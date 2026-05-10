@@ -1,0 +1,69 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+
+	"libriter/internal/model"
+	"libriter/internal/storage"
+
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+)
+
+type UserService struct {
+	store *storage.Store
+}
+
+func NewUser(store *storage.Store) *UserService {
+	return &UserService{store: store}
+}
+
+func (u *UserService) List(ctx context.Context) ([]model.User, error) {
+	return u.store.ListUsers(ctx)
+}
+
+func (u *UserService) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
+	usr, err := u.store.GetUserByID(ctx, id)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	return usr, err
+}
+
+func (u *UserService) Update(ctx context.Context, id uuid.UUID, displayName, email string) (*model.User, error) {
+	usr, err := u.store.UpdateUser(ctx, id, displayName, email)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	if errors.Is(err, storage.ErrConflict) {
+		return nil, ErrEmailTaken
+	}
+	return usr, err
+}
+
+func (u *UserService) ChangePassword(ctx context.Context, id uuid.UUID, newPassword string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcryptCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	if err = u.store.UpdateUserPassword(ctx, id, string(hash)); errors.Is(err, storage.ErrNotFound) {
+		return ErrNotFound
+	}
+	return err
+}
+
+func (u *UserService) Delete(ctx context.Context, id uuid.UUID) error {
+	if err := u.store.DeleteUser(ctx, id); errors.Is(err, storage.ErrNotFound) {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (u *UserService) SetRole(ctx context.Context, userID uuid.UUID, roleName string) error {
+	if _, ok := model.RoleLevel[roleName]; !ok {
+		return fmt.Errorf("neznámá role: %s", roleName)
+	}
+	return u.store.SetUserRole(ctx, userID, roleName)
+}

@@ -1,0 +1,35 @@
+# Data directory
+data/
+
+# Environment variables
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Go
+libriter-backend/main
+libriter-backend/dist/
+libriter-backend/tmp/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Node / frontend
+node_modules/
+libriter-frontend/dist/
+libriter-frontend/.next/
+libriter-frontend/build/
+
+# Mobile
+libriter-mobile/.expo/
+libriter-mobile/node_modules/
+libriter-mobile/dist/
