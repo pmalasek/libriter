@@ -144,3 +144,18 @@ func TestSupportsAuthorURL(t *testing.T) {
 		}
 	}
 }
+
+func TestCleanBio(t *testing.T) {
+	tests := map[string]string{
+		"Popis knihy. (Založil/a: icekafe )": "Popis knihy.",
+		"Popis knihy. (Založil: někdo)":      "Popis knihy.",
+		"Popis knihy.":                       "Popis knihy.",
+		// Závorka uprostřed textu zůstává.
+		"Karel Čapek (1890–1938) byl spisovatel.": "Karel Čapek (1890–1938) byl spisovatel.",
+	}
+	for in, want := range tests {
+		if got := cleanBio(in); got != want {
+			t.Errorf("cleanBio(%q) = %q, chtěno %q", in, got, want)
+		}
+	}
+}

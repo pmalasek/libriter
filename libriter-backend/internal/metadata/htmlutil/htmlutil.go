@@ -30,8 +30,18 @@ func HasClass(n *html.Node, class string) bool {
 
 // Text posbírá veškerý textový obsah podstromu.
 func Text(n *html.Node) string {
+	return TextSkipping(n, nil)
+}
+
+// TextSkipping posbírá text podstromu, ale vynechá větve, pro které skip
+// vrátí true. Slouží k odstranění ovládacích prvků (typicky odkazů
+// „… celý text“), které by se jinak přilepily k obsahu.
+func TextSkipping(n *html.Node, skip func(*html.Node) bool) string {
 	var sb strings.Builder
 	Walk(n, func(n *html.Node) bool {
+		if skip != nil && n.Type == html.ElementNode && skip(n) {
+			return false
+		}
 		if n.Type == html.TextNode {
 			sb.WriteString(n.Data)
 		}

@@ -228,7 +228,7 @@ func parseBookPage(doc *html.Node) *metadata.BookMetadata {
 		// Anotace knihy.
 		case n.Data == "div" && htmlutil.HasClass(n, "book_description") && meta.Description == "":
 			text := htmlutil.Collapse(htmlutil.Text(n))
-			meta.Description = strings.TrimSpace(descPrefixRe.ReplaceAllString(text, ""))
+			meta.Description = cleanBio(descPrefixRe.ReplaceAllString(text, ""))
 
 		case n.Data == "a":
 			href := htmlutil.Attr(n, "href")

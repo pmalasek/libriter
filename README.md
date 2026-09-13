@@ -550,9 +550,14 @@ Co který zdroj u autorů dá:
 
 | Zdroj | Životopis | Roky | Fotka |
 |-------|-----------|------|-------|
-| `databazeknih` | ano (stručný) | ano | ano |
-| `cbdb` | ano (nejobsáhlejší) | ano | ano |
+| `databazeknih` | ano (nejobsáhlejší) | ano | ano |
+| `cbdb` | ano | ano | ano |
 | `openlibrary` | často prázdný | ano | jen někdy |
+
+Na přehledu autora má databazeknih.cz životopis zkrácený zhruba na 250 znaků
+(a jen v JSON-LD), proto se celý text dotahuje ze stránky `/zivotopis/<slug>-<id>`
+druhým požadavkem. U popisů knih se odřezává ovládací odkaz „… celý text“
+a u cbdb.cz patička „(Založil/a: …)“ – text samotný zkrácený není.
 
 U OpenLibrary je potřeba počítat s duplicitními záznamy téhož autora – většina
 z nich je prázdná, proto je ve výchozím pořadí až za českými zdroji.

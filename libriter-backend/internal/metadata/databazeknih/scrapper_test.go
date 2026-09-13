@@ -3,6 +3,8 @@ package databazeknih
 import (
 	"strings"
 	"testing"
+
+	"golang.org/x/net/html"
 )
 
 // Výřez ze skutečné stránky s výsledky: obálka odkazuje na tutéž adresu jako
@@ -120,6 +122,66 @@ func TestSupports(t *testing.T) {
 	for rawURL, want := range tests {
 		if got := c.Supports(rawURL); got != want {
 			t.Errorf("Supports(%q) = %v, chtěno %v", rawURL, got, want)
+		}
+	}
+}
+
+// Popis knihy je na stránce celý, ale je k němu přilepený ovládací odkaz
+// "… celý text", který text jen rozbaluje. Do anotace nepatří.
+func TestExtractDescriptionStripsReadMore(t *testing.T) {
+	const page = `<html><body>
+	<h2>O knize</h2>
+	<p class='new2 odtop'><span>Autor ve svém slavném románu popisuje nezadržitelnou invazi
+	nepřátelské síly. V knize uvedeno chybné ISBN 80-86201-39-2</span><a href='#' id='160'
+	class='show_hide_more ll' bid='160'>... celý text</a></p>
+	</body></html>`
+
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	got := extractDescription(doc)
+	if strings.Contains(got, "celý text") {
+		t.Errorf("v popisu zůstal ovládací odkaz: %q", got)
+	}
+	if !strings.HasSuffix(got, "ISBN 80-86201-39-2") {
+		t.Errorf("popis = %q", got)
+	}
+}
+
+func TestCleanReadMore(t *testing.T) {
+	tests := map[string]string{
+		"Popis knihy. ... celý text": "Popis knihy.",
+		"Popis knihy. … celý text":   "Popis knihy.",
+		"Popis knihy.":               "Popis knihy.",
+		// "celý text" uprostřed věty se nesmí odstranit.
+		"Nečetl jsem celý text knihy.": "Nečetl jsem celý text knihy.",
+	}
+	for in, want := range tests {
+		if got := cleanReadMore(in); got != want {
+			t.Errorf("cleanReadMore(%q) = %q, chtěno %q", in, got, want)
+		}
+	}
+}
+
+// Přehled autora nese jen zkrácený životopis; celý je na /zivotopis/.
+func TestBioURLFor(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{"https://www.databazeknih.cz/autori/karel-capek-101", baseURL + "/zivotopis/karel-capek-101", true},
+		{"https://databazeknih.cz/autori/karel-capek-101", baseURL + "/zivotopis/karel-capek-101", true},
+		{"https://www.databazeknih.cz/prehled-knihy/valka-160", "", false},
+		{"https://www.databazeknih.cz/autori/", "", false},
+		{"https://www.databazeknih.cz/autori/a/b", "", false},
+	}
+	for _, tt := range tests {
+		got, ok := bioURLFor(tt.in)
+		if ok != tt.ok || got != tt.want {
+			t.Errorf("bioURLFor(%q) = (%q, %v), chtěno (%q, %v)", tt.in, got, ok, tt.want, tt.ok)
 		}
 	}
 }

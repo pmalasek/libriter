@@ -391,6 +391,7 @@ var (
 	yearRe     = regexp.MustCompile(`\b(1[89]\d{2}|20[012]\d)\b`)
 	idRe       = regexp.MustCompile(`-(\d+)$`)
 	yearOnlyRe = regexp.MustCompile(`^(?:1[89]\d{2}|20\d{2})$`)
+	readMoreRe = regexp.MustCompile(`\s*(?:\.{3}|…)\s*celý text\s*$`)
 )
 
 func extractIDFromURL(u string) int {
@@ -416,6 +417,17 @@ func cleanDescription(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// isReadMoreLink pozná ovládací odkaz "… celý text" nad popisem.
+func isReadMoreLink(n *html.Node) bool {
+	return n.Data == "a" && htmlutil.HasClass(n, "show_hide_more")
+}
+
+// cleanReadMore odřízne zbytek ovládacího odkazu, kdyby se změnila jeho třída.
+// Text popisu na stránce je celý, jen je vizuálně zkrácený.
+func cleanReadMore(text string) string {
+	return strings.TrimSpace(readMoreRe.ReplaceAllString(text, ""))
+}
+
 // extractDescription hledá text v sekci "O knize" v DOM
 func extractDescription(doc *html.Node) string {
 	var result string
@@ -433,9 +445,10 @@ func extractDescription(doc *html.Node) string {
 		}
 
 		if inSection && n.Type == html.ElementNode && n.Data == "p" {
-			text := strings.TrimSpace(htmlutil.Text(n))
+			// Odkaz "… celý text" jen rozbaluje už načtený text; do popisu nepatří.
+			text := strings.TrimSpace(htmlutil.TextSkipping(n, isReadMoreLink))
 			if len(text) > 50 {
-				result = text
+				result = cleanReadMore(text)
 				inSection = false
 				return
 			}

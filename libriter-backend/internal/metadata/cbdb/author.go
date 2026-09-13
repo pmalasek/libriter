@@ -21,8 +21,12 @@ import (
 	"golang.org/x/net/html"
 )
 
-// Životopis na webu začíná nadpisem "Životopis - <jméno>:", ten do textu nepatří.
-var lifestoryPrefixRe = regexp.MustCompile(`^Životopis\s*-\s*[^:]*:\s*`)
+var (
+	// Životopis na webu začíná nadpisem "Životopis - <jméno>:", ten do textu nepatří.
+	lifestoryPrefixRe = regexp.MustCompile(`^Životopis\s*-\s*[^:]*:\s*`)
+	// Patička s tím, kdo záznam založil – ovládací text, ne obsah.
+	createdBySuffixRe = regexp.MustCompile(`\s*\((?:Založil|Založila|Založil/a)\s*:[^)]*\)\s*$`)
+)
 
 func (c *Client) SupportsAuthorURL(rawURL string) bool {
 	return metadata.HostMatches(rawURL, host) && authorHrefRe.MatchString(rawURL)
@@ -157,7 +161,7 @@ func parseAuthorPage(doc *html.Node) *metadata.AuthorMetadata {
 	// Životopis v HTML bývá delší než description v JSON-LD.
 	lifestory := findLifestory(doc)
 	if lifestory != "" {
-		meta.Bio = strings.TrimSpace(lifestoryPrefixRe.ReplaceAllString(lifestory, ""))
+		meta.Bio = cleanBio(lifestoryPrefixRe.ReplaceAllString(lifestory, ""))
 	}
 
 	// Roky se odhadnou z textu, když je strukturovaná data nemají. Čte se
@@ -172,6 +176,11 @@ func parseAuthorPage(doc *html.Node) *metadata.AuthorMetadata {
 	}
 
 	return meta
+}
+
+// cleanBio odstraní patičky, které patří webu, ne autorovi.
+func cleanBio(text string) string {
+	return strings.TrimSpace(createdBySuffixRe.ReplaceAllString(strings.TrimSpace(text), ""))
 }
 
 // findLifestory vrátí text bloku se životopisem včetně úvodního nadpisu.

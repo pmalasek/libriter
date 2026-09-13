@@ -97,10 +97,61 @@ func (c *Client) FetchAuthorByURL(ctx context.Context, rawURL string) (*metadata
 		return nil, fmt.Errorf("jméno autora nenalezeno na stránce %s", rawURL)
 	}
 
+	// Na přehledu autora je životopis jen v JSON-LD a web ho tam zkracuje
+	// (~250 znaků). Celý text je na samostatné stránce /zivotopis/.
+	if full := c.fullBio(ctx, rawURL); len(full) > len(meta.Bio) {
+		meta.Bio = full
+		if meta.BirthYear == 0 {
+			meta.BirthYear, meta.DeathYear = metadata.YearsFromText(full)
+		}
+	}
+
 	meta.ID = extractIDFromURL(rawURL)
 	meta.SourceURL = rawURL
 	meta.Source = providerName
 	return meta, nil
+}
+
+// fullBio stáhne celý životopis ze stránky /zivotopis/<slug>-<id>.
+// Selhání se ignoruje – zůstane zkrácená verze z přehledu.
+func (c *Client) fullBio(ctx context.Context, authorURL string) string {
+	bioURL, ok := bioURLFor(authorURL)
+	if !ok {
+		return ""
+	}
+
+	body, err := c.fetch(ctx, bioURL)
+	if err != nil {
+		return ""
+	}
+	defer body.Close()
+
+	doc, err := html.Parse(body)
+	if err != nil {
+		return ""
+	}
+
+	node := htmlutil.Find(doc, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "p" && htmlutil.HasClass(n, "new2")
+	})
+	if node == nil {
+		return ""
+	}
+	return strings.TrimSpace(htmlutil.Collapse(htmlutil.TextSkipping(node, isReadMoreLink)))
+}
+
+// bioURLFor přeloží /autori/<slug>-<id> na /zivotopis/<slug>-<id>.
+func bioURLFor(authorURL string) (string, bool) {
+	u, err := url.Parse(authorURL)
+	if err != nil {
+		return "", false
+	}
+
+	slug, ok := strings.CutPrefix(u.Path, "/autori/")
+	if !ok || slug == "" || strings.Contains(slug, "/") {
+		return "", false
+	}
+	return baseURL + "/zivotopis/" + slug, true
 }
 
 func parseAuthorPage(doc *html.Node) *metadata.AuthorMetadata {
