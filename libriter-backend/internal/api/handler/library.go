@@ -5,7 +5,9 @@ import (
 	"net/http"
 	"strings"
 
+	"libriter/internal/model"
 	"libriter/internal/service"
+	"libriter/internal/storage"
 )
 
 type AuthorHandler struct {
@@ -46,21 +48,23 @@ func (h *AuthorHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/v1/authors  (editor+)
 func (h *AuthorHandler) Create(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Name      string  `json:"name"`
-		Bio       *string `json:"bio"`
-		ImagePath *string `json:"image_path"`
-	}
+	var req authorRequest
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
 		return
 	}
-	if strings.TrimSpace(req.Name) == "" {
-		writeError(w, http.StatusBadRequest, "name je povinný")
+
+	in, err := req.toInput()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	a, err := h.svc.Create(r.Context(), strings.TrimSpace(req.Name), req.Bio, req.ImagePath)
+	a, err := h.svc.Create(r.Context(), in)
+	if errors.Is(err, service.ErrConflict) {
+		writeError(w, http.StatusConflict, "autor se stejným jménem už existuje")
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "chyba při vytváření autora")
 		return
@@ -74,26 +78,28 @@ func (h *AuthorHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var req struct {
-		Name      string  `json:"name"`
-		Bio       *string `json:"bio"`
-		ImagePath *string `json:"image_path"`
-	}
+
+	var req authorRequest
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
 		return
 	}
-	if strings.TrimSpace(req.Name) == "" {
-		writeError(w, http.StatusBadRequest, "name je povinný")
+
+	in, err := req.toInput()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	a, err := h.svc.Update(r.Context(), id, strings.TrimSpace(req.Name), req.Bio, req.ImagePath)
-	if errors.Is(err, service.ErrNotFound) {
+	a, err := h.svc.Update(r.Context(), id, in)
+	switch {
+	case errors.Is(err, service.ErrNotFound):
 		writeError(w, http.StatusNotFound, "autor nenalezen")
 		return
-	}
-	if err != nil {
+	case errors.Is(err, service.ErrConflict):
+		writeError(w, http.StatusConflict, "autor se stejným jménem už existuje")
+		return
+	case err != nil:
 		writeError(w, http.StatusInternalServerError, "chyba při aktualizaci autora")
 		return
 	}
@@ -106,14 +112,46 @@ func (h *AuthorHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := h.svc.Delete(r.Context(), id); errors.Is(err, service.ErrNotFound) {
+	err := h.svc.Delete(r.Context(), id)
+	switch {
+	case errors.Is(err, service.ErrNotFound):
 		writeError(w, http.StatusNotFound, "autor nenalezen")
 		return
-	} else if err != nil {
+	case errors.Is(err, service.ErrConflict):
+		writeError(w, http.StatusConflict, "autor má v knihovně knihy")
+		return
+	case err != nil:
 		writeError(w, http.StatusInternalServerError, "chyba při mazání autora")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// authorRequest přijímá jméno po částech; pro pohodlí lze poslat i celé jméno
+// v poli name, které se rozdělí samo ("Komenský, Jan Amos" i "Jan Amos Komenský").
+type authorRequest struct {
+	FirstName  string  `json:"first_name"`
+	MiddleName string  `json:"middle_name"`
+	LastName   string  `json:"last_name"`
+	Name       string  `json:"name"`
+	Bio        *string `json:"bio"`
+	ImagePath  *string `json:"image_path"`
+}
+
+func (req *authorRequest) toInput() (storage.AuthorInput, error) {
+	name := model.AuthorName{
+		First:  strings.TrimSpace(req.FirstName),
+		Middle: strings.TrimSpace(req.MiddleName),
+		Last:   strings.TrimSpace(req.LastName),
+	}
+	if name.IsEmpty() {
+		name = model.ParseAuthorName(req.Name)
+	}
+	if name.Last == "" {
+		return storage.AuthorInput{}, errors.New("last_name (příjmení) je povinné")
+	}
+
+	return storage.AuthorInput{Name: name, Bio: req.Bio, ImagePath: req.ImagePath}, nil
 }
 
 // --- Series ---

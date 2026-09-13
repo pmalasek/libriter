@@ -15,7 +15,9 @@ export function AuthorsPage() {
   const countByAuthor = useMemo(() => {
     const counts = new Map<string, number>()
     for (const book of books.data ?? []) {
-      counts.set(book.author_id, (counts.get(book.author_id) ?? 0) + 1)
+      for (const author of book.authors ?? []) {
+        counts.set(author.id, (counts.get(author.id) ?? 0) + 1)
+      }
     }
     return counts
   }, [books.data])

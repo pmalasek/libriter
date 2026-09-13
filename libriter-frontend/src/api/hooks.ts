@@ -79,17 +79,7 @@ export function useUser(id: string | undefined) {
 }
 
 // --- pomocné mapy pro spojení na klientovi ---
-// Knihy nesou jen author_id / series_id, jména si doplňujeme sami.
-
-export function useAuthorsById() {
-  const query = useAuthors()
-  const map = useMemo(() => {
-    const m = new Map<string, Author>()
-    for (const a of query.data ?? []) m.set(a.id, a)
-    return m
-  }, [query.data])
-  return { ...query, map }
-}
+// Knihy nesou jen series_id, název série si doplňujeme sami.
 
 export function useSeriesById() {
   const query = useSeriesList()

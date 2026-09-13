@@ -1,3 +1,5 @@
+import type { Author } from '@/api/types'
+
 /** Délka v sekundách → "3:07 h" / "48 min" / "45 s". */
 export function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return 'neznámá délka'
@@ -36,4 +38,10 @@ export function bookCount(count: number): string {
   if (count === 1) return '1 kniha'
   if (count >= 2 && count <= 4) return `${count} knihy`
   return `${count} knih`
+}
+
+/** Jména autorů knihy oddělená čárkou. */
+export function authorNames(authors: Author[] | undefined): string {
+  if (!authors || authors.length === 0) return 'Neznámý autor'
+  return authors.map((author) => author.name).join(', ')
 }

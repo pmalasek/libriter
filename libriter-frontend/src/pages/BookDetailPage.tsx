@@ -1,7 +1,7 @@
 import { ArrowLeftIcon, ClockIcon, LanguagesIcon, MicIcon, StarIcon } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router'
-import { useAuthor, useBook, useBooks, useSeriesOne } from '@/api/hooks'
+import { useBook, useBooks, useSeriesOne } from '@/api/hooks'
 import { BookGrid } from '@/components/BookGrid'
 import { CoverPlaceholder } from '@/components/CoverPlaceholder'
 import { ErrorState } from '@/components/ErrorState'
@@ -14,16 +14,18 @@ import { formatDate, formatDuration } from '@/lib/format'
 export function BookDetailPage() {
   const { id = '' } = useParams()
   const book = useBook(id)
-  const author = useAuthor(book.data?.author_id ?? '')
   const series = useSeriesOne(book.data?.series_id ?? '')
   const allBooks = useBooks()
 
+  // "Další knihy autora" bereme podle hlavního (prvního) autora knihy.
+  const mainAuthor = book.data?.authors?.[0]
+
   const moreByAuthor = useMemo(() => {
-    if (!book.data) return []
+    if (!book.data || !mainAuthor) return []
     return (allBooks.data ?? []).filter(
-      (b) => b.author_id === book.data.author_id && b.id !== book.data.id,
+      (b) => b.id !== book.data.id && b.authors?.some((a) => a.id === mainAuthor.id),
     )
-  }, [allBooks.data, book.data])
+  }, [allBooks.data, book.data, mainAuthor])
 
   if (book.isPending) {
     return (
@@ -61,13 +63,17 @@ export function BookDetailPage() {
         <div className="min-w-0">
           <h1 className="font-heading text-2xl font-semibold tracking-tight">{data.title}</h1>
 
-          {author.data ? (
-            <Link
-              to={`/authors/${author.data.id}`}
-              className="mt-1 inline-block text-muted-foreground underline-offset-4 hover:underline"
-            >
-              {author.data.name}
-            </Link>
+          {data.authors?.length ? (
+            <p className="mt-1 text-muted-foreground">
+              {data.authors.map((author, index) => (
+                <span key={author.id}>
+                  {index > 0 ? ', ' : null}
+                  <Link to={`/authors/${author.id}`} className="underline-offset-4 hover:underline">
+                    {author.name}
+                  </Link>
+                </span>
+              ))}
+            </p>
           ) : null}
 
           {series.data ? (
@@ -127,10 +133,10 @@ export function BookDetailPage() {
         </div>
       </div>
 
-      {moreByAuthor.length > 0 && author.data ? (
+      {moreByAuthor.length > 0 && mainAuthor ? (
         <section className="mt-10">
           <h2 className="font-heading mb-4 text-lg font-semibold">
-            Další knihy autora {author.data.name}
+            Další knihy autora {mainAuthor.name}
           </h2>
           <BookGrid books={moreByAuthor} />
         </section>

@@ -14,6 +14,10 @@ export interface User {
 
 export interface Author {
   id: string
+  first_name: string
+  middle_name: string
+  last_name: string
+  /** Celé jméno složené z částí – dopočítává backend. */
   name: string
   bio?: string
   image_path?: string
@@ -29,7 +33,8 @@ export interface Series {
 
 export interface Book {
   id: string
-  author_id: string
+  /** Kniha může mít víc autorů; pořadí určuje backend (hlavní autor první). */
+  authors: Author[]
   series_id?: string
   series_position?: number
   title: string

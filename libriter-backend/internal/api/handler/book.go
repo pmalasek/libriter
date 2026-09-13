@@ -123,17 +123,17 @@ func (h *BookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // --- request / helper ---
 
 type bookRequest struct {
-	AuthorID        string  `json:"author_id"`
-	SeriesID        *string `json:"series_id"`
-	SeriesPosition  *int16  `json:"series_position"`
-	Title           string  `json:"title"`
-	Narrator        *string `json:"narrator"`
-	DurationSeconds int     `json:"duration_seconds"`
-	FilePath        string  `json:"file_path"`
-	CoverPath       *string `json:"cover_path"`
-	Language        string  `json:"language"`
-	Description     *string `json:"description"`
-	InternalRating  *int16  `json:"internal_rating"`
+	AuthorIDs       []string `json:"author_ids"`
+	SeriesID        *string  `json:"series_id"`
+	SeriesPosition  *int16   `json:"series_position"`
+	Title           string   `json:"title"`
+	Narrator        *string  `json:"narrator"`
+	DurationSeconds int      `json:"duration_seconds"`
+	FilePath        string   `json:"file_path"`
+	CoverPath       *string  `json:"cover_path"`
+	Language        string   `json:"language"`
+	Description     *string  `json:"description"`
+	InternalRating  *int16   `json:"internal_rating"`
 }
 
 func (req *bookRequest) toInput() (storage.BookInput, error) {
@@ -150,13 +150,16 @@ func (req *bookRequest) toInput() (storage.BookInput, error) {
 		return storage.BookInput{}, errors.New("internal_rating musí být 1–5")
 	}
 
-	authorID, err := parseUUIDStr(req.AuthorID, "author_id")
+	authorIDs, err := parseUUIDs(req.AuthorIDs, "author_ids")
 	if err != nil {
 		return storage.BookInput{}, err
 	}
+	if len(authorIDs) == 0 {
+		return storage.BookInput{}, errors.New("author_ids musí obsahovat alespoň jednoho autora")
+	}
 
 	in := storage.BookInput{
-		AuthorID:        authorID,
+		AuthorIDs:       authorIDs,
 		SeriesPosition:  req.SeriesPosition,
 		Title:           strings.TrimSpace(req.Title),
 		Narrator:        req.Narrator,
@@ -181,6 +184,19 @@ func (req *bookRequest) toInput() (storage.BookInput, error) {
 	}
 
 	return in, nil
+}
+
+// parseUUIDs převede seznam ID; zachovává pořadí (určuje pořadí autorů u knihy).
+func parseUUIDs(values []string, field string) ([]uuid.UUID, error) {
+	ids := make([]uuid.UUID, 0, len(values))
+	for _, v := range values {
+		id, err := parseUUIDStr(v, field)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 func parseUUIDStr(s, field string) (uuid.UUID, error) {

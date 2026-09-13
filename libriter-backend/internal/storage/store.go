@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 
@@ -23,6 +24,14 @@ func New(db *sql.DB) *Store {
 	return &Store{db: db}
 }
 
+// querier pokrývá *sql.DB i *sql.Tx – dotaz tak lze spustit uvnitř
+// transakce i mimo ni.
+type querier interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // isUniqueViolation vrátí true, pokud chyba pochází z porušení
 // UNIQUE nebo PRIMARY KEY omezení v SQLite.
 func isUniqueViolation(err error) bool {
@@ -32,6 +41,16 @@ func isUniqueViolation(err error) bool {
 	}
 	code := se.Code()
 	return code == sqlite3.SQLITE_CONSTRAINT_UNIQUE || code == sqlite3.SQLITE_CONSTRAINT_PRIMARYKEY
+}
+
+// isForeignKeyViolation vrátí true, pokud chyba pochází z porušení
+// cizího klíče (např. mazání autora, který má v knihovně knihy).
+func isForeignKeyViolation(err error) bool {
+	var se *sqlite.Error
+	if !errors.As(err, &se) {
+		return false
+	}
+	return se.Code() == sqlite3.SQLITE_CONSTRAINT_FOREIGNKEY
 }
 
 // rowsAffected vrátí počet ovlivněných řádků; při chybě 0.

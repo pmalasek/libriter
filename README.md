@@ -213,7 +213,8 @@ pak na `/` vrátí stránku s návodem a HTTP 503, ale API funguje normálně.
 Při prvním startu backend automaticky:
 - vytvoří soubor databáze na cestě `DB_PATH` (včetně adresáře)
 - aplikuje migrace z `internal/db/migrations/` – všechny tabulky
-  (authors, series, books, chapters, tags, users, roles, permissions, ratings, ...)
+  (authors, series, books, book_authors, chapters, tags, users, roles,
+  permissions, ratings, ...)
 - založí výchozí role **admin**, **editor**, **reader** a jejich oprávnění
 
 Aplikované migrace se evidují v tabulce `schema_migrations`; při dalších
@@ -290,9 +291,26 @@ Scanner se spustí **automaticky při startu backendu** a:
 | Pole | Pořadí čtení |
 |------|-------------|
 | Název knihy | `Album` → `Title` tag → název souboru |
-| Autor | `AlbumArtist` → `Composer` → `Artist` → název adresáře |
-| Vypravěč | `Artist` (pokud se liší od autora) |
+| Autoři | `AlbumArtist` → `Composer` → `Artist` → název adresáře |
+| Vypravěč | `Artist` (pokud se liší od autorů) |
 | Délka | `ffprobe` → `1 s` (placeholder, opravit přes API) |
+
+**Autoři:** kniha jich může mít víc. Tag se rozdělí na jednotlivá jména podle
+oddělovačů `;` `/` `&` `|`, slov „a“ / „and“ a podle čárky (ta se ale bere jako
+oddělovač jen tehdy, nejde-li o tvar `Příjmení, Křestní`). Každé jméno se pak
+rozdělí na **křestní / prostřední / příjmení**:
+
+| Tag | Křestní | Prostřední | Příjmení |
+|-----|---------|------------|----------|
+| `Jan Amos Komenský` | Jan | Amos | Komenský |
+| `Komenský, Jan Amos` | Jan | Amos | Komenský |
+| `Karel Čapek` | Karel | – | Čapek |
+| `Homér` | – | – | Homér |
+
+Jednoslovné jméno se ukládá jako příjmení – podle něj se autoři řadí i hledají.
+Autor je v databázi jednoznačně určen trojicí jmen, takže stejný autor ze dvou
+různých souborů vznikne jen jednou. Pořadí autorů z tagu se zachovává, první je
+hlavní autor (podle něj scanner páruje soubory ke knize).
 
 **Obálky:** při ingestu knihy scanner hledá obálku v tomto pořadí:
 
@@ -343,6 +361,21 @@ Authorization: Bearer <token>
 | `PUT` | `/books/{id}` | Aktualizace knihy | editor+ |
 | `DELETE` | `/books/{id}` | Smazání knihy | admin |
 
+Kniha má autory ve vazbě M:N. Při zápisu se posílá `author_ids` (alespoň jedno
+ID, pořadí určuje hlavního autora), ve čtení se vrací pole `authors` s celými
+záznamy autorů:
+
+```jsonc
+// POST /books
+{ "author_ids": ["<uuid>", "<uuid>"], "title": "Ze života hmyzu",
+  "duration_seconds": 7200, "file_path": "capek/ze-zivota-hmyzu" }
+
+// GET /books/{id}
+{ "id": "<uuid>", "title": "Ze života hmyzu",
+  "authors": [ { "id": "<uuid>", "first_name": "Karel", "middle_name": "",
+                 "last_name": "Čapek", "name": "Karel Čapek" }, ... ] }
+```
+
 ### Autoři
 
 | Metoda | Endpoint | Popis | Přístup |
@@ -352,6 +385,14 @@ Authorization: Bearer <token>
 | `POST` | `/authors` | Přidání autora | editor+ |
 | `PUT` | `/authors/{id}` | Aktualizace autora | editor+ |
 | `DELETE` | `/authors/{id}` | Smazání autora | admin |
+
+Jméno se posílá po částech (`first_name`, `middle_name`, `last_name`); povinné
+je `last_name`. Místo částí lze poslat celé jméno v `name` – rozdělí se stejnou
+logikou jako tagy (`"Komenský, Jan Amos"` i `"Jan Amos Komenský"`). Odpověď
+obsahuje části i složené `name`.
+
+Autor se stejnou trojicí jmen vrátí `409 Conflict`; stejně dopadne mazání
+autora, který má v knihovně knihy.
 
 ### Série
 

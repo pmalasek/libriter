@@ -71,23 +71,34 @@ func (a *AuthorService) GetByID(ctx context.Context, id uuid.UUID) (*model.Autho
 	return author, err
 }
 
-func (a *AuthorService) Create(ctx context.Context, name string, bio, imagePath *string) (*model.Author, error) {
-	return a.store.CreateAuthor(ctx, name, bio, imagePath)
+func (a *AuthorService) Create(ctx context.Context, in storage.AuthorInput) (*model.Author, error) {
+	author, err := a.store.CreateAuthor(ctx, in)
+	if errors.Is(err, storage.ErrConflict) {
+		return nil, ErrConflict
+	}
+	return author, err
 }
 
-func (a *AuthorService) Update(ctx context.Context, id uuid.UUID, name string, bio, imagePath *string) (*model.Author, error) {
-	author, err := a.store.UpdateAuthor(ctx, id, name, bio, imagePath)
-	if errors.Is(err, storage.ErrNotFound) {
+func (a *AuthorService) Update(ctx context.Context, id uuid.UUID, in storage.AuthorInput) (*model.Author, error) {
+	author, err := a.store.UpdateAuthor(ctx, id, in)
+	switch {
+	case errors.Is(err, storage.ErrNotFound):
 		return nil, ErrNotFound
+	case errors.Is(err, storage.ErrConflict):
+		return nil, ErrConflict
 	}
 	return author, err
 }
 
 func (a *AuthorService) Delete(ctx context.Context, id uuid.UUID) error {
-	if err := a.store.DeleteAuthor(ctx, id); errors.Is(err, storage.ErrNotFound) {
+	err := a.store.DeleteAuthor(ctx, id)
+	switch {
+	case errors.Is(err, storage.ErrNotFound):
 		return ErrNotFound
+	case errors.Is(err, storage.ErrConflict):
+		return ErrConflict
 	}
-	return nil
+	return err
 }
 
 // --- Series ---

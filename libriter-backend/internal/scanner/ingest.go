@@ -3,8 +3,8 @@
 // Vkládá audio soubor do databáze jako kapitolu (chapter) v rámci knihy (book).
 //
 // Pravidlo seskupování (v tomto pořadí priority):
-//  1. album tag + author_id  → nejpřesnější identifikace ze samotného souboru
-//  2. adresář               → fallback, pokud album tag chybí
+//  1. album tag + hlavní autor → nejpřesnější identifikace ze samotného souboru
+//  2. adresář                  → fallback, pokud album tag chybí
 //
 // books.file_path    = relativní cesta k adresáři od AUDIO_ROOT
 // chapters.file_path = relativní cesta k souboru od AUDIO_ROOT
@@ -17,9 +17,12 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"libriter/internal/model"
 	"libriter/internal/storage"
+
+	"github.com/google/uuid"
 )
 
 // ingest je volán z processFile (uvnitř ingestMu zámku).
@@ -43,14 +46,14 @@ func (s *Scanner) ingest(ctx context.Context, absPath, relPath string) error {
 		s.log.Warn("délka souboru neznámá – nainstalujte ffprobe", "path", relPath)
 	}
 
-	// Najdi nebo vytvoř autora
-	author, err := s.store.GetOrCreateAuthor(ctx, meta.Author)
+	// Najdi nebo vytvoř autory (kniha jich může mít víc)
+	authors, err := s.store.GetOrCreateAuthors(ctx, meta.Authors)
 	if err != nil {
-		return fmt.Errorf("get/create author %q: %w", meta.Author, err)
+		return fmt.Errorf("get/create authors %q: %w", model.JoinAuthorNames(meta.Authors), err)
 	}
 
 	// Najdi existující knihu: nejdříve podle album tagu, pak podle adresáře
-	book, err := s.findOrCreateBook(ctx, relDir, meta, author, duration)
+	book, err := s.findOrCreateBook(ctx, relDir, meta, authors, duration)
 	if err != nil {
 		return err
 	}
@@ -71,18 +74,18 @@ func (s *Scanner) ingest(ctx context.Context, absPath, relPath string) error {
 	return s.appendChapter(ctx, relPath, book, meta, position, duration)
 }
 
-// findOrCreateBook najde knihu podle album tagu (+ autor) nebo adresáře.
+// findOrCreateBook najde knihu podle album tagu (+ hlavní autor) nebo adresáře.
 // Pokud neexistuje, vytvoří ji.
 func (s *Scanner) findOrCreateBook(
 	ctx context.Context,
 	relDir string,
 	meta *AudioMeta,
-	author *model.Author,
+	authors []model.Author,
 	duration int,
 ) (*model.Book, error) {
-	// 1. Pokus: album tag + author_id
-	if meta.BookTitle != "" {
-		book, err := s.store.GetBookByTitleAndAuthorID(ctx, meta.BookTitle, author.ID)
+	// 1. Pokus: album tag + hlavní autor
+	if meta.BookTitle != "" && len(authors) > 0 {
+		book, err := s.store.GetBookByTitleAndAuthorID(ctx, meta.BookTitle, authors[0].ID)
 		if err == nil {
 			return book, nil
 		}
@@ -113,7 +116,7 @@ func (s *Scanner) findOrCreateBook(
 	}
 
 	in := storage.BookInput{
-		AuthorID:        author.ID,
+		AuthorIDs:       authorIDs(authors),
 		Title:           title,
 		Narrator:        narratorPtr,
 		DurationSeconds: duration,
@@ -126,8 +129,27 @@ func (s *Scanner) findOrCreateBook(
 		return nil, fmt.Errorf("create book: %w", err)
 	}
 
-	s.log.Info("kniha vytvořena", "title", book.Title, "author", author.Name, "dir", relDir)
+	s.log.Info("kniha vytvořena", "title", book.Title,
+		"autoři", authorLabel(authors), "dir", relDir)
 	return book, nil
+}
+
+// authorIDs vrátí ID autorů v pořadí, v jakém byly načteny z tagu.
+func authorIDs(authors []model.Author) []uuid.UUID {
+	ids := make([]uuid.UUID, 0, len(authors))
+	for _, a := range authors {
+		ids = append(ids, a.ID)
+	}
+	return ids
+}
+
+// authorLabel vrátí jména autorů oddělená čárkou (pro log).
+func authorLabel(authors []model.Author) string {
+	names := make([]string, 0, len(authors))
+	for _, a := range authors {
+		names = append(names, a.Name)
+	}
+	return strings.Join(names, ", ")
 }
 
 // appendChapter vloží nebo aktualizuje kapitolu a přepočítá celkovou délku knihy.

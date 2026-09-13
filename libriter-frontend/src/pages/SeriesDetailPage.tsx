@@ -1,7 +1,7 @@
 import { ArrowLeftIcon } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router'
-import { useAuthorsById, useBooks, useSeriesOne } from '@/api/hooks'
+import { useBooks, useSeriesOne } from '@/api/hooks'
 import { BookGrid } from '@/components/BookGrid'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingGrid } from '@/components/LoadingGrid'
@@ -13,7 +13,6 @@ export function SeriesDetailPage() {
   const { id = '' } = useParams()
   const series = useSeriesOne(id)
   const books = useBooks()
-  const authors = useAuthorsById()
 
   // V sérii řadíme podle pořadí dílu; knihy bez pozice jdou na konec.
   const seriesBooks = useMemo(() => {
@@ -44,11 +43,7 @@ export function SeriesDetailPage() {
         </p>
       ) : null}
 
-      <BookGrid
-        books={seriesBooks}
-        authorsById={authors.map}
-        emptyTitle="V této sérii nejsou žádné knihy"
-      />
+      <BookGrid books={seriesBooks} emptyTitle="V této sérii nejsou žádné knihy" />
     </>
   )
 }

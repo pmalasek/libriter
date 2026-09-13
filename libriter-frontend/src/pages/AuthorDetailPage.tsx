@@ -15,7 +15,7 @@ export function AuthorDetailPage() {
   const books = useBooks()
 
   const authorBooks = useMemo(
-    () => (books.data ?? []).filter((book) => book.author_id === id),
+    () => (books.data ?? []).filter((book) => book.authors?.some((a) => a.id === id)),
     [books.data, id],
   )
 

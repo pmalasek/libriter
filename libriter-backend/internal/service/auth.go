@@ -138,4 +138,5 @@ var (
 	ErrInvalidToken       = errors.New("neplatný token")
 	ErrForbidden          = errors.New("nedostatečná oprávnění")
 	ErrNotFound           = errors.New("not found")
+	ErrConflict           = errors.New("záznam již existuje")
 )

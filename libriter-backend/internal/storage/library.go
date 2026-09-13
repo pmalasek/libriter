@@ -13,18 +13,35 @@ import (
 
 // --- Authors ---
 
-func (s *Store) CreateAuthor(ctx context.Context, name string, bio, imagePath *string) (*model.Author, error) {
-	const q = `
-		INSERT INTO authors (id, name, bio, image_path)
-		VALUES (?1, ?2, ?3, ?4)
-		RETURNING id, name, bio, image_path, created_at`
+// AuthorInput jsou zapisovatelná pole autora. Celé jméno (sloupec name)
+// se dopočítává z částí, nezadává se.
+type AuthorInput struct {
+	Name      model.AuthorName
+	Bio       *string
+	ImagePath *string
+}
 
-	row := s.db.QueryRowContext(ctx, q, uuid.New(), name, bio, imagePath)
-	return scanAuthor(row)
+const authorColumns = `id, first_name, middle_name, last_name, name, bio, image_path, created_at`
+
+func (s *Store) CreateAuthor(ctx context.Context, in AuthorInput) (*model.Author, error) {
+	const q = `
+		INSERT INTO authors (id, first_name, middle_name, last_name, name, bio, image_path)
+		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+		RETURNING ` + authorColumns
+
+	row := s.db.QueryRowContext(ctx, q,
+		uuid.New(), in.Name.First, in.Name.Middle, in.Name.Last, in.Name.Full(),
+		in.Bio, in.ImagePath,
+	)
+	a, err := scanAuthor(row)
+	if isUniqueViolation(err) {
+		return nil, ErrConflict
+	}
+	return a, err
 }
 
 func (s *Store) GetAuthor(ctx context.Context, id uuid.UUID) (*model.Author, error) {
-	const q = `SELECT id, name, bio, image_path, created_at FROM authors WHERE id = ?1`
+	const q = `SELECT ` + authorColumns + ` FROM authors WHERE id = ?1`
 	row := s.db.QueryRowContext(ctx, q, id)
 	a, err := scanAuthor(row)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -33,8 +50,9 @@ func (s *Store) GetAuthor(ctx context.Context, id uuid.UUID) (*model.Author, err
 	return a, err
 }
 
+// ListAuthors vrací autory seřazené jako v knihovně – podle příjmení.
 func (s *Store) ListAuthors(ctx context.Context) ([]model.Author, error) {
-	const q = `SELECT id, name, bio, image_path, created_at FROM authors ORDER BY name`
+	const q = `SELECT ` + authorColumns + ` FROM authors ORDER BY last_name, first_name, middle_name`
 	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("list authors: %w", err)
@@ -52,23 +70,33 @@ func (s *Store) ListAuthors(ctx context.Context) ([]model.Author, error) {
 	return authors, rows.Err()
 }
 
-func (s *Store) UpdateAuthor(ctx context.Context, id uuid.UUID, name string, bio, imagePath *string) (*model.Author, error) {
+func (s *Store) UpdateAuthor(ctx context.Context, id uuid.UUID, in AuthorInput) (*model.Author, error) {
 	const q = `
 		UPDATE authors
-		SET name = ?2, bio = ?3, image_path = ?4
+		SET first_name = ?2, middle_name = ?3, last_name = ?4, name = ?5,
+		    bio = ?6, image_path = ?7
 		WHERE id = ?1
-		RETURNING id, name, bio, image_path, created_at`
+		RETURNING ` + authorColumns
 
-	row := s.db.QueryRowContext(ctx, q, id, name, bio, imagePath)
+	row := s.db.QueryRowContext(ctx, q,
+		id, in.Name.First, in.Name.Middle, in.Name.Last, in.Name.Full(),
+		in.Bio, in.ImagePath,
+	)
 	a, err := scanAuthor(row)
-	if errors.Is(err, sql.ErrNoRows) {
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
 		return nil, ErrNotFound
+	case isUniqueViolation(err):
+		return nil, ErrConflict
 	}
 	return a, err
 }
 
 func (s *Store) DeleteAuthor(ctx context.Context, id uuid.UUID) error {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM authors WHERE id = ?1`, id)
+	if isForeignKeyViolation(err) {
+		return ErrConflict
+	}
 	if err != nil {
 		return fmt.Errorf("delete author: %w", err)
 	}
@@ -78,23 +106,39 @@ func (s *Store) DeleteAuthor(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
-// GetOrCreateAuthor najde autora podle jména nebo ho vytvoří.
+// GetOrCreateAuthor najde autora podle rozdělených částí jména nebo ho vytvoří.
 // Volající musí serializovat přístupy (scanner používá ingestMu).
-func (s *Store) GetOrCreateAuthor(ctx context.Context, name string) (*model.Author, error) {
-	const q = `SELECT id, name, bio, image_path, created_at FROM authors WHERE name = ?1 LIMIT 1`
-	a, err := scanAuthor(s.db.QueryRowContext(ctx, q, name))
+func (s *Store) GetOrCreateAuthor(ctx context.Context, name model.AuthorName) (*model.Author, error) {
+	const q = `SELECT ` + authorColumns + ` FROM authors
+		WHERE first_name = ?1 AND middle_name = ?2 AND last_name = ?3 LIMIT 1`
+
+	a, err := scanAuthor(s.db.QueryRowContext(ctx, q, name.First, name.Middle, name.Last))
 	if err == nil {
 		return a, nil
 	}
 	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("get author by name: %w", err)
 	}
-	return s.CreateAuthor(ctx, name, nil, nil)
+	return s.CreateAuthor(ctx, AuthorInput{Name: name})
+}
+
+// GetOrCreateAuthors zpracuje celý seznam jmen a zachová jeho pořadí.
+func (s *Store) GetOrCreateAuthors(ctx context.Context, names []model.AuthorName) ([]model.Author, error) {
+	authors := make([]model.Author, 0, len(names))
+	for _, name := range names {
+		a, err := s.GetOrCreateAuthor(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		authors = append(authors, *a)
+	}
+	return authors, nil
 }
 
 func scanAuthor(row scanner) (*model.Author, error) {
 	var a model.Author
-	err := row.Scan(&a.ID, &a.Name, &a.Bio, &a.ImagePath, &a.CreatedAt)
+	err := row.Scan(&a.ID, &a.FirstName, &a.MiddleName, &a.LastName, &a.Name,
+		&a.Bio, &a.ImagePath, &a.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

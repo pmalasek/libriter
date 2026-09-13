@@ -1,30 +1,27 @@
 import { useMemo, useState } from 'react'
-import { useAuthorsById, useBooks } from '@/api/hooks'
+import { useBooks } from '@/api/hooks'
 import { BookGrid } from '@/components/BookGrid'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingGrid } from '@/components/LoadingGrid'
 import { PageHeader } from '@/components/PageHeader'
 import { Input } from '@/components/ui/input'
-import { bookCount } from '@/lib/format'
+import { authorNames, bookCount } from '@/lib/format'
 
 export function BooksPage() {
   const [query, setQuery] = useState('')
   const books = useBooks()
-  const authors = useAuthorsById()
 
   const filtered = useMemo(() => {
     const all = books.data ?? []
     const needle = query.trim().toLocaleLowerCase('cs')
     if (!needle) return all
 
-    return all.filter((book) => {
-      const author = authors.map.get(book.author_id)?.name ?? ''
-      return (
+    return all.filter(
+      (book) =>
         book.title.toLocaleLowerCase('cs').includes(needle) ||
-        author.toLocaleLowerCase('cs').includes(needle)
-      )
-    })
-  }, [books.data, authors.map, query])
+        authorNames(book.authors).toLocaleLowerCase('cs').includes(needle),
+    )
+  }, [books.data, query])
 
   if (books.isPending) {
     return (
@@ -61,7 +58,6 @@ export function BooksPage() {
       />
       <BookGrid
         books={filtered}
-        authorsById={authors.map}
         emptyTitle={query ? 'Nic nenalezeno' : 'Zatím žádné knihy'}
         emptyDescription={
           query

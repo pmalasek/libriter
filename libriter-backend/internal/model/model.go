@@ -42,12 +42,17 @@ type Rating struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// Author – jméno je uložené po částech; Name je z nich odvozené celé jméno,
+// které udržuje storage vrstva (viz AuthorName.Full).
 type Author struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Bio       *string   `json:"bio,omitempty"`
-	ImagePath *string   `json:"image_path,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
+	ID         uuid.UUID `json:"id"`
+	FirstName  string    `json:"first_name"`
+	MiddleName string    `json:"middle_name"`
+	LastName   string    `json:"last_name"`
+	Name       string    `json:"name"`
+	Bio        *string   `json:"bio,omitempty"`
+	ImagePath  *string   `json:"image_path,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type Series struct {
@@ -59,7 +64,7 @@ type Series struct {
 
 type Book struct {
 	ID              uuid.UUID  `json:"id"`
-	AuthorID        uuid.UUID  `json:"author_id"`
+	Authors         []Author   `json:"authors"` // seřazeno podle book_authors.position
 	SeriesID        *uuid.UUID `json:"series_id,omitempty"`
 	SeriesPosition  *int16     `json:"series_position,omitempty"`
 	Title           string     `json:"title"`

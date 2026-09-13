@@ -3,8 +3,10 @@
 // Extrakce metadat z audio souborů.
 //
 // BookTitle:    Album tag (vyčištěný od číselného prefixu) → název adresáře
-// Author:       AlbumArtist → Composer → Artist → název adresáře → "Neznámý autor"
-// Narrator:     Artist, pokud se liší od autora
+// Authors:      AlbumArtist → Composer → Artist → název adresáře → "Neznámý autor"
+//               Tag může obsahovat víc autorů oddělených ";", "/", "&", " a ", …;
+//               každé jméno se rozdělí na křestní / prostřední / příjmení.
+// Narrator:     Artist, pokud se liší od autorů
 // ChapterTitle: Title tag → název souboru bez přípony
 // TrackNumber:  Track tag → 0 (pořadí z filesystému jako fallback)
 // Délka:        ffprobe → 0 (zobrazí varování)
@@ -20,6 +22,8 @@ import (
 	"strconv"
 	"strings"
 
+	"libriter/internal/model"
+
 	"github.com/dhowden/tag"
 )
 
@@ -27,7 +31,7 @@ import (
 type AudioMeta struct {
 	// Metadata na úrovni knihy
 	BookTitle string // album tag, vyčištěný od číselných prefixů
-	Author    string
+	Authors   []model.AuthorName
 	Narrator  string // prázdný = neuveden
 
 	// Metadata na úrovni kapitoly
@@ -61,19 +65,12 @@ func extractMeta(absPath, dirName string) (*AudioMeta, error) {
 		}
 
 		// Autor: AlbumArtist > Composer > Artist
-		switch {
-		case albumArtist != "":
-			meta.Author = albumArtist
-			if artist != "" && !strings.EqualFold(artist, albumArtist) {
-				meta.Narrator = artist
-			}
-		case composer != "":
-			meta.Author = composer
-			if artist != "" && !strings.EqualFold(artist, composer) {
-				meta.Narrator = artist
-			}
-		default:
-			meta.Author = artist
+		authorTag := firstNonEmpty(albumArtist, composer, artist)
+		meta.Authors = model.ParseAuthorNames(authorTag)
+
+		// Vypravěč: Artist, pokud jím není jeden z autorů
+		if artist != "" && artist != authorTag && !isAuthor(meta.Authors, artist) {
+			meta.Narrator = artist
 		}
 	}
 
@@ -85,16 +82,36 @@ func extractMeta(absPath, dirName string) (*AudioMeta, error) {
 		base := filepath.Base(absPath)
 		meta.ChapterTitle = strings.TrimSuffix(base, filepath.Ext(base))
 	}
-	if meta.Author == "" {
-		if dirName != "" {
-			meta.Author = dirName
-		} else {
-			meta.Author = "Neznámý autor"
-		}
+	if len(meta.Authors) == 0 {
+		meta.Authors = model.ParseAuthorNames(dirName)
+	}
+	if len(meta.Authors) == 0 {
+		meta.Authors = []model.AuthorName{model.UnknownAuthor}
 	}
 
 	meta.DurationSeconds = ffprobeDuration(absPath)
 	return meta, nil
+}
+
+// firstNonEmpty vrátí první neprázdnou hodnotu.
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// isAuthor zjistí, zda se jméno shoduje s některým z autorů.
+func isAuthor(authors []model.AuthorName, name string) bool {
+	full := model.ParseAuthorName(name).Full()
+	for _, a := range authors {
+		if strings.EqualFold(a.Full(), full) {
+			return true
+		}
+	}
+	return false
 }
 
 // cleanAlbumTitle odstraní číselný prefix jako "01 - " nebo "1. " z názvu alba.
