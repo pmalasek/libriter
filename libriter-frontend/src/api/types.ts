@@ -20,7 +20,10 @@ export interface Author {
   /** Celé jméno složené z částí – dopočítává backend. */
   name: string
   bio?: string
+  /** Název souboru v AUTHOR_IMAGE_ROOT; obrázek se čte z /authors/{id}/image. */
   image_path?: string
+  birth_year?: number
+  death_year?: number
   created_at: string
 }
 
@@ -84,6 +87,8 @@ export interface AuthorRequest {
   last_name: string
   bio: string | null
   image_path: string | null
+  birth_year: number | null
+  death_year: number | null
 }
 
 /**
@@ -134,6 +139,37 @@ export interface BookMetadata {
   year: number
   source_url: string
   source: string
+}
+
+/** Výsledek GET /metadata/author/search?q= */
+export interface AuthorSearchResult {
+  id: number
+  name: string
+  /** Roky života nebo nejznámější dílo – odliší jmenovce. */
+  note: string
+  birth_year: number
+  death_year: number
+  url: string
+  source: string
+}
+
+/** Odpověď GET /metadata/author?url= */
+export interface AuthorMetadata {
+  id: number
+  name: string
+  bio: string
+  /** Adresa fotky u zdroje; stahuje se až přes PUT /authors/{id}/image. */
+  image_url: string
+  birth_year: number
+  death_year: number
+  source_url: string
+  source: string
+}
+
+/** Zdroje metadat podle toho, co umí (GET /metadata/sources). */
+export interface MetadataSources {
+  books: string[]
+  authors: string[]
 }
 
 /** Čitelné názvy zdrojů metadat (hodnoty pole `source`). */

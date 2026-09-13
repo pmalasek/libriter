@@ -39,9 +39,12 @@ type JWTConfig struct {
 }
 
 type StorageConfig struct {
-	AudioRoot   string
-	CoverRoot   string
-	MaxUploadMB int64
+	AudioRoot string
+	CoverRoot string
+	// AuthorImageRoot je adresář s fotkami autorů. Drží se odděleně od obálek,
+	// aby se obsah obou adresářů nemíchal.
+	AuthorImageRoot string
+	MaxUploadMB     int64
 }
 
 // MetadataConfig řídí zdroje knižních metadat.
@@ -90,9 +93,10 @@ func load() *Config {
 			ExpiryHours: time.Duration(envInt("JWT_EXPIRY_HOURS", 72)) * time.Hour,
 		},
 		Storage: StorageConfig{
-			AudioRoot:   env.path("AUDIO_ROOT", "/var/lib/libriter/audio"),
-			CoverRoot:   env.path("COVER_ROOT", "/var/lib/libriter/covers"),
-			MaxUploadMB: int64(envInt("MAX_UPLOAD_MB", 500)),
+			AudioRoot:       env.path("AUDIO_ROOT", "/var/lib/libriter/audio"),
+			CoverRoot:       env.path("COVER_ROOT", "/var/lib/libriter/covers"),
+			AuthorImageRoot: env.path("AUTHOR_IMAGE_ROOT", "/var/lib/libriter/author-images"),
+			MaxUploadMB:     int64(envInt("MAX_UPLOAD_MB", 500)),
 		},
 		Metadata: MetadataConfig{
 			Providers:         envList("METADATA_PROVIDERS", DefaultMetadataProviders),

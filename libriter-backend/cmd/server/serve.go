@@ -57,18 +57,22 @@ func runServe() error {
 	scn := scanner.New(cfg.Storage.AudioRoot, cfg.Storage.CoverRoot, store)
 	scn.Start(appCtx)
 
+	// Zdroje metadat musí vzniknout dřív než služby, které je používají –
+	// stahování fotek autorů si přes ně ověřuje povolené adresy.
+	metadataChain, dkClient := buildMetadata(cfg.Metadata)
+
 	authSvc := service.NewAuth(store, cfg.JWT)
 	userSvc := service.NewUser(store)
 	bookSvc := service.NewBook(store)
 	authorSvc := service.NewAuthor(store)
+	authorImageSvc := service.NewAuthorImage(store, metadataChain, cfg.Storage.AuthorImageRoot)
 	seriesSvc := service.NewSeries(store)
 
 	authH := handler.NewAuth(authSvc)
 	userH := handler.NewUser(userSvc)
 	bookH := handler.NewBook(bookSvc, cfg.Storage.CoverRoot)
-	authorH := handler.NewAuthor(authorSvc)
+	authorH := handler.NewAuthor(authorSvc, cfg.Storage.AuthorImageRoot, authorImageSvc)
 	seriesH := handler.NewSeries(seriesSvc)
-	metadataChain, dkClient := buildMetadata(cfg.Metadata)
 	metadataH := handler.NewMetadata(metadataChain, dkClient)
 
 	// --- router ---
@@ -92,6 +96,8 @@ func runServe() error {
 		// <img> neumí poslat hlavičku Authorization; ochranou je neuhodnutelné UUID knihy.
 		r.Get("/books/{id}/cover", bookH.Cover)
 		r.Head("/books/{id}/cover", bookH.Cover)
+		r.Get("/authors/{id}/image", authorH.Image)
+		r.Head("/authors/{id}/image", authorH.Image)
 
 		// --- chráněné endpointy ---
 		r.Group(func(r chi.Router) {
@@ -129,6 +135,8 @@ func runServe() error {
 				r.Patch("/books/{id}", bookH.Patch) // částečná aktualizace (webové rozhraní)
 				r.Post("/authors", authorH.Create)
 				r.Put("/authors/{id}", authorH.Update)
+				r.Put("/authors/{id}/image", authorH.SetImage) // stáhne fotku ze zdroje
+				r.Delete("/authors/{id}/image", authorH.DeleteImage)
 				r.Post("/series", seriesH.Create)
 				r.Put("/series/{id}", seriesH.Update)
 			})
@@ -144,10 +152,12 @@ func runServe() error {
 			// Metadata knih - zdroje a jejich pořadí řídí METADATA_PROVIDERS (editor+)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole("editor"))
-				r.Get("/metadata/sources", metadataH.Sources)     // pořadí zdrojů
-				r.Get("/metadata/search", metadataH.Search)       // ?q=<dotaz>
-				r.Get("/metadata/book/{id}", metadataH.FetchByID) // dle DK ID
-				r.Get("/metadata/book", metadataH.FetchByURL)     // ?url=<url>
+				r.Get("/metadata/sources", metadataH.Sources) // pořadí zdrojů
+				r.Get("/metadata/search", metadataH.Search)   // ?q=<dotaz>
+				r.Get("/metadata/author/search", metadataH.SearchAuthors)
+				r.Get("/metadata/author", metadataH.FetchAuthorByURL) // ?url=<url>
+				r.Get("/metadata/book/{id}", metadataH.FetchByID)     // dle DK ID
+				r.Get("/metadata/book", metadataH.FetchByURL)         // ?url=<url>
 			})
 		})
 	})

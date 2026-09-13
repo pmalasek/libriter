@@ -60,7 +60,60 @@ func (h *MetadataHandler) Search(w http.ResponseWriter, r *http.Request) {
 // popisuje, odkud data přijdou.
 // Přístup: editor+
 func (h *MetadataHandler) Sources(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, h.chain.Providers())
+	writeJSON(w, http.StatusOK, map[string][]string{
+		"books":   h.chain.Providers(),
+		"authors": h.chain.AuthorProviders(),
+	})
+}
+
+// GET /api/v1/metadata/author/search?q=<dotaz>  (editor+)
+func (h *MetadataHandler) SearchAuthors(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		writeError(w, http.StatusBadRequest, "parametr q je povinný")
+		return
+	}
+
+	results, err := h.chain.SearchAuthors(r.Context(), q)
+	if err != nil {
+		if errors.Is(err, r.Context().Err()) {
+			writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
+			return
+		}
+		writeError(w, http.StatusBadGateway, "zdroje metadat selhaly – "+err.Error())
+		return
+	}
+
+	if results == nil {
+		results = []metadata.AuthorSearchResult{}
+	}
+	writeJSON(w, http.StatusOK, results)
+}
+
+// GET /api/v1/metadata/author?url=<url>  (editor+)
+//
+// Zdroj se vybere podle adresy; tím zároveň vzniká allowlist.
+func (h *MetadataHandler) FetchAuthorByURL(w http.ResponseWriter, r *http.Request) {
+	authorURL := r.URL.Query().Get("url")
+	if authorURL == "" {
+		writeError(w, http.StatusBadRequest, "parametr url je povinný")
+		return
+	}
+
+	meta, err := h.chain.FetchAuthorByURL(r.Context(), authorURL)
+	switch {
+	case errors.Is(err, metadata.ErrNoProvider):
+		writeError(w, http.StatusBadRequest, "url nepatří žádnému zapnutému zdroji metadat")
+		return
+	case errors.Is(err, r.Context().Err()) && err != nil:
+		writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
+		return
+	case err != nil:
+		writeError(w, http.StatusBadGateway, "chyba při stahování metadat autora")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, meta)
 }
 
 // GET /api/v1/metadata/book/{id}

@@ -5,6 +5,7 @@ import { useAuthor, useBooks } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
 import { canEdit } from '@/auth/permissions'
 import { AuthorEditDialog } from '@/components/AuthorEditDialog'
+import { AuthorImage, lifeYears } from '@/components/AuthorImage'
 import { BookGrid } from '@/components/BookGrid'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingGrid } from '@/components/LoadingGrid'
@@ -38,24 +39,31 @@ export function AuthorDetailPage() {
         </Link>
       </Button>
 
-      <PageHeader
-        title={author.data.name}
-        description={bookCount(authorBooks.length)}
-        actions={
-          canEdit(user) ? (
-            <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-              <PencilIcon />
-              Upravit
-            </Button>
-          ) : null
-        }
-      />
+      <div className="mb-6 flex flex-wrap items-start gap-4">
+        <AuthorImage key={author.data.id} author={author.data} className="size-24 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <PageHeader
+            title={author.data.name}
+            description={[lifeYears(author.data), bookCount(authorBooks.length)]
+              .filter(Boolean)
+              .join(' · ')}
+            actions={
+              canEdit(user) ? (
+                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                  <PencilIcon />
+                  Upravit
+                </Button>
+              ) : null
+            }
+          />
 
-      {author.data.bio ? (
-        <p className="mb-8 max-w-3xl whitespace-pre-line text-sm leading-relaxed">
-          {author.data.bio}
-        </p>
-      ) : null}
+          {author.data.bio ? (
+            <p className="max-w-3xl whitespace-pre-line text-sm leading-relaxed">
+              {author.data.bio}
+            </p>
+          ) : null}
+        </div>
+      </div>
 
       <BookGrid books={authorBooks} emptyTitle="U tohoto autora nejsou žádné knihy" />
 

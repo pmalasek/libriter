@@ -13,24 +13,16 @@ package scanner
 
 import (
 	"context"
-	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"libriter/internal/imagestore"
 	"libriter/internal/model"
 
 	"github.com/dhowden/tag"
 	"github.com/google/uuid"
 )
-
-const maxCoverBytes = 20 << 20 // 20 MB – větší soubor není obálka
-
-var imageExts = map[string]bool{
-	".jpg": true, ".jpeg": true, ".png": true,
-	".webp": true, ".gif": true, ".bmp": true,
-}
 
 // ensureCover doplní knize obálku, pokud ji ještě nemá.
 // Chyby pouze loguje – ingest kapitoly kvůli obálce neselže.
@@ -63,8 +55,7 @@ func (s *Scanner) hasCover(book *model.Book) bool {
 	if book.CoverPath == nil || *book.CoverPath == "" {
 		return false
 	}
-	_, err := os.Stat(filepath.Join(s.coverRoot, *book.CoverPath))
-	return err == nil
+	return imagestore.Exists(s.coverRoot, *book.CoverPath)
 }
 
 // resolveCover najde obálku a zkopíruje ji do COVER_ROOT.
@@ -72,13 +63,13 @@ func (s *Scanner) hasCover(book *model.Book) bool {
 func (s *Scanner) resolveCover(bookID uuid.UUID, absDir, absFile string) (string, string, error) {
 	// 1. Obrázek v adresáři – největší
 	if src := largestImageInDir(absDir); src != "" {
-		rel, err := s.copyCoverFile(bookID, src)
+		rel, err := imagestore.CopyFile(s.coverRoot, bookID.String(), src)
 		return rel, "adresář: " + filepath.Base(src), err
 	}
 
 	// 2. Obrázek vložený v audio souboru
 	if pic := embeddedCover(absFile); pic != nil {
-		rel, err := s.writeCover(bookID, pic.Data, "."+strings.ToLower(pic.Ext))
+		rel, err := imagestore.Write(s.coverRoot, bookID.String(), pic.Data, "."+strings.ToLower(pic.Ext))
 		return rel, "tag: " + filepath.Base(absFile), err
 	}
 
@@ -97,11 +88,11 @@ func largestImageInDir(dir string) string {
 	var bestSize int64
 
 	for _, e := range entries {
-		if e.IsDir() || !imageExts[strings.ToLower(filepath.Ext(e.Name()))] {
+		if e.IsDir() || !imagestore.IsImageExt(filepath.Ext(e.Name())) {
 			continue
 		}
 		info, err := e.Info()
-		if err != nil || info.Size() == 0 || info.Size() > maxCoverBytes {
+		if err != nil || info.Size() == 0 || info.Size() > imagestore.MaxBytes {
 			continue
 		}
 		if info.Size() > bestSize {
@@ -125,53 +116,8 @@ func embeddedCover(absPath string) *tag.Picture {
 	}
 
 	pic := m.Picture()
-	if pic == nil || len(pic.Data) == 0 || len(pic.Data) > maxCoverBytes {
+	if pic == nil || len(pic.Data) == 0 || len(pic.Data) > imagestore.MaxBytes {
 		return nil
 	}
 	return pic
-}
-
-// copyCoverFile zkopíruje obrázek z disku do COVER_ROOT.
-func (s *Scanner) copyCoverFile(bookID uuid.UUID, srcPath string) (string, error) {
-	data, err := os.ReadFile(srcPath)
-	if err != nil {
-		return "", fmt.Errorf("čtení obálky %s: %w", srcPath, err)
-	}
-	return s.writeCover(bookID, data, filepath.Ext(srcPath))
-}
-
-// writeCover uloží data obálky do COVER_ROOT jako <book_id><ext>
-// a vrátí cestu relativní ke COVER_ROOT.
-func (s *Scanner) writeCover(bookID uuid.UUID, data []byte, ext string) (string, error) {
-	ext = normalizeImageExt(ext)
-	name := bookID.String() + ext
-
-	if err := os.MkdirAll(s.coverRoot, 0o755); err != nil {
-		return "", fmt.Errorf("vytvoření %s: %w", s.coverRoot, err)
-	}
-
-	dst := filepath.Join(s.coverRoot, name)
-	tmp := dst + ".tmp"
-
-	if err := os.WriteFile(tmp, data, fs.FileMode(0o644)); err != nil {
-		return "", fmt.Errorf("zápis obálky: %w", err)
-	}
-	if err := os.Rename(tmp, dst); err != nil {
-		_ = os.Remove(tmp)
-		return "", fmt.Errorf("přesun obálky: %w", err)
-	}
-
-	return name, nil
-}
-
-// normalizeImageExt vrátí známou příponu obrázku, jinak ".jpg".
-func normalizeImageExt(ext string) string {
-	ext = strings.ToLower(ext)
-	if !strings.HasPrefix(ext, ".") {
-		ext = "." + ext
-	}
-	if imageExts[ext] {
-		return ext
-	}
-	return ".jpg"
 }

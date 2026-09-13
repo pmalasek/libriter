@@ -21,43 +21,6 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestResolveCoverPath(t *testing.T) {
-	root := t.TempDir()
-
-	tests := []struct {
-		name      string
-		coverRoot string
-		coverPath string
-		want      bool
-	}{
-		{"holý název souboru", root, "abc.jpg", true},
-		{"prázdný coverRoot", "", "abc.jpg", false},
-		{"prázdná cesta", root, "", false},
-		{"tečka", root, ".", false},
-		{"dvě tečky", root, "..", false},
-		{"únik nahoru", root, "../secret.txt", false},
-		{"podadresář", root, "sub/x.jpg", false},
-		{"absolutní cesta", root, "/etc/passwd", false},
-		{"zpětné lomítko", root, `..\x.jpg`, false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			abs, ok := resolveCoverPath(tt.coverRoot, tt.coverPath)
-			if ok != tt.want {
-				t.Fatalf("resolveCoverPath(%q, %q) ok = %v, chtěno %v", tt.coverRoot, tt.coverPath, ok, tt.want)
-			}
-			if !ok {
-				return
-			}
-			want := filepath.Join(tt.coverRoot, tt.coverPath)
-			if abs != want {
-				t.Errorf("cesta = %q, chtěno %q", abs, want)
-			}
-		})
-	}
-}
-
 // newCoverTestEnv připraví store, handler a adresář s obálkami.
 func newCoverTestEnv(t *testing.T) (*storage.Store, http.Handler, string) {
 	t.Helper()

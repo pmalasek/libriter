@@ -19,19 +19,23 @@ type AuthorInput struct {
 	Name      model.AuthorName
 	Bio       *string
 	ImagePath *string
+	BirthYear *int
+	DeathYear *int
 }
 
-const authorColumns = `id, first_name, middle_name, last_name, name, bio, image_path, created_at`
+const authorColumns = `id, first_name, middle_name, last_name, name, bio, image_path,
+	       birth_year, death_year, created_at`
 
 func (s *Store) CreateAuthor(ctx context.Context, in AuthorInput) (*model.Author, error) {
 	const q = `
-		INSERT INTO authors (id, first_name, middle_name, last_name, name, bio, image_path)
-		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+		INSERT INTO authors (id, first_name, middle_name, last_name, name, bio, image_path,
+		                     birth_year, death_year)
+		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
 		RETURNING ` + authorColumns
 
 	row := s.db.QueryRowContext(ctx, q,
 		uuid.New(), in.Name.First, in.Name.Middle, in.Name.Last, in.Name.Full(),
-		in.Bio, in.ImagePath,
+		in.Bio, in.ImagePath, in.BirthYear, in.DeathYear,
 	)
 	a, err := scanAuthor(row)
 	if isUniqueViolation(err) {
@@ -70,17 +74,17 @@ func (s *Store) ListAuthors(ctx context.Context) ([]model.Author, error) {
 	return authors, rows.Err()
 }
 
-func (s *Store) UpdateAuthor(ctx context.Context, id uuid.UUID, in AuthorInput) (*model.Author, error) {
-	const q = `
-		UPDATE authors
-		SET first_name = ?2, middle_name = ?3, last_name = ?4, name = ?5,
-		    bio = ?6, image_path = ?7
-		WHERE id = ?1
-		RETURNING ` + authorColumns
+const updateAuthorQuery = `
+	UPDATE authors
+	SET first_name = ?2, middle_name = ?3, last_name = ?4, name = ?5,
+	    bio = ?6, image_path = ?7, birth_year = ?8, death_year = ?9
+	WHERE id = ?1
+	RETURNING ` + authorColumns
 
-	row := s.db.QueryRowContext(ctx, q,
+func (s *Store) UpdateAuthor(ctx context.Context, id uuid.UUID, in AuthorInput) (*model.Author, error) {
+	row := s.db.QueryRowContext(ctx, updateAuthorQuery,
 		id, in.Name.First, in.Name.Middle, in.Name.Last, in.Name.Full(),
-		in.Bio, in.ImagePath,
+		in.Bio, in.ImagePath, in.BirthYear, in.DeathYear,
 	)
 	a, err := scanAuthor(row)
 	switch {
@@ -90,6 +94,57 @@ func (s *Store) UpdateAuthor(ctx context.Context, id uuid.UUID, in AuthorInput) 
 		return nil, ErrConflict
 	}
 	return a, err
+}
+
+// PatchAuthor načte autora, nechá apply upravit vstup a zapíše ho zpět.
+// Čtení i zápis běží v jedné transakci, takže se změní jen to, na co apply
+// sáhne – zbytek se přepíše původními hodnotami.
+func (s *Store) PatchAuthor(ctx context.Context, id uuid.UUID, apply func(*AuthorInput)) (*model.Author, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("patch author: begin: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	const sel = `SELECT ` + authorColumns + ` FROM authors WHERE id = ?1`
+	current, err := scanAuthor(tx.QueryRowContext(ctx, sel, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	in := AuthorInput{
+		Name: model.AuthorName{
+			First:  current.FirstName,
+			Middle: current.MiddleName,
+			Last:   current.LastName,
+		},
+		Bio:       current.Bio,
+		ImagePath: current.ImagePath,
+		BirthYear: current.BirthYear,
+		DeathYear: current.DeathYear,
+	}
+	apply(&in)
+
+	author, err := scanAuthor(tx.QueryRowContext(ctx, updateAuthorQuery,
+		id, in.Name.First, in.Name.Middle, in.Name.Last, in.Name.Full(),
+		in.Bio, in.ImagePath, in.BirthYear, in.DeathYear,
+	))
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return nil, ErrNotFound
+	case isUniqueViolation(err):
+		return nil, ErrConflict
+	case err != nil:
+		return nil, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("patch author: commit: %w", err)
+	}
+	return author, nil
 }
 
 func (s *Store) DeleteAuthor(ctx context.Context, id uuid.UUID) error {
@@ -138,7 +193,7 @@ func (s *Store) GetOrCreateAuthors(ctx context.Context, names []model.AuthorName
 func scanAuthor(row scanner) (*model.Author, error) {
 	var a model.Author
 	err := row.Scan(&a.ID, &a.FirstName, &a.MiddleName, &a.LastName, &a.Name,
-		&a.Bio, &a.ImagePath, &a.CreatedAt)
+		&a.Bio, &a.ImagePath, &a.BirthYear, &a.DeathYear, &a.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

@@ -52,6 +52,8 @@ type Author struct {
 	Name       string    `json:"name"`
 	Bio        *string   `json:"bio,omitempty"`
 	ImagePath  *string   `json:"image_path,omitempty"`
+	BirthYear  *int      `json:"birth_year,omitempty"`
+	DeathYear  *int      `json:"death_year,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
 }
 

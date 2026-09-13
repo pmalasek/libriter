@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Link } from 'react-router'
 import { useAuthors, useBooks } from '@/api/hooks'
+import { AuthorImage, lifeYears } from '@/components/AuthorImage'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingList } from '@/components/LoadingGrid'
@@ -54,11 +55,16 @@ export function AuthorsPage() {
           {authors.data.map((author) => (
             <Link key={author.id} to={`/authors/${author.id}`} className="group">
               <Card className="transition-colors group-hover:border-ring/50">
-                <CardContent>
-                  <p className="truncate font-medium">{author.name}</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {bookCount(countByAuthor.get(author.id) ?? 0)}
-                  </p>
+                <CardContent className="flex items-center gap-3">
+                  <AuthorImage author={author} className="size-12 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="truncate font-medium">{author.name}</p>
+                    <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                      {[lifeYears(author), bookCount(countByAuthor.get(author.id) ?? 0)]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </Link>

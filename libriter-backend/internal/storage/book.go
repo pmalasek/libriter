@@ -299,7 +299,7 @@ func setBookAuthors(ctx context.Context, q querier, bookID uuid.UUID, authorIDs 
 func loadBookAuthors(ctx context.Context, q querier, bookID uuid.UUID) ([]model.Author, error) {
 	const sel = `
 		SELECT a.id, a.first_name, a.middle_name, a.last_name, a.name,
-		       a.bio, a.image_path, a.created_at
+		       a.bio, a.image_path, a.birth_year, a.death_year, a.created_at
 		FROM   book_authors ba
 		JOIN   authors a ON a.id = ba.author_id
 		WHERE  ba.book_id = ?1
@@ -326,7 +326,7 @@ func loadBookAuthors(ctx context.Context, q querier, bookID uuid.UUID) ([]model.
 func loadAllBookAuthors(ctx context.Context, q querier) (map[uuid.UUID][]model.Author, error) {
 	const sel = `
 		SELECT ba.book_id, a.id, a.first_name, a.middle_name, a.last_name, a.name,
-		       a.bio, a.image_path, a.created_at
+		       a.bio, a.image_path, a.birth_year, a.death_year, a.created_at
 		FROM   book_authors ba
 		JOIN   authors a ON a.id = ba.author_id
 		ORDER BY ba.book_id, ba.position`
@@ -344,7 +344,7 @@ func loadAllBookAuthors(ctx context.Context, q querier) (map[uuid.UUID][]model.A
 			a      model.Author
 		)
 		if err := rows.Scan(&bookID, &a.ID, &a.FirstName, &a.MiddleName, &a.LastName,
-			&a.Name, &a.Bio, &a.ImagePath, &a.CreatedAt); err != nil {
+			&a.Name, &a.Bio, &a.ImagePath, &a.BirthYear, &a.DeathYear, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		byBook[bookID] = append(byBook[bookID], a)

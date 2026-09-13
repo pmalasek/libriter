@@ -1,8 +1,11 @@
+import { Trash2Icon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
-import { useUpdateAuthor } from '@/api/hooks'
+import { useDeleteAuthorImage, useSetAuthorImage, useUpdateAuthor } from '@/api/hooks'
 import type { Author } from '@/api/types'
+import { AuthorImage } from '@/components/AuthorImage'
+import { AuthorMetadataImport } from '@/components/AuthorMetadataImport'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -24,16 +27,22 @@ interface Props {
 
 /**
  * Úprava autora. Formulář se inicializuje z předaného autora; obsah dialogu je
- * přes `key` svázaný s otevřením, takže se po zavření a znovuotevření resetuje.
+ * svázaný s otevřením, takže se po zavření a znovuotevření resetuje.
  */
 export function AuthorEditDialog({ author, open, onOpenChange }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         {open ? <AuthorEditForm author={author} onDone={() => onOpenChange(false)} /> : null}
       </DialogContent>
     </Dialog>
   )
+}
+
+/** Prázdné pole → null, jinak číslo. Formulářová pole jsou vždy řetězce. */
+function toYear(value: string): number | null {
+  const trimmed = value.trim()
+  return trimmed === '' ? null : Number(trimmed)
 }
 
 function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void }) {
@@ -41,9 +50,15 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
   const [middleName, setMiddleName] = useState(author.middle_name)
   const [lastName, setLastName] = useState(author.last_name)
   const [bio, setBio] = useState(author.bio ?? '')
+  const [birthYear, setBirthYear] = useState(String(author.birth_year ?? ''))
+  const [deathYear, setDeathYear] = useState(String(author.death_year ?? ''))
+  // Fotka nabídnutá zdrojem metadat; stáhne se až při uložení.
+  const [pendingImageURL, setPendingImageURL] = useState<string | null>(null)
   const [conflict, setConflict] = useState<string | null>(null)
 
   const updateAuthor = useUpdateAuthor(author.id)
+  const setImage = useSetAuthorImage(author.id)
+  const deleteImage = useDeleteAuthorImage(author.id)
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -55,12 +70,18 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
         middle_name: middleName.trim(),
         last_name: lastName.trim(),
         bio: bio.trim() || null,
-        // Formulář obrázek neukazuje, ale PUT je úplná náhrada – bez vrácení
-        // původní hodnoty by se cesta k obrázku vymazala.
+        // Formulář obrázek needituje přímo, ale PUT je úplná náhrada – bez
+        // vrácení původní hodnoty by se cesta k fotce vymazala.
         image_path: author.image_path ?? null,
+        birth_year: toYear(birthYear),
+        death_year: toYear(deathYear),
       },
       {
         onSuccess: () => {
+          if (pendingImageURL) {
+            downloadImage(pendingImageURL)
+            return
+          }
           toast.success('Autor byl uložen.')
           onDone()
         },
@@ -76,6 +97,31 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
     )
   }
 
+  // Fotka se stahuje až po uložení zbytku – kdyby cizí server nereagoval,
+  // text se tím neztratí.
+  function downloadImage(url: string) {
+    setImage.mutate(url, {
+      onSuccess: () => {
+        toast.success('Autor byl uložen i s fotkou.')
+        onDone()
+      },
+      onError: (error) => {
+        toast.warning(`Autor uložen, ale fotku se nepodařilo stáhnout: ${error.message}`)
+        onDone()
+      },
+    })
+  }
+
+  function handleDeleteImage() {
+    setPendingImageURL(null)
+    deleteImage.mutate(undefined, {
+      onSuccess: () => toast.success('Fotka byla smazána.'),
+      onError: (error) => toast.error(error.message),
+    })
+  }
+
+  const pending = updateAuthor.isPending || setImage.isPending
+
   return (
     <form onSubmit={handleSubmit} className="grid gap-4">
       <DialogHeader>
@@ -84,6 +130,39 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
           Jméno se ukládá po částech – řadí a vyhledává se podle příjmení.
         </DialogDescription>
       </DialogHeader>
+
+      <AuthorMetadataImport
+        defaultQuery={author.name}
+        onApply={(meta) => {
+          if (meta.bio) setBio(meta.bio)
+          if (meta.birth_year) setBirthYear(String(meta.birth_year))
+          if (meta.death_year) setDeathYear(String(meta.death_year))
+          if (meta.image_url) setPendingImageURL(meta.image_url)
+          toast.success('Metadata načtena – zkontroluj je a ulož.')
+        }}
+      />
+
+      <div className="flex items-center gap-3">
+        <AuthorImage key={author.id} author={author} className="size-16 shrink-0" />
+        <div className="min-w-0 text-sm">
+          {pendingImageURL ? (
+            <p className="text-muted-foreground">Nová fotka se stáhne při uložení.</p>
+          ) : author.image_path ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleDeleteImage}
+              disabled={deleteImage.isPending}
+            >
+              <Trash2Icon />
+              Smazat fotku
+            </Button>
+          ) : (
+            <p className="text-muted-foreground">Bez fotky. Doplní ji „Načíst metadata“.</p>
+          )}
+        </div>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
@@ -117,14 +196,34 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
         </p>
       </div>
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="author_birth_year">Rok narození</Label>
+          <Input
+            id="author_birth_year"
+            type="number"
+            min={1000}
+            max={new Date().getFullYear()}
+            value={birthYear}
+            onChange={(e) => setBirthYear(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="author_death_year">Rok úmrtí</Label>
+          <Input
+            id="author_death_year"
+            type="number"
+            min={1000}
+            max={new Date().getFullYear()}
+            value={deathYear}
+            onChange={(e) => setDeathYear(e.target.value)}
+          />
+        </div>
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="author_bio">Životopis</Label>
-        <Textarea
-          id="author_bio"
-          rows={5}
-          value={bio}
-          onChange={(e) => setBio(e.target.value)}
-        />
+        <Textarea id="author_bio" rows={6} value={bio} onChange={(e) => setBio(e.target.value)} />
       </div>
 
       {conflict ? <p className="text-sm text-destructive">{conflict}</p> : null}
@@ -133,8 +232,8 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
         <Button type="button" variant="ghost" onClick={onDone}>
           Zrušit
         </Button>
-        <Button type="submit" disabled={updateAuthor.isPending}>
-          {updateAuthor.isPending ? 'Ukládám…' : 'Uložit'}
+        <Button type="submit" disabled={pending}>
+          {pending ? 'Ukládám…' : 'Uložit'}
         </Button>
       </DialogFooter>
     </form>

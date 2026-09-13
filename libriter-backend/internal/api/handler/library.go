@@ -4,7 +4,9 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
+	"libriter/internal/imagestore"
 	"libriter/internal/model"
 	"libriter/internal/service"
 	"libriter/internal/storage"
@@ -12,10 +14,14 @@ import (
 
 type AuthorHandler struct {
 	svc *service.AuthorService
+	// imageRoot je adresář s fotkami autorů (AUTHOR_IMAGE_ROOT).
+	imageRoot string
+	// images stahuje fotky z povolených zdrojů; nil = zdroje jsou vypnuté.
+	images *service.AuthorImageService
 }
 
-func NewAuthor(svc *service.AuthorService) *AuthorHandler {
-	return &AuthorHandler{svc: svc}
+func NewAuthor(svc *service.AuthorService, imageRoot string, images *service.AuthorImageService) *AuthorHandler {
+	return &AuthorHandler{svc: svc, imageRoot: imageRoot, images: images}
 }
 
 // GET /api/v1/authors
@@ -127,6 +133,108 @@ func (h *AuthorHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// GET|HEAD /api/v1/authors/{id}/image
+//
+// Veřejný endpoint ze stejného důvodu jako obálky knih – <img> v prohlížeči
+// neumí poslat hlavičku Authorization. Ochranou je neuhodnutelné UUID autora.
+func (h *AuthorHandler) Image(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+
+	author, err := h.svc.GetByID(r.Context(), id)
+	if errors.Is(err, service.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "autor nenalezen")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "chyba při načítání autora")
+		return
+	}
+
+	if author.ImagePath == nil {
+		writeError(w, http.StatusNotFound, "autor nemá obrázek")
+		return
+	}
+
+	// image_path může editor nastavit přes PUT na cokoliv, proto validujeme.
+	abs, ok := imagestore.Resolve(h.imageRoot, *author.ImagePath)
+	if !ok || !imagestore.Exists(h.imageRoot, *author.ImagePath) {
+		writeError(w, http.StatusNotFound, "obrázek nenalezen")
+		return
+	}
+
+	// Frontend přidává ?v=<image_path>, takže dlouhá cache je bezpečná.
+	w.Header().Set("Cache-Control", "public, max-age=2592000")
+	http.ServeFile(w, r, abs)
+}
+
+// PUT /api/v1/authors/{id}/image  (editor+)
+//
+// Stáhne obrázek z adresy u zdroje metadat a uloží ho do AUTHOR_IMAGE_ROOT.
+// Adresu určuje klient, proto se pouští jen hostitelé zapnutých zdrojů.
+func (h *AuthorHandler) SetImage(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	if h.images == nil {
+		writeError(w, http.StatusNotFound, "zdroje metadat nejsou zapnuté")
+		return
+	}
+
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		return
+	}
+	if strings.TrimSpace(req.URL) == "" {
+		writeError(w, http.StatusBadRequest, "url je povinná")
+		return
+	}
+
+	author, err := h.images.SetFromURL(r.Context(), id, strings.TrimSpace(req.URL))
+	switch {
+	case errors.Is(err, service.ErrImageNotAllowed):
+		writeError(w, http.StatusBadRequest, "adresa obrázku nepatří žádnému zapnutému zdroji metadat")
+		return
+	case errors.Is(err, service.ErrNotFound):
+		writeError(w, http.StatusNotFound, "autor nenalezen")
+		return
+	case err != nil:
+		writeError(w, http.StatusBadGateway, "obrázek se nepodařilo stáhnout – "+err.Error())
+		return
+	}
+
+	writeJSON(w, http.StatusOK, author)
+}
+
+// DELETE /api/v1/authors/{id}/image  (editor+)
+func (h *AuthorHandler) DeleteImage(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	if h.images == nil {
+		writeError(w, http.StatusNotFound, "zdroje metadat nejsou zapnuté")
+		return
+	}
+
+	author, err := h.images.Clear(r.Context(), id)
+	if errors.Is(err, service.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "autor nenalezen")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "chyba při mazání obrázku")
+		return
+	}
+	writeJSON(w, http.StatusOK, author)
+}
+
 // authorRequest přijímá jméno po částech; pro pohodlí lze poslat i celé jméno
 // v poli name, které se rozdělí samo ("Komenský, Jan Amos" i "Jan Amos Komenský").
 type authorRequest struct {
@@ -136,6 +244,8 @@ type authorRequest struct {
 	Name       string  `json:"name"`
 	Bio        *string `json:"bio"`
 	ImagePath  *string `json:"image_path"`
+	BirthYear  *int    `json:"birth_year"`
+	DeathYear  *int    `json:"death_year"`
 }
 
 func (req *authorRequest) toInput() (storage.AuthorInput, error) {
@@ -151,7 +261,31 @@ func (req *authorRequest) toInput() (storage.AuthorInput, error) {
 		return storage.AuthorInput{}, errors.New("last_name (příjmení) je povinné")
 	}
 
-	return storage.AuthorInput{Name: name, Bio: req.Bio, ImagePath: req.ImagePath}, nil
+	if err := checkLifeYears(req.BirthYear, req.DeathYear); err != nil {
+		return storage.AuthorInput{}, err
+	}
+
+	return storage.AuthorInput{
+		Name:      name,
+		Bio:       req.Bio,
+		ImagePath: req.ImagePath,
+		BirthYear: req.BirthYear,
+		DeathYear: req.DeathYear,
+	}, nil
+}
+
+// checkLifeYears ověří roky života. Zdroje metadat je občas přečtou špatně,
+// takže nesmysly je lepší odmítnout, než je uložit.
+func checkLifeYears(birth, death *int) error {
+	for _, year := range []*int{birth, death} {
+		if year != nil && (*year < 1000 || *year > time.Now().Year()) {
+			return errors.New("rok narození i úmrtí musí být mezi 1000 a letošním rokem")
+		}
+	}
+	if birth != nil && death != nil && *death < *birth {
+		return errors.New("rok úmrtí nesmí být dřív než rok narození")
+	}
+	return nil
 }
 
 // --- Series ---

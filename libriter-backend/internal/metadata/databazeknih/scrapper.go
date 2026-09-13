@@ -31,6 +31,7 @@ const (
 	baseURL      = "https://www.databazeknih.cz"
 	host         = "databazeknih.cz"
 	minDelay     = 3 * time.Second
+	searchLimit  = 10
 )
 
 // Aliasy na sdílené typy – ať se v parserech nečte metadata.BookMetadata.
@@ -249,7 +250,14 @@ func parseBookPage(r io.Reader) (*BookMetadata, error) {
 	return meta, nil
 }
 
-// parseSearchResults parsuje výsledky vyhledávání
+// parseSearchResults parsuje výsledky vyhledávání knih.
+//
+// Jeden výsledek je <p class="new"> a uvnitř odkaz na knihu plus
+// <span class="pozn"> s textem "2007, Karel Čapek". Autor je pro výběr
+// z výsledků zásadní – stejných názvů bývá víc.
+//
+// Když se struktura stránky změní, spadne se na hledání holých odkazů:
+// výsledky pak nemají autora, ale funkce se aspoň nerozbije úplně.
 func parseSearchResults(r io.Reader) ([]SearchResult, error) {
 	doc, err := html.Parse(r)
 	if err != nil {
@@ -257,41 +265,121 @@ func parseSearchResults(r io.Reader) ([]SearchResult, error) {
 	}
 
 	var results []SearchResult
+	seen := make(map[int]bool)
 
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		// Výsledky hledání jsou v <a> odkazech na /knihy/ nebo /prehled-knihy/
-		if n.Type == html.ElementNode && n.Data == "a" {
-			href := htmlutil.Attr(n, "href")
-			if strings.Contains(href, "/knihy/") || strings.Contains(href, "/prehled-knihy/") {
-				id := extractIDFromURL(href)
-				title := strings.TrimSpace(htmlutil.Text(n))
-				if id > 0 && title != "" && !strings.Contains(title, "Více") {
-					// Deduplikace
-					for _, r := range results {
-						if r.ID == id {
-							goto next
-						}
-					}
-					results = append(results, SearchResult{
-						ID:    id,
-						Title: title,
-						URL:   htmlutil.ResolveURL(baseURL, href),
-					})
-					if len(results) >= 10 {
-						return
-					}
-				}
-			}
+	htmlutil.Walk(doc, func(n *html.Node) bool {
+		if len(results) >= searchLimit {
+			return false
 		}
-	next:
-		for child := n.FirstChild; child != nil; child = child.NextSibling {
-			walk(child)
+		if n.Type != html.ElementNode || n.Data != "p" || !htmlutil.HasClass(n, "new") {
+			return true
+		}
+
+		result, ok := parseSearchRow(n)
+		if ok && !seen[result.ID] {
+			seen[result.ID] = true
+			results = append(results, result)
+		}
+		return false // řádek je zpracovaný celý, dovnitř už nelezeme
+	})
+
+	if len(results) == 0 {
+		return parseSearchLinks(doc), nil
+	}
+	return results, nil
+}
+
+// parseSearchRow přečte jeden <p class="new"> s výsledkem.
+func parseSearchRow(row *html.Node) (SearchResult, bool) {
+	var result SearchResult
+
+	htmlutil.Walk(row, func(n *html.Node) bool {
+		if n.Type != html.ElementNode {
+			return true
+		}
+
+		switch {
+		// Odkaz s názvem knihy. Obálka odkazuje na tutéž adresu, ale text nemá.
+		case n.Data == "a" && result.Title == "":
+			href := htmlutil.Attr(n, "href")
+			if !strings.Contains(href, "/prehled-knihy/") && !strings.Contains(href, "/knihy/") {
+				return true
+			}
+			title := htmlutil.Collapse(htmlutil.Text(n))
+			if title == "" || strings.Contains(title, "Více") {
+				return true
+			}
+			result.ID = extractIDFromURL(href)
+			result.Title = title
+			result.URL = htmlutil.ResolveURL(baseURL, href)
+
+		// Poznámka pod názvem: "2007, Karel Čapek".
+		case n.Data == "span" && htmlutil.HasClass(n, "pozn") && result.Author == "":
+			result.Year, result.Author = parseNote(htmlutil.Collapse(htmlutil.Text(n)))
+		}
+		return true
+	})
+
+	return result, result.ID > 0 && result.Title != ""
+}
+
+// parseNote rozdělí "2007, Karel Čapek" na rok a autory. Rok i autor mohou
+// chybět; víc autorů zůstane oddělených čárkou.
+func parseNote(note string) (year int, author string) {
+	parts := strings.Split(note, ",")
+
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if i == 0 && yearOnlyRe.MatchString(part) {
+			year, _ = strconv.Atoi(part)
+			continue
+		}
+		if author == "" {
+			author = part
+		} else {
+			author += ", " + part
 		}
 	}
-	walk(doc)
+	return year, author
+}
 
-	return results, nil
+// parseSearchLinks je záložní parser pro případ, že se rozložení stránky změní.
+func parseSearchLinks(doc *html.Node) []SearchResult {
+	var results []SearchResult
+	seen := make(map[int]bool)
+
+	htmlutil.Walk(doc, func(n *html.Node) bool {
+		if len(results) >= searchLimit {
+			return false
+		}
+		if n.Type != html.ElementNode || n.Data != "a" {
+			return true
+		}
+
+		href := htmlutil.Attr(n, "href")
+		if !strings.Contains(href, "/prehled-knihy/") && !strings.Contains(href, "/knihy/") {
+			return true
+		}
+
+		id := extractIDFromURL(href)
+		title := htmlutil.Collapse(htmlutil.Text(n))
+		if id == 0 || title == "" || seen[id] || strings.Contains(title, "Více") {
+			return true
+		}
+
+		seen[id] = true
+		results = append(results, SearchResult{
+			ID:    id,
+			Title: title,
+			URL:   htmlutil.ResolveURL(baseURL, href),
+		})
+		return true
+	})
+
+	return results
 }
 
 // -------------------------------------------------------------------
@@ -299,9 +387,10 @@ func parseSearchResults(r io.Reader) ([]SearchResult, error) {
 // -------------------------------------------------------------------
 
 var (
-	ratingRe = regexp.MustCompile(`(\d{1,3})\s*%`)
-	yearRe   = regexp.MustCompile(`\b(1[89]\d{2}|20[012]\d)\b`)
-	idRe     = regexp.MustCompile(`-(\d+)$`)
+	ratingRe   = regexp.MustCompile(`(\d{1,3})\s*%`)
+	yearRe     = regexp.MustCompile(`\b(1[89]\d{2}|20[012]\d)\b`)
+	idRe       = regexp.MustCompile(`-(\d+)$`)
+	yearOnlyRe = regexp.MustCompile(`^(?:1[89]\d{2}|20\d{2})$`)
 )
 
 func extractIDFromURL(u string) int {

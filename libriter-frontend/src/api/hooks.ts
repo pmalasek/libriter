@@ -3,7 +3,9 @@ import { useMemo } from 'react'
 import { apiFetch, asList } from './client'
 import type {
   Author,
+  AuthorMetadata,
   AuthorRequest,
+  AuthorSearchResult,
   AuthResponse,
   Book,
   BookMetadata,
@@ -134,13 +136,22 @@ export function useUpdateAuthor(authorId: string) {
   return useMutation({
     mutationFn: (body: AuthorRequest) =>
       apiFetch<Author>(`/authors/${authorId}`, { method: 'PUT', json: body }),
-    onSuccess: (author) => {
-      queryClient.setQueryData(queryKeys.author(authorId), author)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.authors })
-      // Knihy nesou vnořené záznamy autorů, takže po přejmenování zestarají taky.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
-    },
+    onSuccess: (author) => refreshAuthor(queryClient, authorId, author),
   })
+}
+
+/**
+ * Zapíše upraveného autora do cache. Knihy nesou vnořené záznamy autorů,
+ * takže po změně jména nebo obrázku zestarají taky.
+ */
+function refreshAuthor(
+  queryClient: ReturnType<typeof useQueryClient>,
+  authorId: string,
+  author: Author,
+) {
+  queryClient.setQueryData(queryKeys.author(authorId), author)
+  void queryClient.invalidateQueries({ queryKey: queryKeys.authors })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.books })
 }
 
 /** Částečná aktualizace knihy – v těle smí být jen skutečně změněná pole. */
@@ -158,6 +169,42 @@ export function usePatchBook(bookId: string) {
 
 // Scraper databazeknih.cz je pomalý a rate-limitovaný (3 s mezi dotazy), proto
 // mutace, ne query – volá se až na kliknutí a nic se necachuje.
+
+/** Stáhne fotku autora ze zdroje metadat a uloží ji na serveru. */
+export function useSetAuthorImage(authorId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (url: string) =>
+      apiFetch<Author>(`/authors/${authorId}/image`, { method: 'PUT', json: { url } }),
+    onSuccess: (author) => refreshAuthor(queryClient, authorId, author),
+  })
+}
+
+export function useDeleteAuthorImage(authorId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => apiFetch<Author>(`/authors/${authorId}/image`, { method: 'DELETE' }),
+    onSuccess: (author) => refreshAuthor(queryClient, authorId, author),
+  })
+}
+
+export function useAuthorMetadataSearch() {
+  return useMutation({
+    mutationFn: async (query: string) =>
+      asList(
+        await apiFetch<AuthorSearchResult[] | null>(
+          `/metadata/author/search?q=${encodeURIComponent(query)}`,
+        ),
+      ),
+  })
+}
+
+export function useFetchAuthorMetadata() {
+  return useMutation({
+    mutationFn: (url: string) =>
+      apiFetch<AuthorMetadata>(`/metadata/author?url=${encodeURIComponent(url)}`),
+  })
+}
 
 export function useMetadataSearch() {
   return useMutation({

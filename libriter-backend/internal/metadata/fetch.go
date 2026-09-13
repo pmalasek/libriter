@@ -77,6 +77,31 @@ func StatusOf(err error) int {
 	return 0
 }
 
+// GetWithType stáhne URL a vrátí i hlavičku Content-Type. Volající musí
+// tělo zavřít.
+func (f *Fetcher) GetWithType(ctx context.Context, targetURL, accept string) (io.ReadCloser, string, error) {
+	if err := f.wait(ctx); err != nil {
+		return nil, "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("User-Agent", UserAgent)
+	req.Header.Set("Accept", accept)
+
+	resp, err := f.client.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
+		return nil, "", &StatusError{Status: resp.StatusCode, URL: targetURL}
+	}
+	return resp.Body, resp.Header.Get("Content-Type"), nil
+}
+
 // GetJSON stáhne URL a rozparsuje ji do v.
 func (f *Fetcher) GetJSON(ctx context.Context, targetURL string, v any) error {
 	body, err := f.Get(ctx, targetURL, "application/json")

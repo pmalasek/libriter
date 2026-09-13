@@ -16,7 +16,8 @@ libriter/
 └── data/
     ├── libriter.db     # SQLite databáze (DB_PATH) – vytvoří se automaticky
     ├── audio/          # Audio soubory (AUDIO_ROOT)
-    └── covers/         # Obálky knih (COVER_ROOT)
+    ├── covers/         # Obálky knih (COVER_ROOT)
+    └── author-images/  # Fotky autorů (AUTHOR_IMAGE_ROOT)
 ```
 
 Produkční build je **jediná binárka** – webové rozhraní je v ní vestavěné přes
@@ -123,7 +124,8 @@ JWT_EXPIRY_HOURS=72
 
 # Soubory
 AUDIO_ROOT=./data/audio         # kořenový adresář audio souborů
-COVER_ROOT=./data/covers        # kořenový adresář obrázků
+COVER_ROOT=./data/covers        # kořenový adresář obálek knih
+AUTHOR_IMAGE_ROOT=./data/author-images   # fotky autorů
 MAX_UPLOAD_MB=500
 
 # Zdroje metadat – pořadí, ve kterém se zkoušejí
@@ -143,7 +145,7 @@ Vývojový server Vite přebírá adresu backendu z `BACKEND_URL` (výchozí
 proměnnou `LIBRITER_ENV_FILE`. Skutečné proměnné prostředí mají vždy přednost
 před hodnotami z `.env`.
 
-**Relativní cesty** (`DB_PATH`, `AUDIO_ROOT`, `COVER_ROOT`) zapsané v `.env` se
+**Relativní cesty** (`DB_PATH`, `AUDIO_ROOT`, `COVER_ROOT`, `AUTHOR_IMAGE_ROOT`) zapsané v `.env` se
 vztahují k adresáři toho `.env` – ne k aktuálnímu adresáři. `bin/libriter` tak
 míří na stejná data, ať ho spustíte odkudkoli. Cesta předaná proměnnou prostředí
 se ponechává tak, jak je.
@@ -155,7 +157,7 @@ se ponechává tak, jak je.
 ### 1. Vytvoření adresářů pro data
 
 ```bash
-mkdir -p data/audio data/covers
+mkdir -p data/audio data/covers data/author-images
 ```
 
 ### 2. Produkční build – jedna binárka
@@ -242,8 +244,14 @@ světlý i tmavý režim podle systému.
 hodnocení a popis; tlačítko *Načíst metadata* vyhledá knihu ve zdrojích
 (databazeknih.cz, cbdb.cz, OpenLibrary, Google Books – viz Metadata knih)
 a předvyplní název a popis. Ukládá se přes `PATCH /books/{id}`, takže odchází
-jen skutečně změněná pole. U autora se edituje jméno po částech a životopis
-(`PUT /authors/{id}`). Čtenář (role reader) tlačítka nevidí.
+jen skutečně změněná pole.
+
+U autora se edituje jméno po částech, roky života a životopis
+(`PUT /authors/{id}`). Stejné tlačítko *Načíst metadata* vyhledá autora ve
+zdrojích a předvyplní životopis i roky; nabídnutá fotka se stáhne až při
+uložení (`PUT /authors/{id}/image`), takže „Zrušit“ nic nezmění. Fotka se
+ukazuje na detailu autora i na kartách v seznamu; autor bez fotky má
+zástupnou ikonu. Čtenář (role reader) tlačítka nevidí.
 
 **Co ještě ne:** přehrávání audia (chybí kapitoly a streamování) a zakládání či
 mazání záznamů z rozhraní – nové knihy, autory a série zakládá scanner nebo
@@ -416,8 +424,11 @@ neznámé pole). Ověřuje se jen to, co klient poslal: `title` nesmí být prá
 |--------|----------|-------|---------|
 | `GET` | `/authors` | Seznam autorů | reader+ |
 | `GET` | `/authors/{id}` | Detail autora | reader+ |
+| `GET` | `/authors/{id}/image` | Fotka autora (soubor z `AUTHOR_IMAGE_ROOT`) | veřejné |
 | `POST` | `/authors` | Přidání autora | editor+ |
 | `PUT` | `/authors/{id}` | Aktualizace autora | editor+ |
+| `PUT` | `/authors/{id}/image` | Stažení fotky ze zdroje metadat | editor+ |
+| `DELETE` | `/authors/{id}/image` | Smazání fotky | editor+ |
 | `DELETE` | `/authors/{id}` | Smazání autora | admin |
 
 Jméno se posílá po částech (`first_name`, `middle_name`, `last_name`); povinné
@@ -425,8 +436,28 @@ je `last_name`. Místo částí lze poslat celé jméno v `name` – rozdělí s
 logikou jako tagy (`"Komenský, Jan Amos"` i `"Jan Amos Komenský"`). Odpověď
 obsahuje části i složené `name`.
 
+Volitelně lze poslat `birth_year` a `death_year` (1000 až letošní rok, úmrtí
+nesmí předcházet narození – jinak `400`).
+
 Autor se stejnou trojicí jmen vrátí `409 Conflict`; stejně dopadne mazání
 autora, který má v knihovně knihy.
+
+**Fotka autora** se nenahrává souborem, ale stáhne se ze zdroje metadat:
+
+```jsonc
+// PUT /authors/{id}/image
+{ "url": "https://www.databazeknih.cz/img/authors/10_/101/karel-capek-z04-101.jpg" }
+```
+
+Adresu určuje klient, proto se pouští jen hostitelé **zapnutých** zdrojů
+metadat (viz níže) – cizí nebo vnitřní adresa skončí `400`, takže přes tenhle
+endpoint nejde server donutit sáhnout kamkoliv. Odpověď musí být obrázek
+(`Content-Type: image/*`, max 20 MB), jinak `502`. Soubor se uloží do
+`AUTHOR_IMAGE_ROOT` jako `<author_id>.<přípona>` a jeho název jde do
+`authors.image_path`.
+
+`GET /authors/{id}/image` je veřejný ze stejného důvodu jako obálky knih –
+`<img>` v prohlížeči neumí poslat hlavičku `Authorization`.
 
 ### Série
 
@@ -444,8 +475,10 @@ autora, který má v knihovně knihy.
 |--------|----------|-------|---------|
 | `GET` | `/metadata/sources` | Zdroje v pořadí, ve kterém se zkoušejí | editor+ |
 | `GET` | `/metadata/search?q=<dotaz>` | Vyhledání knihy | editor+ |
-| `GET` | `/metadata/book?url=<url>` | Metadata dle URL | editor+ |
-| `GET` | `/metadata/book/{id}` | Metadata dle ID databazeknih.cz | editor+ |
+| `GET` | `/metadata/book?url=<url>` | Metadata knihy dle URL | editor+ |
+| `GET` | `/metadata/book/{id}` | Metadata knihy dle ID databazeknih.cz | editor+ |
+| `GET` | `/metadata/author/search?q=<dotaz>` | Vyhledání autora | editor+ |
+| `GET` | `/metadata/author?url=<url>` | Metadata autora dle URL | editor+ |
 
 Typický workflow editora:
 ```
@@ -481,12 +514,51 @@ nezablokuje. Zdroj, který v seznamu není, je vypnutý; prázdná hodnota
 | `databazeknih` | scraper HTML | Nejlepší pokrytí českých titulů. Vrací i žánry, nakladatele a hodnocení. |
 | `cbdb` | scraper HTML | Česká databáze, dobrý doplněk. Nedává rok vydání ani nakladatele (patří konkrétnímu vydání). |
 | `openlibrary` | oficiální JSON API | Zdarma, bez klíče a bez limitu. Česká beletrie je děravá. Rok ani nakladatel u díla nejsou. |
-| `googlebooks` | oficiální JSON API | Bez klíče platí anonymní denní kvóta **sdílená pro celou IP** – snadno se vyčerpá (`429`). Vlastní klíč se zadá do `GOOGLE_BOOKS_API_KEY`. |
+| `googlebooks` | oficiální JSON API | Bez klíče platí anonymní denní kvóta **sdílená pro celou IP** – snadno se vyčerpá (`429`). Vlastní klíč se zadá do `GOOGLE_BOOKS_API_KEY`. Autory jako samostatné záznamy nemá, hledá jen knihy. |
 
 `GET /metadata/book?url=` si zdroj vybere podle domény v adrese; tím zároveň
 vzniká allowlist, protože cizí adresu neobslouží nikdo (`400`). Endpoint
 `/metadata/book/{id}` pracuje s číselným ID specifickým pro databazeknih.cz
 a vrací `404`, když tento zdroj není zapnutý.
+
+`GET /metadata/sources` vrátí, které zdroje jsou zapnuté a v jakém pořadí –
+zvlášť pro knihy a zvlášť pro autory:
+
+```jsonc
+{ "books":   ["databazeknih", "cbdb", "openlibrary", "googlebooks"],
+  "authors": ["databazeknih", "cbdb", "openlibrary"] }
+```
+
+#### Metadata autorů
+
+`GET /metadata/author/search?q=` a `GET /metadata/author?url=` fungují stejně
+jako u knih, jen je neumí `googlebooks`. Vrací jméno, životopis, roky života
+a adresu fotky:
+
+```jsonc
+// GET /metadata/author?url=https://www.databazeknih.cz/autori/karel-capek-101
+{ "id": 101, "name": "Karel Čapek", "bio": "Český prozaik, dramatik…",
+  "image_url": "https://www.databazeknih.cz/img/authors/…/karel-capek-z04-101.jpg",
+  "birth_year": 1890, "death_year": 1938,
+  "source_url": "https://www.databazeknih.cz/autori/karel-capek-101",
+  "source": "databazeknih" }
+```
+
+Fotku stáhne až `PUT /authors/{id}/image` (viz Autoři výše).
+
+Co který zdroj u autorů dá:
+
+| Zdroj | Životopis | Roky | Fotka |
+|-------|-----------|------|-------|
+| `databazeknih` | ano (stručný) | ano | ano |
+| `cbdb` | ano (nejobsáhlejší) | ano | ano |
+| `openlibrary` | často prázdný | ano | jen někdy |
+
+U OpenLibrary je potřeba počítat s duplicitními záznamy téhož autora – většina
+z nich je prázdná, proto je ve výchozím pořadí až za českými zdroji.
+
+České zdroje čtou detail autora přednostně z JSON-LD (`schema.org/Person`),
+které je proti změnám rozložení stránky odolnější než hledání v HTML.
 
 Scrapery stojí na HTML cizích webů a ty se mění bez ohlášení – databazeknih.cz
 si například přesunul vyhledávání z `/hledat` na `/search?in=books`. Když se

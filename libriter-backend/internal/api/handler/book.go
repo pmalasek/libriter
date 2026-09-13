@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
+	"libriter/internal/imagestore"
 	"libriter/internal/service"
 	"libriter/internal/storage"
 
@@ -78,7 +78,7 @@ func (h *BookHandler) Cover(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// cover_path může editor nastavit přes PUT na cokoliv, proto validujeme.
-	abs, ok := resolveCoverPath(h.coverRoot, *book.CoverPath)
+	abs, ok := imagestore.Resolve(h.coverRoot, *book.CoverPath)
 	if !ok {
 		writeError(w, http.StatusNotFound, "obálka nenalezena")
 		return
@@ -93,29 +93,6 @@ func (h *BookHandler) Cover(w http.ResponseWriter, r *http.Request) {
 	// Obálky se mění zřídka a frontend přidává ?v=<updated_at>, takže dlouhá cache je bezpečná.
 	w.Header().Set("Cache-Control", "public, max-age=2592000")
 	http.ServeFile(w, r, abs)
-}
-
-// resolveCoverPath ověří, že coverPath je holý název souboru, a vrátí
-// absolutní cestu uvnitř coverRoot. Chrání před path traversal.
-func resolveCoverPath(coverRoot, coverPath string) (string, bool) {
-	if coverRoot == "" || coverPath == "" || coverPath == "." || coverPath == ".." {
-		return "", false
-	}
-	if strings.ContainsAny(coverPath, `/\`) || filepath.Base(coverPath) != coverPath {
-		return "", false
-	}
-
-	// COVER_ROOT může být relativní cesta (viz config.env.path).
-	root, err := filepath.Abs(coverRoot)
-	if err != nil {
-		return "", false
-	}
-
-	abs := filepath.Join(root, coverPath)
-	if !strings.HasPrefix(abs, root+string(filepath.Separator)) {
-		return "", false
-	}
-	return abs, true
 }
 
 // POST /api/v1/books  (editor+)

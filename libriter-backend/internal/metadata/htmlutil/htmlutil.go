@@ -71,6 +71,13 @@ func Find(n *html.Node, match func(*html.Node) bool) *html.Node {
 	return found
 }
 
+// ByID hledá element s daným id.
+func ByID(n *html.Node, id string) *html.Node {
+	return Find(n, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && Attr(n, "id") == id
+	})
+}
+
 // Element hledá první element daného jména (například "h1").
 func Element(n *html.Node, name string) *html.Node {
 	return Find(n, func(n *html.Node) bool {

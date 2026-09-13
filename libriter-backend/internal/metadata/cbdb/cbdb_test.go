@@ -11,15 +11,39 @@ import (
 // s hodnocením v procentech, druhý s názvem – a odkazy jsou relativní
 // bez úvodního lomítka.
 const searchHTML = `<html><body>
-<div class="results">
-  <a href="kniha-975-valka-s-mloky-valka-s-mloky"><span class="rating">87 %</span></a>
-  <a href="kniha-975-valka-s-mloky-valka-s-mloky">Válka s Mloky</a>
-  <a href="kniha-96180-valka-s-mloky-valka-s-mloky">92 %</a>
-  <a href="kniha-96180-valka-s-mloky-valka-s-mloky">Válka s Mloky</a>
-  <a href="kniha-12778-valka-s-mloky-doktora-jarose">Válka s mloky doktora Jaroše</a>
-  <a href="autor-66-karel-capek">Karel Čapek</a>
-  <a href="/o-projektu">O projektu</a>
-</div></body></html>`
+<div id="search_result_box_books" class="search_result_box">
+ <div class="search_graphic">
+  <div class="search_graphic_box">
+   <a href="kniha-975-valka-s-mloky-valka-s-mloky" class="search_graphic_box_img">
+     <span class="book_item_rating book_item_rating_0">87%</span>
+     <img src="/books/valka-s-mloky-975.jpg" alt="Válka s Mloky" />
+   </a>
+   <div class="search_graphic_box_content">
+     <a href="kniha-975-valka-s-mloky-valka-s-mloky">Válka s Mloky</a>
+     <br /><div> (Válka s Mloky)</div>
+     <span class="search_author_link">Karel Čapek</span>
+   </div>
+  </div>
+  <div class="search_graphic_box">
+   <a href="kniha-96180-valka-s-mloky-valka-s-mloky" class="search_graphic_box_img">
+     <span class="book_item_rating">92%</span>
+   </a>
+   <div class="search_graphic_box_content">
+     <a href="kniha-96180-valka-s-mloky-valka-s-mloky">Válka s Mloky</a>
+     <span class="search_author_link">Karel Čapek</span>,
+     <span class="search_author_link">Pavel Kohout</span>
+   </div>
+  </div>
+  <div class="search_graphic_box">
+   <div class="search_graphic_box_content">
+     <a href="kniha-12778-valka-s-mloky-doktora-jarose">Válka s mloky doktora Jaroše</a>
+   </div>
+  </div>
+ </div>
+</div>
+<a href="autor-66-karel-capek">Karel Čapek</a>
+<a href="/o-projektu">O projektu</a>
+</body></html>`
 
 func TestParseSearchResults(t *testing.T) {
 	doc, err := html.Parse(strings.NewReader(searchHTML))
@@ -44,6 +68,17 @@ func TestParseSearchResults(t *testing.T) {
 	}
 	if first.Source != providerName {
 		t.Errorf("source = %q", first.Source)
+	}
+	if first.Author != "Karel Čapek" {
+		t.Errorf("author = %q – bez autora nejde ze stejných názvů vybrat", first.Author)
+	}
+	// Víc autorů se spojí čárkou.
+	if results[1].Author != "Karel Čapek, Pavel Kohout" {
+		t.Errorf("author druhého = %q", results[1].Author)
+	}
+	// Kniha bez uvedeného autora projde dál, jen s prázdným polem.
+	if results[2].Title != "Válka s mloky doktora Jaroše" || results[2].Author != "" {
+		t.Errorf("třetí = %+v", results[2])
 	}
 
 	// Každá kniha jen jednou, i když na ni vede víc odkazů.

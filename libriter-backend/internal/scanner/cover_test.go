@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"libriter/internal/model"
-
-	"github.com/google/uuid"
 )
 
 func TestLargestImageInDir(t *testing.T) {
@@ -29,43 +27,6 @@ func TestLargestImageInDir(t *testing.T) {
 
 	if got := largestImageInDir(t.TempDir()); got != "" {
 		t.Fatalf("prázdný adresář má vrátit \"\", dostal %q", got)
-	}
-}
-
-func TestNormalizeImageExt(t *testing.T) {
-	cases := map[string]string{
-		".JPEG": ".jpeg", "png": ".png", ".xyz": ".jpg", "": ".jpg", ".webp": ".webp",
-	}
-	for in, want := range cases {
-		if got := normalizeImageExt(in); got != want {
-			t.Errorf("normalizeImageExt(%q) = %q, chtěl %q", in, got, want)
-		}
-	}
-}
-
-func TestWriteCoverAndHasCover(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "covers") // ještě neexistuje – musí se vytvořit
-	s := &Scanner{coverRoot: root}
-
-	src := filepath.Join(t.TempDir(), "folder.JPG")
-	if err := os.WriteFile(src, []byte("obrazek"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	id := uuid.New()
-	rel, err := s.copyCoverFile(id, src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if rel != id.String()+".jpg" {
-		t.Fatalf("cesta %q", rel)
-	}
-	data, err := os.ReadFile(filepath.Join(root, rel))
-	if err != nil || string(data) != "obrazek" {
-		t.Fatalf("obsah %q err %v", data, err)
-	}
-	if entries, _ := os.ReadDir(root); len(entries) != 1 {
-		t.Fatalf("zůstal .tmp soubor: %v", entries)
 	}
 }
 

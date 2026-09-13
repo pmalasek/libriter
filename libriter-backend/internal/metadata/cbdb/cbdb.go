@@ -78,14 +78,86 @@ func (c *Client) Search(ctx context.Context, query string) ([]metadata.SearchRes
 	return parseSearchResults(doc), nil
 }
 
-// parseSearchResults sbírá odkazy na knihy. Každá kniha má na stránce víc
-// odkazů (obálka, hodnocení v procentech, název), proto se deduplikuje podle
-// ID a jako název se bere první smysluplný text.
+// parseSearchResults čte výsledky hledání knih. Jeden výsledek je
+// <div class="search_graphic_box">, uvnitř odkaz na knihu s názvem a
+// <span class="search_author_link"> pro každého autora. Autor je pro výběr
+// z výsledků zásadní – stejných názvů bývá víc.
+//
+// Když se rozložení stránky změní, spadne se na hledání holých odkazů:
+// výsledky pak nemají autora, ale funkce se aspoň nerozbije úplně.
 func parseSearchResults(doc *html.Node) []metadata.SearchResult {
 	var results []metadata.SearchResult
-	index := make(map[int]int) // ID knihy -> pozice ve results
+	seen := make(map[int]bool)
 
 	htmlutil.Walk(doc, func(n *html.Node) bool {
+		if len(results) >= searchLimit {
+			return false
+		}
+		if n.Type != html.ElementNode || n.Data != "div" || !htmlutil.HasClass(n, "search_graphic_box") {
+			return true
+		}
+
+		result, ok := parseSearchRow(n)
+		if ok && !seen[result.ID] {
+			seen[result.ID] = true
+			results = append(results, result)
+		}
+		return false // řádek je zpracovaný celý
+	})
+
+	if len(results) == 0 {
+		return parseSearchLinks(doc)
+	}
+	return results
+}
+
+// parseSearchRow přečte jeden <div class="search_graphic_box">.
+func parseSearchRow(row *html.Node) (metadata.SearchResult, bool) {
+	result := metadata.SearchResult{Source: providerName}
+	var authors []string
+
+	htmlutil.Walk(row, func(n *html.Node) bool {
+		if n.Type != html.ElementNode {
+			return true
+		}
+
+		switch {
+		case n.Data == "a" && result.Title == "":
+			href := htmlutil.Attr(n, "href")
+			match := bookHrefRe.FindStringSubmatch(href)
+			if match == nil {
+				return true
+			}
+			// Odkaz s obálkou vede na tutéž adresu, ale nese jen hodnocení.
+			title := htmlutil.Collapse(htmlutil.Text(n))
+			if title == "" || ratingRe.MatchString(title) {
+				return true
+			}
+			result.ID, _ = strconv.Atoi(match[1])
+			result.Title = title
+			result.URL = htmlutil.ResolveURL(baseURL, href)
+
+		case n.Data == "span" && htmlutil.HasClass(n, "search_author_link"):
+			if name := htmlutil.Collapse(htmlutil.Text(n)); name != "" {
+				authors = append(authors, name)
+			}
+		}
+		return true
+	})
+
+	result.Author = strings.Join(authors, ", ")
+	return result, result.ID > 0 && result.Title != ""
+}
+
+// parseSearchLinks je záložní parser pro případ, že se rozložení stránky změní.
+func parseSearchLinks(doc *html.Node) []metadata.SearchResult {
+	var results []metadata.SearchResult
+	seen := make(map[int]bool)
+
+	htmlutil.Walk(doc, func(n *html.Node) bool {
+		if len(results) >= searchLimit {
+			return false
+		}
 		if n.Type != html.ElementNode || n.Data != "a" {
 			return true
 		}
@@ -96,44 +168,26 @@ func parseSearchResults(doc *html.Node) []metadata.SearchResult {
 			return true
 		}
 		id, err := strconv.Atoi(match[1])
-		if err != nil || id == 0 {
+		if err != nil || id == 0 || seen[id] {
 			return true
 		}
 
 		title := htmlutil.Collapse(htmlutil.Text(n))
 		if title == "" || ratingRe.MatchString(title) {
-			// Odkaz s obálkou nebo s procentem hodnocení – název nenese.
-			title = ""
-		}
-
-		position, seen := index[id]
-		if !seen {
-			index[id] = len(results)
-			results = append(results, metadata.SearchResult{
-				ID:     id,
-				Title:  title,
-				URL:    htmlutil.ResolveURL(baseURL, href),
-				Source: providerName,
-			})
 			return true
 		}
-		if results[position].Title == "" {
-			results[position].Title = title
-		}
+
+		seen[id] = true
+		results = append(results, metadata.SearchResult{
+			ID:     id,
+			Title:  title,
+			URL:    htmlutil.ResolveURL(baseURL, href),
+			Source: providerName,
+		})
 		return true
 	})
 
-	// Knihy bez názvu zahodit a výsledek zkrátit na rozumný počet.
-	named := results[:0]
-	for _, r := range results {
-		if r.Title != "" {
-			named = append(named, r)
-		}
-		if len(named) == searchLimit {
-			break
-		}
-	}
-	return named
+	return results
 }
 
 // --- detail ---
