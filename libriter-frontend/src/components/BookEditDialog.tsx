@@ -1,0 +1,279 @@
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { usePatchBook, useSeriesList } from '@/api/hooks'
+import {
+  METADATA_SOURCE_LABELS,
+  type Author,
+  type Book,
+  type BookPatchRequest,
+} from '@/api/types'
+import { BookAuthorsField } from '@/components/BookAuthorsField'
+import { MetadataImport } from '@/components/MetadataImport'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
+import { joinDuration, splitDuration } from '@/lib/format'
+
+/** Hodnota Selectu pro „nic nevybráno“ – Radix nedovolí prázdný řetězec. */
+const NONE = 'none'
+
+interface Props {
+  book: Book
+  open: boolean
+  onOpenChange: (open: boolean) => void
+}
+
+export function BookEditDialog({ book, open, onOpenChange }: Props) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+        {open ? <BookEditForm book={book} onDone={() => onOpenChange(false)} /> : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function BookEditForm({ book, onDone }: { book: Book; onDone: () => void }) {
+  const initialDuration = splitDuration(book.duration_seconds)
+
+  const [title, setTitle] = useState(book.title)
+  const [authors, setAuthors] = useState<Author[]>(book.authors ?? [])
+  const [seriesId, setSeriesId] = useState(book.series_id ?? NONE)
+  const [seriesPosition, setSeriesPosition] = useState(String(book.series_position ?? ''))
+  const [narrator, setNarrator] = useState(book.narrator ?? '')
+  const [hours, setHours] = useState(String(initialDuration.hours))
+  const [minutes, setMinutes] = useState(String(initialDuration.minutes))
+  const [language, setLanguage] = useState(book.language)
+  const [rating, setRating] = useState(book.internal_rating ? String(book.internal_rating) : NONE)
+  const [description, setDescription] = useState(book.description ?? '')
+
+  const seriesList = useSeriesList()
+  const patchBook = usePatchBook(book.id)
+
+  /**
+   * Tělo požadavku vzniká porovnáním s načtenou knihou – PATCH nese jen to, co
+   * se opravdu změnilo. Díky tomu se délka neposílá (a nezaokrouhlí na celé
+   * minuty), dokud s ní uživatel nehne.
+   */
+  function buildPatch(): BookPatchRequest {
+    const patch: BookPatchRequest = {}
+
+    if (title.trim() !== book.title) patch.title = title.trim()
+
+    const authorIDs = authors.map((a) => a.id)
+    const originalIDs = (book.authors ?? []).map((a) => a.id)
+    if (authorIDs.join() !== originalIDs.join()) patch.author_ids = authorIDs
+
+    const nextSeriesID = seriesId === NONE ? null : seriesId
+    if (nextSeriesID !== (book.series_id ?? null)) patch.series_id = nextSeriesID
+
+    // Bez série nedává pořadí dílu smysl – odpojení série ho vyprázdní taky.
+    const nextPosition =
+      nextSeriesID === null || seriesPosition.trim() === '' ? null : Number(seriesPosition)
+    if (nextPosition !== (book.series_position ?? null)) patch.series_position = nextPosition
+
+    const nextNarrator = narrator.trim() || null
+    if (nextNarrator !== (book.narrator ?? null)) patch.narrator = nextNarrator
+
+    const nextDuration = joinDuration(Number(hours) || 0, Number(minutes) || 0)
+    const original = splitDuration(book.duration_seconds)
+    if (nextDuration !== joinDuration(original.hours, original.minutes)) {
+      patch.duration_seconds = nextDuration
+    }
+
+    if (language.trim() !== book.language) patch.language = language.trim()
+
+    const nextRating = rating === NONE ? null : Number(rating)
+    if (nextRating !== (book.internal_rating ?? null)) patch.internal_rating = nextRating
+
+    const nextDescription = description.trim() || null
+    if (nextDescription !== (book.description ?? null)) patch.description = nextDescription
+
+    return patch
+  }
+
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+
+    if (authors.length === 0) {
+      toast.error('Kniha musí mít alespoň jednoho autora.')
+      return
+    }
+
+    const patch = buildPatch()
+    if (Object.keys(patch).length === 0) {
+      onDone()
+      return
+    }
+    if (patch.duration_seconds !== undefined && patch.duration_seconds <= 0) {
+      toast.error('Délka musí být kladná.')
+      return
+    }
+
+    patchBook.mutate(patch, {
+      onSuccess: () => {
+        toast.success('Kniha byla uložena.')
+        onDone()
+      },
+      onError: (error) => toast.error(error.message),
+    })
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="grid gap-4">
+      <DialogHeader>
+        <DialogTitle>Upravit knihu</DialogTitle>
+        <DialogDescription>
+          Obálku a cestu k audio souborům spravuje scanner, tady se měnit nedají.
+        </DialogDescription>
+      </DialogHeader>
+
+      <MetadataImport
+        defaultQuery={[book.title, book.authors?.[0]?.name].filter(Boolean).join(' ')}
+        onApply={(meta) => {
+          if (meta.title) setTitle(meta.title)
+          if (meta.description) setDescription(meta.description)
+          toast.success(
+            `Metadata z ${METADATA_SOURCE_LABELS[meta.source] ?? meta.source} načtena – zkontroluj je a ulož.`,
+          )
+        }}
+      />
+
+      <div className="space-y-2">
+        <Label htmlFor="book_title">Název</Label>
+        <Input
+          id="book_title"
+          required
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+      </div>
+
+      <BookAuthorsField value={authors} onChange={setAuthors} />
+
+      <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
+        <div className="space-y-2">
+          <Label htmlFor="book_series">Série</Label>
+          <Select value={seriesId} onValueChange={setSeriesId}>
+            <SelectTrigger id="book_series" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>Žádná</SelectItem>
+              {(seriesList.data ?? []).map((series) => (
+                <SelectItem key={series.id} value={series.id}>
+                  {series.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="book_series_position">Díl</Label>
+          <Input
+            id="book_series_position"
+            type="number"
+            min={1}
+            value={seriesPosition}
+            onChange={(e) => setSeriesPosition(e.target.value)}
+            disabled={seriesId === NONE}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="book_narrator">Vypravěč</Label>
+        <Input
+          id="book_narrator"
+          value={narrator}
+          onChange={(e) => setNarrator(e.target.value)}
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div className="space-y-2">
+          <Label htmlFor="book_hours">Délka</Label>
+          <div className="flex items-center gap-2">
+            <Input
+              id="book_hours"
+              type="number"
+              min={0}
+              value={hours}
+              onChange={(e) => setHours(e.target.value)}
+            />
+            <span className="text-sm text-muted-foreground">h</span>
+            <Input
+              type="number"
+              min={0}
+              max={59}
+              value={minutes}
+              onChange={(e) => setMinutes(e.target.value)}
+              aria-label="Minuty"
+            />
+            <span className="text-sm text-muted-foreground">min</span>
+          </div>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="book_language">Jazyk</Label>
+          <Input
+            id="book_language"
+            maxLength={5}
+            value={language}
+            onChange={(e) => setLanguage(e.target.value)}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="book_rating">Hodnocení</Label>
+          <Select value={rating} onValueChange={setRating}>
+            <SelectTrigger id="book_rating" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>Žádné</SelectItem>
+              {[1, 2, 3, 4, 5].map((value) => (
+                <SelectItem key={value} value={String(value)}>
+                  {value}/5
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="book_description">Popis</Label>
+        <Textarea
+          id="book_description"
+          rows={6}
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+        />
+      </div>
+
+      <DialogFooter>
+        <Button type="button" variant="ghost" onClick={onDone}>
+          Zrušit
+        </Button>
+        <Button type="submit" disabled={patchBook.isPending || authors.length === 0}>
+          {patchBook.isPending ? 'Ukládám…' : 'Uložit'}
+        </Button>
+      </DialogFooter>
+    </form>
+  )
+}

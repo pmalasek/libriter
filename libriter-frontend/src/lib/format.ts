@@ -13,6 +13,21 @@ export function formatDuration(seconds: number): string {
   return `${total} s`
 }
 
+/** Délka v sekundách → hodiny a minuty pro formulář. */
+export function splitDuration(seconds: number): { hours: number; minutes: number } {
+  const total = Math.max(0, Math.round(seconds))
+  return { hours: Math.floor(total / 3600), minutes: Math.floor((total % 3600) / 60) }
+}
+
+/**
+ * Hodiny a minuty zpět na sekundy. Převod je ztrátový (scanner ukládá i
+ * nezaokrouhlené hodnoty), proto se duration_seconds posílá jen tehdy,
+ * když uživatel s poli délky skutečně hnul.
+ */
+export function joinDuration(hours: number, minutes: number): number {
+  return Math.max(0, Math.trunc(hours)) * 3600 + Math.max(0, Math.trunc(minutes)) * 60
+}
+
 const dateFormatter = new Intl.DateTimeFormat('cs-CZ', {
   day: 'numeric',
   month: 'long',

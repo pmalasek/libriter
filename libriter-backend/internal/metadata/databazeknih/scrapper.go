@@ -14,66 +14,54 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
+	"libriter/internal/metadata"
+	"libriter/internal/metadata/htmlutil"
+
 	"golang.org/x/net/html"
 )
 
 const (
-	baseURL   = "https://www.databazeknih.cz"
-	userAgent = "Libriter/1.0 (osobni-audiobook-knihovna; +https://github.com/libriter)"
-	minDelay  = 3 * time.Second
+	providerName = "databazeknih"
+	baseURL      = "https://www.databazeknih.cz"
+	host         = "databazeknih.cz"
+	minDelay     = 3 * time.Second
 )
 
-// BookMetadata jsou metadata stažená z databazeknih.cz
-type BookMetadata struct {
-	DatabazeknihID int
-	Title          string
-	Author         string
-	AuthorID       int
-	Description    string
-	Genres         []string
-	CoverURL       string
-	Rating         int // 0-100
-	Publisher      string
-	Year           int
-	SourceURL      string
-}
-
-// SearchResult je jeden výsledek vyhledávání
-type SearchResult struct {
-	ID     int
-	Title  string
-	Author string
-	Year   int
-	URL    string
-}
+// Aliasy na sdílené typy – ať se v parserech nečte metadata.BookMetadata.
+type (
+	SearchResult = metadata.SearchResult
+	BookMetadata = metadata.BookMetadata
+)
 
 // Client je scraper klient s rate limitingem
 type Client struct {
-	http     *http.Client
-	lastReq  time.Time
-	minDelay time.Duration
+	fetcher *metadata.Fetcher
 }
 
 // NewClient vytvoří nový scraper klient
 func NewClient() *Client {
-	return &Client{
-		http: &http.Client{
-			Timeout: 15 * time.Second,
-		},
-		minDelay: minDelay,
-	}
+	return &Client{fetcher: metadata.NewFetcher(minDelay)}
+}
+
+func (c *Client) Name() string { return providerName }
+
+// Supports přijímá jen adresy z databazeknih.cz – slouží zároveň jako
+// allowlist pro /metadata/book?url=.
+func (c *Client) Supports(rawURL string) bool {
+	return metadata.HostMatches(rawURL, host)
 }
 
 // Search vyhledá knihy podle dotazu, vrátí max. 10 výsledků
 func (c *Client) Search(ctx context.Context, query string) ([]SearchResult, error) {
-	searchURL := fmt.Sprintf("%s/hledat?q=%s&hledat=Hledat",
+	// Vyhledávací formulář na webu míří na /search?in=books; starší /hledat
+	// dnes vrací 404.
+	searchURL := fmt.Sprintf("%s/search?in=books&q=%s",
 		baseURL,
 		url.QueryEscape(query),
 	)
@@ -103,14 +91,14 @@ func (c *Client) FetchBook(ctx context.Context, bookID int) (*BookMetadata, erro
 		return nil, fmt.Errorf("parse book %d: %w", bookID, err)
 	}
 
-	meta.DatabazeknihID = bookID
+	meta.ID = bookID
 	meta.SourceURL = bookURL
 	return meta, nil
 }
 
-// FetchBookByURL stáhne metadata knihy přímo z URL
-// Preferovaná metoda - URL máme ze search výsledků
-func (c *Client) FetchBookByURL(ctx context.Context, bookURL string) (*BookMetadata, error) {
+// FetchByURL stáhne metadata knihy přímo z URL.
+// Preferovaná metoda - URL máme ze search výsledků.
+func (c *Client) FetchByURL(ctx context.Context, bookURL string) (*BookMetadata, error) {
 	body, err := c.fetch(ctx, bookURL)
 	if err != nil {
 		return nil, fmt.Errorf("fetch book url: %w", err)
@@ -122,8 +110,9 @@ func (c *Client) FetchBookByURL(ctx context.Context, bookURL string) (*BookMetad
 		return nil, fmt.Errorf("parse book page: %w", err)
 	}
 
-	meta.DatabazeknihID = extractIDFromURL(bookURL)
+	meta.ID = extractIDFromURL(bookURL)
 	meta.SourceURL = bookURL
+	meta.Source = providerName
 	return meta, nil
 }
 
@@ -154,37 +143,7 @@ func (c *Client) DownloadCover(ctx context.Context, coverURL string) ([]byte, st
 // -------------------------------------------------------------------
 
 func (c *Client) fetch(ctx context.Context, targetURL string) (io.ReadCloser, error) {
-	// Rate limiting - počkáme pokud jsme volali příliš nedávno
-	if elapsed := time.Since(c.lastReq); elapsed < c.minDelay {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(c.minDelay - elapsed):
-		}
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, targetURL, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Set("User-Agent", userAgent)
-	req.Header.Set("Accept", "text/html,application/xhtml+xml")
-	req.Header.Set("Accept-Language", "cs,en;q=0.9")
-
-	resp, err := c.http.Do(req)
-	c.lastReq = time.Now()
-
-	if err != nil {
-		return nil, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		resp.Body.Close()
-		return nil, fmt.Errorf("HTTP %d pro %s", resp.StatusCode, targetURL)
-	}
-
-	return resp.Body, nil
+	return c.fetcher.Get(ctx, targetURL, "text/html,application/xhtml+xml")
 }
 
 // -------------------------------------------------------------------
@@ -209,14 +168,14 @@ func parseBookPage(r io.Reader) (*BookMetadata, error) {
 			// <h1> = název knihy
 			case "h1":
 				if meta.Title == "" {
-					meta.Title = strings.TrimSpace(nodeText(n))
+					meta.Title = strings.TrimSpace(htmlutil.Text(n))
 				}
 
 			// <meta> tagy - og:image pro obálku, description pro popis
 			case "meta":
-				prop := attr(n, "property")
-				name := attr(n, "name")
-				content := attr(n, "content")
+				prop := htmlutil.Attr(n, "property")
+				name := htmlutil.Attr(n, "name")
+				content := htmlutil.Attr(n, "content")
 
 				switch {
 				case prop == "og:image" && content != "":
@@ -231,8 +190,8 @@ func parseBookPage(r io.Reader) (*BookMetadata, error) {
 
 			// <a> linky - autor, žánry, nakladatel
 			case "a":
-				href := attr(n, "href")
-				text := strings.TrimSpace(nodeText(n))
+				href := htmlutil.Attr(n, "href")
+				text := strings.TrimSpace(htmlutil.Text(n))
 
 				switch {
 				case strings.Contains(href, "/autori/") && text != "" && meta.Author == "":
@@ -303,10 +262,10 @@ func parseSearchResults(r io.Reader) ([]SearchResult, error) {
 	walk = func(n *html.Node) {
 		// Výsledky hledání jsou v <a> odkazech na /knihy/ nebo /prehled-knihy/
 		if n.Type == html.ElementNode && n.Data == "a" {
-			href := attr(n, "href")
+			href := htmlutil.Attr(n, "href")
 			if strings.Contains(href, "/knihy/") || strings.Contains(href, "/prehled-knihy/") {
 				id := extractIDFromURL(href)
-				title := strings.TrimSpace(nodeText(n))
+				title := strings.TrimSpace(htmlutil.Text(n))
 				if id > 0 && title != "" && !strings.Contains(title, "Více") {
 					// Deduplikace
 					for _, r := range results {
@@ -317,7 +276,7 @@ func parseSearchResults(r io.Reader) ([]SearchResult, error) {
 					results = append(results, SearchResult{
 						ID:    id,
 						Title: title,
-						URL:   fullURL(href),
+						URL:   htmlutil.ResolveURL(baseURL, href),
 					})
 					if len(results) >= 10 {
 						return
@@ -360,37 +319,6 @@ func extractIDFromURL(u string) int {
 	return id
 }
 
-func attr(n *html.Node, key string) string {
-	for _, a := range n.Attr {
-		if a.Key == key {
-			return a.Val
-		}
-	}
-	return ""
-}
-
-func nodeText(n *html.Node) string {
-	var sb strings.Builder
-	var walk func(*html.Node)
-	walk = func(n *html.Node) {
-		if n.Type == html.TextNode {
-			sb.WriteString(n.Data)
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			walk(c)
-		}
-	}
-	walk(n)
-	return sb.String()
-}
-
-func fullURL(href string) string {
-	if strings.HasPrefix(href, "http") {
-		return href
-	}
-	return baseURL + href
-}
-
 func cleanDescription(s string) string {
 	// Oříznutí "... od Autor Jméno" na konci (formát meta description)
 	if idx := strings.LastIndex(s, "... od "); idx > 0 {
@@ -411,12 +339,12 @@ func extractDescription(doc *html.Node) string {
 		}
 
 		if n.Type == html.ElementNode && n.Data == "h2" {
-			text := strings.TrimSpace(nodeText(n))
+			text := strings.TrimSpace(htmlutil.Text(n))
 			inSection = strings.Contains(text, "O knize")
 		}
 
 		if inSection && n.Type == html.ElementNode && n.Data == "p" {
-			text := strings.TrimSpace(nodeText(n))
+			text := strings.TrimSpace(htmlutil.Text(n))
 			if len(text) > 50 {
 				result = text
 				inSection = false

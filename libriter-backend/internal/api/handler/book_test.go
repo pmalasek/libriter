@@ -2,10 +2,13 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"libriter/internal/config"
@@ -193,4 +196,127 @@ func TestBookHandlerCoverServesFile(t *testing.T) {
 			t.Errorf("Content-Type = %q, chtěno %q", ct, "image/jpeg")
 		}
 	})
+}
+
+func TestBookPatchRequestValidation(t *testing.T) {
+	// Základ, proti kterému se patch aplikuje – odpovídá řádku v databázi.
+	narrator := "Viktor Preiss"
+	description := "Původní popis."
+	rating := int16(4)
+	base := func() storage.BookInput {
+		return storage.BookInput{
+			AuthorIDs:       []uuid.UUID{uuid.MustParse("11111111-1111-1111-1111-111111111111")},
+			Title:           "Ze života hmyzu",
+			Narrator:        &narrator,
+			DurationSeconds: 7200,
+			FilePath:        "capek/ze-zivota-hmyzu",
+			Language:        "cs",
+			Description:     &description,
+			InternalRating:  &rating,
+		}
+	}
+
+	invalid := []struct {
+		name string
+		body string
+	}{
+		{"prázdný title", `{"title":"   "}`},
+		{"nulová délka", `{"duration_seconds":0}`},
+		{"záporná délka", `{"duration_seconds":-1}`},
+		{"hodnocení mimo rozsah", `{"internal_rating":9}`},
+		{"prázdní autoři", `{"author_ids":[]}`},
+		{"neplatné UUID autora", `{"author_ids":["nope"]}`},
+		{"neplatné UUID série", `{"series_id":"nope"}`},
+	}
+	for _, tt := range invalid {
+		t.Run(tt.name, func(t *testing.T) {
+			var req bookPatchRequest
+			if err := json.Unmarshal([]byte(tt.body), &req); err != nil {
+				t.Fatalf("unmarshal: %v", err)
+			}
+			if _, err := req.toPatch(); err == nil {
+				t.Errorf("toPatch(%s) prošlo, chtěna chyba", tt.body)
+			}
+		})
+	}
+
+	t.Run("prázdné tělo nic nemění", func(t *testing.T) {
+		var req bookPatchRequest
+		if err := json.Unmarshal([]byte(`{}`), &req); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		apply, err := req.toPatch()
+		if err != nil {
+			t.Fatalf("toPatch: %v", err)
+		}
+
+		in := base()
+		apply(&in)
+		if !reflect.DeepEqual(in, base()) {
+			t.Errorf("vstup se změnil: %+v", in)
+		}
+	})
+
+	t.Run("null vyprázdní nullable pole", func(t *testing.T) {
+		var req bookPatchRequest
+		body := `{"description":null,"narrator":null,"internal_rating":null,"series_id":null}`
+		if err := json.Unmarshal([]byte(body), &req); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		apply, err := req.toPatch()
+		if err != nil {
+			t.Fatalf("toPatch: %v", err)
+		}
+
+		in := base()
+		apply(&in)
+		if in.Description != nil || in.Narrator != nil || in.InternalRating != nil || in.SeriesID != nil {
+			t.Errorf("nullable pole se nevyprázdnila: %+v", in)
+		}
+		// Ostatní pole zůstávají nedotčená.
+		if in.Title != base().Title || in.FilePath != base().FilePath {
+			t.Errorf("změnila se i jiná pole: %+v", in)
+		}
+	})
+
+	t.Run("poslaná pole se zapíšou", func(t *testing.T) {
+		var req bookPatchRequest
+		body := `{"title":"  Nový název  ","duration_seconds":60,"internal_rating":5,
+		          "author_ids":["22222222-2222-2222-2222-222222222222"]}`
+		if err := json.Unmarshal([]byte(body), &req); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		apply, err := req.toPatch()
+		if err != nil {
+			t.Fatalf("toPatch: %v", err)
+		}
+
+		in := base()
+		apply(&in)
+		if in.Title != "Nový název" {
+			t.Errorf("title = %q, chtěno %q (oříznuté)", in.Title, "Nový název")
+		}
+		if in.DurationSeconds != 60 {
+			t.Errorf("duration_seconds = %d", in.DurationSeconds)
+		}
+		if in.InternalRating == nil || *in.InternalRating != 5 {
+			t.Errorf("internal_rating = %v", in.InternalRating)
+		}
+		if len(in.AuthorIDs) != 1 || in.AuthorIDs[0].String() != "22222222-2222-2222-2222-222222222222" {
+			t.Errorf("author_ids = %v", in.AuthorIDs)
+		}
+		// file_path v požadavku vůbec není a zůstává netknutý.
+		if in.FilePath != base().FilePath {
+			t.Errorf("file_path = %q, chtěno %q", in.FilePath, base().FilePath)
+		}
+	})
+}
+
+// file_path je neznámé pole – readJSON ho odmítne, takže ho klient nemá jak přepsat.
+func TestBookPatchRejectsFilePath(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPatch, "/", strings.NewReader(`{"file_path":"/etc/passwd"}`))
+	var req bookPatchRequest
+	if err := readJSON(r, &req); err == nil {
+		t.Error("readJSON přijal file_path, chtěna chyba")
+	}
 }

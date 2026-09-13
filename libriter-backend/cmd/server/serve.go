@@ -17,7 +17,11 @@ import (
 	"libriter/internal/api/middleware"
 	"libriter/internal/config"
 	"libriter/internal/db"
+	"libriter/internal/metadata"
+	"libriter/internal/metadata/cbdb"
 	"libriter/internal/metadata/databazeknih"
+	"libriter/internal/metadata/googlebooks"
+	"libriter/internal/metadata/openlibrary"
 	"libriter/internal/scanner"
 	"libriter/internal/service"
 	"libriter/internal/storage"
@@ -64,7 +68,8 @@ func runServe() error {
 	bookH := handler.NewBook(bookSvc, cfg.Storage.CoverRoot)
 	authorH := handler.NewAuthor(authorSvc)
 	seriesH := handler.NewSeries(seriesSvc)
-	metadataH := handler.NewMetadata(databazeknih.NewClient())
+	metadataChain, dkClient := buildMetadata(cfg.Metadata)
+	metadataH := handler.NewMetadata(metadataChain, dkClient)
 
 	// --- router ---
 	r := chi.NewRouter()
@@ -121,6 +126,7 @@ func runServe() error {
 				r.Use(middleware.RequireRole("editor"))
 				r.Post("/books", bookH.Create)
 				r.Put("/books/{id}", bookH.Update)
+				r.Patch("/books/{id}", bookH.Patch) // částečná aktualizace (webové rozhraní)
 				r.Post("/authors", authorH.Create)
 				r.Put("/authors/{id}", authorH.Update)
 				r.Post("/series", seriesH.Create)
@@ -135,9 +141,10 @@ func runServe() error {
 				r.Delete("/series/{id}", seriesH.Delete)
 			})
 
-			// Metadata scraper - databazeknih.cz (editor+)
+			// Metadata knih - zdroje a jejich pořadí řídí METADATA_PROVIDERS (editor+)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole("editor"))
+				r.Get("/metadata/sources", metadataH.Sources)     // pořadí zdrojů
 				r.Get("/metadata/search", metadataH.Search)       // ?q=<dotaz>
 				r.Get("/metadata/book/{id}", metadataH.FetchByID) // dle DK ID
 				r.Get("/metadata/book", metadataH.FetchByURL)     // ?url=<url>
@@ -184,4 +191,25 @@ func runServe() error {
 		return fmt.Errorf("shutdown: %w", err)
 	}
 	return nil
+}
+
+// buildMetadata sestaví řetězec zdrojů metadat podle konfigurace. Vrací
+// zároveň klienta databazeknih.cz (nebo nil), protože endpoint /metadata/book/{id}
+// pracuje s číselným ID, které je pro tento zdroj specifické.
+func buildMetadata(cfg config.MetadataConfig) (*metadata.Chain, *databazeknih.Client) {
+	var dkClient *databazeknih.Client
+
+	factories := map[string]metadata.Factory{
+		"databazeknih": func() metadata.Provider {
+			dkClient = databazeknih.NewClient()
+			return dkClient
+		},
+		"cbdb":        func() metadata.Provider { return cbdb.NewClient() },
+		"openlibrary": func() metadata.Provider { return openlibrary.NewClient() },
+		"googlebooks": func() metadata.Provider { return googlebooks.NewClient(cfg.GoogleBooksAPIKey) },
+	}
+
+	chain := metadata.BuildChain(cfg.Providers, factories)
+	slog.Info("zdroje metadat", "pořadí", chain.Providers())
+	return chain, dkClient
 }

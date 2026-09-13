@@ -171,6 +171,41 @@ func (h *BookHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, book)
 }
 
+// PATCH /api/v1/books/{id}  (editor+)
+//
+// Mění jen pole, která klient skutečně poslal. Existuje vedle PUT proto, že
+// file_path se přes API nevystavuje (model.Book má json:"-"), takže úplná
+// náhrada by cestu k audiu přepsala prázdnou hodnotou.
+func (h *BookHandler) Patch(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+
+	var req bookPatchRequest
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		return
+	}
+
+	apply, err := req.toPatch()
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	book, err := h.svc.Patch(r.Context(), id, apply)
+	if errors.Is(err, service.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "kniha nenalezena")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "chyba při aktualizaci knihy")
+		return
+	}
+	writeJSON(w, http.StatusOK, book)
+}
+
 // DELETE /api/v1/books/{id}  (admin)
 func (h *BookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUID(w, r, "id")
@@ -253,6 +288,94 @@ func (req *bookRequest) toInput() (storage.BookInput, error) {
 	}
 
 	return in, nil
+}
+
+// bookPatchRequest je bookRequest pro částečnou aktualizaci – každé pole nese
+// navíc informaci, jestli ho klient poslal. file_path chybí schválně: cestu
+// k audiu spravuje výhradně scanner a klient ji nikdy nevidí.
+type bookPatchRequest struct {
+	AuthorIDs      Optional[[]string] `json:"author_ids"`
+	SeriesID       Optional[*string]  `json:"series_id"`
+	SeriesPosition Optional[*int16]   `json:"series_position"`
+	Title          Optional[string]   `json:"title"`
+	Narrator       Optional[*string]  `json:"narrator"`
+	// duration_seconds zůstává i tady povinně kladné – nulová délka by rozbila
+	// zobrazení i budoucí přehrávání.
+	DurationSeconds Optional[int]     `json:"duration_seconds"`
+	CoverPath       Optional[*string] `json:"cover_path"`
+	Language        Optional[string]  `json:"language"`
+	Description     Optional[*string] `json:"description"`
+	InternalRating  Optional[*int16]  `json:"internal_rating"`
+}
+
+// toPatch ověří poslaná pole a vrátí funkci, která je zanese do vstupu knihy.
+// Validuje se jen to, co klient poslal – zbytek vstupu pochází z uloženého
+// řádku, který je už platný.
+func (req *bookPatchRequest) toPatch() (func(*storage.BookInput), error) {
+	if req.Title.Set && strings.TrimSpace(req.Title.Value) == "" {
+		return nil, errors.New("title nesmí být prázdný")
+	}
+	if req.DurationSeconds.Set && req.DurationSeconds.Value <= 0 {
+		return nil, errors.New("duration_seconds musí být kladné číslo")
+	}
+	if req.InternalRating.Set && req.InternalRating.Value != nil &&
+		(*req.InternalRating.Value < 1 || *req.InternalRating.Value > 5) {
+		return nil, errors.New("internal_rating musí být 1–5")
+	}
+
+	var authorIDs []uuid.UUID
+	if req.AuthorIDs.Set {
+		ids, err := parseUUIDs(req.AuthorIDs.Value, "author_ids")
+		if err != nil {
+			return nil, err
+		}
+		if len(ids) == 0 {
+			return nil, errors.New("author_ids musí obsahovat alespoň jednoho autora")
+		}
+		authorIDs = ids
+	}
+
+	var seriesID *uuid.UUID
+	if req.SeriesID.Set && req.SeriesID.Value != nil {
+		sid, err := parseUUIDStr(*req.SeriesID.Value, "series_id")
+		if err != nil {
+			return nil, err
+		}
+		seriesID = &sid
+	}
+
+	return func(in *storage.BookInput) {
+		if req.AuthorIDs.Set {
+			in.AuthorIDs = authorIDs
+		}
+		if req.SeriesID.Set {
+			in.SeriesID = seriesID // null v těle sérii odpojí
+		}
+		if req.SeriesPosition.Set {
+			in.SeriesPosition = req.SeriesPosition.Value
+		}
+		if req.Title.Set {
+			in.Title = strings.TrimSpace(req.Title.Value)
+		}
+		if req.Narrator.Set {
+			in.Narrator = req.Narrator.Value
+		}
+		if req.DurationSeconds.Set {
+			in.DurationSeconds = req.DurationSeconds.Value
+		}
+		if req.CoverPath.Set {
+			in.CoverPath = req.CoverPath.Value
+		}
+		if req.Language.Set && req.Language.Value != "" {
+			in.Language = req.Language.Value
+		}
+		if req.Description.Set {
+			in.Description = req.Description.Value
+		}
+		if req.InternalRating.Set {
+			in.InternalRating = req.InternalRating.Value
+		}
+	}, nil
 }
 
 // parseUUIDs převede seznam ID; zachovává pořadí (určuje pořadí autorů u knihy).

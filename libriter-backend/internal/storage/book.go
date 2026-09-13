@@ -29,62 +29,104 @@ const bookColumns = `id, series_id, series_position, title, narrator,
 	       duration_seconds, file_path, cover_path, language, description,
 	       internal_rating, created_at, updated_at`
 
-func (s *Store) CreateBook(ctx context.Context, in BookInput) (*model.Book, error) {
-	const q = `
-		INSERT INTO books
-			(id, series_id, series_position, title, narrator,
-			 duration_seconds, file_path, cover_path, language, description, internal_rating)
-		VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
-		RETURNING ` + bookColumns
+const insertBookQuery = `
+	INSERT INTO books
+		(id, series_id, series_position, title, narrator,
+		 duration_seconds, file_path, cover_path, language, description, internal_rating)
+	VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
+	RETURNING ` + bookColumns
 
-	return s.writeBook(ctx, in, func(tx *sql.Tx) (*model.Book, error) {
-		row := tx.QueryRowContext(ctx, q,
-			uuid.New(), in.SeriesID, in.SeriesPosition, in.Title, in.Narrator,
-			in.DurationSeconds, in.FilePath, in.CoverPath, in.Language, in.Description,
-			in.InternalRating,
-		)
-		return scanBook(row)
+const updateBookQuery = `
+	UPDATE books SET
+		series_id = ?2, series_position = ?3, title = ?4,
+		narrator = ?5, duration_seconds = ?6, file_path = ?7, cover_path = ?8,
+		language = ?9, description = ?10, internal_rating = ?11,
+		updated_at = CURRENT_TIMESTAMP
+	WHERE id = ?1
+	RETURNING ` + bookColumns
+
+func (s *Store) CreateBook(ctx context.Context, in BookInput) (*model.Book, error) {
+	return s.writeBook(ctx, func(tx *sql.Tx) (*model.Book, []uuid.UUID, error) {
+		b, err := scanBook(bookRow(ctx, tx, insertBookQuery, uuid.New(), in))
+		return b, in.AuthorIDs, err
 	})
 }
 
 func (s *Store) UpdateBook(ctx context.Context, id uuid.UUID, in BookInput) (*model.Book, error) {
-	const q = `
-		UPDATE books SET
-			series_id = ?2, series_position = ?3, title = ?4,
-			narrator = ?5, duration_seconds = ?6, file_path = ?7, cover_path = ?8,
-			language = ?9, description = ?10, internal_rating = ?11,
-			updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?1
-		RETURNING ` + bookColumns
-
-	return s.writeBook(ctx, in, func(tx *sql.Tx) (*model.Book, error) {
-		row := tx.QueryRowContext(ctx, q,
-			id, in.SeriesID, in.SeriesPosition, in.Title, in.Narrator,
-			in.DurationSeconds, in.FilePath, in.CoverPath, in.Language, in.Description,
-			in.InternalRating,
-		)
-		b, err := scanBook(row)
+	return s.writeBook(ctx, func(tx *sql.Tx) (*model.Book, []uuid.UUID, error) {
+		b, err := scanBook(bookRow(ctx, tx, updateBookQuery, id, in))
 		if errors.Is(err, sql.ErrNoRows) {
-			return nil, ErrNotFound
+			err = ErrNotFound
 		}
-		return b, err
+		return b, in.AuthorIDs, err
 	})
 }
 
+// PatchBook načte knihu, nechá apply upravit její vstup a zapíše ji zpět.
+// Čtení i zápis běží v jedné transakci, takže se nikdy nepracuje se zastaralou
+// hodnotou. Na rozdíl od UpdateBook tak volající nemusí znát pole, která přes
+// API neputují (file_path) – nezměněné sloupce se přepíšou samy sebou.
+func (s *Store) PatchBook(ctx context.Context, id uuid.UUID, apply func(*BookInput)) (*model.Book, error) {
+	return s.writeBook(ctx, func(tx *sql.Tx) (*model.Book, []uuid.UUID, error) {
+		current, err := getBook(ctx, tx, id)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		in := bookInputFrom(current)
+		apply(&in)
+
+		b, err := scanBook(bookRow(ctx, tx, updateBookQuery, id, in))
+		return b, in.AuthorIDs, err
+	})
+}
+
+// bookRow spustí dotaz nad sloupci knihy ve stejném pořadí, jaké čeká scanBook.
+func bookRow(ctx context.Context, tx *sql.Tx, query string, id uuid.UUID, in BookInput) *sql.Row {
+	return tx.QueryRowContext(ctx, query,
+		id, in.SeriesID, in.SeriesPosition, in.Title, in.Narrator,
+		in.DurationSeconds, in.FilePath, in.CoverPath, in.Language, in.Description,
+		in.InternalRating,
+	)
+}
+
+// bookInputFrom složí zapisovatelný vstup z načtené knihy – základ pro PatchBook.
+func bookInputFrom(b *model.Book) BookInput {
+	authorIDs := make([]uuid.UUID, 0, len(b.Authors))
+	for _, a := range b.Authors {
+		authorIDs = append(authorIDs, a.ID)
+	}
+
+	return BookInput{
+		AuthorIDs:       authorIDs,
+		SeriesID:        b.SeriesID,
+		SeriesPosition:  b.SeriesPosition,
+		Title:           b.Title,
+		Narrator:        b.Narrator,
+		DurationSeconds: b.DurationSeconds,
+		FilePath:        b.FilePath,
+		CoverPath:       b.CoverPath,
+		Language:        b.Language,
+		Description:     b.Description,
+		InternalRating:  b.InternalRating,
+	}
+}
+
 // writeBook provede zápis knihy a přepis jejích autorů v jedné transakci.
-func (s *Store) writeBook(ctx context.Context, in BookInput, write func(*sql.Tx) (*model.Book, error)) (*model.Book, error) {
+// Closure vrací zapsanou knihu a seznam autorů, který se na ni má navázat.
+func (s *Store) writeBook(ctx context.Context, write func(*sql.Tx) (*model.Book, []uuid.UUID, error)) (*model.Book, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("write book: begin: %w", err)
 	}
 	defer tx.Rollback() //nolint:errcheck
 
-	book, err := write(tx)
+	book, authorIDs, err := write(tx)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := setBookAuthors(ctx, tx, book.ID, in.AuthorIDs); err != nil {
+	if err := setBookAuthors(ctx, tx, book.ID, authorIDs); err != nil {
 		return nil, err
 	}
 	if book.Authors, err = loadBookAuthors(ctx, tx, book.ID); err != nil {
@@ -98,10 +140,14 @@ func (s *Store) writeBook(ctx context.Context, in BookInput, write func(*sql.Tx)
 }
 
 func (s *Store) GetBook(ctx context.Context, id uuid.UUID) (*model.Book, error) {
-	const q = `SELECT ` + bookColumns + ` FROM books WHERE id = ?1`
+	return getBook(ctx, s.db, id)
+}
 
-	row := s.db.QueryRowContext(ctx, q, id)
-	b, err := scanBook(row)
+// getBook načte knihu včetně autorů; funguje nad *sql.DB i uvnitř transakce.
+func getBook(ctx context.Context, q querier, id uuid.UUID) (*model.Book, error) {
+	const sel = `SELECT ` + bookColumns + ` FROM books WHERE id = ?1`
+
+	b, err := scanBook(q.QueryRowContext(ctx, sel, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -109,7 +155,7 @@ func (s *Store) GetBook(ctx context.Context, id uuid.UUID) (*model.Book, error) 
 		return nil, err
 	}
 
-	if b.Authors, err = loadBookAuthors(ctx, s.db, b.ID); err != nil {
+	if b.Authors, err = loadBookAuthors(ctx, q, b.ID); err != nil {
 		return nil, err
 	}
 	return b, nil

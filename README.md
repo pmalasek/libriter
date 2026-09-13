@@ -125,6 +125,10 @@ JWT_EXPIRY_HOURS=72
 AUDIO_ROOT=./data/audio         # kořenový adresář audio souborů
 COVER_ROOT=./data/covers        # kořenový adresář obrázků
 MAX_UPLOAD_MB=500
+
+# Zdroje metadat – pořadí, ve kterém se zkoušejí
+METADATA_PROVIDERS=databazeknih,cbdb,openlibrary,googlebooks
+GOOGLE_BOOKS_API_KEY=           # nepovinné, viz Metadata knih
 ```
 
 > **Bezpečnost:** `JWT_SECRET` musí být v produkci silný náhodný řetězec.
@@ -229,12 +233,22 @@ React + TypeScript + Tailwind v4, komponenty shadcn/ui (Radix), routing
 `react-router`, serverový stav `@tanstack/react-query`. Vše v češtině.
 
 **Co první verze umí:** přihlášení a registraci, seznam a detail knih, autory,
-série, profil (změna jména, e-mailu a hesla), hledání v knihách, světlý i tmavý
-režim podle systému.
+série, profil (změna jména, e-mailu a hesla), hledání v knihách, obálky knih,
+světlý i tmavý režim podle systému.
 
-**Co ještě ne:** přehrávání audia, obálky knih a editační formuláře – backend pro
-ně zatím nemá endpointy (chybí kapitoly, streamování a servírování `COVER_ROOT`).
-Knihy, autory a série proto zakládá scanner nebo přímé volání API.
+**Editace (role editor a vyšší):** na detailu knihy i autora je tlačítko
+*Upravit*, které otevře formulář v dialogu. U knihy jde změnit název, autory
+(včetně pořadí – první je hlavní), sérii a díl, vypravěče, délku, jazyk, vlastní
+hodnocení a popis; tlačítko *Načíst metadata* vyhledá knihu ve zdrojích
+(databazeknih.cz, cbdb.cz, OpenLibrary, Google Books – viz Metadata knih)
+a předvyplní název a popis. Ukládá se přes `PATCH /books/{id}`, takže odchází
+jen skutečně změněná pole. U autora se edituje jméno po částech a životopis
+(`PUT /authors/{id}`). Čtenář (role reader) tlačítka nevidí.
+
+**Co ještě ne:** přehrávání audia (chybí kapitoly a streamování) a zakládání či
+mazání záznamů z rozhraní – nové knihy, autory a série zakládá scanner nebo
+přímé volání API. Obálku a cestu k audio souborům nelze z rozhraní měnit,
+spravuje je scanner.
 
 Přihlášený uživatel se drží v `localStorage` (JWT + profil). Role se obnoví až
 při dalším přihlášení, takže po změně role adminem je nutné se odhlásit a
@@ -362,7 +376,8 @@ hlavičku `Authorization` poslat neumí. Ochranou je neuhodnutelné UUID knihy.
 | `GET` | `/books/{id}` | Detail knihy | reader+ |
 | `GET` | `/books/{id}/cover` | Obrázek obálky (soubor z `COVER_ROOT`) | veřejné |
 | `POST` | `/books` | Přidání knihy | editor+ |
-| `PUT` | `/books/{id}` | Aktualizace knihy | editor+ |
+| `PUT` | `/books/{id}` | Aktualizace knihy (úplná náhrada) | editor+ |
+| `PATCH` | `/books/{id}` | Aktualizace jen poslaných polí | editor+ |
 | `DELETE` | `/books/{id}` | Smazání knihy | admin |
 
 Kniha má autory ve vazbě M:N. Při zápisu se posílá `author_ids` (alespoň jedno
@@ -379,6 +394,21 @@ záznamy autorů:
   "authors": [ { "id": "<uuid>", "first_name": "Karel", "middle_name": "",
                  "last_name": "Čapek", "name": "Karel Čapek" }, ... ] }
 ```
+
+**`PUT` vs. `PATCH`:** `PUT` je úplná náhrada a vyžaduje i `file_path`. Ten se
+ale přes API nikdy nevrací (cesty k audiu jsou v režii scanneru), takže klient,
+který knihu jen četl, nemá co poslat a `PUT` by cestu přepsal. Na úpravy proto
+slouží `PATCH`, který mění výhradně pole obsažená v těle:
+
+```jsonc
+// PATCH /books/{id} – vynechané pole zůstane beze změny, null sloupec vyprázdní
+{ "title": "Nový název", "narrator": null }
+```
+
+`PATCH` pole `file_path` nepřijímá vůbec (skončí `400`, stejně jako každé jiné
+neznámé pole). Ověřuje se jen to, co klient poslal: `title` nesmí být prázdný,
+`duration_seconds` musí být kladné, `internal_rating` 1–5 nebo `null` a
+`author_ids` musí obsahovat alespoň jednoho autora.
 
 ### Autoři
 
@@ -408,24 +438,68 @@ autora, který má v knihovně knihy.
 | `PUT` | `/series/{id}` | Aktualizace série | editor+ |
 | `DELETE` | `/series/{id}` | Smazání série | admin |
 
-### Metadata (databazeknih.cz)
+### Metadata knih
 
 | Metoda | Endpoint | Popis | Přístup |
 |--------|----------|-------|---------|
+| `GET` | `/metadata/sources` | Zdroje v pořadí, ve kterém se zkoušejí | editor+ |
 | `GET` | `/metadata/search?q=<dotaz>` | Vyhledání knihy | editor+ |
-| `GET` | `/metadata/book/{id}` | Metadata dle DK ID | editor+ |
 | `GET` | `/metadata/book?url=<url>` | Metadata dle URL | editor+ |
+| `GET` | `/metadata/book/{id}` | Metadata dle ID databazeknih.cz | editor+ |
 
 Typický workflow editora:
 ```
 GET /metadata/search?q=Sapkowski+Zaklínač
-→ [ { "id": 1234, "title": "Zaklínač", "url": "https://..." }, ... ]
+→ [ { "id": 1234, "title": "Zaklínač", "author": "", "year": 0,
+      "url": "https://www.databazeknih.cz/prehled-knihy/...",
+      "source": "databazeknih" }, ... ]
 
 GET /metadata/book?url=https://www.databazeknih.cz/...
-→ { "title": "...", "author": "...", "description": "...", "cover_url": "..." }
+→ { "id": 160, "title": "...", "author": "...", "author_id": 101,
+    "description": "...", "genres": [...], "cover_url": "...", "rating": 100,
+    "publisher": "...", "year": 1936, "source_url": "...",
+    "source": "databazeknih" }
 
-POST /books   (s daty z metadat)
+PATCH /books/{id}   (s daty z metadat)
 ```
+
+Odpovědi jsou v `snake_case` jako zbytek API. `rating` je hodnocení zdroje
+v procentech (0–100) – **není** to `internal_rating` knihy (1–5). Nevyplněná
+pole zůstávají nulová: ne každý zdroj dává autora a rok už v seznamu výsledků
+a ne každý zná nakladatele.
+
+#### Zdroje a jejich pořadí
+
+`METADATA_PROVIDERS` určuje, které zdroje se používají a v jakém pořadí.
+Zkouší se odshora a vrátí se výsledky **prvního, který něco najde** – zdroj,
+který spadne nebo nic nevrátí, se přeskočí. Rozbitý scraper tak funkci
+nezablokuje. Zdroj, který v seznamu není, je vypnutý; prázdná hodnota
+(`METADATA_PROVIDERS=`) vypne metadata úplně.
+
+| Zdroj | Typ | Poznámka |
+|-------|-----|----------|
+| `databazeknih` | scraper HTML | Nejlepší pokrytí českých titulů. Vrací i žánry, nakladatele a hodnocení. |
+| `cbdb` | scraper HTML | Česká databáze, dobrý doplněk. Nedává rok vydání ani nakladatele (patří konkrétnímu vydání). |
+| `openlibrary` | oficiální JSON API | Zdarma, bez klíče a bez limitu. Česká beletrie je děravá. Rok ani nakladatel u díla nejsou. |
+| `googlebooks` | oficiální JSON API | Bez klíče platí anonymní denní kvóta **sdílená pro celou IP** – snadno se vyčerpá (`429`). Vlastní klíč se zadá do `GOOGLE_BOOKS_API_KEY`. |
+
+`GET /metadata/book?url=` si zdroj vybere podle domény v adrese; tím zároveň
+vzniká allowlist, protože cizí adresu neobslouží nikdo (`400`). Endpoint
+`/metadata/book/{id}` pracuje s číselným ID specifickým pro databazeknih.cz
+a vrací `404`, když tento zdroj není zapnutý.
+
+Scrapery stojí na HTML cizích webů a ty se mění bez ohlášení – databazeknih.cz
+si například přesunul vyhledávání z `/hledat` na `/search?in=books`. Když se
+zdá, že import nefunguje, nejrychleji to prověří živý smoke test:
+
+```bash
+cd libriter-backend
+LIBRITER_LIVE_METADATA=1 go test ./internal/metadata/ -run Live -v
+```
+
+Běžné `go test ./...` na cizí weby nechodí, tenhle test se bez proměnné
+přeskakuje. Selhání zdroje se v API projeví jako `502` s konkrétním důvodem
+v těle, vypršení časového limitu jako `504`.
 
 ### Zdraví serveru
 

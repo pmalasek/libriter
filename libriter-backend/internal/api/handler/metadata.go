@@ -5,22 +5,29 @@ import (
 	"net/http"
 	"strconv"
 
+	"libriter/internal/metadata"
 	"libriter/internal/metadata/databazeknih"
 
 	"github.com/go-chi/chi/v5"
 )
 
+// MetadataHandler obsluhuje vyhledávání metadat. Zdroje a jejich pořadí
+// určuje METADATA_PROVIDERS, viz metadata.Chain.
 type MetadataHandler struct {
-	client *databazeknih.Client
+	chain *metadata.Chain
+	// dk je potřeba jen pro /metadata/book/{id}, kde je číselné ID
+	// specifické pro databazeknih.cz. Může být nil, pokud zdroj není zapnutý.
+	dk *databazeknih.Client
 }
 
-func NewMetadata(client *databazeknih.Client) *MetadataHandler {
-	return &MetadataHandler{client: client}
+func NewMetadata(chain *metadata.Chain, dk *databazeknih.Client) *MetadataHandler {
+	return &MetadataHandler{chain: chain, dk: dk}
 }
 
 // GET /api/v1/metadata/search?q=<dotaz>
 //
-// Vyhledá knihy na databazeknih.cz a vrátí seznam výsledků.
+// Zkouší zdroje v nakonfigurovaném pořadí, vrátí výsledky prvního, který
+// něco najde.
 // Přístup: editor+
 func (h *MetadataHandler) Search(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
@@ -29,23 +36,44 @@ func (h *MetadataHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := h.client.Search(r.Context(), q)
+	results, err := h.chain.Search(r.Context(), q)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "chyba při vyhledávání na databazeknih.cz")
+		if errors.Is(err, r.Context().Err()) {
+			writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
+			return
+		}
+		// Důvod se propouští k editorovi schválně: typicky jde o vyčerpanou
+		// kvótu nebo rozbitý scraper a z obecné hlášky by nešlo poznat, co dělat.
+		writeError(w, http.StatusBadGateway, "zdroje metadat selhaly – "+err.Error())
 		return
 	}
 
 	if results == nil {
-		results = []databazeknih.SearchResult{}
+		results = []metadata.SearchResult{}
 	}
 	writeJSON(w, http.StatusOK, results)
 }
 
+// GET /api/v1/metadata/sources
+//
+// Vrátí zdroje v pořadí, ve kterém se zkoušejí – rozhraní podle toho
+// popisuje, odkud data přijdou.
+// Přístup: editor+
+func (h *MetadataHandler) Sources(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.chain.Providers())
+}
+
 // GET /api/v1/metadata/book/{id}
 //
-// Stáhne metadata knihy z databazeknih.cz podle jejího interního ID.
+// Stáhne metadata podle interního ID databazeknih.cz. Ostatní zdroje číselné
+// ID nesdílejí, pro ně slouží varianta s url.
 // Přístup: editor+
 func (h *MetadataHandler) FetchByID(w http.ResponseWriter, r *http.Request) {
+	if h.dk == nil {
+		writeError(w, http.StatusNotFound, "zdroj databazeknih.cz není zapnutý")
+		return
+	}
+
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil || id <= 0 {
@@ -53,7 +81,7 @@ func (h *MetadataHandler) FetchByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta, err := h.client.FetchBook(r.Context(), id)
+	meta, err := h.dk.FetchBook(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, r.Context().Err()) {
 			writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
@@ -63,13 +91,14 @@ func (h *MetadataHandler) FetchByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	meta.Source = h.dk.Name()
 	writeJSON(w, http.StatusOK, meta)
 }
 
 // GET /api/v1/metadata/book?url=<url>
 //
-// Stáhne metadata knihy přímo z URL stránky na databazeknih.cz.
-// Preferovaná metoda po vyhledávání – URL pochází ze SearchResult.
+// Stáhne metadata přímo z URL. Zdroj se vybere podle adresy – a zároveň tím
+// vzniká allowlist, protože cizí adresu neobslouží nikdo.
 // Přístup: editor+
 func (h *MetadataHandler) FetchByURL(w http.ResponseWriter, r *http.Request) {
 	bookURL := r.URL.Query().Get("url")
@@ -78,61 +107,18 @@ func (h *MetadataHandler) FetchByURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Základní ochrana – akceptujeme pouze URLs z databazeknih.cz
-	const allowedHost = "databazeknih.cz"
-	if !isAllowedHost(bookURL, allowedHost) {
-		writeError(w, http.StatusBadRequest, "url musí být z databazeknih.cz")
+	meta, err := h.chain.FetchByURL(r.Context(), bookURL)
+	switch {
+	case errors.Is(err, metadata.ErrNoProvider):
+		writeError(w, http.StatusBadRequest, "url nepatří žádnému zapnutému zdroji metadat")
 		return
-	}
-
-	meta, err := h.client.FetchBookByURL(r.Context(), bookURL)
-	if err != nil {
-		if errors.Is(err, r.Context().Err()) {
-			writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
-			return
-		}
-		writeError(w, http.StatusBadGateway, "chyba při stahování metadat z databazeknih.cz")
+	case errors.Is(err, r.Context().Err()) && err != nil:
+		writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
+		return
+	case err != nil:
+		writeError(w, http.StatusBadGateway, "chyba při stahování metadat")
 		return
 	}
 
 	writeJSON(w, http.StatusOK, meta)
-}
-
-// isAllowedHost ověří, zda URL patří k povolenému hostu (bez importu net/url jako závislosti).
-func isAllowedHost(rawURL, host string) bool {
-	// Musí začínat http:// nebo https:// + host
-	for _, scheme := range []string{"https://", "http://"} {
-		after, ok := cutPrefix(rawURL, scheme)
-		if !ok {
-			continue
-		}
-		// after = "www.databazeknih.cz/..." nebo "databazeknih.cz/..."
-		if hasHostPrefix(after, host) {
-			return true
-		}
-	}
-	return false
-}
-
-func cutPrefix(s, prefix string) (string, bool) {
-	if len(s) >= len(prefix) && s[:len(prefix)] == prefix {
-		return s[len(prefix):], true
-	}
-	return "", false
-}
-
-func hasHostPrefix(s, host string) bool {
-	// s = "www.databazeknih.cz/path" nebo "databazeknih.cz/path"
-	if len(s) >= len(host) && s[:len(host)] == host {
-		// Musí následovat '/', '?' nebo konec
-		if len(s) == len(host) || s[len(host)] == '/' || s[len(host)] == '?' {
-			return true
-		}
-	}
-	// www. prefix
-	const www = "www."
-	if len(s) >= len(www)+len(host) && s[:len(www)] == www {
-		return hasHostPrefix(s[len(www):], host)
-	}
-	return false
 }

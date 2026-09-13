@@ -3,10 +3,14 @@ import { useMemo } from 'react'
 import { apiFetch, asList } from './client'
 import type {
   Author,
+  AuthorRequest,
   AuthResponse,
   Book,
+  BookMetadata,
+  BookPatchRequest,
   ChangePasswordRequest,
   LoginRequest,
+  MetadataSearchResult,
   RegisterRequest,
   Series,
   UpdateUserRequest,
@@ -122,5 +126,53 @@ export function useChangePassword(userId: string) {
   return useMutation({
     mutationFn: (body: ChangePasswordRequest) =>
       apiFetch<{ status: string }>(`/users/${userId}/password`, { method: 'PUT', json: body }),
+  })
+}
+
+export function useUpdateAuthor(authorId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: AuthorRequest) =>
+      apiFetch<Author>(`/authors/${authorId}`, { method: 'PUT', json: body }),
+    onSuccess: (author) => {
+      queryClient.setQueryData(queryKeys.author(authorId), author)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.authors })
+      // Knihy nesou vnořené záznamy autorů, takže po přejmenování zestarají taky.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+    },
+  })
+}
+
+/** Částečná aktualizace knihy – v těle smí být jen skutečně změněná pole. */
+export function usePatchBook(bookId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: BookPatchRequest) =>
+      apiFetch<Book>(`/books/${bookId}`, { method: 'PATCH', json: body }),
+    onSuccess: (book) => {
+      queryClient.setQueryData(queryKeys.book(bookId), book)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+    },
+  })
+}
+
+// Scraper databazeknih.cz je pomalý a rate-limitovaný (3 s mezi dotazy), proto
+// mutace, ne query – volá se až na kliknutí a nic se necachuje.
+
+export function useMetadataSearch() {
+  return useMutation({
+    mutationFn: async (query: string) =>
+      asList(
+        await apiFetch<MetadataSearchResult[] | null>(
+          `/metadata/search?q=${encodeURIComponent(query)}`,
+        ),
+      ),
+  })
+}
+
+export function useFetchMetadata() {
+  return useMutation({
+    mutationFn: (url: string) =>
+      apiFetch<BookMetadata>(`/metadata/book?url=${encodeURIComponent(url)}`),
   })
 }

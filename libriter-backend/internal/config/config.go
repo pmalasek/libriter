@@ -6,16 +6,18 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/joho/godotenv"
 )
 
 type Config struct {
-	Server  ServerConfig
-	DB      DBConfig
-	JWT     JWTConfig
-	Storage StorageConfig
+	Server   ServerConfig
+	DB       DBConfig
+	JWT      JWTConfig
+	Storage  StorageConfig
+	Metadata MetadataConfig
 
 	// EnvFile je cesta k načtenému .env (prázdná, pokud se žádný nenašel).
 	EnvFile string
@@ -41,6 +43,20 @@ type StorageConfig struct {
 	CoverRoot   string
 	MaxUploadMB int64
 }
+
+// MetadataConfig řídí zdroje knižních metadat.
+type MetadataConfig struct {
+	// Providers je pořadí, ve kterém se zdroje zkoušejí. Zdroj, který v
+	// seznamu není, je vypnutý; prázdný seznam vypne metadata úplně.
+	Providers []string
+	// GoogleBooksAPIKey je nepovinný – bez něj se jede na sdílenou anonymní
+	// kvótu Google Books, která se u sdílené IP snadno vyčerpá.
+	GoogleBooksAPIKey string
+}
+
+// DefaultMetadataProviders je výchozí pořadí: nejdřív české zdroje, pak
+// zahraniční API jako záloha.
+var DefaultMetadataProviders = []string{"databazeknih", "cbdb", "openlibrary", "googlebooks"}
 
 // Load načte konfiguraci pro server. Vyžaduje JWT_SECRET, protože server
 // podepisuje a ověřuje tokeny.
@@ -77,6 +93,10 @@ func load() *Config {
 			AudioRoot:   env.path("AUDIO_ROOT", "/var/lib/libriter/audio"),
 			CoverRoot:   env.path("COVER_ROOT", "/var/lib/libriter/covers"),
 			MaxUploadMB: int64(envInt("MAX_UPLOAD_MB", 500)),
+		},
+		Metadata: MetadataConfig{
+			Providers:         envList("METADATA_PROVIDERS", DefaultMetadataProviders),
+			GoogleBooksAPIKey: envStr("GOOGLE_BOOKS_API_KEY", ""),
 		},
 		EnvFile: env.file,
 	}
@@ -176,6 +196,26 @@ func envStr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// envList načte seznam oddělený čárkami. Prázdné položky se zahazují,
+// hodnoty se normalizují na malá písmena bez okolních mezer.
+//
+// Rozlišuje "nenastaveno" (použije se fallback) od "nastaveno na prázdno"
+// (prázdný seznam) – jen tak jde METADATA_PROVIDERS= vypnout úplně.
+func envList(key string, fallback []string) []string {
+	raw, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+
+	var values []string
+	for _, part := range strings.Split(raw, ",") {
+		if trimmed := strings.ToLower(strings.TrimSpace(part)); trimmed != "" {
+			values = append(values, trimmed)
+		}
+	}
+	return values
 }
 
 func envInt(key string, fallback int) int {

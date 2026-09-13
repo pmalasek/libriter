@@ -1,7 +1,17 @@
-import { ArrowLeftIcon, ClockIcon, LanguagesIcon, MicIcon, StarIcon } from 'lucide-react'
-import { useMemo } from 'react'
+import {
+  ArrowLeftIcon,
+  ClockIcon,
+  LanguagesIcon,
+  MicIcon,
+  PencilIcon,
+  StarIcon,
+} from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { useBook, useBooks, useSeriesOne } from '@/api/hooks'
+import { useAuth } from '@/auth/AuthContext'
+import { canEdit } from '@/auth/permissions'
+import { BookEditDialog } from '@/components/BookEditDialog'
 import { BookGrid } from '@/components/BookGrid'
 import { BookCover } from '@/components/BookCover'
 import { ErrorState } from '@/components/ErrorState'
@@ -16,6 +26,8 @@ export function BookDetailPage() {
   const book = useBook(id)
   const series = useSeriesOne(book.data?.series_id ?? '')
   const allBooks = useBooks()
+  const { user } = useAuth()
+  const [editing, setEditing] = useState(false)
 
   // "Další knihy autora" bereme podle hlavního (prvního) autora knihy.
   const mainAuthor = book.data?.authors?.[0]
@@ -61,7 +73,15 @@ export function BookDetailPage() {
         </div>
 
         <div className="min-w-0">
-          <h1 className="font-heading text-2xl font-semibold tracking-tight">{data.title}</h1>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <h1 className="font-heading text-2xl font-semibold tracking-tight">{data.title}</h1>
+            {canEdit(user) ? (
+              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                <PencilIcon />
+                Upravit
+              </Button>
+            ) : null}
+          </div>
 
           {data.authors?.length ? (
             <p className="mt-1 text-muted-foreground">
@@ -141,6 +161,8 @@ export function BookDetailPage() {
           <BookGrid books={moreByAuthor} />
         </section>
       ) : null}
+
+      <BookEditDialog book={data} open={editing} onOpenChange={setEditing} />
     </>
   )
 }

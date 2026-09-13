@@ -32,7 +32,7 @@ export function setAuthToken(token: string | null) {
 }
 
 interface RequestOptions {
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   /** Tělo požadavku; serializuje se jako JSON. */
   json?: unknown
   /** Neposílat Authorization ani nespouštět odhlášení při 401 (login, registrace). */

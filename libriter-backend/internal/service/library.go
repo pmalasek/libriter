@@ -42,6 +42,15 @@ func (b *BookService) Update(ctx context.Context, id uuid.UUID, in storage.BookI
 	return book, err
 }
 
+// Patch upraví jen pole, která apply skutečně nastaví; zbytek zůstane beze změny.
+func (b *BookService) Patch(ctx context.Context, id uuid.UUID, apply func(*storage.BookInput)) (*model.Book, error) {
+	book, err := b.store.PatchBook(ctx, id, apply)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	return book, err
+}
+
 func (b *BookService) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := b.store.DeleteBook(ctx, id); errors.Is(err, storage.ErrNotFound) {
 		return ErrNotFound

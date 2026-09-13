@@ -129,3 +129,89 @@ func TestGetOrCreateAuthorIsIdempotent(t *testing.T) {
 		t.Errorf("DeleteAuthor: %v", err)
 	}
 }
+
+func TestPatchBookKeepsUntouchedFields(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	authors, err := store.GetOrCreateAuthors(ctx, []model.AuthorName{
+		{First: "Karel", Last: "Čapek"},
+		{First: "Josef", Last: "Čapek"},
+	})
+	if err != nil {
+		t.Fatalf("GetOrCreateAuthors: %v", err)
+	}
+
+	narrator := "Viktor Preiss"
+	cover := "obalka.jpg"
+	book, err := store.CreateBook(ctx, BookInput{
+		AuthorIDs:       []uuid.UUID{authors[0].ID, authors[1].ID},
+		Title:           "Ze života hmyzu",
+		Narrator:        &narrator,
+		DurationSeconds: 7200,
+		FilePath:        "capek/ze-zivota-hmyzu",
+		CoverPath:       &cover,
+		Language:        "cs",
+	})
+	if err != nil {
+		t.Fatalf("CreateBook: %v", err)
+	}
+
+	// Změna jediného pole nesmí sáhnout na nic dalšího – hlavně ne na file_path,
+	// který se přes API vůbec nevystavuje.
+	patched, err := store.PatchBook(ctx, book.ID, func(in *BookInput) {
+		in.Title = "Ze života hmyzu (rozhlasová hra)"
+	})
+	if err != nil {
+		t.Fatalf("PatchBook: %v", err)
+	}
+	if patched.Title != "Ze života hmyzu (rozhlasová hra)" {
+		t.Errorf("title = %q", patched.Title)
+	}
+	if patched.FilePath != book.FilePath {
+		t.Errorf("file_path = %q, chtěno %q", patched.FilePath, book.FilePath)
+	}
+	if patched.DurationSeconds != 7200 {
+		t.Errorf("duration_seconds = %d, chtěno 7200", patched.DurationSeconds)
+	}
+	if patched.Narrator == nil || *patched.Narrator != narrator {
+		t.Errorf("narrator = %v, chtěno %q", patched.Narrator, narrator)
+	}
+	if patched.CoverPath == nil || *patched.CoverPath != cover {
+		t.Errorf("cover_path = %v, chtěno %q", patched.CoverPath, cover)
+	}
+	if len(patched.Authors) != 2 || patched.Authors[0].Name != "Karel Čapek" {
+		t.Errorf("autoři po patchi: %v", patched.Authors)
+	}
+
+	// Patch, který autory nastaví, je přepíše i s pořadím.
+	patched, err = store.PatchBook(ctx, book.ID, func(in *BookInput) {
+		in.AuthorIDs = []uuid.UUID{authors[1].ID, authors[0].ID}
+	})
+	if err != nil {
+		t.Fatalf("PatchBook s autory: %v", err)
+	}
+	if len(patched.Authors) != 2 || patched.Authors[0].Name != "Josef Čapek" {
+		t.Errorf("autoři po přeuspořádání: %v", patched.Authors)
+	}
+
+	// Vyprázdnění nullable pole projde.
+	patched, err = store.PatchBook(ctx, book.ID, func(in *BookInput) {
+		in.Narrator = nil
+	})
+	if err != nil {
+		t.Fatalf("PatchBook s prázdným vypravěčem: %v", err)
+	}
+	if patched.Narrator != nil {
+		t.Errorf("narrator = %v, chtěno nil", *patched.Narrator)
+	}
+
+	// Neexistující kniha končí ErrNotFound a apply se nevolá.
+	called := false
+	if _, err := store.PatchBook(ctx, uuid.New(), func(*BookInput) { called = true }); !errors.Is(err, ErrNotFound) {
+		t.Errorf("PatchBook neexistující knihy: %v, chtěno ErrNotFound", err)
+	}
+	if called {
+		t.Error("apply se zavolalo i pro neexistující knihu")
+	}
+}
