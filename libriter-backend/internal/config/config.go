@@ -2,7 +2,9 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -14,6 +16,9 @@ type Config struct {
 	DB      DBConfig
 	JWT     JWTConfig
 	Storage StorageConfig
+
+	// EnvFile je cesta k načtenému .env (prázdná, pokud se žádný nenašel).
+	EnvFile string
 }
 
 type ServerConfig struct {
@@ -37,33 +42,133 @@ type StorageConfig struct {
 	MaxUploadMB int64
 }
 
+// Load načte konfiguraci pro server. Vyžaduje JWT_SECRET, protože server
+// podepisuje a ověřuje tokeny.
 func Load() (*Config, error) {
-	_ = godotenv.Load()
+	cfg := load()
+	if cfg.JWT.Secret == "" {
+		return nil, fmt.Errorf("JWT_SECRET není nastaven (hledal jsem .env: %s)", envFileOrNone(cfg.EnvFile))
+	}
+	return cfg, nil
+}
 
-	cfg := &Config{
+// LoadCLI načte konfiguraci pro příkazy, které nepracují s tokeny
+// (například správa uživatelů). JWT_SECRET proto nevyžaduje.
+func LoadCLI() (*Config, error) {
+	return load(), nil
+}
+
+func load() *Config {
+	env := loadDotEnv()
+
+	return &Config{
 		Server: ServerConfig{
 			Port: envInt("SERVER_PORT", 8080),
 			Env:  envStr("SERVER_ENV", "development"),
 		},
 		DB: DBConfig{
-			Path: envStr("DB_PATH", "./data/libriter.db"),
+			Path: env.path("DB_PATH", "./data/libriter.db"),
 		},
 		JWT: JWTConfig{
 			Secret:      envStr("JWT_SECRET", ""),
 			ExpiryHours: time.Duration(envInt("JWT_EXPIRY_HOURS", 72)) * time.Hour,
 		},
 		Storage: StorageConfig{
-			AudioRoot:   envStr("AUDIO_ROOT", "/var/lib/libriter/audio"),
-			CoverRoot:   envStr("COVER_ROOT", "/var/lib/libriter/covers"),
+			AudioRoot:   env.path("AUDIO_ROOT", "/var/lib/libriter/audio"),
+			CoverRoot:   env.path("COVER_ROOT", "/var/lib/libriter/covers"),
 			MaxUploadMB: int64(envInt("MAX_UPLOAD_MB", 500)),
 		},
+		EnvFile: env.file,
+	}
+}
+
+// dotEnv drží výsledek načtení .env: odkud se čerpalo a které klíče z něj přišly.
+type dotEnv struct {
+	file     string
+	baseDir  string
+	fromFile map[string]bool
+}
+
+// path vrátí cestu z konfigurace. Relativní cesty zapsané v .env se vztahují
+// k adresáři toho .env, ne k aktuálnímu adresáři – binárku tak lze spustit
+// odkudkoli (např. bin/libriter z korene repozitáře) a pořád míří na stejná data.
+// Cesty předané skutečnou proměnnou prostředí se nechávají být.
+func (d dotEnv) path(key, fallback string) string {
+	value := envStr(key, fallback)
+	if value == "" || filepath.IsAbs(value) {
+		return value
+	}
+	if d.baseDir == "" || !d.fromFile[key] {
+		return value
+	}
+	return filepath.Join(d.baseDir, value)
+}
+
+// loadDotEnv najde a načte .env. Skutečné proměnné prostředí mají přednost.
+func loadDotEnv() dotEnv {
+	empty := dotEnv{fromFile: map[string]bool{}}
+
+	path := findEnvFile()
+	if path == "" {
+		return empty
 	}
 
-	if cfg.JWT.Secret == "" {
-		return nil, fmt.Errorf("JWT_SECRET není nastaven")
+	values, err := godotenv.Read(path)
+	if err != nil {
+		slog.Warn("nepodařilo se načíst .env", "soubor", path, "err", err)
+		return empty
 	}
 
-	return cfg, nil
+	fromFile := make(map[string]bool, len(values))
+	for key, value := range values {
+		if _, exists := os.LookupEnv(key); exists {
+			continue // proměnná prostředí přebíjí .env
+		}
+		if err := os.Setenv(key, value); err != nil {
+			continue
+		}
+		fromFile[key] = true
+	}
+
+	return dotEnv{file: path, baseDir: filepath.Dir(path), fromFile: fromFile}
+}
+
+// findEnvFile hledá .env v aktuálním adresáři i v nadřazených, a v každém z nich
+// také v podadresáři libriter-backend/. Explicitní volbu lze vynutit přes
+// LIBRITER_ENV_FILE.
+func findEnvFile() string {
+	if explicit := os.Getenv("LIBRITER_ENV_FILE"); explicit != "" {
+		return explicit
+	}
+
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+
+	for {
+		for _, candidate := range []string{
+			filepath.Join(dir, ".env"),
+			filepath.Join(dir, "libriter-backend", ".env"),
+		} {
+			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+				return candidate
+			}
+		}
+
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
+func envFileOrNone(path string) string {
+	if path == "" {
+		return "žádný nenalezen"
+	}
+	return path
 }
 
 func envStr(key, fallback string) string {

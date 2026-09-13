@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -81,18 +82,9 @@ func runUserAdd(args []string) error {
 		return fmt.Errorf("neznámá role %q (povolené: admin, editor, reader)", *role)
 	}
 
-	pass := *password
-	if pass == "" {
-		var err error
-		if pass, err = promptPassword(); err != nil {
-			return err
-		}
-	}
-	if len(pass) < minPasswordLen {
-		return fmt.Errorf("heslo musí mít alespoň %d znaků", minPasswordLen)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Databázi otevíráme dřív než se ptáme na heslo – chyba konfigurace se tak
+	// projeví hned, ne až po dvojím zadání hesla.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
 	userSvc, closeDB, err := openUserService(ctx)
@@ -100,6 +92,16 @@ func runUserAdd(args []string) error {
 		return err
 	}
 	defer closeDB()
+
+	pass := *password
+	if pass == "" {
+		if pass, err = promptPassword(); err != nil {
+			return err
+		}
+	}
+	if len(pass) < minPasswordLen {
+		return fmt.Errorf("heslo musí mít alespoň %d znaků", minPasswordLen)
+	}
 
 	u, err := userSvc.Create(ctx, *name, *email, pass, *role)
 	if errors.Is(err, service.ErrEmailTaken) {
@@ -197,11 +199,24 @@ func runUserList(args []string) error {
 
 // openUserService otevře databázi (včetně migrací) a vrátí UserService
 // spolu s funkcí pro uzavření spojení. Nespouští scanner ani HTTP server.
+// Používá LoadCLI, takže nevyžaduje JWT_SECRET – správa uživatelů tokeny nepodepisuje.
 func openUserService(ctx context.Context) (*service.UserService, func(), error) {
-	cfg, err := config.Load()
+	cfg, err := config.LoadCLI()
 	if err != nil {
 		return nil, nil, fmt.Errorf("konfigurace: %w", err)
 	}
+
+	// Vypsat, s čím se pracuje – jinak je snadné omylem zapsat do jiné databáze.
+	if cfg.EnvFile != "" {
+		fmt.Fprintf(os.Stderr, "konfigurace: %s\n", cfg.EnvFile)
+	} else {
+		fmt.Fprintln(os.Stderr, "konfigurace: .env nenalezen, použity výchozí hodnoty")
+	}
+	abs, err := filepath.Abs(cfg.DB.Path)
+	if err != nil {
+		abs = cfg.DB.Path
+	}
+	fmt.Fprintf(os.Stderr, "databáze:    %s\n", abs)
 
 	sqlDB, err := db.Open(ctx, cfg.DB)
 	if err != nil {

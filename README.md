@@ -126,6 +126,16 @@ Webové rozhraní ani CLI žádné další proměnné nepotřebují – `.env` z
 Vývojový server Vite přebírá adresu backendu z `BACKEND_URL` (výchozí
 `http://localhost:8080`), což je proměnná prostředí, ne součást `.env`.
 
+**Jak se `.env` hledá:** v aktuálním adresáři, pak v jeho podadresáři
+`libriter-backend/`, a takto dál v nadřazených adresářích. Cestu lze vynutit
+proměnnou `LIBRITER_ENV_FILE`. Skutečné proměnné prostředí mají vždy přednost
+před hodnotami z `.env`.
+
+**Relativní cesty** (`DB_PATH`, `AUDIO_ROOT`, `COVER_ROOT`) zapsané v `.env` se
+vztahují k adresáři toho `.env` – ne k aktuálnímu adresáři. `bin/libriter` tak
+míří na stejná data, ať ho spustíte odkudkoli. Cesta předaná proměnnou prostředí
+se ponechává tak, jak je.
+
 ---
 
 ## Instalace a spuštění
@@ -140,14 +150,16 @@ mkdir -p data/audio data/covers
 
 ```bash
 make build          # npm ci + npm run build, potom go build
-cd libriter-backend && ../bin/libriter
+bin/libriter
 ```
 
 Vznikne `bin/libriter` s vestavěným webovým rozhraním. Rozhraní pak najdete na
 `http://localhost:8080`, API na `http://localhost:8080/api/v1`.
 
-> Binárku spouštějte z adresáře `libriter-backend/` – `.env` a relativní `DB_PATH`
-> se hledají vůči aktuálnímu adresáři. Jinak použijte absolutní cesty v `.env`.
+Binárku lze spustit z libovolného adresáře: `.env` se hledá v aktuálním adresáři
+a v nadřazených (včetně podadresáře `libriter-backend/`) a relativní cesty v něm
+(`DB_PATH`, `COVER_ROOT`, …) se vztahují k adresáři toho `.env`. Server na startu
+vypíše, kterou databázi otevřel. Jiný soubor vynutíte přes `LIBRITER_ENV_FILE`.
 
 ### 3. Vývoj – dva procesy
 
@@ -227,16 +239,14 @@ Registrace přes API dává vždy roli **reader**, takže prvního administráto
 vytvořte přes CLI stejné binárky:
 
 ```bash
-cd libriter-backend
-
 # nové konto (bez --password se heslo zadá interaktivně, skrytě a dvakrát)
-../bin/libriter user add --email admin@example.com --name "Jan Novák" --role admin
+bin/libriter user add --email admin@example.com --name "Jan Novák" --role admin
 
 # povýšení už registrovaného účtu
-../bin/libriter user set-role --email jan@example.com --role editor
+bin/libriter user set-role --email jan@example.com --role editor
 
 # přehled účtů
-../bin/libriter user list
+bin/libriter user list
 ```
 
 Ve vývoji bez buildu: `go run ./cmd/server user add --email … --name …`.
@@ -248,7 +258,11 @@ Ve vývoji bez buildu: `go run ./cmd/server user add --email … --name …`.
 | `user list` | – |
 
 CLI čte stejný `.env` jako server a samo aplikuje chybějící migrace, takže
-funguje i na prázdné databázi. Server ani scanner přitom nespouští.
+funguje i na prázdné databázi. Server ani scanner přitom nespouští a **nevyžaduje
+`JWT_SECRET`** – žádné tokeny nepodepisuje.
+
+Před dotazem na heslo vypíše, který `.env` a kterou databázi použil, takže je
+hned vidět, kdyby mířil jinam, než chcete.
 
 ---
 
