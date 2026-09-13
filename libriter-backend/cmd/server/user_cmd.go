@@ -223,7 +223,7 @@ func openUserService(ctx context.Context) (*service.UserService, func(), error) 
 		return nil, nil, fmt.Errorf("databáze: %w", err)
 	}
 
-	return service.NewUser(storage.New(sqlDB)), func() { _ = sqlDB.Close() }, nil
+	return service.NewUser(storage.New(sqlDB), nil), func() { _ = sqlDB.Close() }, nil
 }
 
 // promptPassword načte heslo dvakrát ze terminálu bez zobrazení znaků.

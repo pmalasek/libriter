@@ -62,7 +62,7 @@ func runServe() error {
 	metadataChain, dkClient := buildMetadata(cfg.Metadata)
 
 	authSvc := service.NewAuth(store, cfg.JWT)
-	userSvc := service.NewUser(store)
+	userSvc := service.NewUser(store, authSvc)
 	bookSvc := service.NewBook(store)
 	authorSvc := service.NewAuthor(store)
 	authorImageSvc := service.NewAuthorImage(store, metadataChain, cfg.Storage.AuthorImageRoot)

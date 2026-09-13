@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"libriter/internal/config"
@@ -17,6 +18,12 @@ import (
 
 const bcryptCost = 12
 
+// authCacheTTL je doba, po kterou middleware věří jednou načtené roli, aniž by
+// se znovu ptal databáze. Změny provedené přes API se projeví okamžitě (viz
+// InvalidateUser), zásah zvenčí – například `libriter user set-role` na běžícím
+// serveru – se projeví nejpozději po této době.
+const authCacheTTL = 10 * time.Second
+
 // Claims jsou data zakódovaná v JWT tokenu.
 type Claims struct {
 	Role string `json:"role"`
@@ -26,10 +33,75 @@ type Claims struct {
 type AuthService struct {
 	store *storage.Store
 	cfg   config.JWTConfig
+
+	// cacheTTL je vytažená do pole kvůli testům; produkčně je to authCacheTTL.
+	cacheTTL time.Duration
+	cacheMu  sync.Mutex
+	cache    map[uuid.UUID]cachedUser
+}
+
+// cachedUser je krátkodobě zapamatovaný výsledek ověření uživatele z tokenu.
+type cachedUser struct {
+	role      string
+	expiresAt time.Time
 }
 
 func NewAuth(store *storage.Store, cfg config.JWTConfig) *AuthService {
-	return &AuthService{store: store, cfg: cfg}
+	return &AuthService{
+		store:    store,
+		cfg:      cfg,
+		cacheTTL: authCacheTTL,
+		cache:    make(map[uuid.UUID]cachedUser),
+	}
+}
+
+// ResolveRole ověří, že uživatel z tokenu v databázi stále existuje, a vrátí
+// jeho aktuální roli. Middleware ji volá místo toho, aby věřil roli zapečené
+// v tokenu – jinak by smazaný nebo přeřazený uživatel jel na stará práva až do
+// expirace tokenu. Vrací ErrNotFound, pokud uživatel neexistuje.
+func (a *AuthService) ResolveRole(ctx context.Context, userID uuid.UUID) (string, error) {
+	if role, ok := a.cachedRole(userID); ok {
+		return role, nil
+	}
+
+	u, err := a.store.GetUserByID(ctx, userID)
+	if errors.Is(err, storage.ErrNotFound) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("get user: %w", err)
+	}
+
+	// Cachují se jen úspěšné odpovědi. Token smazaného uživatele tak sahá do
+	// databáze při každém požadavku, což je přesně ta strana, kde chceme jistotu.
+	a.cacheMu.Lock()
+	a.cache[userID] = cachedUser{role: u.Role, expiresAt: time.Now().Add(a.cacheTTL)}
+	a.cacheMu.Unlock()
+
+	return u.Role, nil
+}
+
+// InvalidateUser zahodí zapamatovanou roli uživatele. Volá se po změně role
+// nebo smazání účtu, aby zásah platil okamžitě.
+func (a *AuthService) InvalidateUser(userID uuid.UUID) {
+	a.cacheMu.Lock()
+	delete(a.cache, userID)
+	a.cacheMu.Unlock()
+}
+
+func (a *AuthService) cachedRole(userID uuid.UUID) (string, bool) {
+	a.cacheMu.Lock()
+	defer a.cacheMu.Unlock()
+
+	entry, ok := a.cache[userID]
+	if !ok {
+		return "", false
+	}
+	if time.Now().After(entry.expiresAt) {
+		delete(a.cache, userID)
+		return "", false
+	}
+	return entry.role, true
 }
 
 // Register vytvoří nového uživatele s rolí reader (výchozí) a vrátí JWT token.

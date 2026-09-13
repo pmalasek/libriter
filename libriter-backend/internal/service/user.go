@@ -14,10 +14,21 @@ import (
 
 type UserService struct {
 	store *storage.Store
+	// auth je volitelný – potřebuje ho jen server, aby po změně role nebo
+	// smazání účtu zahodil zapamatovanou roli. CLI běží ve vlastním procesu
+	// a předává nil; tam se změna projeví po vypršení authCacheTTL.
+	auth *AuthService
 }
 
-func NewUser(store *storage.Store) *UserService {
-	return &UserService{store: store}
+func NewUser(store *storage.Store, auth *AuthService) *UserService {
+	return &UserService{store: store, auth: auth}
+}
+
+// invalidate zahodí cache role, pokud je služba zapojená na AuthService.
+func (u *UserService) invalidate(id uuid.UUID) {
+	if u.auth != nil {
+		u.auth.InvalidateUser(id)
+	}
 }
 
 func (u *UserService) List(ctx context.Context) ([]model.User, error) {
@@ -73,6 +84,7 @@ func (u *UserService) Delete(ctx context.Context, id uuid.UUID) error {
 	if err := u.store.DeleteUser(ctx, id); errors.Is(err, storage.ErrNotFound) {
 		return ErrNotFound
 	}
+	u.invalidate(id)
 	return nil
 }
 
@@ -80,5 +92,9 @@ func (u *UserService) SetRole(ctx context.Context, userID uuid.UUID, roleName st
 	if _, ok := model.RoleLevel[roleName]; !ok {
 		return fmt.Errorf("neznámá role: %s", roleName)
 	}
-	return u.store.SetUserRole(ctx, userID, roleName)
+	if err := u.store.SetUserRole(ctx, userID, roleName); err != nil {
+		return err
+	}
+	u.invalidate(userID)
+	return nil
 }
