@@ -14,6 +14,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -32,6 +33,9 @@ const (
 	host         = "databazeknih.cz"
 	minDelay     = 3 * time.Second
 	searchLimit  = 10
+	// Kolik stránek vydaných knih autora se projde, než to vzdáme.
+	// Jedna stránka je 20 knih; víc už je moc požadavků na jedno hledání.
+	authorBookPages = 3
 )
 
 // Aliasy na sdílené typy – ať se v parserech nečte metadata.BookMetadata.
@@ -58,13 +62,51 @@ func (c *Client) Supports(rawURL string) bool {
 	return metadata.HostMatches(rawURL, host)
 }
 
-// Search vyhledá knihy podle dotazu, vrátí max. 10 výsledků
-func (c *Client) Search(ctx context.Context, query string) ([]SearchResult, error) {
+// Search vyhledá knihy podle dotazu, vrátí max. 10 výsledků.
+//
+// Web hledá jen v názvech knih – jméno autora v dotazu ignoruje. U běžného
+// názvu („Ostrov“) tak vrátí padesát stránek jmenovců a kniha hledaného autora
+// mezi prvními deseti není. Proto se autor neposílá do dotazu, ale výsledky se
+// podle něj seřadí; a když mezi nimi není vůbec, zkusí se knihy autora.
+func (c *Client) Search(ctx context.Context, q metadata.SearchQuery) ([]SearchResult, error) {
+	results, err := c.searchTitle(ctx, q.Title)
+	if err != nil {
+		return nil, err
+	}
+	if q.Author == "" {
+		return results, nil
+	}
+
+	for _, r := range results {
+		if metadata.AuthorMatches(r.Author, q.Author) {
+			return metadata.RankByAuthor(results, q.Author), nil
+		}
+	}
+
+	// Dva požadavky navíc (autor + jeho knihy), zato se kniha najde. Selhání
+	// se ignoruje – zůstanou výsledky podle názvu.
+	byAuthor, err := c.searchAuthorBooks(ctx, q)
+	if err != nil {
+		slog.Debug("hledání přes autora selhalo", "autor", q.Author, "err", err)
+	}
+	if len(byAuthor) == 0 {
+		return results, nil
+	}
+
+	merged := append(byAuthor, results...)
+	if len(merged) > searchLimit {
+		merged = merged[:searchLimit]
+	}
+	return merged, nil
+}
+
+// searchTitle je vyhledávání webu; hledá jen v názvech knih.
+func (c *Client) searchTitle(ctx context.Context, title string) ([]SearchResult, error) {
 	// Vyhledávací formulář na webu míří na /search?in=books; starší /hledat
 	// dnes vrací 404.
 	searchURL := fmt.Sprintf("%s/search?in=books&q=%s",
 		baseURL,
-		url.QueryEscape(query),
+		url.QueryEscape(title),
 	)
 
 	body, err := c.fetch(ctx, searchURL)
@@ -74,6 +116,65 @@ func (c *Client) Search(ctx context.Context, query string) ([]SearchResult, erro
 	defer body.Close()
 
 	return parseSearchResults(body)
+}
+
+// searchAuthorBooks najde knihu přes stránku autora: nejdřív autora podle
+// jména, pak jeho vydané knihy a v nich hledaný název. Prochází se nejvýš
+// authorBookPages stránek výpisu.
+func (c *Client) searchAuthorBooks(ctx context.Context, q metadata.SearchQuery) ([]SearchResult, error) {
+	authors, err := c.SearchAuthors(ctx, q.Author)
+	if err != nil {
+		return nil, fmt.Errorf("hledání autora: %w", err)
+	}
+
+	// Jen autor, jehož jméno opravdu sedí – hledání vrací i vzdálené shody
+	// (na „Samuel Bjørk“ nabídne i Ricki Ostrov).
+	var authorURL, authorName string
+	for _, a := range authors {
+		if metadata.AuthorMatches(a.Name, q.Author) {
+			authorURL, authorName = a.URL, a.Name
+			break
+		}
+	}
+	if authorURL == "" {
+		return nil, nil
+	}
+
+	booksURL, ok := booksURLFor(authorURL)
+	if !ok {
+		return nil, nil
+	}
+
+	var found []SearchResult
+	for page := 1; page <= authorBookPages; page++ {
+		pageURL := booksURL
+		if page > 1 {
+			pageURL = fmt.Sprintf("%s?page=%d", booksURL, page)
+		}
+
+		body, err := c.fetch(ctx, pageURL)
+		if err != nil {
+			return found, fmt.Errorf("vydané knihy autora: %w", err)
+		}
+		doc, err := html.Parse(body)
+		body.Close()
+		if err != nil {
+			return found, err
+		}
+
+		books := parseAuthorBooks(doc)
+		for _, b := range books {
+			if titleMatches(b.Title, q.Title) {
+				b.Author = authorName
+				found = append(found, b)
+			}
+		}
+		// Poslední stránka výpisu – dál už není kam jít.
+		if len(found) > 0 || len(books) < authorBooksPerPage {
+			break
+		}
+	}
+	return found, nil
 }
 
 // FetchBook stáhne metadata knihy podle jejího ID
@@ -478,6 +579,8 @@ var (
 	// „Název originálu, 1979“ – rok na konci řádku Originální název.
 	originalYearRe = regexp.MustCompile(`,?\s*(\d{4})\s*$`)
 	yearOnlyRe     = regexp.MustCompile(`^(?:1[89]\d{2}|20\d{2})$`)
+	// Rok kdekoliv v textu – „2023 (1. vydání)“ ve výpisu knih autora.
+	yearInTextRe = regexp.MustCompile(`\b(1[89]\d{2}|20\d{2})\b`)
 	// „1. díl“ z pruhu série nad názvem knihy.
 	seriesPartRe = regexp.MustCompile(`(\d+)\s*\.\s*díl`)
 	readMoreRe   = regexp.MustCompile(`\s*(?:\.{3}|…)\s*celý text\s*$`)
@@ -636,4 +739,79 @@ func parseAuthors(doc *html.Node) (names []string, firstID int) {
 		return false // uvnitř jmenovky autora už nic dalšího není
 	})
 	return names, firstID
+}
+
+// authorBooksPerPage je počet knih na jedné stránce výpisu /vydane-knihy/.
+// Kratší stránka znamená, že další už není.
+const authorBooksPerPage = 20
+
+// booksURLFor přeloží /autori/<slug>-<id> na /vydane-knihy/<slug>-<id>.
+func booksURLFor(authorURL string) (string, bool) {
+	u, err := url.Parse(authorURL)
+	if err != nil {
+		return "", false
+	}
+
+	slug, ok := strings.CutPrefix(u.Path, "/autori/")
+	if !ok || slug == "" || strings.Contains(slug, "/") {
+		return "", false
+	}
+	return baseURL + "/vydane-knihy/" + slug, true
+}
+
+// parseAuthorBooks čte výpis vydaných knih autora:
+//
+//	<h3 class="midlRowHeight oddown">
+//	  <a href="/prehled-knihy/...-ostrov-521083" title="Ostrov">Ostrov</a>
+//	  <span class="pozn odl">2023 (1. vydání)</span>
+//	</h3>
+func parseAuthorBooks(doc *html.Node) []SearchResult {
+	var results []SearchResult
+
+	htmlutil.Walk(doc, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || n.Data != "h3" {
+			return true
+		}
+
+		link := htmlutil.Find(n, func(c *html.Node) bool {
+			return c.Type == html.ElementNode && c.Data == "a" &&
+				strings.Contains(htmlutil.Attr(c, "href"), "/prehled-knihy/")
+		})
+		if link == nil {
+			return false
+		}
+
+		href := htmlutil.Attr(link, "href")
+		title := htmlutil.Collapse(htmlutil.Text(link))
+		id := extractIDFromURL(href)
+		if title == "" || id == 0 {
+			return false
+		}
+
+		result := SearchResult{
+			ID:     id,
+			Title:  title,
+			URL:    htmlutil.ResolveURL(baseURL, href),
+			Source: providerName,
+		}
+		if m := yearInTextRe.FindStringSubmatch(htmlutil.Collapse(htmlutil.Text(n))); m != nil {
+			result.Year, _ = strconv.Atoi(m[1])
+		}
+		results = append(results, result)
+		return false
+	})
+
+	return results
+}
+
+// titleMatches porovná název z výpisu s hledaným. Nestačí přesná shoda –
+// stránka u některých vydání píše název i se sérií („Atomové šelmy: Aréna“) –,
+// ale ani volné hledání po slovech: to by u „Ostrov“ prošlo všechno.
+func titleMatches(title, wanted string) bool {
+	title = strings.ToLower(htmlutil.Collapse(title))
+	wanted = strings.ToLower(htmlutil.Collapse(wanted))
+	if title == "" || wanted == "" {
+		return false
+	}
+	return strings.Contains(title, wanted) || strings.Contains(wanted, title)
 }

@@ -406,3 +406,66 @@ func TestParseAuthorSearchResultsPseudonym(t *testing.T) {
 		t.Errorf("druhý výsledek = %q / %q", results[1].Name, results[1].Note)
 	}
 }
+
+// Výpis vydaných knih autora je jediná cesta ke knize s obyčejným názvem –
+// vyhledávání webu prochází jen názvy a „Ostrov“ jich má padesát stránek.
+func TestParseAuthorBooks(t *testing.T) {
+	const page = `<html><body>
+	<h3 class='midlRowHeight oddown'>
+	  <a href='/prehled-knihy/holger-munch-a-mia-krugerova-ostrov-521083' title='Ostrov'>Ostrov</a>
+	  <span class='pozn odl'>2023 (1. vydání)</span>
+	</h3>
+	<h3 class='midlRowHeight oddown'>
+	  <a href='/prehled-knihy/sova-495064' title='Sova'>Sova</a>
+	  <span class='pozn odl'>2021</span>
+	</h3>
+	<h3>Nadpis bez knihy</h3>
+	</body></html>`
+
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	books := parseAuthorBooks(doc)
+	if len(books) != 2 {
+		t.Fatalf("počet knih = %d, chtěno 2", len(books))
+	}
+	if books[0].Title != "Ostrov" || books[0].ID != 521083 || books[0].Year != 2023 {
+		t.Errorf("první kniha = %+v", books[0])
+	}
+	if books[1].Year != 2021 {
+		t.Errorf("rok druhé knihy = %d", books[1].Year)
+	}
+}
+
+func TestTitleMatches(t *testing.T) {
+	tests := []struct {
+		title, wanted string
+		want          bool
+	}{
+		{"Ostrov", "Ostrov", true},
+		{"ostrov", "Ostrov", true},
+		// Některá vydání mají v názvu i sérii.
+		{"Atomové šelmy: Aréna", "Aréna", true},
+		{"Ostrov", "Ostrov pokladů", true},
+		{"Ostrov pokladů", "Sova", false},
+		{"", "Ostrov", false},
+	}
+
+	for _, tt := range tests {
+		if got := titleMatches(tt.title, tt.wanted); got != tt.want {
+			t.Errorf("titleMatches(%q, %q) = %v", tt.title, tt.wanted, got)
+		}
+	}
+}
+
+func TestBooksURLFor(t *testing.T) {
+	got, ok := booksURLFor("https://www.databazeknih.cz/autori/frode-sander-ien-83556")
+	if !ok || got != "https://www.databazeknih.cz/vydane-knihy/frode-sander-ien-83556" {
+		t.Errorf("booksURLFor = %q, %v", got, ok)
+	}
+	if _, ok := booksURLFor("https://www.databazeknih.cz/prehled-knihy/ostrov-12234"); ok {
+		t.Error("booksURLFor přijal adresu, která není autor")
+	}
+}

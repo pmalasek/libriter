@@ -23,7 +23,7 @@ func (f *fakeProvider) Supports(rawURL string) bool {
 	return f.host != "" && HostMatches(rawURL, f.host)
 }
 
-func (f *fakeProvider) Search(context.Context, string) ([]SearchResult, error) {
+func (f *fakeProvider) Search(context.Context, SearchQuery) ([]SearchResult, error) {
 	if f.calls != nil {
 		*f.calls++
 	}
@@ -50,7 +50,7 @@ func TestChainSearchFallback(t *testing.T) {
 			&fakeProvider{name: "druhy", results: hit("B"), calls: &secondCalls},
 		)
 
-		got, err := chain.Search(ctx, "dotaz")
+		got, err := chain.Search(ctx, SearchQuery{Title: "dotaz"})
 		if err != nil {
 			t.Fatalf("Search: %v", err)
 		}
@@ -72,7 +72,7 @@ func TestChainSearchFallback(t *testing.T) {
 			&fakeProvider{name: "funkcni", results: hit("C")},
 		)
 
-		got, err := chain.Search(ctx, "dotaz")
+		got, err := chain.Search(ctx, SearchQuery{Title: "dotaz"})
 		if err != nil {
 			t.Fatalf("Search: %v", err)
 		}
@@ -87,7 +87,7 @@ func TestChainSearchFallback(t *testing.T) {
 			&fakeProvider{name: "b", err: boom},
 		)
 
-		if _, err := chain.Search(ctx, "dotaz"); !errors.Is(err, boom) {
+		if _, err := chain.Search(ctx, SearchQuery{Title: "dotaz"}); !errors.Is(err, boom) {
 			t.Errorf("err = %v, chtěna původní chyba", err)
 		}
 	})
@@ -95,7 +95,7 @@ func TestChainSearchFallback(t *testing.T) {
 	t.Run("všichni odpověděli prázdno -> prázdný výsledek bez chyby", func(t *testing.T) {
 		chain := NewChain(&fakeProvider{name: "a"}, &fakeProvider{name: "b"})
 
-		got, err := chain.Search(ctx, "dotaz")
+		got, err := chain.Search(ctx, SearchQuery{Title: "dotaz"})
 		if err != nil {
 			t.Errorf("err = %v, chtěno nil (kniha prostě nikde není)", err)
 		}
@@ -105,7 +105,7 @@ func TestChainSearchFallback(t *testing.T) {
 	})
 
 	t.Run("prázdný řetězec nepadá", func(t *testing.T) {
-		got, err := NewChain().Search(ctx, "dotaz")
+		got, err := NewChain().Search(ctx, SearchQuery{Title: "dotaz"})
 		if err != nil || len(got) != 0 {
 			t.Errorf("got = %v, err = %v", got, err)
 		}
@@ -285,5 +285,50 @@ func TestSplitAuthors(t *testing.T) {
 				t.Errorf("jména = %v, chtěno %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestAuthorMatches(t *testing.T) {
+	tests := []struct {
+		result, wanted string
+		want           bool
+	}{
+		{"Samuel Bjørk", "Samuel Bjørk", true},
+		// Zdroje píšou jména různě a u víc autorů je hledaný jen jeden z nich.
+		{"Bjørk, Samuel", "Samuel Bjørk", true},
+		{"František Kotleta, Kristýna Sněgoňová", "Kristýna Sněgoňová", true},
+		{"Robert Merle", "Samuel Bjørk", false},
+		// Diakritika se musí shodovat, jinak by „Bjork“ prošel jako „Bjørk“.
+		{"Samuel Bjork", "Samuel Bjørk", false},
+		{"Robert Merle", "", false},
+	}
+
+	for _, tt := range tests {
+		if got := AuthorMatches(tt.result, tt.wanted); got != tt.want {
+			t.Errorf("AuthorMatches(%q, %q) = %v", tt.result, tt.wanted, got)
+		}
+	}
+}
+
+// Zdroj, který hledá jen v názvech, vrátí jmenovce v libovolném pořadí –
+// knihy hledaného autora patří nahoru, zbytek si pořadí drží.
+func TestRankByAuthor(t *testing.T) {
+	results := []SearchResult{
+		{Title: "Ostrov", Author: "Robert Merle"},
+		{Title: "Ostrov", Author: "Samuel Bjørk"},
+		{Title: "Ostrov", Author: "Aldous Huxley"},
+	}
+
+	got := RankByAuthor(results, "Samuel Bjørk")
+	want := []string{"Samuel Bjørk", "Robert Merle", "Aldous Huxley"}
+	for i, author := range want {
+		if got[i].Author != author {
+			t.Errorf("pořadí[%d] = %q, chtěno %q", i, got[i].Author, author)
+		}
+	}
+
+	// Bez autora se pořadí nemění.
+	if got := RankByAuthor(results, ""); got[0].Author != "Robert Merle" {
+		t.Errorf("bez autora se pořadí změnilo: %+v", got)
 	}
 }

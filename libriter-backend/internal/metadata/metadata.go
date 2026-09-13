@@ -17,6 +17,27 @@ import (
 	"libriter/internal/model"
 )
 
+// SearchQuery je dotaz na knihu. Author je nepovinný, ale hodně pomáhá:
+// vyhledávání českých webů prochází jen názvy knih a jméno autora přilepené
+// za název ignoruje, takže „Ostrov“ od Samuela Bjørka se mezi stovkou jiných
+// Ostrovů nenajde. Zdroj s vlastním hledáním podle autora (Google Books,
+// OpenLibrary) ho pošle rovnou v dotazu, scraper podle něj výsledky seřadí
+// nebo zkusí knihu najít přes stránku autora.
+type SearchQuery struct {
+	Title  string
+	Author string
+}
+
+// String složí dotaz do jednoho řetězce.
+func (q SearchQuery) String() string {
+	return strings.TrimSpace(q.Title + " " + q.Author)
+}
+
+// IsEmpty říká, že dotaz nemá co hledat.
+func (q SearchQuery) IsEmpty() bool {
+	return strings.TrimSpace(q.Title) == "" && strings.TrimSpace(q.Author) == ""
+}
+
 // SearchResult je jeden výsledek vyhledávání. Author a Year mohou zůstat
 // prázdné – ne každý zdroj je dává už v seznamu, doplní se až detailem.
 type SearchResult struct {
@@ -119,7 +140,7 @@ type Provider interface {
 	// Supports říká, jestli poskytovatel umí stáhnout detail z této URL.
 	// Slouží zároveň jako allowlist – handler přes něj pouští /metadata/book?url=.
 	Supports(rawURL string) bool
-	Search(ctx context.Context, query string) ([]SearchResult, error)
+	Search(ctx context.Context, q SearchQuery) ([]SearchResult, error)
 	FetchByURL(ctx context.Context, rawURL string) (*BookMetadata, error)
 }
 
@@ -164,11 +185,11 @@ func (c *Chain) Providers() []string {
 // Chyba se vrací jen tehdy, když nic nenašel nikdo A aspoň jeden zdroj selhal –
 // jinak by se rozbitý scraper tvářil jako „kniha nenalezena“. Když všechny
 // zdroje odpověděly a shodly se na prázdnu, je to prázdný seznam bez chyby.
-func (c *Chain) Search(ctx context.Context, query string) ([]SearchResult, error) {
+func (c *Chain) Search(ctx context.Context, q SearchQuery) ([]SearchResult, error) {
 	var firstErr error
 
 	for _, p := range c.providers {
-		results, err := p.Search(ctx, query)
+		results, err := p.Search(ctx, q)
 		switch {
 		case err != nil:
 			// Cizí weby se rozbíjejí; zalogujeme a jdeme na další zdroj.
@@ -182,7 +203,7 @@ func (c *Chain) Search(ctx context.Context, query string) ([]SearchResult, error
 			}
 			return results, nil
 		default:
-			slog.Debug("zdroj metadat nic nenašel", "zdroj", p.Name(), "dotaz", query)
+			slog.Debug("zdroj metadat nic nenašel", "zdroj", p.Name(), "dotaz", q.String())
 		}
 	}
 
@@ -242,6 +263,43 @@ func SplitAuthors(s string) []BookAuthor {
 		})
 	}
 	return authors
+}
+
+// AuthorMatches říká, jestli jméno autora z výsledku odpovídá hledanému.
+// Stačí shoda příjmení: zdroje píšou jména různě („Samuel Bjørk“,
+// „Bjørk, Samuel“) a u knih s víc autory je hledaný autor jen jedním
+// ze jmen v řetězci.
+func AuthorMatches(resultAuthor, wanted string) bool {
+	last := model.ParseAuthorName(wanted).Last
+	if last == "" {
+		return false
+	}
+	for _, word := range strings.Fields(strings.ReplaceAll(resultAuthor, ",", " ")) {
+		if strings.EqualFold(word, last) {
+			return true
+		}
+	}
+	return false
+}
+
+// RankByAuthor přesune dopředu výsledky, které napsal hledaný autor; pořadí
+// uvnitř obou skupin zůstává. Zdroj, který hledá jen v názvech, tak aspoň
+// nenechá správnou knihu až pod pěti jmenovci.
+func RankByAuthor(results []SearchResult, author string) []SearchResult {
+	if author == "" {
+		return results
+	}
+
+	match := make([]SearchResult, 0, len(results))
+	rest := make([]SearchResult, 0, len(results))
+	for _, r := range results {
+		if AuthorMatches(r.Author, author) {
+			match = append(match, r)
+		} else {
+			rest = append(rest, r)
+		}
+	}
+	return append(match, rest...)
 }
 
 // --- autoři ---

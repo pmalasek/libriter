@@ -305,7 +305,8 @@ function BookEditForm({
       </DialogHeader>
 
       <MetadataImport
-        defaultQuery={[book.title, book.authors?.[0]?.name].filter(Boolean).join(' ')}
+        defaultTitle={book.title}
+        defaultAuthor={book.authors?.[0]?.name ?? ''}
         onApply={(meta) => {
           if (meta.title) setTitle(meta.title)
           if (meta.authors?.length) applyAuthors(meta.authors)

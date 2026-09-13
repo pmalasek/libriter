@@ -10,8 +10,10 @@ function sourceLabel(source: string): string {
 }
 
 interface Props {
-  /** Předvyplněný dotaz – typicky název knihy a hlavní autor. */
-  defaultQuery: string
+  /** Předvyplněný název knihy. */
+  defaultTitle: string
+  /** Předvyplněný hlavní autor; posílá se zvlášť, viz useMetadataSearch. */
+  defaultAuthor: string
   onApply: (meta: BookMetadata) => void
 }
 
@@ -22,9 +24,10 @@ interface Props {
  * Nic se neukládá – stažená metadata jen přepíšou rozpracovaný formulář, takže
  * „Zrušit“ je pořád plnohodnotná cesta zpět.
  */
-export function MetadataImport({ defaultQuery, onApply }: Props) {
+export function MetadataImport({ defaultTitle, defaultAuthor, onApply }: Props) {
   const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState(defaultQuery)
+  const [title, setTitle] = useState(defaultTitle)
+  const [author, setAuthor] = useState(defaultAuthor)
   const [results, setResults] = useState<MetadataSearchResult[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -43,10 +46,13 @@ export function MetadataImport({ defaultQuery, onApply }: Props) {
   function handleSearch() {
     setError(null)
     setResults(null)
-    search.mutate(query.trim(), {
-      onSuccess: setResults,
-      onError: (err) => setError(err.message),
-    })
+    search.mutate(
+      { title: title.trim(), author: author.trim() },
+      {
+        onSuccess: setResults,
+        onError: (err) => setError(err.message),
+      },
+    )
   }
 
   function handlePick(result: MetadataSearchResult) {
@@ -60,24 +66,36 @@ export function MetadataImport({ defaultQuery, onApply }: Props) {
     })
   }
 
+  function handleKeyDown(event: React.KeyboardEvent) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      handleSearch()
+    }
+  }
+
   const pending = search.isPending || fetchMetadata.isPending
 
   return (
     <div className="space-y-3 rounded-lg border p-3">
-      <div className="flex items-end gap-2">
+      <div className="flex flex-wrap items-end gap-2">
         <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Název a autor"
+          className="min-w-40 flex-2"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Název"
+          aria-label="Název knihy"
           // Enter uvnitř dialogu by jinak odeslal celý formulář knihy.
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.preventDefault()
-              handleSearch()
-            }
-          }}
+          onKeyDown={handleKeyDown}
         />
-        <Button type="button" size="sm" onClick={handleSearch} disabled={pending || !query.trim()}>
+        <Input
+          className="min-w-32 flex-1"
+          value={author}
+          onChange={(e) => setAuthor(e.target.value)}
+          placeholder="Autor"
+          aria-label="Autor"
+          onKeyDown={handleKeyDown}
+        />
+        <Button type="button" size="sm" onClick={handleSearch} disabled={pending || !title.trim()}>
           <SearchIcon />
           {search.isPending ? 'Hledám…' : 'Hledat'}
         </Button>
@@ -123,8 +141,9 @@ export function MetadataImport({ defaultQuery, onApply }: Props) {
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        Převezme se název, popis a rok prvního vydání (u překladů rok originálu). Obálka ani
-        hodnocení zdroje se nepřebírají.
+        Hledá se podle názvu, autor v druhém poli výběr zpřesní. Převezme se název, autoři,
+        série, popis a rok prvního vydání (u překladů rok originálu). Obálka ani hodnocení
+        zdroje se nepřebírají.
       </p>
     </div>
   )

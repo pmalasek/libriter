@@ -68,14 +68,17 @@ func (c *Client) fetch(ctx context.Context, targetURL string) (*html.Node, error
 
 // --- vyhledávání ---
 
-func (c *Client) Search(ctx context.Context, query string) ([]metadata.SearchResult, error) {
-	searchURL := fmt.Sprintf("%s/hledat?text=%s&ok=", baseURL, url.QueryEscape(query))
+// Search hledá knihy podle názvu. Web prochází jen názvy – jméno autora
+// v dotazu by výsledky spíš vyprázdnilo –, takže se autor použije až na
+// seřazení nalezeného.
+func (c *Client) Search(ctx context.Context, q metadata.SearchQuery) ([]metadata.SearchResult, error) {
+	searchURL := fmt.Sprintf("%s/hledat?text=%s&ok=", baseURL, url.QueryEscape(q.Title))
 
 	doc, err := c.fetch(ctx, searchURL)
 	if err != nil {
 		return nil, fmt.Errorf("search: %w", err)
 	}
-	return parseSearchResults(doc), nil
+	return metadata.RankByAuthor(parseSearchResults(doc), q.Author), nil
 }
 
 // parseSearchResults čte výsledky hledání knih. Jeden výsledek je

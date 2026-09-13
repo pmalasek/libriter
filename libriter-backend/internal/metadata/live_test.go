@@ -40,7 +40,7 @@ func TestLiveProviders(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			results, err := provider.Search(ctx, "Válka s mloky")
+			results, err := provider.Search(ctx, metadata.SearchQuery{Title: "Válka s mloky"})
 			if err != nil {
 				t.Fatalf("Search: %v", err)
 			}

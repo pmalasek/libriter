@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"libriter/internal/metadata"
@@ -53,11 +54,23 @@ type searchResponse struct {
 	} `json:"docs"`
 }
 
-func (c *Client) Search(ctx context.Context, query string) ([]metadata.SearchResult, error) {
-	searchURL := fmt.Sprintf(
-		"%s/search.json?q=%s&limit=%d&fields=key,title,author_name,first_publish_year,cover_i",
-		baseURL, url.QueryEscape(query), searchLimit,
-	)
+func (c *Client) Search(ctx context.Context, q metadata.SearchQuery) ([]metadata.SearchResult, error) {
+	// OpenLibrary umí hledat podle názvu a autora zvlášť; to je přesnější než
+	// jeden fulltextový dotaz, kde by se jméno autora hledalo i v názvu.
+	params := url.Values{}
+	if title := strings.TrimSpace(q.Title); title != "" {
+		params.Set("title", title)
+	}
+	if author := strings.TrimSpace(q.Author); author != "" {
+		params.Set("author", author)
+	}
+	if len(params) == 0 {
+		return nil, nil
+	}
+	params.Set("limit", strconv.Itoa(searchLimit))
+	params.Set("fields", "key,title,author_name,first_publish_year,cover_i")
+
+	searchURL := baseURL + "/search.json?" + params.Encode()
 
 	var resp searchResponse
 	if err := c.fetcher.GetJSON(ctx, searchURL, &resp); err != nil {

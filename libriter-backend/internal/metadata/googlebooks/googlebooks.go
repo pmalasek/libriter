@@ -74,9 +74,9 @@ type volumesResponse struct {
 	Items      []volume `json:"items"`
 }
 
-func (c *Client) Search(ctx context.Context, query string) ([]metadata.SearchResult, error) {
+func (c *Client) Search(ctx context.Context, q metadata.SearchQuery) ([]metadata.SearchResult, error) {
 	params := url.Values{}
-	params.Set("q", query)
+	params.Set("q", searchExpr(q))
 	params.Set("maxResults", strconv.Itoa(searchLimit))
 	params.Set("country", c.country)
 	if c.apiKey != "" {
@@ -105,6 +105,21 @@ func (c *Client) Search(ctx context.Context, query string) ([]metadata.SearchRes
 		})
 	}
 	return results, nil
+}
+
+// searchExpr složí dotaz v syntaxi Google Books. Autor patří do inauthor:,
+// jinak by se hledal i v názvu a popisu a knihu o autorovi by vrátil dřív
+// než knihu od něj.
+func searchExpr(q metadata.SearchQuery) string {
+	title, author := strings.TrimSpace(q.Title), strings.TrimSpace(q.Author)
+	switch {
+	case title != "" && author != "":
+		return fmt.Sprintf("intitle:%q inauthor:%q", title, author)
+	case author != "":
+		return fmt.Sprintf("inauthor:%q", author)
+	default:
+		return title
+	}
 }
 
 func (c *Client) FetchByURL(ctx context.Context, rawURL string) (*metadata.BookMetadata, error) {

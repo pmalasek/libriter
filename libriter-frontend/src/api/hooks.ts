@@ -277,14 +277,26 @@ export function useFetchAuthorMetadata() {
   })
 }
 
+/** Dotaz na knihu. Autor je nepovinný, ale hledání výrazně zpřesňuje. */
+export interface MetadataSearchInput {
+  title: string
+  author?: string
+}
+
+/**
+ * Vyhledání knihy ve zdrojích metadat. Autor se posílá zvlášť, ne přilepený
+ * za název – české weby hledají jen v názvech knih a jméno v dotazu ignorují,
+ * takže „Ostrov“ od Samuela Bjørka by se mezi jmenovci nenašel.
+ */
 export function useMetadataSearch() {
   return useMutation({
-    mutationFn: async (query: string) =>
-      asList(
-        await apiFetch<MetadataSearchResult[] | null>(
-          `/metadata/search?q=${encodeURIComponent(query)}`,
-        ),
-      ),
+    mutationFn: async ({ title, author }: MetadataSearchInput) => {
+      const params = new URLSearchParams({ q: title })
+      if (author?.trim()) params.set('author', author.trim())
+      return asList(
+        await apiFetch<MetadataSearchResult[] | null>(`/metadata/search?${params}`),
+      )
+    },
   })
 }
 

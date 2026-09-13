@@ -24,19 +24,23 @@ func NewMetadata(chain *metadata.Chain, dk *databazeknih.Client) *MetadataHandle
 	return &MetadataHandler{chain: chain, dk: dk}
 }
 
-// GET /api/v1/metadata/search?q=<dotaz>
+// GET /api/v1/metadata/search?q=<název>&author=<autor>
 //
 // Zkouší zdroje v nakonfigurovaném pořadí, vrátí výsledky prvního, který
-// něco najde.
+// něco najde. Autor je nepovinný, ale výrazně zpřesňuje hledání – viz
+// metadata.SearchQuery.
 // Přístup: editor+
 func (h *MetadataHandler) Search(w http.ResponseWriter, r *http.Request) {
-	q := r.URL.Query().Get("q")
-	if q == "" {
+	query := metadata.SearchQuery{
+		Title:  r.URL.Query().Get("q"),
+		Author: r.URL.Query().Get("author"),
+	}
+	if query.Title == "" {
 		writeError(w, http.StatusBadRequest, "parametr q je povinný")
 		return
 	}
 
-	results, err := h.chain.Search(r.Context(), q)
+	results, err := h.chain.Search(r.Context(), query)
 	if err != nil {
 		if errors.Is(err, r.Context().Err()) {
 			writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
