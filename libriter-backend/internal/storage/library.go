@@ -2,40 +2,40 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
 	"libriter/internal/model"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 // --- Authors ---
 
 func (s *Store) CreateAuthor(ctx context.Context, name string, bio, imagePath *string) (*model.Author, error) {
 	const q = `
-		INSERT INTO library.authors (name, bio, image_path)
-		VALUES ($1, $2, $3)
+		INSERT INTO authors (id, name, bio, image_path)
+		VALUES (?1, ?2, ?3, ?4)
 		RETURNING id, name, bio, image_path, created_at`
 
-	row := s.db.QueryRow(ctx, q, name, bio, imagePath)
+	row := s.db.QueryRowContext(ctx, q, uuid.New(), name, bio, imagePath)
 	return scanAuthor(row)
 }
 
 func (s *Store) GetAuthor(ctx context.Context, id uuid.UUID) (*model.Author, error) {
-	const q = `SELECT id, name, bio, image_path, created_at FROM library.authors WHERE id = $1`
-	row := s.db.QueryRow(ctx, q, id)
+	const q = `SELECT id, name, bio, image_path, created_at FROM authors WHERE id = ?1`
+	row := s.db.QueryRowContext(ctx, q, id)
 	a, err := scanAuthor(row)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	return a, err
 }
 
 func (s *Store) ListAuthors(ctx context.Context) ([]model.Author, error) {
-	const q = `SELECT id, name, bio, image_path, created_at FROM library.authors ORDER BY name`
-	rows, err := s.db.Query(ctx, q)
+	const q = `SELECT id, name, bio, image_path, created_at FROM authors ORDER BY name`
+	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("list authors: %w", err)
 	}
@@ -54,25 +54,25 @@ func (s *Store) ListAuthors(ctx context.Context) ([]model.Author, error) {
 
 func (s *Store) UpdateAuthor(ctx context.Context, id uuid.UUID, name string, bio, imagePath *string) (*model.Author, error) {
 	const q = `
-		UPDATE library.authors
-		SET name = $2, bio = $3, image_path = $4
-		WHERE id = $1
+		UPDATE authors
+		SET name = ?2, bio = ?3, image_path = ?4
+		WHERE id = ?1
 		RETURNING id, name, bio, image_path, created_at`
 
-	row := s.db.QueryRow(ctx, q, id, name, bio, imagePath)
+	row := s.db.QueryRowContext(ctx, q, id, name, bio, imagePath)
 	a, err := scanAuthor(row)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	return a, err
 }
 
 func (s *Store) DeleteAuthor(ctx context.Context, id uuid.UUID) error {
-	tag, err := s.db.Exec(ctx, `DELETE FROM library.authors WHERE id = $1`, id)
+	res, err := s.db.ExecContext(ctx, `DELETE FROM authors WHERE id = ?1`, id)
 	if err != nil {
 		return fmt.Errorf("delete author: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if rowsAffected(res) == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -81,12 +81,12 @@ func (s *Store) DeleteAuthor(ctx context.Context, id uuid.UUID) error {
 // GetOrCreateAuthor najde autora podle jména nebo ho vytvoří.
 // Volající musí serializovat přístupy (scanner používá ingestMu).
 func (s *Store) GetOrCreateAuthor(ctx context.Context, name string) (*model.Author, error) {
-	const q = `SELECT id, name, bio, image_path, created_at FROM library.authors WHERE name = $1 LIMIT 1`
-	a, err := scanAuthor(s.db.QueryRow(ctx, q, name))
+	const q = `SELECT id, name, bio, image_path, created_at FROM authors WHERE name = ?1 LIMIT 1`
+	a, err := scanAuthor(s.db.QueryRowContext(ctx, q, name))
 	if err == nil {
 		return a, nil
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if !errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("get author by name: %w", err)
 	}
 	return s.CreateAuthor(ctx, name, nil, nil)
@@ -105,27 +105,27 @@ func scanAuthor(row scanner) (*model.Author, error) {
 
 func (s *Store) CreateSeries(ctx context.Context, title string, description *string) (*model.Series, error) {
 	const q = `
-		INSERT INTO library.series (title, description)
-		VALUES ($1, $2)
+		INSERT INTO series (id, title, description)
+		VALUES (?1, ?2, ?3)
 		RETURNING id, title, description, created_at`
 
-	row := s.db.QueryRow(ctx, q, title, description)
+	row := s.db.QueryRowContext(ctx, q, uuid.New(), title, description)
 	return scanSeries(row)
 }
 
 func (s *Store) GetSeries(ctx context.Context, id uuid.UUID) (*model.Series, error) {
-	const q = `SELECT id, title, description, created_at FROM library.series WHERE id = $1`
-	row := s.db.QueryRow(ctx, q, id)
+	const q = `SELECT id, title, description, created_at FROM series WHERE id = ?1`
+	row := s.db.QueryRowContext(ctx, q, id)
 	sr, err := scanSeries(row)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	return sr, err
 }
 
 func (s *Store) ListSeries(ctx context.Context) ([]model.Series, error) {
-	const q = `SELECT id, title, description, created_at FROM library.series ORDER BY title`
-	rows, err := s.db.Query(ctx, q)
+	const q = `SELECT id, title, description, created_at FROM series ORDER BY title`
+	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("list series: %w", err)
 	}
@@ -144,24 +144,24 @@ func (s *Store) ListSeries(ctx context.Context) ([]model.Series, error) {
 
 func (s *Store) UpdateSeries(ctx context.Context, id uuid.UUID, title string, description *string) (*model.Series, error) {
 	const q = `
-		UPDATE library.series SET title = $2, description = $3
-		WHERE id = $1
+		UPDATE series SET title = ?2, description = ?3
+		WHERE id = ?1
 		RETURNING id, title, description, created_at`
 
-	row := s.db.QueryRow(ctx, q, id, title, description)
+	row := s.db.QueryRowContext(ctx, q, id, title, description)
 	sr, err := scanSeries(row)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	return sr, err
 }
 
 func (s *Store) DeleteSeries(ctx context.Context, id uuid.UUID) error {
-	tag, err := s.db.Exec(ctx, `DELETE FROM library.series WHERE id = $1`, id)
+	res, err := s.db.ExecContext(ctx, `DELETE FROM series WHERE id = ?1`, id)
 	if err != nil {
 		return fmt.Errorf("delete series: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if rowsAffected(res) == 0 {
 		return ErrNotFound
 	}
 	return nil

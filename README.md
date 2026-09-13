@@ -9,12 +9,15 @@ libriter/
 ├── libriter-backend/   # REST API (Go)
 ├── libriter-frontend/  # Webové rozhraní
 ├── libriter-mobile/    # Mobilní aplikace
-├── _sql/               # Databázové schéma
 ├── _scripts/           # Pomocné skripty
 └── data/
+    ├── libriter.db     # SQLite databáze (DB_PATH) – vytvoří se automaticky
     ├── audio/          # Audio soubory (AUDIO_ROOT)
     └── covers/         # Obálky knih (COVER_ROOT)
 ```
+
+Databázové schéma je v `libriter-backend/internal/db/migrations/` a aplikuje se
+automaticky při startu backendu.
 
 ---
 
@@ -25,8 +28,11 @@ libriter/
 | Nástroj | Verze | Účel | Instalace |
 |---------|-------|------|-----------|
 | **Go** | ≥ 1.21 | Backend | viz níže |
-| **PostgreSQL** | ≥ 15 | Databáze | viz níže |
 | **ffprobe** | libovolná | Délka audio souborů (scanner) | součást balíčku `ffmpeg` |
+
+Databáze je **SQLite** vestavěná přímo v backendu (čistě Go driver `modernc.org/sqlite`,
+bez cgo) – žádný databázový server není potřeba. Soubor `data/libriter.db` i schéma
+vzniknou automaticky při prvním startu.
 
 #### Go
 
@@ -41,34 +47,11 @@ sudo tar -C /usr/local -xzf go1.24.linux-amd64.tar.gz
 export PATH=$PATH:/usr/local/go/bin  # přidat do ~/.bashrc nebo ~/.zshrc
 ```
 
-#### PostgreSQL 15+
+#### Developer tools
 
 ```bash
-# Debian/Ubuntu
-sudo apt install postgresql postgresql-contrib
-
-# Arch Linux
-sudo pacman -S postgresql
-
-# Spuštění a inicializace (pokud ještě neběží)
-sudo systemctl enable --now postgresql
+sudo apt install build-essential git cmake pkg-config
 ```
-
-Vytvoření databáze (jako PostgreSQL superuser):
-
-```sql
-CREATE DATABASE libriter
-  ENCODING    'UTF8'
-  LC_COLLATE  'cs_CZ.utf8'
-  LC_CTYPE    'cs_CZ.utf8'
-  TEMPLATE    template0;
-```
-
-> Pokud locale `cs_CZ.utf8` není dostupné, vygenerujte ho:
-> ```bash
-> sudo locale-gen cs_CZ.UTF-8
-> sudo update-locale
-> ```
 
 #### ffprobe (ffmpeg)
 
@@ -90,10 +73,10 @@ ffprobe -version
 
 ## Konfigurace backendu
 
-Zkopírujte `.env.example` do `.env` a upravte hodnoty:
+Zkopírujte `env.example` do `.env` a upravte hodnoty:
 
 ```bash
-cp libriter-backend/.env.example libriter-backend/.env
+cp libriter-backend/env.example libriter-backend/.env
 ```
 
 ```dotenv
@@ -101,13 +84,8 @@ cp libriter-backend/.env.example libriter-backend/.env
 SERVER_PORT=8080
 SERVER_ENV=development          # development | production
 
-# Databáze
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=libriter
-DB_USER=postgres
-DB_PASSWORD=your_password
-DB_POOL_MAX=10
+# Databáze (SQLite – soubor i schéma se vytvoří automaticky při startu)
+DB_PATH=./data/libriter.db
 
 # JWT – NUTNÉ ZMĚNIT před nasazením do produkce!
 JWT_SECRET=change-me-before-production
@@ -126,25 +104,13 @@ MAX_UPLOAD_MB=500
 
 ## Instalace a spuštění backendu
 
-### 1. Inicializace databáze
-
-```bash
-psql -U postgres -d libriter -f libriter-backend/migrations/001_init.sql
-```
-
-Skript vytvoří:
-- Schémata `library` a `user_data`
-- Všechny tabulky (authors, series, books, chapters, tags, users, roles, permissions, ratings, ...)
-- Výchozí role: **admin**, **editor**, **reader**
-- Výchozí oprávnění pro jednotlivé role
-
-### 2. Vytvoření adresářů pro data
+### 1. Vytvoření adresářů pro data
 
 ```bash
 mkdir -p data/audio data/covers
 ```
 
-### 3. Stažení Go závislostí a build
+### 2. Stažení Go závislostí a build
 
 ```bash
 cd libriter-backend
@@ -152,7 +118,7 @@ go mod download
 go build ./...
 ```
 
-### 4. Spuštění serveru
+### 3. Spuštění serveru
 
 ```bash
 cd libriter-backend
@@ -160,6 +126,16 @@ go run ./cmd/server
 ```
 
 Server se spustí na portu nastaveném v `SERVER_PORT` (výchozí `8080`).
+
+Při prvním startu backend automaticky:
+- vytvoří soubor databáze na cestě `DB_PATH` (včetně adresáře)
+- aplikuje migrace z `internal/db/migrations/` – všechny tabulky
+  (authors, series, books, chapters, tags, users, roles, permissions, ratings, ...)
+- založí výchozí role **admin**, **editor**, **reader** a jejich oprávnění
+
+Aplikované migrace se evidují v tabulce `schema_migrations`; při dalších
+startech se spustí jen nové. Zálohu databáze pořídíte prostým zkopírováním
+souboru `libriter.db` (při běžícím serveru i souborů `-wal` a `-shm`).
 
 ---
 

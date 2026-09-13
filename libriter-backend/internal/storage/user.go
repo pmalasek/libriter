@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,43 +10,40 @@ import (
 	"libriter/internal/model"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 )
 
 // CreateUser vytvoří uživatele a přiřadí mu roli v jedné transakci.
 func (s *Store) CreateUser(ctx context.Context, displayName, email, passwordHash, roleName string) (*model.User, error) {
-	tx, err := s.db.Begin(ctx)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback() //nolint:errcheck
 
 	const qUser = `
-		INSERT INTO user_data.users (display_name, email, password_hash)
-		VALUES ($1, $2, $3)
+		INSERT INTO users (id, display_name, email, password_hash)
+		VALUES (?1, ?2, ?3, ?4)
 		RETURNING id, display_name, email, password_hash, created_at, updated_at`
 
-	row := tx.QueryRow(ctx, qUser, displayName, email, passwordHash)
+	row := tx.QueryRowContext(ctx, qUser, uuid.New(), displayName, email, passwordHash)
 	u, err := scanUser(row)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if isUniqueViolation(err) {
 			return nil, ErrConflict
 		}
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
 
 	const qRole = `
-		INSERT INTO user_data.user_roles (user_id, role_id)
-		SELECT $1, id FROM user_data.roles WHERE name = $2`
+		INSERT INTO user_roles (user_id, role_id)
+		SELECT ?1, id FROM roles WHERE name = ?2`
 
-	if _, err = tx.Exec(ctx, qRole, u.ID, roleName); err != nil {
+	if _, err = tx.ExecContext(ctx, qRole, u.ID, roleName); err != nil {
 		return nil, fmt.Errorf("assign role: %w", err)
 	}
 
 	u.Role = roleName
-	return u, tx.Commit(ctx)
+	return u, tx.Commit()
 }
 
 // GetUserByEmail vrátí uživatele včetně jeho role.
@@ -54,15 +52,15 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*model.User, 
 		SELECT u.id, u.display_name, u.email, u.password_hash,
 		       COALESCE(r.name, 'reader') AS role,
 		       u.created_at, u.updated_at
-		FROM user_data.users u
-		LEFT JOIN user_data.user_roles ur ON ur.user_id = u.id
-		LEFT JOIN user_data.roles r        ON r.id = ur.role_id
-		WHERE lower(u.email) = lower($1)
+		FROM users u
+		LEFT JOIN user_roles ur ON ur.user_id = u.id
+		LEFT JOIN roles r       ON r.id = ur.role_id
+		WHERE lower(u.email) = lower(?1)
 		LIMIT 1`
 
-	row := s.db.QueryRow(ctx, q, email)
+	row := s.db.QueryRowContext(ctx, q, email)
 	u, err := scanUserWithRole(row)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	return u, err
@@ -74,15 +72,15 @@ func (s *Store) GetUserByID(ctx context.Context, id uuid.UUID) (*model.User, err
 		SELECT u.id, u.display_name, u.email, u.password_hash,
 		       COALESCE(r.name, 'reader') AS role,
 		       u.created_at, u.updated_at
-		FROM user_data.users u
-		LEFT JOIN user_data.user_roles ur ON ur.user_id = u.id
-		LEFT JOIN user_data.roles r        ON r.id = ur.role_id
-		WHERE u.id = $1
+		FROM users u
+		LEFT JOIN user_roles ur ON ur.user_id = u.id
+		LEFT JOIN roles r       ON r.id = ur.role_id
+		WHERE u.id = ?1
 		LIMIT 1`
 
-	row := s.db.QueryRow(ctx, q, id)
+	row := s.db.QueryRowContext(ctx, q, id)
 	u, err := scanUserWithRole(row)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	return u, err
@@ -94,12 +92,12 @@ func (s *Store) ListUsers(ctx context.Context) ([]model.User, error) {
 		SELECT u.id, u.display_name, u.email, u.password_hash,
 		       COALESCE(r.name, 'reader') AS role,
 		       u.created_at, u.updated_at
-		FROM user_data.users u
-		LEFT JOIN user_data.user_roles ur ON ur.user_id = u.id
-		LEFT JOIN user_data.roles r        ON r.id = ur.role_id
+		FROM users u
+		LEFT JOIN user_roles ur ON ur.user_id = u.id
+		LEFT JOIN roles r       ON r.id = ur.role_id
 		ORDER BY u.display_name`
 
-	rows, err := s.db.Query(ctx, q)
+	rows, err := s.db.QueryContext(ctx, q)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
@@ -119,19 +117,18 @@ func (s *Store) ListUsers(ctx context.Context) ([]model.User, error) {
 // UpdateUser aktualizuje display_name a email uživatele.
 func (s *Store) UpdateUser(ctx context.Context, id uuid.UUID, displayName, email string) (*model.User, error) {
 	const q = `
-		UPDATE user_data.users
-		SET display_name = $2, email = $3
-		WHERE id = $1
+		UPDATE users
+		SET display_name = ?2, email = ?3, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?1
 		RETURNING id, display_name, email, password_hash, created_at, updated_at`
 
-	row := s.db.QueryRow(ctx, q, id, displayName, email)
+	row := s.db.QueryRowContext(ctx, q, id, displayName, email)
 	u, err := scanUser(row)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		if isUniqueViolation(err) {
 			return nil, ErrConflict
 		}
 		return nil, err
@@ -146,12 +143,12 @@ func (s *Store) UpdateUser(ctx context.Context, id uuid.UUID, displayName, email
 
 // UpdateUserPassword nastaví nový hash hesla.
 func (s *Store) UpdateUserPassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
-	const q = `UPDATE user_data.users SET password_hash = $2 WHERE id = $1`
-	tag, err := s.db.Exec(ctx, q, id, passwordHash)
+	const q = `UPDATE users SET password_hash = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?1`
+	res, err := s.db.ExecContext(ctx, q, id, passwordHash)
 	if err != nil {
 		return fmt.Errorf("update password: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if rowsAffected(res) == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -159,12 +156,12 @@ func (s *Store) UpdateUserPassword(ctx context.Context, id uuid.UUID, passwordHa
 
 // DeleteUser smaže uživatele (kaskáda odstraní role, pozice atd.)
 func (s *Store) DeleteUser(ctx context.Context, id uuid.UUID) error {
-	const q = `DELETE FROM user_data.users WHERE id = $1`
-	tag, err := s.db.Exec(ctx, q, id)
+	const q = `DELETE FROM users WHERE id = ?1`
+	res, err := s.db.ExecContext(ctx, q, id)
 	if err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if rowsAffected(res) == 0 {
 		return ErrNotFound
 	}
 	return nil
@@ -174,15 +171,15 @@ func (s *Store) DeleteUser(ctx context.Context, id uuid.UUID) error {
 func (s *Store) GetUserRole(ctx context.Context, userID uuid.UUID) (string, error) {
 	const q = `
 		SELECT r.name
-		FROM user_data.user_roles ur
-		JOIN user_data.roles r ON r.id = ur.role_id
-		WHERE ur.user_id = $1
+		FROM user_roles ur
+		JOIN roles r ON r.id = ur.role_id
+		WHERE ur.user_id = ?1
 		ORDER BY r.id
 		LIMIT 1`
 
 	var role string
-	err := s.db.QueryRow(ctx, q, userID).Scan(&role)
-	if errors.Is(err, pgx.ErrNoRows) {
+	err := s.db.QueryRowContext(ctx, q, userID).Scan(&role)
+	if errors.Is(err, sql.ErrNoRows) {
 		return model.RoleReader, nil
 	}
 	return role, err
@@ -195,24 +192,24 @@ func (s *Store) SetUserRole(ctx context.Context, userID uuid.UUID, roleName stri
 		return fmt.Errorf("neznámá role: %s", roleName)
 	}
 
-	tx, err := s.db.Begin(ctx)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	defer tx.Rollback() //nolint:errcheck
 
-	if _, err = tx.Exec(ctx, `DELETE FROM user_data.user_roles WHERE user_id = $1`, userID); err != nil {
+	if _, err = tx.ExecContext(ctx, `DELETE FROM user_roles WHERE user_id = ?1`, userID); err != nil {
 		return fmt.Errorf("clear roles: %w", err)
 	}
 
 	const q = `
-		INSERT INTO user_data.user_roles (user_id, role_id)
-		SELECT $1, id FROM user_data.roles WHERE name = $2`
-	if _, err = tx.Exec(ctx, q, userID, roleName); err != nil {
+		INSERT INTO user_roles (user_id, role_id)
+		SELECT ?1, id FROM roles WHERE name = ?2`
+	if _, err = tx.ExecContext(ctx, q, userID, roleName); err != nil {
 		return fmt.Errorf("set role: %w", err)
 	}
 
-	return tx.Commit(ctx)
+	return tx.Commit()
 }
 
 // --- helpers ---

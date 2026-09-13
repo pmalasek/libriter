@@ -26,7 +26,7 @@ mkdir -p \
   internal/model \
   internal/service \
   internal/storage \
-  migrations \
+  internal/db/migrations \
   scripts
 
 echo "→ Adresáře vytvořeny"
@@ -40,8 +40,8 @@ go mod init "$MODULE"
 go get \
   github.com/go-chi/chi/v5 \
   github.com/go-chi/chi/v5/middleware \
-  github.com/jackc/pgx/v5 \
-  github.com/jackc/pgx/v5/pgxpool \
+  modernc.org/sqlite \
+  golang.org/x/text \
   github.com/golang-jwt/jwt/v5 \
   github.com/joho/godotenv \
   golang.org/x/crypto
@@ -59,13 +59,8 @@ cat > .env << 'ENV'
 SERVER_PORT=8080
 SERVER_ENV=development
 
-# Databáze
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=libriter
-DB_USER=postgres
-DB_PASSWORD=
-DB_POOL_MAX=10
+# Databáze (SQLite – soubor i schéma se vytvoří automaticky při startu)
+DB_PATH=./data/libriter.db
 
 # JWT
 JWT_SECRET=change-me-before-production
@@ -123,12 +118,7 @@ type ServerConfig struct {
 }
 
 type DBConfig struct {
-	Host     string
-	Port     int
-	Name     string
-	User     string
-	Password string
-	PoolMax  int
+	Path string // cesta k souboru SQLite databáze
 }
 
 type JWTConfig struct {
@@ -151,12 +141,7 @@ func Load() (*Config, error) {
 			Env:  envStr("SERVER_ENV", "development"),
 		},
 		DB: DBConfig{
-			Host:     envStr("DB_HOST", "localhost"),
-			Port:     envInt("DB_PORT", 5432),
-			Name:     envStr("DB_NAME", "libriter"),
-			User:     envStr("DB_USER", "postgres"),
-			Password: envStr("DB_PASSWORD", ""),
-			PoolMax:  envInt("DB_POOL_MAX", 10),
+			Path: envStr("DB_PATH", "./data/libriter.db"),
 		},
 		JWT: JWTConfig{
 			Secret:      envStr("JWT_SECRET", ""),
@@ -174,13 +159,6 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
-}
-
-func (d DBConfig) DSN() string {
-	return fmt.Sprintf(
-		"host=%s port=%d dbname=%s user=%s password=%s sslmode=disable pool_max_conns=%d",
-		d.Host, d.Port, d.Name, d.User, d.Password, d.PoolMax,
-	)
 }
 
 func envStr(key, fallback string) string {
@@ -209,23 +187,34 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
 
-	"github.com/jackc/pgx/v5/pgxpool"
+	_ "modernc.org/sqlite"
+
 	"libriter/internal/config"
 )
 
-func Connect(ctx context.Context, cfg config.DBConfig) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, cfg.DSN())
-	if err != nil {
-		return nil, fmt.Errorf("db connect: %w", err)
+func Open(ctx context.Context, cfg config.DBConfig) (*sql.DB, error) {
+	if err := os.MkdirAll(filepath.Dir(cfg.Path), 0o755); err != nil {
+		return nil, fmt.Errorf("db: vytvoření adresáře: %w", err)
 	}
 
-	if err := pool.Ping(ctx); err != nil {
+	dsn := "file:" + cfg.Path + "?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_time_format=sqlite"
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("db open: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+
+	if err := db.PingContext(ctx); err != nil {
+		db.Close()
 		return nil, fmt.Errorf("db ping: %w", err)
 	}
 
-	return pool, nil
+	return db, nil
 }
 GO
 
@@ -412,14 +401,14 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pool, err := db.Connect(ctx, cfg.DB)
+	sqlDB, err := db.Open(ctx, cfg.DB)
 	if err != nil {
 		slog.Error("databáze", "err", err)
 		os.Exit(1)
 	}
-	defer pool.Close()
+	defer sqlDB.Close()
 
-	slog.Info("databáze připojena", "db", cfg.DB.Name)
+	slog.Info("databáze otevřena", "path", cfg.DB.Path)
 
 	r := chi.NewRouter()
 	r.Use(chimw.Recoverer)
@@ -463,16 +452,11 @@ func main() {
 GO
 
 # -------------------------------------------------------------
-#  Migrations - zkopírujeme init skript pokud existuje
+#  Migrations - SQLite schéma se vkládá přes go:embed
 # -------------------------------------------------------------
 
-if [ -f "../libriter_init.sql" ]; then
-  cp ../libriter_init.sql migrations/001_init.sql
-  echo "→ Migration 001_init.sql zkopírována"
-else
-  touch migrations/001_init.sql
-  echo "→ Vlož obsah libriter_init.sql do migrations/001_init.sql"
-fi
+mkdir -p internal/db/migrations
+echo "→ Vlož SQLite schéma do internal/db/migrations/001_init.sql (viz internal/db/migrate.go v repozitáři)"
 
 # -------------------------------------------------------------
 #  go mod tidy (s novými uuid importy)
@@ -488,6 +472,6 @@ echo "  Struktura:"
 find . -type f | sort | sed 's/^/    /'
 echo ""
 echo "  Další kroky:"
-echo "    1. Nastav DB_PASSWORD v .env"
+echo "    1. Zkontroluj DB_PATH a AUDIO_ROOT v .env"
 echo "    2. go run ./cmd/server"
 echo "    3. curl http://localhost:8080/health"

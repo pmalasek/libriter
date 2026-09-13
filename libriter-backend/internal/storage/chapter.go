@@ -2,13 +2,13 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 
 	"libriter/internal/model"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 type ChapterInput struct {
@@ -23,17 +23,17 @@ type ChapterInput struct {
 // UpsertChapter vloží nebo aktualizuje kapitolu (idempotentní – bezpečné při opakovaném scanu).
 func (s *Store) UpsertChapter(ctx context.Context, in ChapterInput) (*model.Chapter, error) {
 	const q = `
-		INSERT INTO library.chapters
-			(book_id, position, title, file_path, start_offset_seconds, duration_seconds)
-		VALUES ($1, $2, $3, $4, 0, $5)
+		INSERT INTO chapters
+			(id, book_id, position, title, file_path, start_offset_seconds, duration_seconds)
+		VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6)
 		ON CONFLICT (book_id, position) DO UPDATE SET
-			title            = EXCLUDED.title,
-			file_path        = EXCLUDED.file_path,
-			duration_seconds = EXCLUDED.duration_seconds
-		RETURNING id, book_id, position, title, file_path, 0::int, duration_seconds`
+			title            = excluded.title,
+			file_path        = excluded.file_path,
+			duration_seconds = excluded.duration_seconds
+		RETURNING id, book_id, position, title, file_path, 0, duration_seconds`
 
-	row := s.db.QueryRow(ctx, q,
-		in.BookID, in.Position, in.Title, in.FilePath, in.DurationSeconds,
+	row := s.db.QueryRowContext(ctx, q,
+		uuid.New(), in.BookID, in.Position, in.Title, in.FilePath, in.DurationSeconds,
 	)
 	return scanChapter(row)
 }
@@ -41,13 +41,13 @@ func (s *Store) UpsertChapter(ctx context.Context, in ChapterInput) (*model.Chap
 // CreateChapter přidá kapitolu ke knize.
 func (s *Store) CreateChapter(ctx context.Context, in ChapterInput) (*model.Chapter, error) {
 	const q = `
-		INSERT INTO library.chapters
-			(book_id, position, title, file_path, start_offset_seconds, duration_seconds)
-		VALUES ($1, $2, $3, $4, 0, $5)
-		RETURNING id, book_id, position, title, file_path, 0::int, duration_seconds`
+		INSERT INTO chapters
+			(id, book_id, position, title, file_path, start_offset_seconds, duration_seconds)
+		VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6)
+		RETURNING id, book_id, position, title, file_path, 0, duration_seconds`
 
-	row := s.db.QueryRow(ctx, q,
-		in.BookID, in.Position, in.Title, in.FilePath, in.DurationSeconds,
+	row := s.db.QueryRowContext(ctx, q,
+		uuid.New(), in.BookID, in.Position, in.Title, in.FilePath, in.DurationSeconds,
 	)
 	return scanChapter(row)
 }
@@ -66,11 +66,11 @@ func (s *Store) GetChaptersByBookID(ctx context.Context, bookID uuid.UUID) ([]mo
 				), 0
 			) AS start_offset_seconds,
 			duration_seconds
-		FROM library.chapters
-		WHERE book_id = $1
+		FROM chapters
+		WHERE book_id = ?1
 		ORDER BY position`
 
-	rows, err := s.db.Query(ctx, q, bookID)
+	rows, err := s.db.QueryContext(ctx, q, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("get chapters: %w", err)
 	}
@@ -90,8 +90,8 @@ func (s *Store) GetChaptersByBookID(ctx context.Context, bookID uuid.UUID) ([]mo
 // ChapterExistsByFilePath vrátí true, pokud v DB existuje kapitola s danou cestou souboru.
 func (s *Store) ChapterExistsByFilePath(ctx context.Context, filePath string) (bool, error) {
 	var exists bool
-	const q = `SELECT EXISTS(SELECT 1 FROM library.chapters WHERE file_path = $1)`
-	if err := s.db.QueryRow(ctx, q, filePath).Scan(&exists); err != nil {
+	const q = `SELECT EXISTS(SELECT 1 FROM chapters WHERE file_path = ?1)`
+	if err := s.db.QueryRowContext(ctx, q, filePath).Scan(&exists); err != nil {
 		return false, fmt.Errorf("check chapter exists: %w", err)
 	}
 	return exists, nil
@@ -101,9 +101,9 @@ func (s *Store) ChapterExistsByFilePath(ctx context.Context, filePath string) (b
 func (s *Store) GetBookChapterStats(ctx context.Context, bookID uuid.UUID) (count int, totalDuration int, err error) {
 	const q = `
 		SELECT COUNT(*), COALESCE(SUM(duration_seconds), 0)
-		FROM library.chapters
-		WHERE book_id = $1`
-	err = s.db.QueryRow(ctx, q, bookID).Scan(&count, &totalDuration)
+		FROM chapters
+		WHERE book_id = ?1`
+	err = s.db.QueryRowContext(ctx, q, bookID).Scan(&count, &totalDuration)
 	return
 }
 
@@ -113,7 +113,7 @@ func scanChapter(row scanner) (*model.Chapter, error) {
 		&c.ID, &c.BookID, &c.Position, &c.Title,
 		&c.FilePath, &c.StartOffsetSeconds, &c.DurationSeconds,
 	)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {

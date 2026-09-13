@@ -10,10 +10,10 @@ import (
 )
 
 type Config struct {
-	Server   ServerConfig
-	DB       DBConfig
-	JWT      JWTConfig
-	Storage  StorageConfig
+	Server  ServerConfig
+	DB      DBConfig
+	JWT     JWTConfig
+	Storage StorageConfig
 }
 
 type ServerConfig struct {
@@ -21,13 +21,9 @@ type ServerConfig struct {
 	Env  string
 }
 
+// DBConfig popisuje SQLite databázi – jediný soubor na disku.
 type DBConfig struct {
-	Host     string
-	Port     int
-	Name     string
-	User     string
-	Password string
-	PoolMax  int
+	Path string // cesta k souboru databáze (vytvoří se automaticky)
 }
 
 type JWTConfig struct {
@@ -50,12 +46,7 @@ func Load() (*Config, error) {
 			Env:  envStr("SERVER_ENV", "development"),
 		},
 		DB: DBConfig{
-			Host:     envStr("DB_HOST", "localhost"),
-			Port:     envInt("DB_PORT", 5432),
-			Name:     envStr("DB_NAME", "libriter"),
-			User:     envStr("DB_USER", "postgres"),
-			Password: envStr("DB_PASSWORD", ""),
-			PoolMax:  envInt("DB_POOL_MAX", 10),
+			Path: envStr("DB_PATH", "./data/libriter.db"),
 		},
 		JWT: JWTConfig{
 			Secret:      envStr("JWT_SECRET", ""),
@@ -73,13 +64,6 @@ func Load() (*Config, error) {
 	}
 
 	return cfg, nil
-}
-
-func (d DBConfig) DSN() string {
-	return fmt.Sprintf(
-		"host=%s port=%d dbname=%s user=%s password=%s sslmode=disable pool_max_conns=%d",
-		d.Host, d.Port, d.Name, d.User, d.Password, d.PoolMax,
-	)
 }
 
 func envStr(key, fallback string) string {

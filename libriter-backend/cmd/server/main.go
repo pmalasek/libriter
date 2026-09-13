@@ -37,21 +37,21 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	pool, err := db.Connect(ctx, cfg.DB)
+	sqlDB, err := db.Open(ctx, cfg.DB)
 	if err != nil {
 		slog.Error("databáze", "err", err)
 		os.Exit(1)
 	}
-	defer pool.Close()
+	defer sqlDB.Close()
 
-	slog.Info("databáze připojena", "db", cfg.DB.Name)
+	slog.Info("databáze otevřena", "path", cfg.DB.Path)
 
 	// Kontext života aplikace - zruší se při shutdown
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
 
 	// --- dependency injection ---
-	store := storage.New(pool)
+	store := storage.New(sqlDB)
 
 	// --- scanner ---
 	scn := scanner.New(cfg.Storage.AudioRoot, store)
