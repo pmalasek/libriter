@@ -1,4 +1,4 @@
-const API_PREFIX = '/api/v1'
+export const API_PREFIX = '/api/v1'
 
 /** Chyba z API včetně HTTP statusu; message je česká zpráva z backendu. */
 export class ApiError extends Error {

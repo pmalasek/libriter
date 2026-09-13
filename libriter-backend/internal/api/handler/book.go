@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"libriter/internal/service"
@@ -13,11 +15,12 @@ import (
 )
 
 type BookHandler struct {
-	svc *service.BookService
+	svc       *service.BookService
+	coverRoot string // adresář s obálkami (COVER_ROOT)
 }
 
-func NewBook(svc *service.BookService) *BookHandler {
-	return &BookHandler{svc: svc}
+func NewBook(svc *service.BookService, coverRoot string) *BookHandler {
+	return &BookHandler{svc: svc, coverRoot: coverRoot}
 }
 
 // GET /api/v1/books
@@ -47,6 +50,72 @@ func (h *BookHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, book)
+}
+
+// GET|HEAD /api/v1/books/{id}/cover
+//
+// Veřejný endpoint - <img> v prohlížeči neumí poslat hlavičku Authorization.
+// Ochranou je neuhodnutelné UUID knihy, které zná jen přihlášený uživatel.
+func (h *BookHandler) Cover(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+
+	book, err := h.svc.GetByID(r.Context(), id)
+	if errors.Is(err, service.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "kniha nenalezena")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "chyba při načítání knihy")
+		return
+	}
+
+	if book.CoverPath == nil {
+		writeError(w, http.StatusNotFound, "kniha nemá obálku")
+		return
+	}
+
+	// cover_path může editor nastavit přes PUT na cokoliv, proto validujeme.
+	abs, ok := resolveCoverPath(h.coverRoot, *book.CoverPath)
+	if !ok {
+		writeError(w, http.StatusNotFound, "obálka nenalezena")
+		return
+	}
+
+	info, err := os.Stat(abs)
+	if err != nil || !info.Mode().IsRegular() {
+		writeError(w, http.StatusNotFound, "obálka nenalezena")
+		return
+	}
+
+	// Obálky se mění zřídka a frontend přidává ?v=<updated_at>, takže dlouhá cache je bezpečná.
+	w.Header().Set("Cache-Control", "public, max-age=2592000")
+	http.ServeFile(w, r, abs)
+}
+
+// resolveCoverPath ověří, že coverPath je holý název souboru, a vrátí
+// absolutní cestu uvnitř coverRoot. Chrání před path traversal.
+func resolveCoverPath(coverRoot, coverPath string) (string, bool) {
+	if coverRoot == "" || coverPath == "" || coverPath == "." || coverPath == ".." {
+		return "", false
+	}
+	if strings.ContainsAny(coverPath, `/\`) || filepath.Base(coverPath) != coverPath {
+		return "", false
+	}
+
+	// COVER_ROOT může být relativní cesta (viz config.env.path).
+	root, err := filepath.Abs(coverRoot)
+	if err != nil {
+		return "", false
+	}
+
+	abs := filepath.Join(root, coverPath)
+	if !strings.HasPrefix(abs, root+string(filepath.Separator)) {
+		return "", false
+	}
+	return abs, true
 }
 
 // POST /api/v1/books  (editor+)

@@ -340,6 +340,9 @@ Všechny ostatní endpointy vyžadují hlavičku:
 Authorization: Bearer <token>
 ```
 
+Výjimkou je `GET /books/{id}/cover` – obálky se načítají přes `<img>`, které
+hlavičku `Authorization` poslat neumí. Ochranou je neuhodnutelné UUID knihy.
+
 ### Uživatelé
 
 | Metoda | Endpoint | Popis | Přístup |
@@ -357,6 +360,7 @@ Authorization: Bearer <token>
 |--------|----------|-------|---------|
 | `GET` | `/books` | Seznam knih | reader+ |
 | `GET` | `/books/{id}` | Detail knihy | reader+ |
+| `GET` | `/books/{id}/cover` | Obrázek obálky (soubor z `COVER_ROOT`) | veřejné |
 | `POST` | `/books` | Přidání knihy | editor+ |
 | `PUT` | `/books/{id}` | Aktualizace knihy | editor+ |
 | `DELETE` | `/books/{id}` | Smazání knihy | admin |

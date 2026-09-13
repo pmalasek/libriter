@@ -1,6 +1,6 @@
 import { Link } from 'react-router'
 import type { Book } from '@/api/types'
-import { CoverPlaceholder } from '@/components/CoverPlaceholder'
+import { BookCover } from '@/components/BookCover'
 import { authorNames, formatDuration } from '@/lib/format'
 
 export function BookCard({ book }: { book: Book }) {
@@ -9,7 +9,7 @@ export function BookCard({ book }: { book: Book }) {
       to={`/books/${book.id}`}
       className="group block rounded-xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
     >
-      <CoverPlaceholder className="transition-opacity group-hover:opacity-80" />
+      <BookCover key={book.id} book={book} className="transition-opacity group-hover:opacity-80" />
       <div className="mt-2 space-y-0.5">
         <p className="line-clamp-2 text-sm font-medium leading-snug">{book.title}</p>
         <p className="truncate text-xs text-muted-foreground">{authorNames(book.authors)}</p>

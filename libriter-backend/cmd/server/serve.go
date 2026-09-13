@@ -61,7 +61,7 @@ func runServe() error {
 
 	authH := handler.NewAuth(authSvc)
 	userH := handler.NewUser(userSvc)
-	bookH := handler.NewBook(bookSvc)
+	bookH := handler.NewBook(bookSvc, cfg.Storage.CoverRoot)
 	authorH := handler.NewAuthor(authorSvc)
 	seriesH := handler.NewSeries(seriesSvc)
 	metadataH := handler.NewMetadata(databazeknih.NewClient())
@@ -82,6 +82,11 @@ func runServe() error {
 		// --- auth (bez přihlášení) ---
 		r.Post("/auth/register", authH.Register)
 		r.Post("/auth/login", authH.Login)
+
+		// --- obálky (bez přihlášení) ---
+		// <img> neumí poslat hlavičku Authorization; ochranou je neuhodnutelné UUID knihy.
+		r.Get("/books/{id}/cover", bookH.Cover)
+		r.Head("/books/{id}/cover", bookH.Cover)
 
 		// --- chráněné endpointy ---
 		r.Group(func(r chi.Router) {

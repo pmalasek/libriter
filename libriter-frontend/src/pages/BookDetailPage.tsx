@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { Link, useParams } from 'react-router'
 import { useBook, useBooks, useSeriesOne } from '@/api/hooks'
 import { BookGrid } from '@/components/BookGrid'
-import { CoverPlaceholder } from '@/components/CoverPlaceholder'
+import { BookCover } from '@/components/BookCover'
 import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -57,7 +57,7 @@ export function BookDetailPage() {
 
       <div className="grid gap-8 md:grid-cols-[220px_1fr]">
         <div className="max-w-[220px]">
-          <CoverPlaceholder />
+          <BookCover key={data.id} book={data} />
         </div>
 
         <div className="min-w-0">
