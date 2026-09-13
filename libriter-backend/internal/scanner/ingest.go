@@ -55,6 +55,9 @@ func (s *Scanner) ingest(ctx context.Context, absPath, relPath string) error {
 		return err
 	}
 
+	// Obálka: obrázek v adresáři, jinak obrázek vložený v audio souboru
+	s.ensureCover(ctx, book, filepath.Dir(absPath), absPath)
+
 	// Urči pozici kapitoly: z track tagu, nebo jako další v pořadí
 	position := meta.TrackNumber
 	if position <= 0 {

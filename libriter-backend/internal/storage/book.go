@@ -142,6 +142,19 @@ func (s *Store) GetBookByDirPath(ctx context.Context, dirPath string) (*model.Bo
 	return b, err
 }
 
+// UpdateBookCoverPath nastaví cestu k obálce (relativní ke COVER_ROOT).
+func (s *Store) UpdateBookCoverPath(ctx context.Context, bookID uuid.UUID, coverPath string) error {
+	const q = `UPDATE books SET cover_path = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?1`
+	res, err := s.db.ExecContext(ctx, q, bookID, coverPath)
+	if err != nil {
+		return fmt.Errorf("update book cover path: %w", err)
+	}
+	if rowsAffected(res) == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 // UpdateBookDuration nastaví celkovou délku knihy (v sekundách).
 func (s *Store) UpdateBookDuration(ctx context.Context, bookID uuid.UUID, durationSeconds int) error {
 	const q = `UPDATE books SET duration_seconds = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?1`

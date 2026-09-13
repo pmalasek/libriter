@@ -50,7 +50,7 @@ func runServe() error {
 	store := storage.New(sqlDB)
 
 	// --- scanner ---
-	scn := scanner.New(cfg.Storage.AudioRoot, store)
+	scn := scanner.New(cfg.Storage.AudioRoot, cfg.Storage.CoverRoot, store)
 	scn.Start(appCtx)
 
 	authSvc := service.NewAuth(store, cfg.JWT)

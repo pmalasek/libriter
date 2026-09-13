@@ -41,6 +41,7 @@ var audioExts = map[string]bool{
 // Scanner sleduje AUDIO_ROOT a při detekci nového audio souboru ho ingestuje do DB.
 type Scanner struct {
 	audioRoot string
+	coverRoot string // kam se ukládají obálky knih (prázdné = obálky se neřeší)
 	store     *storage.Store
 	log       *slog.Logger
 
@@ -51,9 +52,10 @@ type Scanner struct {
 }
 
 // New vytvoří nový Scanner.
-func New(audioRoot string, store *storage.Store) *Scanner {
+func New(audioRoot, coverRoot string, store *storage.Store) *Scanner {
 	return &Scanner{
 		audioRoot: audioRoot,
+		coverRoot: coverRoot,
 		store:     store,
 		log:       slog.Default().With("component", "scanner"),
 		pending:   make(map[string]struct{}),

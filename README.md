@@ -294,6 +294,16 @@ Scanner se spustí **automaticky při startu backendu** a:
 | Vypravěč | `Artist` (pokud se liší od autora) |
 | Délka | `ffprobe` → `1 s` (placeholder, opravit přes API) |
 
+**Obálky:** při ingestu knihy scanner hledá obálku v tomto pořadí:
+
+1. **Obrázek v adresáři s audio soubory** (`.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`, `.bmp`) –
+   pokud jich je víc, použije se **největší** (podle velikosti souboru)
+2. **Obrázek vložený v tagu** audio souboru (`APIC` / `covr`)
+
+Nalezená obálka se zkopíruje do `COVER_ROOT` jako `<book_id>.<přípona>` a relativní
+cesta se uloží do `books.cover_path`. Kniha, která už obálku má (a soubor v
+`COVER_ROOT` existuje), se znovu nepřepisuje. Obrázky nad 20 MB se ignorují.
+
 ---
 
 ## API přehled
