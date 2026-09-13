@@ -74,10 +74,13 @@ function CardShell({
 export function BookCard({
   book,
   size = 'tiles',
+  series,
   selection,
 }: {
   book: Book
   size?: 'tiles' | 'small'
+  /** Popisek série („Atomové šelmy · 2. díl“); prázdný u knihy mimo sérii. */
+  series?: string
   selection?: CardSelection
 }) {
   const small = size === 'small'
@@ -109,6 +112,11 @@ export function BookCard({
         <p className={cn('truncate text-muted-foreground', small ? 'text-[11px]' : 'text-xs')}>
           {authorNames(book.authors)}
         </p>
+        {series ? (
+          <p className={cn('truncate text-muted-foreground', small ? 'text-[11px]' : 'text-xs')}>
+            {series}
+          </p>
+        ) : null}
         {/* Malá dlaždice má málo místa, vejde se jen rok prvního vydání.
             Bez roku se řádek nevykreslí, ať dlaždice nemá prázdné místo. */}
         {meta ? (
@@ -128,7 +136,7 @@ export function BookRowHeader({ selecting = false }: { selecting?: boolean }) {
     <div className="flex items-center gap-3 bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">
       {selecting ? <span className="size-6 shrink-0" /> : null}
       <span className="size-12 shrink-0" />
-      <span className="min-w-0 flex-1">Název a autor</span>
+      <span className="min-w-0 flex-1">Název, autor a série</span>
       <span className="w-12 shrink-0 text-right">Vydáno</span>
       <span className="hidden w-16 shrink-0 text-right sm:block">Délka</span>
       <span className="hidden w-32 shrink-0 text-right md:block">Přidáno</span>
@@ -137,7 +145,16 @@ export function BookRowHeader({ selecting = false }: { selecting?: boolean }) {
 }
 
 /** Řádek knihy v seznamovém zobrazení. */
-export function BookRow({ book, selection }: { book: Book; selection?: CardSelection }) {
+export function BookRow({
+  book,
+  series,
+  selection,
+}: {
+  book: Book
+  /** Popisek série; v řádku stojí za autory, aby řádek nezvýšil. */
+  series?: string
+  selection?: CardSelection
+}) {
   return (
     <CardShell
       book={book}
@@ -151,7 +168,9 @@ export function BookRow({ book, selection }: { book: Book; selection?: CardSelec
       <BookCover key={book.id} book={book} className="size-12 shrink-0 rounded-md" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{book.title}</p>
-        <p className="truncate text-xs text-muted-foreground">{authorNames(book.authors)}</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {[authorNames(book.authors), series].filter(Boolean).join(' · ')}
+        </p>
       </div>
       {/* Rok se ukazuje v každé šířce; délka a datum přidání až od sm/md. */}
       <p className="w-12 shrink-0 text-right text-xs tabular-nums text-muted-foreground">

@@ -8,6 +8,18 @@ export function sameName(a: string, b: string): boolean {
   return a.trim().localeCompare(b.trim(), 'cs', { sensitivity: 'accent' }) === 0
 }
 
+/**
+ * Popisek série pro výpisy knih: „Atomové šelmy · 2. díl“. Bez názvu (ve výpisu
+ * jedné série, kde by se u každé knihy opakoval) zůstane jen díl; bez obojího
+ * prázdný řetězec, ať se řádek vůbec nevykreslí.
+ */
+export function seriesLabel(
+  title: string | null | undefined,
+  position: number | null | undefined,
+): string {
+  return [title, position ? `${position}. díl` : null].filter(Boolean).join(' · ')
+}
+
 /** Délka v sekundách → "3:07 h" / "48 min" / "45 s". */
 export function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return 'neznámá délka'

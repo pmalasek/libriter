@@ -43,7 +43,11 @@ export function SeriesDetailPage() {
         </p>
       ) : null}
 
-      <BookGrid books={seriesBooks} emptyTitle="V této sérii nejsou žádné knihy" />
+      <BookGrid
+        books={seriesBooks}
+        seriesContext={id}
+        emptyTitle="V této sérii nejsou žádné knihy"
+      />
     </>
   )
 }
