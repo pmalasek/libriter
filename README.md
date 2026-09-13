@@ -12,7 +12,7 @@ libriter/
 ├── libriter-frontend/  # Webové rozhraní (React + Vite + Tailwind)
 ├── libriter-mobile/    # Mobilní aplikace
 ├── _scripts/           # Pomocné skripty
-├── bin/                # Sestavená binárka (make build)
+├── bin/                # Sestavená binárka (just build)
 └── data/
     ├── libriter.db     # SQLite databáze (DB_PATH) – vytvoří se automaticky
     ├── audio/          # Audio soubory (AUDIO_ROOT)
@@ -74,6 +74,14 @@ npm --version
 ```bash
 sudo apt install build-essential git cmake pkg-config
 ```
+
+#### just (task runner)
+
+Build a vývojové cíle se spouštějí přes [`just`](https://github.com/casey/just).
+```bash
+sudo apt install just     # nebo: cargo install just
+```
+`just` bez argumentů (nebo `just --list`) vypíše dostupné cíle.
 
 #### ffprobe (ffmpeg)
 
@@ -149,7 +157,7 @@ mkdir -p data/audio data/covers
 ### 2. Produkční build – jedna binárka
 
 ```bash
-make build          # npm ci + npm run build, potom go build
+just build          # npm ci + npm run build, potom go build
 bin/libriter
 ```
 
@@ -165,8 +173,8 @@ vypíše, kterou databázi otevřel. Jiný soubor vynutíte přes `LIBRITER_ENV_
 
 | Terminál | Příkaz | Co běží |
 |----------|--------|---------|
-| 1 | `make dev-backend` | Go API na `http://localhost:8080` |
-| 2 | `make dev-frontend` | Vite s hot reloadem na `http://localhost:5173` |
+| 1 | `just dev-backend` | Go API na `http://localhost:8080` |
+| 2 | `just dev-frontend` | Vite s hot reloadem na `http://localhost:5173` |
 
 Pracujte na `http://localhost:5173`. Vite proxuje `/api` a `/health` na backend,
 takže CORS není potřeba a frontend volá stejné relativní cesty jako v produkci.
@@ -183,19 +191,19 @@ První spuštění frontendu si vyžádá závislosti:
 cd libriter-frontend && npm install
 ```
 
-### Přehled cílů Makefile
+### Přehled cílů (justfile)
 
 | Cíl | Popis |
 |-----|-------|
-| `make build` | Frontend i backend → `bin/libriter` |
-| `make frontend` | `npm ci && npm run build` (výstup do `libriter-backend/internal/web/dist`) |
-| `make backend` | `go build` s aktuálně sestaveným frontendem |
-| `make dev-backend` | `go run ./cmd/server` |
-| `make dev-frontend` | `npm run dev` |
-| `make vet` | `go vet ./...` |
-| `make clean` | Smaže `bin/` a sestavený frontend |
+| `just build` | Frontend i backend → `bin/libriter` |
+| `just frontend` | `npm ci && npm run build` (výstup do `libriter-backend/internal/web/dist`) |
+| `just backend` | `go build` s aktuálně sestaveným frontendem |
+| `just dev-backend` | `go run ./cmd/server` |
+| `just dev-frontend` | `npm run dev` |
+| `just vet` | `go vet ./...` |
+| `just clean` | Smaže `bin/` a sestavený frontend |
 
-Backend jde sestavit i bez frontendu (`make backend` na čerstvém klonu) – server
+Backend jde sestavit i bez frontendu (`just backend` na čerstvém klonu) – server
 pak na `/` vrátí stránku s návodem a HTTP 503, ale API funguje normálně.
 
 > **Pozor:** backend spouštějte jako balíček (`go run ./cmd/server`), ne jako
