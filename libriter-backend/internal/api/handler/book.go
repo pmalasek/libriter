@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"libriter/internal/imagestore"
 	"libriter/internal/service"
@@ -215,6 +216,7 @@ type bookRequest struct {
 	Language        string   `json:"language"`
 	Description     *string  `json:"description"`
 	InternalRating  *int16   `json:"internal_rating"`
+	PublishedYear   *int     `json:"published_year"`
 }
 
 func (req *bookRequest) toInput() (storage.BookInput, error) {
@@ -229,6 +231,9 @@ func (req *bookRequest) toInput() (storage.BookInput, error) {
 	}
 	if req.InternalRating != nil && (*req.InternalRating < 1 || *req.InternalRating > 5) {
 		return storage.BookInput{}, errors.New("internal_rating musí být 1–5")
+	}
+	if err := checkPublishedYear(req.PublishedYear); err != nil {
+		return storage.BookInput{}, err
 	}
 
 	authorIDs, err := parseUUIDs(req.AuthorIDs, "author_ids")
@@ -250,6 +255,7 @@ func (req *bookRequest) toInput() (storage.BookInput, error) {
 		Language:        req.Language,
 		Description:     req.Description,
 		InternalRating:  req.InternalRating,
+		PublishedYear:   req.PublishedYear,
 	}
 
 	if req.Language == "" {
@@ -283,6 +289,7 @@ type bookPatchRequest struct {
 	Language        Optional[string]  `json:"language"`
 	Description     Optional[*string] `json:"description"`
 	InternalRating  Optional[*int16]  `json:"internal_rating"`
+	PublishedYear   Optional[*int]    `json:"published_year"`
 }
 
 // toPatch ověří poslaná pole a vrátí funkci, která je zanese do vstupu knihy.
@@ -298,6 +305,11 @@ func (req *bookPatchRequest) toPatch() (func(*storage.BookInput), error) {
 	if req.InternalRating.Set && req.InternalRating.Value != nil &&
 		(*req.InternalRating.Value < 1 || *req.InternalRating.Value > 5) {
 		return nil, errors.New("internal_rating musí být 1–5")
+	}
+	if req.PublishedYear.Set {
+		if err := checkPublishedYear(req.PublishedYear.Value); err != nil {
+			return nil, err
+		}
 	}
 
 	var authorIDs []uuid.UUID
@@ -352,7 +364,22 @@ func (req *bookPatchRequest) toPatch() (func(*storage.BookInput), error) {
 		if req.InternalRating.Set {
 			in.InternalRating = req.InternalRating.Value
 		}
+		if req.PublishedYear.Set {
+			in.PublishedYear = req.PublishedYear.Value
+		}
 	}, nil
+}
+
+// checkPublishedYear odmítne nesmyslný rok vydání. Zdroje metadat rok občas
+// přečtou špatně (např. z ISBN), takže hlídat horní i dolní mez se vyplatí.
+func checkPublishedYear(year *int) error {
+	if year == nil {
+		return nil
+	}
+	if *year < 1000 || *year > time.Now().Year()+1 {
+		return errors.New("published_year musí být mezi 1000 a příštím rokem")
+	}
+	return nil
 }
 
 // parseUUIDs převede seznam ID; zachovává pořadí (určuje pořadí autorů u knihy).

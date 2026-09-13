@@ -37,19 +37,40 @@ interface Props {
   book: Book
   open: boolean
   onOpenChange: (open: boolean) => void
+  /**
+   * Přechod na další knihu po uložení („Uložit a další“, Ctrl+Enter). Když
+   * chybí, tlačítko se neukazuje – typicky u poslední knihy seznamu.
+   */
+  onSaveAndNext?: () => void
 }
 
-export function BookEditDialog({ book, open, onOpenChange }: Props) {
+export function BookEditDialog({ book, open, onOpenChange, onSaveAndNext }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
-        {open ? <BookEditForm book={book} onDone={() => onOpenChange(false)} /> : null}
+        {open ? (
+          // key: po přechodu na další knihu se formulář naplní znovu.
+          <BookEditForm
+            key={book.id}
+            book={book}
+            onDone={() => onOpenChange(false)}
+            onSaveAndNext={onSaveAndNext}
+          />
+        ) : null}
       </DialogContent>
     </Dialog>
   )
 }
 
-function BookEditForm({ book, onDone }: { book: Book; onDone: () => void }) {
+function BookEditForm({
+  book,
+  onDone,
+  onSaveAndNext,
+}: {
+  book: Book
+  onDone: () => void
+  onSaveAndNext?: () => void
+}) {
   const initialDuration = splitDuration(book.duration_seconds)
 
   const [title, setTitle] = useState(book.title)
@@ -61,6 +82,7 @@ function BookEditForm({ book, onDone }: { book: Book; onDone: () => void }) {
   const [minutes, setMinutes] = useState(String(initialDuration.minutes))
   const [language, setLanguage] = useState(book.language)
   const [rating, setRating] = useState(book.internal_rating ? String(book.internal_rating) : NONE)
+  const [publishedYear, setPublishedYear] = useState(String(book.published_year ?? ''))
   const [description, setDescription] = useState(book.description ?? '')
 
   const seriesList = useSeriesList()
@@ -102,14 +124,21 @@ function BookEditForm({ book, onDone }: { book: Book; onDone: () => void }) {
     const nextRating = rating === NONE ? null : Number(rating)
     if (nextRating !== (book.internal_rating ?? null)) patch.internal_rating = nextRating
 
+    const nextYear = publishedYear.trim() === '' ? null : Number(publishedYear)
+    if (nextYear !== (book.published_year ?? null)) patch.published_year = nextYear
+
     const nextDescription = description.trim() || null
     if (nextDescription !== (book.description ?? null)) patch.description = nextDescription
 
     return patch
   }
 
-  function handleSubmit(event: React.FormEvent) {
-    event.preventDefault()
+  /**
+   * Uloží změny; andNext místo zavření dialogu přejde na další knihu.
+   * Bez změn se jen zavře / přejde dál – prázdný PATCH nemá smysl posílat.
+   */
+  function save(andNext: boolean) {
+    const finish = andNext && onSaveAndNext ? onSaveAndNext : onDone
 
     if (authors.length === 0) {
       toast.error('Kniha musí mít alespoň jednoho autora.')
@@ -118,25 +147,42 @@ function BookEditForm({ book, onDone }: { book: Book; onDone: () => void }) {
 
     const patch = buildPatch()
     if (Object.keys(patch).length === 0) {
-      onDone()
+      finish()
       return
     }
     if (patch.duration_seconds !== undefined && patch.duration_seconds <= 0) {
       toast.error('Délka musí být kladná.')
       return
     }
+    if (patch.published_year != null && !Number.isInteger(patch.published_year)) {
+      toast.error('Rok vydání musí být celé číslo.')
+      return
+    }
 
     patchBook.mutate(patch, {
       onSuccess: () => {
         toast.success('Kniha byla uložena.')
-        onDone()
+        finish()
       },
       onError: (error) => toast.error(error.message),
     })
   }
 
+  function handleSubmit(event: React.FormEvent) {
+    event.preventDefault()
+    save(false)
+  }
+
+  // Ctrl+Enter (na Macu Cmd+Enter) = „Uložit a další“; bez další knihy jen uloží.
+  function handleKeyDown(event: React.KeyboardEvent) {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !patchBook.isPending) {
+      event.preventDefault()
+      save(true)
+    }
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="grid gap-4">
+    <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="grid gap-4">
       <DialogHeader>
         <DialogTitle>Upravit knihu</DialogTitle>
         <DialogDescription>
@@ -149,6 +195,7 @@ function BookEditForm({ book, onDone }: { book: Book; onDone: () => void }) {
         onApply={(meta) => {
           if (meta.title) setTitle(meta.title)
           if (meta.description) setDescription(meta.description)
+          if (meta.year) setPublishedYear(String(meta.year))
           toast.success(
             `Metadata z ${METADATA_SOURCE_LABELS[meta.source] ?? meta.source} načtena – zkontroluj je a ulož.`,
           )
@@ -206,7 +253,7 @@ function BookEditForm({ book, onDone }: { book: Book; onDone: () => void }) {
         />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
         <div className="space-y-2">
           <Label htmlFor="book_hours">Délka</Label>
           <div className="flex items-center gap-2">
@@ -236,6 +283,20 @@ function BookEditForm({ book, onDone }: { book: Book; onDone: () => void }) {
             maxLength={5}
             value={language}
             onChange={(e) => setLanguage(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="book_published_year">Rok vydání</Label>
+          <Input
+            id="book_published_year"
+            type="number"
+            min={1000}
+            max={new Date().getFullYear() + 1}
+            value={publishedYear}
+            onChange={(e) => setPublishedYear(e.target.value)}
           />
         </div>
         <div className="space-y-2">
@@ -270,6 +331,20 @@ function BookEditForm({ book, onDone }: { book: Book; onDone: () => void }) {
         <Button type="button" variant="ghost" onClick={onDone}>
           Zrušit
         </Button>
+        {onSaveAndNext ? (
+          <Button
+            type="button"
+            variant="outline"
+            title="Ctrl+Enter"
+            onClick={() => save(true)}
+            disabled={patchBook.isPending || authors.length === 0}
+          >
+            Uložit a další
+            <kbd className="ml-1 hidden rounded border px-1 font-mono text-[10px] text-muted-foreground sm:inline">
+              Ctrl+↵
+            </kbd>
+          </Button>
+        ) : null}
         <Button type="submit" disabled={patchBook.isPending || authors.length === 0}>
           {patchBook.isPending ? 'Ukládám…' : 'Uložit'}
         </Button>

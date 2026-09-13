@@ -185,3 +185,32 @@ func TestBioURLFor(t *testing.T) {
 		}
 	}
 }
+
+// Rok vydání se bere jen ze samostatného čísla v infoboxu. JSON-LD skript má
+// dateModified s aktuálním datem a popis i patička obsahují jiné letopočty –
+// nic z toho není rok vydání.
+func TestParseBookPageYear(t *testing.T) {
+	const page = `<html><head>
+	<script type="application/ld+json">{"@type":"Book","name":"Aristokratka ve varu","dateModified":"2026-09-01"}</script>
+	</head><body>
+	<h1>Aristokratka ve varu</h1>
+	<div class="bookRightDiv"><div class="lora lineHeightMid">
+	  <a href='/zanry/romany-12'>Romány</a><br />
+	  2013
+	  <span class='pozn'>,</span> <a href='/nakladatelstvi/druhe-mesto-3940'>Druhé město</a>
+	</div></div>
+	<p>Pokračování knihy z roku 2012, která se odehrává v roce 1966.</p>
+	<footer><p>© 2008 - 2026 Databazeknih.cz</p></footer>
+	</body></html>`
+
+	meta, err := parseBookPage(strings.NewReader(page))
+	if err != nil {
+		t.Fatalf("parseBookPage: %v", err)
+	}
+	if meta.Year != 2013 {
+		t.Errorf("year = %d, chtěno 2013", meta.Year)
+	}
+	if meta.Publisher != "Druhé město" {
+		t.Errorf("publisher = %q", meta.Publisher)
+	}
+}

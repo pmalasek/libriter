@@ -134,6 +134,13 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
       <AuthorMetadataImport
         defaultQuery={author.name}
         onApply={(meta) => {
+          // Jméno ze zdroje přepisuje to zadané – jde o opravu překlepů
+          // a zkomolenin z audio tagů, ne o doplnění.
+          if (meta.last_name) {
+            setFirstName(meta.first_name)
+            setMiddleName(meta.middle_name)
+            setLastName(meta.last_name)
+          }
           if (meta.bio) setBio(meta.bio)
           if (meta.birth_year) setBirthYear(String(meta.birth_year))
           if (meta.death_year) setDeathYear(String(meta.death_year))

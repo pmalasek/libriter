@@ -1,5 +1,6 @@
 import {
   ArrowLeftIcon,
+  CalendarIcon,
   ClockIcon,
   LanguagesIcon,
   MicIcon,
@@ -7,7 +8,7 @@ import {
   StarIcon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { useBook, useBooks, useSeriesOne } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
 import { canEdit } from '@/auth/permissions'
@@ -20,14 +21,24 @@ import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate, formatDuration } from '@/lib/format'
+import { sortBooks, useBookListPrefs } from '@/lib/sorting'
 
 export function BookDetailPage() {
   const { id = '' } = useParams()
+  const navigate = useNavigate()
   const book = useBook(id)
   const series = useSeriesOne(book.data?.series_id ?? '')
   const allBooks = useBooks()
   const { user } = useAuth()
   const [editing, setEditing] = useState(false)
+  const { sortKey, sortDir } = useBookListPrefs()
+
+  // Další kniha pro „Uložit a další“ – ve stejném pořadí, jaké má seznam knih.
+  const nextBook = useMemo(() => {
+    const ordered = sortBooks(allBooks.data ?? [], sortKey, sortDir)
+    const index = ordered.findIndex((b) => b.id === id)
+    return index >= 0 ? ordered[index + 1] : undefined
+  }, [allBooks.data, id, sortKey, sortDir])
 
   // "Další knihy autora" bereme podle hlavního (prvního) autora knihy.
   const mainAuthor = book.data?.authors?.[0]
@@ -116,6 +127,12 @@ export function BookDetailPage() {
                 {data.narrator}
               </Badge>
             ) : null}
+            {data.published_year ? (
+              <Badge variant="secondary">
+                <CalendarIcon />
+                {data.published_year}
+              </Badge>
+            ) : null}
             <Badge variant="outline">
               <LanguagesIcon />
               {data.language.toUpperCase()}
@@ -162,7 +179,14 @@ export function BookDetailPage() {
         </section>
       ) : null}
 
-      <BookEditDialog book={data} open={editing} onOpenChange={setEditing} />
+      {/* Dialog zůstává otevřený i po přechodu na další knihu – stránka se
+          nepřemountuje, jen se změní parametr v URL. */}
+      <BookEditDialog
+        book={data}
+        open={editing}
+        onOpenChange={setEditing}
+        onSaveAndNext={nextBook ? () => navigate(`/books/${nextBook.id}`) : undefined}
+      />
     </>
   )
 }

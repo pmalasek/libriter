@@ -206,6 +206,24 @@ func TestPatchBookKeepsUntouchedFields(t *testing.T) {
 		t.Errorf("narrator = %v, chtěno nil", *patched.Narrator)
 	}
 
+	// Rok vydání se ukládá i čte; bez zásahu zůstává prázdný.
+	if patched.PublishedYear != nil {
+		t.Errorf("published_year = %v, chtěno nil", *patched.PublishedYear)
+	}
+	year := 1936
+	patched, err = store.PatchBook(ctx, book.ID, func(in *BookInput) {
+		in.PublishedYear = &year
+	})
+	if err != nil {
+		t.Fatalf("PatchBook s rokem vydání: %v", err)
+	}
+	if patched.PublishedYear == nil || *patched.PublishedYear != year {
+		t.Errorf("published_year = %v, chtěno %d", patched.PublishedYear, year)
+	}
+	if got, err := store.GetBook(ctx, book.ID); err != nil || got.PublishedYear == nil || *got.PublishedYear != year {
+		t.Errorf("GetBook published_year = %v (err %v), chtěno %d", got, err, year)
+	}
+
 	// Neexistující kniha končí ErrNotFound a apply se nevolá.
 	called := false
 	if _, err := store.PatchBook(ctx, uuid.New(), func(*BookInput) { called = true }); !errors.Is(err, ErrNotFound) {

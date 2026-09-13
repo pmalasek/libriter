@@ -166,6 +166,12 @@ func parseBookPage(r io.Reader) (*BookMetadata, error) {
 		if n.Type == html.ElementNode {
 			switch n.Data {
 
+			// Skripty a styly nejsou obsah stránky. JSON-LD blok v hlavičce
+			// obsahuje dateModified s aktuálním datem, které by se jinak
+			// spletlo s rokem vydání.
+			case "script", "style":
+				return
+
 			// <h1> = název knihy
 			case "h1":
 				if meta.Title == "" {
@@ -221,12 +227,12 @@ func parseBookPage(r io.Reader) (*BookMetadata, error) {
 				}
 			}
 
-			// Rok vydání - 4 číslice
-			if yearRe.MatchString(trimmed) && meta.Year == 0 {
-				if m := yearRe.FindStringSubmatch(trimmed); len(m) > 1 {
-					if v, err := strconv.Atoi(m[1]); err == nil && v > 1800 && v <= time.Now().Year()+1 {
-						meta.Year = v
-					}
+			// Rok vydání – v infoboxu knihy stojí samostatně („2013, Druhé
+			// město“). Rok uvnitř delšího textu (popis, patička) se nebere,
+			// tam jde skoro vždy o něco jiného.
+			if meta.Year == 0 && yearOnlyRe.MatchString(trimmed) {
+				if v, err := strconv.Atoi(trimmed); err == nil && v > 1800 && v <= time.Now().Year()+1 {
+					meta.Year = v
 				}
 			}
 		}
@@ -388,7 +394,6 @@ func parseSearchLinks(doc *html.Node) []SearchResult {
 
 var (
 	ratingRe   = regexp.MustCompile(`(\d{1,3})\s*%`)
-	yearRe     = regexp.MustCompile(`\b(1[89]\d{2}|20[012]\d)\b`)
 	idRe       = regexp.MustCompile(`-(\d+)$`)
 	yearOnlyRe = regexp.MustCompile(`^(?:1[89]\d{2}|20\d{2})$`)
 	readMoreRe = regexp.MustCompile(`\s*(?:\.{3}|…)\s*celý text\s*$`)

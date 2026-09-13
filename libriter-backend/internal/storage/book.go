@@ -23,17 +23,19 @@ type BookInput struct {
 	Language        string
 	Description     *string
 	InternalRating  *int16
+	PublishedYear   *int
 }
 
 const bookColumns = `id, series_id, series_position, title, narrator,
 	       duration_seconds, file_path, cover_path, language, description,
-	       internal_rating, created_at, updated_at`
+	       internal_rating, published_year, created_at, updated_at`
 
 const insertBookQuery = `
 	INSERT INTO books
 		(id, series_id, series_position, title, narrator,
-		 duration_seconds, file_path, cover_path, language, description, internal_rating)
-	VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11)
+		 duration_seconds, file_path, cover_path, language, description, internal_rating,
+		 published_year)
+	VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)
 	RETURNING ` + bookColumns
 
 const updateBookQuery = `
@@ -41,7 +43,7 @@ const updateBookQuery = `
 		series_id = ?2, series_position = ?3, title = ?4,
 		narrator = ?5, duration_seconds = ?6, file_path = ?7, cover_path = ?8,
 		language = ?9, description = ?10, internal_rating = ?11,
-		updated_at = CURRENT_TIMESTAMP
+		published_year = ?12, updated_at = CURRENT_TIMESTAMP
 	WHERE id = ?1
 	RETURNING ` + bookColumns
 
@@ -86,7 +88,7 @@ func bookRow(ctx context.Context, tx *sql.Tx, query string, id uuid.UUID, in Boo
 	return tx.QueryRowContext(ctx, query,
 		id, in.SeriesID, in.SeriesPosition, in.Title, in.Narrator,
 		in.DurationSeconds, in.FilePath, in.CoverPath, in.Language, in.Description,
-		in.InternalRating,
+		in.InternalRating, in.PublishedYear,
 	)
 }
 
@@ -109,6 +111,7 @@ func bookInputFrom(b *model.Book) BookInput {
 		Language:        b.Language,
 		Description:     b.Description,
 		InternalRating:  b.InternalRating,
+		PublishedYear:   b.PublishedYear,
 	}
 }
 
@@ -357,7 +360,7 @@ func scanBook(row scanner) (*model.Book, error) {
 	err := row.Scan(
 		&b.ID, &b.SeriesID, &b.SeriesPosition, &b.Title, &b.Narrator,
 		&b.DurationSeconds, &b.FilePath, &b.CoverPath, &b.Language, &b.Description,
-		&b.InternalRating, &b.CreatedAt, &b.UpdatedAt,
+		&b.InternalRating, &b.PublishedYear, &b.CreatedAt, &b.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err

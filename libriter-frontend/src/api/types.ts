@@ -47,6 +47,8 @@ export interface Book {
   language: string
   description?: string
   internal_rating?: number
+  /** Rok (prvního) vydání – přebírá se ze zdrojů metadat, nemusí být známý. */
+  published_year?: number
   created_at: string
   updated_at: string
 }
@@ -106,6 +108,13 @@ export interface BookPatchRequest {
   language?: string
   description?: string | null
   internal_rating?: number | null
+  published_year?: number | null
+}
+
+/** POST /series */
+export interface SeriesRequest {
+  title: string
+  description: string | null
 }
 
 /**
@@ -157,6 +166,10 @@ export interface AuthorSearchResult {
 export interface AuthorMetadata {
   id: number
   name: string
+  /** Jméno rozdělené stejně, jako se ukládá u autora – dopočítává backend. */
+  first_name: string
+  middle_name: string
+  last_name: string
   bio: string
   /** Adresa fotky u zdroje; stahuje se až přes PUT /authors/{id}/image. */
   image_url: string

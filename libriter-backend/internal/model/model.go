@@ -77,6 +77,7 @@ type Book struct {
 	Language        string     `json:"language"`
 	Description     *string    `json:"description,omitempty"`
 	InternalRating  *int16     `json:"internal_rating,omitempty"`
+	PublishedYear   *int       `json:"published_year,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }

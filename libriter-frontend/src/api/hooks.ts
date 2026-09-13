@@ -15,6 +15,7 @@ import type {
   MetadataSearchResult,
   RegisterRequest,
   Series,
+  SeriesRequest,
   UpdateUserRequest,
   User,
 } from './types'
@@ -39,10 +40,15 @@ export function useBooks(): UseQueryResult<Book[], Error> {
 }
 
 export function useBook(id: string) {
+  const queryClient = useQueryClient()
   return useQuery({
     queryKey: queryKeys.book(id),
     queryFn: () => apiFetch<Book>(`/books/${id}`),
     enabled: Boolean(id),
+    // Seznam knih nese stejné záznamy jako detail, takže při přechodu mezi
+    // knihami (např. „Uložit a další“) není třeba čekat na server.
+    placeholderData: () =>
+      queryClient.getQueryData<Book[]>(queryKeys.books)?.find((book) => book.id === id),
   })
 }
 
@@ -163,6 +169,56 @@ export function usePatchBook(bookId: string) {
     onSuccess: (book) => {
       queryClient.setQueryData(queryKeys.book(bookId), book)
       void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+    },
+  })
+}
+
+export function useCreateSeries() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: SeriesRequest) =>
+      apiFetch<Series>('/series', { method: 'POST', json: body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.series })
+    },
+  })
+}
+
+export interface AssignBooksToSeriesInput {
+  /** Existující série podle ID, nebo nová podle názvu. */
+  series: { id: string } | { title: string }
+  /** Knihy a jejich pořadí v sérii – backend vyžaduje díl u každé knihy v sérii. */
+  books: { id: string; position: number }[]
+}
+
+/**
+ * Hromadné zařazení knih do série. Novou sérii založí, pak knihy upraví jednu
+ * po druhé – když některá selže, ty předchozí zůstanou zařazené a chyba se
+ * vrátí i s názvem knihy, u které to skončilo.
+ */
+export function useAssignBooksToSeries() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ series, books }: AssignBooksToSeriesInput) => {
+      const target =
+        'id' in series
+          ? await apiFetch<Series>(`/series/${series.id}`)
+          : await apiFetch<Series>('/series', {
+              method: 'POST',
+              json: { title: series.title, description: null } satisfies SeriesRequest,
+            })
+
+      const updated: Book[] = []
+      for (const book of books) {
+        const body: BookPatchRequest = { series_id: target.id, series_position: book.position }
+        updated.push(await apiFetch<Book>(`/books/${book.id}`, { method: 'PATCH', json: body }))
+      }
+      return { series: target, books: updated }
+    },
+    // Invalidace i po chybě – část knih už může být zařazená.
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.series })
     },
   })
 }

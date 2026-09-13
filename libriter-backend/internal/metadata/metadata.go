@@ -13,6 +13,8 @@ import (
 	"log/slog"
 	"net/url"
 	"strings"
+
+	"libriter/internal/model"
 )
 
 // SearchResult je jeden výsledek vyhledávání. Author a Year mohou zůstat
@@ -52,7 +54,13 @@ type BookMetadata struct {
 type AuthorMetadata struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
-	Bio  string `json:"bio"`
+	// FirstName, MiddleName a LastName jsou Name rozdělené stejně, jako se
+	// jméno ukládá u autora (model.ParseAuthorName). Doplňuje je Chain, aby
+	// klient nemusel jméno parsovat sám a rozdělení bylo všude stejné.
+	FirstName  string `json:"first_name"`
+	MiddleName string `json:"middle_name"`
+	LastName   string `json:"last_name"`
+	Bio        string `json:"bio"`
 	// ImageURL je adresa fotky u zdroje. Stahuje se až na vyžádání
 	// (PUT /authors/{id}/image), do databáze se ukládá soubor, ne odkaz.
 	ImageURL  string `json:"image_url"`
@@ -242,6 +250,8 @@ func (c *Chain) FetchAuthorByURL(ctx context.Context, rawURL string) (*AuthorMet
 			return nil, fmt.Errorf("%s: %w", p.Name(), err)
 		}
 		meta.Source = p.Name()
+		name := model.ParseAuthorName(meta.Name)
+		meta.FirstName, meta.MiddleName, meta.LastName = name.First, name.Middle, name.Last
 		return meta, nil
 	}
 	return nil, ErrNoProvider

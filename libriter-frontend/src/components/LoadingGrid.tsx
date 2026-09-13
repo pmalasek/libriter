@@ -1,8 +1,16 @@
 import { Skeleton } from '@/components/ui/skeleton'
+import type { ViewMode } from '@/lib/sorting'
 
-export function LoadingGrid({ count = 8 }: { count?: number }) {
+const GRID: Record<Exclude<ViewMode, 'list'>, string> = {
+  tiles: 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
+  small: 'grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8',
+}
+
+export function LoadingGrid({ count = 8, view = 'tiles' }: { count?: number; view?: ViewMode }) {
+  if (view === 'list') return <LoadingList count={count} />
+
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+    <div className={GRID[view]}>
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="space-y-2">
           <Skeleton className="aspect-square w-full rounded-lg" />

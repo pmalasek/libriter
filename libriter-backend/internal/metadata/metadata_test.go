@@ -190,3 +190,55 @@ func TestHostMatches(t *testing.T) {
 		}
 	}
 }
+
+// fakeAuthorProvider je zdroj, který umí i autory – vrací pevně dané jméno.
+type fakeAuthorProvider struct {
+	fakeProvider
+	authorName string
+}
+
+func (f *fakeAuthorProvider) SupportsAuthorURL(rawURL string) bool { return f.Supports(rawURL) }
+func (f *fakeAuthorProvider) SupportsImageURL(string) bool         { return false }
+
+func (f *fakeAuthorProvider) SearchAuthors(context.Context, string) ([]AuthorSearchResult, error) {
+	return nil, nil
+}
+
+func (f *fakeAuthorProvider) FetchAuthorByURL(context.Context, string) (*AuthorMetadata, error) {
+	return &AuthorMetadata{Name: f.authorName}, nil
+}
+
+func TestChainFetchAuthorSplitsName(t *testing.T) {
+	tests := []struct {
+		name                string
+		full                string
+		first, middle, last string
+	}{
+		{"křestní a příjmení", "Karel Čapek", "Karel", "", "Čapek"},
+		{"tři části", "Jan Amos Komenský", "Jan", "Amos", "Komenský"},
+		{"obrácený tvar", "Komenský, Jan Amos", "Jan", "Amos", "Komenský"},
+		{"jednoslovné", "Homér", "", "", "Homér"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			chain := NewChain(&fakeAuthorProvider{
+				fakeProvider: fakeProvider{name: "dk", host: "databazeknih.cz"},
+				authorName:   tt.full,
+			})
+
+			meta, err := chain.FetchAuthorByURL(context.Background(), "https://www.databazeknih.cz/autori/x-1")
+			if err != nil {
+				t.Fatalf("FetchAuthorByURL: %v", err)
+			}
+			got := [3]string{meta.FirstName, meta.MiddleName, meta.LastName}
+			want := [3]string{tt.first, tt.middle, tt.last}
+			if got != want {
+				t.Errorf("rozdělení %q = %v, chtěno %v", tt.full, got, want)
+			}
+			if meta.Source != "dk" {
+				t.Errorf("source = %q, chtěno dk", meta.Source)
+			}
+		})
+	}
+}

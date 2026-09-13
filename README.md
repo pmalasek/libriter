@@ -238,20 +238,35 @@ React + TypeScript + Tailwind v4, komponenty shadcn/ui (Radix), routing
 série, profil (změna jména, e-mailu a hesla), hledání v knihách, obálky knih,
 světlý i tmavý režim podle systému.
 
+**Seznamy knih a autorů** mají tři zobrazení (dlaždice, malé dlaždice, seznam)
+a volitelné řazení – knihy podle názvu, autora (příjmení, křestní, prostřední
+jméno), roku vydání nebo data přidání; autoři podle příjmení (výchozí, jméno
+se pak ukazuje katalogově „Čapek, Karel“), křestního jména nebo počtu knih.
+Zvolené zobrazení i řazení si prohlížeč pamatuje (`localStorage`).
+
 **Editace (role editor a vyšší):** na detailu knihy i autora je tlačítko
 *Upravit*, které otevře formulář v dialogu. U knihy jde změnit název, autory
-(včetně pořadí – první je hlavní), sérii a díl, vypravěče, délku, jazyk, vlastní
-hodnocení a popis; tlačítko *Načíst metadata* vyhledá knihu ve zdrojích
-(databazeknih.cz, cbdb.cz, OpenLibrary, Google Books – viz Metadata knih)
-a předvyplní název a popis. Ukládá se přes `PATCH /books/{id}`, takže odchází
-jen skutečně změněná pole.
+(včetně pořadí – první je hlavní), sérii a díl, vypravěče, délku, jazyk, rok
+vydání, vlastní hodnocení a popis; tlačítko *Načíst metadata* vyhledá knihu ve
+zdrojích (databazeknih.cz, cbdb.cz, OpenLibrary, Google Books – viz Metadata
+knih) a předvyplní název, popis a rok vydání. Ukládá se přes
+`PATCH /books/{id}`, takže odchází jen skutečně změněná pole. Tlačítko *Uložit
+a další* (Ctrl+Enter) uloží a rovnou otevře editaci následující knihy v pořadí
+seznamu – hodí se při procházení celé knihovny.
+
+**Hromadné zařazení do série:** v seznamu knih zapne tlačítko *Vybrat* režim
+výběru; kliknutí na knihu ji označí. *Přidat do série* pak vybrané knihy
+zařadí do existující nebo nové série a nechá upravit čísla dílů (předvyplní se
+za poslední obsazený díl). Série může spojovat knihy různých autorů.
 
 U autora se edituje jméno po částech, roky života a životopis
 (`PUT /authors/{id}`). Stejné tlačítko *Načíst metadata* vyhledá autora ve
-zdrojích a předvyplní životopis i roky; nabídnutá fotka se stáhne až při
-uložení (`PUT /authors/{id}/image`), takže „Zrušit“ nic nezmění. Fotka se
-ukazuje na detailu autora i na kartách v seznamu; autor bez fotky má
-zástupnou ikonu. Čtenář (role reader) tlačítka nevidí.
+zdrojích a předvyplní životopis i roky a **přepíše jméno** (křestní, prostřední
+i příjmení) tím ze zdroje – slouží k opravě jmen zkomolených v audio tazích.
+Nabídnutá fotka se stáhne až při uložení (`PUT /authors/{id}/image`), takže
+„Zrušit“ nic nezmění. Fotka se ukazuje na detailu autora i na kartách
+v seznamu; autor bez fotky má zástupnou ikonu. Čtenář (role reader) tlačítka
+nevidí.
 
 **Co ještě ne:** přehrávání audia (chybí kapitoly a streamování) a zakládání či
 mazání záznamů z rozhraní – nové knihy, autory a série zakládá scanner nebo
@@ -410,13 +425,14 @@ slouží `PATCH`, který mění výhradně pole obsažená v těle:
 
 ```jsonc
 // PATCH /books/{id} – vynechané pole zůstane beze změny, null sloupec vyprázdní
-{ "title": "Nový název", "narrator": null }
+{ "title": "Nový název", "narrator": null, "published_year": 1936 }
 ```
 
 `PATCH` pole `file_path` nepřijímá vůbec (skončí `400`, stejně jako každé jiné
 neznámé pole). Ověřuje se jen to, co klient poslal: `title` nesmí být prázdný,
-`duration_seconds` musí být kladné, `internal_rating` 1–5 nebo `null` a
-`author_ids` musí obsahovat alespoň jednoho autora.
+`duration_seconds` musí být kladné, `internal_rating` 1–5 nebo `null`,
+`published_year` (rok vydání) 1000 až příští rok nebo `null` a `author_ids`
+musí obsahovat alespoň jednoho autora.
 
 ### Autoři
 
@@ -532,12 +548,14 @@ zvlášť pro knihy a zvlášť pro autory:
 #### Metadata autorů
 
 `GET /metadata/author/search?q=` a `GET /metadata/author?url=` fungují stejně
-jako u knih, jen je neumí `googlebooks`. Vrací jméno, životopis, roky života
-a adresu fotky:
+jako u knih, jen je neumí `googlebooks`. Vrací jméno (celé i rozdělené na
+části stejně, jako se ukládá u autora), životopis, roky života a adresu fotky:
 
 ```jsonc
 // GET /metadata/author?url=https://www.databazeknih.cz/autori/karel-capek-101
-{ "id": 101, "name": "Karel Čapek", "bio": "Český prozaik, dramatik…",
+{ "id": 101, "name": "Karel Čapek",
+  "first_name": "Karel", "middle_name": "", "last_name": "Čapek",
+  "bio": "Český prozaik, dramatik…",
   "image_url": "https://www.databazeknih.cz/img/authors/…/karel-capek-z04-101.jpg",
   "birth_year": 1890, "death_year": 1938,
   "source_url": "https://www.databazeknih.cz/autori/karel-capek-101",
