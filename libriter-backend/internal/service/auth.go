@@ -32,19 +32,11 @@ func NewAuth(store *storage.Store, cfg config.JWTConfig) *AuthService {
 	return &AuthService{store: store, cfg: cfg}
 }
 
-// Register vytvoří nového uživatele s rolí reader (výchozí).
+// Register vytvoří nového uživatele s rolí reader (výchozí) a vrátí JWT token.
 func (a *AuthService) Register(ctx context.Context, displayName, email, password string) (*model.User, string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	u, err := createUser(ctx, a.store, displayName, email, password, model.RoleReader)
 	if err != nil {
-		return nil, "", fmt.Errorf("hash password: %w", err)
-	}
-
-	u, err := a.store.CreateUser(ctx, displayName, email, string(hash), model.RoleReader)
-	if errors.Is(err, storage.ErrConflict) {
-		return nil, "", ErrEmailTaken
-	}
-	if err != nil {
-		return nil, "", fmt.Errorf("create user: %w", err)
+		return nil, "", err
 	}
 
 	token, err := a.generateToken(u.ID, u.Role)
@@ -53,6 +45,29 @@ func (a *AuthService) Register(ctx context.Context, displayName, email, password
 	}
 
 	return u, token, nil
+}
+
+// createUser je společná cesta vytvoření uživatele pro API registraci i CLI.
+// Zahashuje heslo a uloží uživatele s danou rolí.
+func createUser(ctx context.Context, store *storage.Store, displayName, email, password, role string) (*model.User, error) {
+	if _, ok := model.RoleLevel[role]; !ok {
+		return nil, fmt.Errorf("neznámá role: %s", role)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	if err != nil {
+		return nil, fmt.Errorf("hash password: %w", err)
+	}
+
+	u, err := store.CreateUser(ctx, displayName, email, string(hash), role)
+	if errors.Is(err, storage.ErrConflict) {
+		return nil, ErrEmailTaken
+	}
+	if err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
+	}
+
+	return u, nil
 }
 
 // Login ověří přihlašovací údaje a vrátí JWT token.

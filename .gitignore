@@ -14,6 +14,7 @@ Thumbs.db
 .idea/
 
 # Go
+bin/
 libriter-backend/main
 libriter-backend/dist/
 libriter-backend/tmp/
@@ -25,7 +26,6 @@ libriter-backend/tmp/
 
 # Node / frontend
 node_modules/
-libriter-frontend/dist/
 libriter-frontend/.next/
 libriter-frontend/build/
 

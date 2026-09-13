@@ -21,3 +21,15 @@ func readJSON(r *http.Request, v any) error {
 	dec.DisallowUnknownFields()
 	return dec.Decode(v)
 }
+
+// NotFoundJSON odpovídá na neznámé API cesty v JSONu (místo chi výchozího text/plain).
+// Je nutné registrovat ji uvnitř /api/v1 subrouteru, protože root handler pro SPA
+// by jinak na neznámé API cesty vracel index.html.
+func NotFoundJSON(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, http.StatusNotFound, "endpoint nenalezen")
+}
+
+// MethodNotAllowedJSON odpovídá na nepodporovanou HTTP metodu v JSONu.
+func MethodNotAllowedJSON(w http.ResponseWriter, _ *http.Request) {
+	writeError(w, http.StatusMethodNotAllowed, "metoda není povolena")
+}

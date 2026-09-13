@@ -24,6 +24,21 @@ func (u *UserService) List(ctx context.Context) ([]model.User, error) {
 	return u.store.ListUsers(ctx)
 }
 
+// Create vytvoří uživatele s explicitní rolí. Používá CLI (`libriter user add`);
+// API registrace jde přes AuthService.Register, která vždy přiřadí roli reader.
+func (u *UserService) Create(ctx context.Context, displayName, email, password, role string) (*model.User, error) {
+	return createUser(ctx, u.store, displayName, email, password, role)
+}
+
+// GetByEmail vrátí uživatele podle emailu (používá CLI pro adresování uživatele).
+func (u *UserService) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+	usr, err := u.store.GetUserByEmail(ctx, email)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	return usr, err
+}
+
 func (u *UserService) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	usr, err := u.store.GetUserByID(ctx, id)
 	if errors.Is(err, storage.ErrNotFound) {

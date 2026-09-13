@@ -1,0 +1,140 @@
+import { ArrowLeftIcon, ClockIcon, LanguagesIcon, MicIcon, StarIcon } from 'lucide-react'
+import { useMemo } from 'react'
+import { Link, useParams } from 'react-router'
+import { useAuthor, useBook, useBooks, useSeriesOne } from '@/api/hooks'
+import { BookGrid } from '@/components/BookGrid'
+import { CoverPlaceholder } from '@/components/CoverPlaceholder'
+import { ErrorState } from '@/components/ErrorState'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
+import { formatDate, formatDuration } from '@/lib/format'
+
+export function BookDetailPage() {
+  const { id = '' } = useParams()
+  const book = useBook(id)
+  const author = useAuthor(book.data?.author_id ?? '')
+  const series = useSeriesOne(book.data?.series_id ?? '')
+  const allBooks = useBooks()
+
+  const moreByAuthor = useMemo(() => {
+    if (!book.data) return []
+    return (allBooks.data ?? []).filter(
+      (b) => b.author_id === book.data.author_id && b.id !== book.data.id,
+    )
+  }, [allBooks.data, book.data])
+
+  if (book.isPending) {
+    return (
+      <div className="grid gap-8 md:grid-cols-[220px_1fr]">
+        <Skeleton className="aspect-2/3 w-full rounded-lg" />
+        <div className="space-y-3">
+          <Skeleton className="h-8 w-2/3" />
+          <Skeleton className="h-4 w-1/3" />
+          <Skeleton className="h-24 w-full" />
+        </div>
+      </div>
+    )
+  }
+
+  if (book.isError) {
+    return <ErrorState error={book.error} onRetry={() => void book.refetch()} />
+  }
+
+  const { data } = book
+
+  return (
+    <>
+      <Button variant="ghost" size="sm" asChild className="mb-4 -ml-2">
+        <Link to="/">
+          <ArrowLeftIcon />
+          Zpět na knihy
+        </Link>
+      </Button>
+
+      <div className="grid gap-8 md:grid-cols-[220px_1fr]">
+        <div className="max-w-[220px]">
+          <CoverPlaceholder />
+        </div>
+
+        <div className="min-w-0">
+          <h1 className="font-heading text-2xl font-semibold tracking-tight">{data.title}</h1>
+
+          {author.data ? (
+            <Link
+              to={`/authors/${author.data.id}`}
+              className="mt-1 inline-block text-muted-foreground underline-offset-4 hover:underline"
+            >
+              {author.data.name}
+            </Link>
+          ) : null}
+
+          {series.data ? (
+            <p className="mt-1 text-sm text-muted-foreground">
+              <Link to={`/series/${series.data.id}`} className="underline-offset-4 hover:underline">
+                {series.data.title}
+              </Link>
+              {data.series_position ? ` · ${data.series_position}. díl` : null}
+            </p>
+          ) : null}
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Badge variant="secondary">
+              <ClockIcon />
+              {formatDuration(data.duration_seconds)}
+            </Badge>
+            {data.narrator ? (
+              <Badge variant="secondary">
+                <MicIcon />
+                {data.narrator}
+              </Badge>
+            ) : null}
+            <Badge variant="outline">
+              <LanguagesIcon />
+              {data.language.toUpperCase()}
+            </Badge>
+            {data.internal_rating ? (
+              <Badge variant="outline">
+                <StarIcon />
+                {data.internal_rating}/5
+              </Badge>
+            ) : null}
+          </div>
+
+          {data.description ? (
+            <p className="mt-6 whitespace-pre-line text-sm leading-relaxed">{data.description}</p>
+          ) : (
+            <p className="mt-6 text-sm text-muted-foreground">Popis není k dispozici.</p>
+          )}
+
+          <Separator className="my-6" />
+
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-muted-foreground">Přidáno</dt>
+              <dd>{formatDate(data.created_at)}</dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Naposledy změněno</dt>
+              <dd>{formatDate(data.updated_at)}</dd>
+            </div>
+          </dl>
+
+          <p className="mt-6 text-xs text-muted-foreground">
+            Přehrávání zatím není k dispozici – backend pro něj ještě nemá endpoint.
+          </p>
+        </div>
+      </div>
+
+      {moreByAuthor.length > 0 && author.data ? (
+        <section className="mt-10">
+          <h2 className="font-heading mb-4 text-lg font-semibold">
+            Další knihy autora {author.data.name}
+          </h2>
+          <BookGrid books={moreByAuthor} />
+        </section>
+      ) : null}
+    </>
+  )
+}

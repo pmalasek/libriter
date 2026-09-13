@@ -4,5 +4,9 @@
 *.dll
 *.so
 *.dylib
-dist/
+/dist/
 tmp/
+
+# Sestavený frontend (vzniká přes `make frontend`, vkompiluje se do binárky)
+/internal/web/dist/*
+!/internal/web/dist/.gitkeep

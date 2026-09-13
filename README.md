@@ -6,15 +6,21 @@ Osobní správce a přehrávač audioknih s webovým rozhraním a mobilní aplik
 
 ```
 libriter/
-├── libriter-backend/   # REST API (Go)
-├── libriter-frontend/  # Webové rozhraní
+├── Makefile            # build frontendu i backendu
+├── libriter-backend/   # REST API + server webového rozhraní (Go)
+│   └── internal/web/dist/   # sem se sestaví frontend, vkompiluje se do binárky
+├── libriter-frontend/  # Webové rozhraní (React + Vite + Tailwind)
 ├── libriter-mobile/    # Mobilní aplikace
 ├── _scripts/           # Pomocné skripty
+├── bin/                # Sestavená binárka (make build)
 └── data/
     ├── libriter.db     # SQLite databáze (DB_PATH) – vytvoří se automaticky
     ├── audio/          # Audio soubory (AUDIO_ROOT)
     └── covers/         # Obálky knih (COVER_ROOT)
 ```
+
+Produkční build je **jediná binárka** – webové rozhraní je v ní vestavěné přes
+`go:embed` a servíruje se ze stejného portu jako API.
 
 Databázové schéma je v `libriter-backend/internal/db/migrations/` a aplikuje se
 automaticky při startu backendu.
@@ -27,8 +33,12 @@ automaticky při startu backendu.
 
 | Nástroj | Verze | Účel | Instalace |
 |---------|-------|------|-----------|
-| **Go** | ≥ 1.21 | Backend | viz níže |
+| **Go** | ≥ 1.22 | Backend | viz níže |
+| **Node.js** | ≥ 22 (testováno 24) | Build frontendu | viz níže |
 | **ffprobe** | libovolná | Délka audio souborů (scanner) | součást balíčku `ffmpeg` |
+
+Node.js je potřeba jen pro **sestavení** frontendu. Hotová binárka už na něm
+nezávisí – webové rozhraní je v ní vestavěné.
 
 Databáze je **SQLite** vestavěná přímo v backendu (čistě Go driver `modernc.org/sqlite`,
 bez cgo) – žádný databázový server není potřeba. Soubor `data/libriter.db` i schéma
@@ -45,6 +55,18 @@ wget https://go.dev/dl/go1.24.linux-amd64.tar.gz
 sudo rm -rf /usr/local/go
 sudo tar -C /usr/local -xzf go1.24.linux-amd64.tar.gz
 export PATH=$PATH:/usr/local/go/bin  # přidat do ~/.bashrc nebo ~/.zshrc
+```
+
+#### Node.js
+
+```bash
+# Doporučená cesta – nvm (umožňuje více verzí vedle sebe)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+nvm install 24
+
+# Ověření
+node --version   # v24.x
+npm --version
 ```
 
 #### Developer tools
@@ -100,9 +122,13 @@ MAX_UPLOAD_MB=500
 > **Bezpečnost:** `JWT_SECRET` musí být v produkci silný náhodný řetězec.
 > Vygenerujte ho např. pomocí: `openssl rand -hex 32`
 
+Webové rozhraní ani CLI žádné další proměnné nepotřebují – `.env` zůstává stejný.
+Vývojový server Vite přebírá adresu backendu z `BACKEND_URL` (výchozí
+`http://localhost:8080`), což je proměnná prostředí, ne součást `.env`.
+
 ---
 
-## Instalace a spuštění backendu
+## Instalace a spuštění
 
 ### 1. Vytvoření adresářů pro data
 
@@ -110,22 +136,59 @@ MAX_UPLOAD_MB=500
 mkdir -p data/audio data/covers
 ```
 
-### 2. Stažení Go závislostí a build
+### 2. Produkční build – jedna binárka
 
 ```bash
-cd libriter-backend
-go mod download
-go build ./...
+make build          # npm ci + npm run build, potom go build
+cd libriter-backend && ../bin/libriter
 ```
 
-### 3. Spuštění serveru
+Vznikne `bin/libriter` s vestavěným webovým rozhraním. Rozhraní pak najdete na
+`http://localhost:8080`, API na `http://localhost:8080/api/v1`.
+
+> Binárku spouštějte z adresáře `libriter-backend/` – `.env` a relativní `DB_PATH`
+> se hledají vůči aktuálnímu adresáři. Jinak použijte absolutní cesty v `.env`.
+
+### 3. Vývoj – dva procesy
+
+| Terminál | Příkaz | Co běží |
+|----------|--------|---------|
+| 1 | `make dev-backend` | Go API na `http://localhost:8080` |
+| 2 | `make dev-frontend` | Vite s hot reloadem na `http://localhost:5173` |
+
+Pracujte na `http://localhost:5173`. Vite proxuje `/api` a `/health` na backend,
+takže CORS není potřeba a frontend volá stejné relativní cesty jako v produkci.
+Běží-li backend na jiném portu: `BACKEND_URL=http://localhost:9000 npm run dev`.
+
+Oba servery naslouchají na všech rozhraních (`0.0.0.0`), takže když běží na jiném
+stroji než prohlížeč, otevřete adresu, kterou Vite vypíše na řádku **Network**
+(např. `http://172.24.0.46:5173`). Stejně tak produkční binárka je dostupná na
+`http://<ip-serveru>:8080`.
+
+První spuštění frontendu si vyžádá závislosti:
 
 ```bash
-cd libriter-backend
-go run ./cmd/server
+cd libriter-frontend && npm install
 ```
 
-Server se spustí na portu nastaveném v `SERVER_PORT` (výchozí `8080`).
+### Přehled cílů Makefile
+
+| Cíl | Popis |
+|-----|-------|
+| `make build` | Frontend i backend → `bin/libriter` |
+| `make frontend` | `npm ci && npm run build` (výstup do `libriter-backend/internal/web/dist`) |
+| `make backend` | `go build` s aktuálně sestaveným frontendem |
+| `make dev-backend` | `go run ./cmd/server` |
+| `make dev-frontend` | `npm run dev` |
+| `make vet` | `go vet ./...` |
+| `make clean` | Smaže `bin/` a sestavený frontend |
+
+Backend jde sestavit i bez frontendu (`make backend` na čerstvém klonu) – server
+pak na `/` vrátí stránku s návodem a HTTP 503, ale API funguje normálně.
+
+> **Pozor:** backend spouštějte jako balíček (`go run ./cmd/server`), ne jako
+> jediný soubor (`go run cmd/server/main.go`). Balíček `main` je rozdělený do
+> `main.go`, `serve.go` a `user_cmd.go`, takže build jediného souboru selže.
 
 Při prvním startu backend automaticky:
 - vytvoří soubor databáze na cestě `DB_PATH` (včetně adresáře)
@@ -136,6 +199,56 @@ Při prvním startu backend automaticky:
 Aplikované migrace se evidují v tabulce `schema_migrations`; při dalších
 startech se spustí jen nové. Zálohu databáze pořídíte prostým zkopírováním
 souboru `libriter.db` (při běžícím serveru i souborů `-wal` a `-shm`).
+
+---
+
+## Webové rozhraní
+
+React + TypeScript + Tailwind v4, komponenty shadcn/ui (Radix), routing
+`react-router`, serverový stav `@tanstack/react-query`. Vše v češtině.
+
+**Co první verze umí:** přihlášení a registraci, seznam a detail knih, autory,
+série, profil (změna jména, e-mailu a hesla), hledání v knihách, světlý i tmavý
+režim podle systému.
+
+**Co ještě ne:** přehrávání audia, obálky knih a editační formuláře – backend pro
+ně zatím nemá endpointy (chybí kapitoly, streamování a servírování `COVER_ROOT`).
+Knihy, autory a série proto zakládá scanner nebo přímé volání API.
+
+Přihlášený uživatel se drží v `localStorage` (JWT + profil). Role se obnoví až
+při dalším přihlášení, takže po změně role adminem je nutné se odhlásit a
+přihlásit znovu.
+
+---
+
+## Správa uživatelů z příkazové řádky
+
+Registrace přes API dává vždy roli **reader**, takže prvního administrátora
+vytvořte přes CLI stejné binárky:
+
+```bash
+cd libriter-backend
+
+# nové konto (bez --password se heslo zadá interaktivně, skrytě a dvakrát)
+../bin/libriter user add --email admin@example.com --name "Jan Novák" --role admin
+
+# povýšení už registrovaného účtu
+../bin/libriter user set-role --email jan@example.com --role editor
+
+# přehled účtů
+../bin/libriter user list
+```
+
+Ve vývoji bez buildu: `go run ./cmd/server user add --email … --name …`.
+
+| Příkaz | Přepínače |
+|--------|-----------|
+| `user add` | `--email` a `--name` (povinné), `--role` (`admin`\|`editor`\|`reader`, výchozí `reader`), `--password` (min. 8 znaků) |
+| `user set-role` | `--email`, `--role` |
+| `user list` | – |
+
+CLI čte stejný `.env` jako server a samo aplikuje chybějící migrace, takže
+funguje i na prázdné databázi. Server ani scanner přitom nespouští.
 
 ---
 
@@ -242,6 +355,12 @@ POST /books   (s daty z metadat)
 ```
 GET /health
 ```
+
+### Ostatní cesty
+
+Vše mimo `/health` a `/api/v1/*` obsluhuje webové rozhraní: existující soubor se
+odešle přímo, jinak se vrátí `index.html` a o cestu se postará routing v prohlížeči.
+Neznámé cesty pod `/api/v1/` vracejí JSON `{"error":"endpoint nenalezen"}`.
 
 ---
 
