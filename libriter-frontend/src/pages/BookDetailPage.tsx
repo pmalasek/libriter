@@ -30,7 +30,7 @@ export function BookDetailPage() {
   if (book.isPending) {
     return (
       <div className="grid gap-8 md:grid-cols-[220px_1fr]">
-        <Skeleton className="aspect-2/3 w-full rounded-lg" />
+        <Skeleton className="aspect-square w-full rounded-lg" />
         <div className="space-y-3">
           <Skeleton className="h-8 w-2/3" />
           <Skeleton className="h-4 w-1/3" />
