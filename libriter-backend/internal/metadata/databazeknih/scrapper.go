@@ -94,7 +94,72 @@ func (c *Client) FetchBook(ctx context.Context, bookID int) (*BookMetadata, erro
 
 	meta.ID = bookID
 	meta.SourceURL = bookURL
+	c.addOriginalEdition(ctx, meta)
 	return meta, nil
+}
+
+// addOriginalEdition doplní název a rok originálu ze sekce „Více info“, kterou
+// stránka knihy načítá zvlášť (XHR). Rok originálu je rok prvního vydání díla
+// a má přednost před rokem českého vydání z infoboxu – podle něj se v knihovně
+// řadí a překlad vydaný o dvacet let později by pořadí rozbil.
+//
+// Selhání se ignoruje – zůstane rok z infoboxu.
+func (c *Client) addOriginalEdition(ctx context.Context, meta *BookMetadata) {
+	if meta.ID == 0 {
+		return
+	}
+
+	body, err := c.fetch(ctx, fmt.Sprintf("%s/book-detail-more-info/%d", baseURL, meta.ID))
+	if err != nil {
+		return
+	}
+	defer body.Close()
+
+	title, year := parseOriginalEdition(body)
+	meta.OriginalTitle = title
+	if year > 0 {
+		meta.Year = year
+	}
+}
+
+// parseOriginalEdition vytáhne z fragmentu „Více info“ řádek
+//
+//	<dt>Originální název</dt> <dd>The Hitchhiker's Guide to the Galaxy, 1979</dd>
+//
+// Rok za čárkou je nepovinný; u českých knih řádek chybí úplně.
+func parseOriginalEdition(r io.Reader) (title string, year int) {
+	doc, err := html.Parse(r)
+	if err != nil {
+		return "", 0
+	}
+
+	dt := htmlutil.Find(doc, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "dt" &&
+			strings.EqualFold(htmlutil.Collapse(htmlutil.Text(n)), "Originální název")
+	})
+	if dt == nil {
+		return "", 0
+	}
+
+	var dd *html.Node
+	for sib := dt.NextSibling; sib != nil; sib = sib.NextSibling {
+		if sib.Type == html.ElementNode && sib.Data == "dd" {
+			dd = sib
+			break
+		}
+	}
+	if dd == nil {
+		return "", 0
+	}
+
+	text := htmlutil.Collapse(htmlutil.Text(dd))
+	if m := originalYearRe.FindStringSubmatch(text); m != nil {
+		if v, err := strconv.Atoi(m[1]); err == nil && v > 1000 && v <= time.Now().Year()+1 {
+			year = v
+			text = strings.TrimSpace(strings.TrimSuffix(text[:len(text)-len(m[0])], ","))
+		}
+	}
+	return text, year
 }
 
 // FetchByURL stáhne metadata knihy přímo z URL.
@@ -114,6 +179,7 @@ func (c *Client) FetchByURL(ctx context.Context, bookURL string) (*BookMetadata,
 	meta.ID = extractIDFromURL(bookURL)
 	meta.SourceURL = bookURL
 	meta.Source = providerName
+	c.addOriginalEdition(ctx, meta)
 	return meta, nil
 }
 
@@ -195,7 +261,9 @@ func parseBookPage(r io.Reader) (*BookMetadata, error) {
 					}
 				}
 
-			// <a> linky - autor, žánry, nakladatel
+			// <a> linky - autor, žánry, nakladatel. Autora tady bereme jen
+			// jako záložní cestu; hlavní seznam čte parseAuthors z řádku
+			// pod názvem knihy, kde jsou i spoluautoři.
 			case "a":
 				href := htmlutil.Attr(n, "href")
 				text := strings.TrimSpace(htmlutil.Text(n))
@@ -248,6 +316,18 @@ func parseBookPage(r io.Reader) (*BookMetadata, error) {
 	if desc := extractDescription(doc); desc != "" {
 		meta.Description = desc
 	}
+
+	if names, id := parseAuthors(doc); len(names) > 0 {
+		meta.Author = strings.Join(names, ", ")
+		meta.AuthorID = id
+		// Jména rozebíráme po jednom – ze složeného řetězce by se jméno
+		// s čárkou („Čapek, Karel“) rozdělilo jinak, než jak ho píše stránka.
+		for _, name := range names {
+			meta.Authors = append(meta.Authors, metadata.SplitAuthors(name)...)
+		}
+	}
+
+	meta.Series, meta.SeriesPosition = parseSeries(doc)
 
 	if meta.Title == "" {
 		return nil, fmt.Errorf("titul nenalezen na stránce")
@@ -393,10 +473,14 @@ func parseSearchLinks(doc *html.Node) []SearchResult {
 // -------------------------------------------------------------------
 
 var (
-	ratingRe   = regexp.MustCompile(`(\d{1,3})\s*%`)
-	idRe       = regexp.MustCompile(`-(\d+)$`)
-	yearOnlyRe = regexp.MustCompile(`^(?:1[89]\d{2}|20\d{2})$`)
-	readMoreRe = regexp.MustCompile(`\s*(?:\.{3}|…)\s*celý text\s*$`)
+	ratingRe = regexp.MustCompile(`(\d{1,3})\s*%`)
+	idRe     = regexp.MustCompile(`-(\d+)$`)
+	// „Název originálu, 1979“ – rok na konci řádku Originální název.
+	originalYearRe = regexp.MustCompile(`,?\s*(\d{4})\s*$`)
+	yearOnlyRe     = regexp.MustCompile(`^(?:1[89]\d{2}|20\d{2})$`)
+	// „1. díl“ z pruhu série nad názvem knihy.
+	seriesPartRe = regexp.MustCompile(`(\d+)\s*\.\s*díl`)
+	readMoreRe   = regexp.MustCompile(`\s*(?:\.{3}|…)\s*celý text\s*$`)
 )
 
 func extractIDFromURL(u string) int {
@@ -466,4 +550,90 @@ func extractDescription(doc *html.Node) string {
 	walk(doc)
 
 	return result
+}
+
+// parseSeries přečte pruh se sérií nad názvem knihy:
+//
+//	<div class="lora book_detail_serie_info">
+//	  <p class="inline"><a href='/serie/stoparuv-pruvodce-galaxii-135'>Stopařův průvodce Galaxií</a> série</p>
+//	  <span class="nowrap"><a class="arrow" href="…">&lt;</a>
+//	    <span class="odright_pet odleft_pet">1. díl</span>
+//	    <a class="arrow" href="…">&gt;</a></span>
+//	</div>
+//
+// Kniha mimo sérii blok nemá vůbec; u série bez číslování dílů chybí jen
+// pořadí. V obou případech se vrací nula, ne chyba – série je doplněk.
+func parseSeries(doc *html.Node) (title string, position int) {
+	box := htmlutil.Find(doc, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "div" &&
+			htmlutil.HasClass(n, "book_detail_serie_info")
+	})
+	if box == nil {
+		return "", 0
+	}
+
+	link := htmlutil.Find(box, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "a" &&
+			strings.Contains(htmlutil.Attr(n, "href"), "/serie/")
+	})
+	if link == nil {
+		return "", 0
+	}
+
+	title = htmlutil.Collapse(htmlutil.Text(link))
+	if title == "" {
+		// Odkaz může nést jen obrázek; název je pak v atributu title.
+		title = htmlutil.Collapse(htmlutil.Attr(link, "title"))
+	}
+	if title == "" {
+		return "", 0
+	}
+
+	// Číslo dílu se hledá v textu celého bloku – šipky na sousední díly
+	// jsou vedle něj a jejich text je jen „<“ a „>“.
+	if m := seriesPartRe.FindStringSubmatch(htmlutil.Collapse(htmlutil.Text(box))); m != nil {
+		position, _ = strconv.Atoi(m[1])
+	}
+	return title, position
+}
+
+// parseAuthors přečte autory z řádku pod názvem knihy:
+//
+//	<p class="lora oddown_midl"><span>
+//	  <span class="author"><a href="/autori/leos-kysa-12208">František Kotleta</a>
+//	    <span class="pozn_light">(p)</span>,</span>
+//	  <span class="author"><a href="/autori/kristyna-snegonova-11744">Kristýna Sněgoňová</a></span>
+//	</span></p>
+//
+// Bere se text odkazu, ne adresa: u pseudonymu míří odkaz na občanské jméno
+// (Leoš Kyša), ale kniha je podepsaná pseudonymem. Značka „(p)“ za jménem je
+// mimo odkaz, takže se do jména neplete – a stejně tak odkazy na autory
+// jinde na stránce („Další knihy autora“), ty v bloku .author nejsou.
+//
+// firstID je ID prvního autora u zdroje; drží se kvůli odkazu na jeho stránku.
+func parseAuthors(doc *html.Node) (names []string, firstID int) {
+	htmlutil.Walk(doc, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || n.Data != "span" || !htmlutil.HasClass(n, "author") {
+			return true
+		}
+
+		link := htmlutil.Find(n, func(c *html.Node) bool {
+			return c.Type == html.ElementNode && c.Data == "a" &&
+				strings.Contains(htmlutil.Attr(c, "href"), "/autori/")
+		})
+		if link == nil {
+			return false
+		}
+
+		name := htmlutil.Collapse(htmlutil.Text(link))
+		if name == "" {
+			return false
+		}
+		if len(names) == 0 {
+			firstID = extractIDFromURL(htmlutil.Attr(link, "href"))
+		}
+		names = append(names, name)
+		return false // uvnitř jmenovky autora už nic dalšího není
+	})
+	return names, firstID
 }

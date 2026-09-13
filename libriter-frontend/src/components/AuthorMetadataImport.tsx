@@ -122,8 +122,8 @@ export function AuthorMetadataImport({ defaultQuery, onApply }: Props) {
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        Převezme se jméno, životopis, roky života a fotka. Jméno přepíše zadané; fotka se
-        stáhne až při uložení.
+        Převezme se jméno, životopis, roky života a fotka. Jméno přepíše zadané (pseudonym
+        zůstane); fotka se stáhne až při uložení.
       </p>
     </div>
   )

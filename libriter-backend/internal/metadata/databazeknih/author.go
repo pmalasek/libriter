@@ -6,6 +6,7 @@ package databazeknih
 //   - hledání: /search?in=authors&q=<dotaz>, odkazy tvaru "/autori/<slug>-<id>"
 //   - detail:  JSON-LD schema.org/Person (jméno, životopis, fotka),
 //     záložně <h1> a <meta property="og:image">
+//   - pseudonymy: odkazy "/vydane-knihy-pseudonym/..." v <h2> pod jménem
 
 import (
 	"context"
@@ -62,15 +63,24 @@ func parseAuthorSearchResults(doc *html.Node) []metadata.AuthorSearchResult {
 		}
 
 		id := extractIDFromURL(href)
-		name := htmlutil.Collapse(htmlutil.Text(n))
+		// Značka „(pseudonym)“ stojí uvnitř odkazu, ale do jména nepatří –
+		// hledání totiž vypisuje jméno, pod kterým autor vydává, zatímco
+		// odkaz míří na jeho stránku vedenou pod občanským jménem.
+		name := htmlutil.Collapse(htmlutil.TextSkipping(n, isSearchNote))
 		if id == 0 || name == "" || seen[id] || strings.Contains(name, "Více") {
 			return true
+		}
+
+		note := ""
+		if span := htmlutil.Find(n, isSearchNote); span != nil {
+			note = strings.Trim(htmlutil.Collapse(htmlutil.Text(span)), "()")
 		}
 
 		seen[id] = true
 		results = append(results, metadata.AuthorSearchResult{
 			ID:     id,
 			Name:   name,
+			Note:   note,
 			URL:    htmlutil.ResolveURL(baseURL, href),
 			Source: providerName,
 		})
@@ -175,10 +185,45 @@ func parseAuthorPage(doc *html.Node) *metadata.AuthorMetadata {
 		meta.ImageURL = htmlutil.MetaContent(doc, "og:image")
 	}
 
+	meta.Pseudonyms = parsePseudonyms(doc)
+
 	// Roky života bývají hned v první větě životopisu ("Narodil se 9.1. 1890").
 	if meta.BirthYear == 0 {
 		meta.BirthYear, meta.DeathYear = metadata.YearsFromText(meta.Bio)
 	}
 
 	return meta
+}
+
+// isSearchNote pozná poznámku ve výsledku hledání autora – "(pseudonym)".
+func isSearchNote(n *html.Node) bool {
+	return n.Type == html.ElementNode && n.Data == "span" && htmlutil.HasClass(n, "pozn")
+}
+
+// parsePseudonyms přečte jména, pod kterými autor vydává, z řádku pod jménem:
+//
+//	<h1>Frode Sander Øien</h1>
+//	<h2 class="norm"><a href="/vydane-knihy-pseudonym/samuel-bjork-2596">Samuel Bjørk</a>
+//	  <span class="gray"> · pseudonym</span></h2>
+//
+// Většina autorů žádný nemá a seznam zůstane prázdný.
+func parsePseudonyms(doc *html.Node) []string {
+	var names []string
+	seen := make(map[string]bool)
+
+	htmlutil.Walk(doc, func(n *html.Node) bool {
+		if n.Type != html.ElementNode || n.Data != "a" ||
+			!strings.Contains(htmlutil.Attr(n, "href"), "/vydane-knihy-pseudonym/") {
+			return true
+		}
+
+		name := htmlutil.Collapse(htmlutil.Text(n))
+		if name != "" && !seen[name] {
+			seen[name] = true
+			names = append(names, name)
+		}
+		return false
+	})
+
+	return names
 }

@@ -1,5 +1,5 @@
 import type { Book } from '@/api/types'
-import { BookCard, BookRow } from '@/components/BookCard'
+import { BookCard, BookRow, BookRowHeader } from '@/components/BookCard'
 import { EmptyState } from '@/components/EmptyState'
 import type { ViewMode } from '@/lib/sorting'
 
@@ -40,6 +40,7 @@ export function BookGrid({
   if (view === 'list') {
     return (
       <div className={GRID_CLASSES.list}>
+        <BookRowHeader selecting={Boolean(selection)} />
         {books.map((book) => (
           <BookRow key={book.id} book={book} selection={selectionFor(book)} />
         ))}

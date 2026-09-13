@@ -1,6 +1,7 @@
 package databazeknih
 
 import (
+	"reflect"
 	"strings"
 	"testing"
 
@@ -212,5 +213,196 @@ func TestParseBookPageYear(t *testing.T) {
 	}
 	if meta.Publisher != "Druhé město" {
 		t.Errorf("publisher = %q", meta.Publisher)
+	}
+}
+
+func TestParseOriginalEdition(t *testing.T) {
+	tests := []struct {
+		name      string
+		fragment  string
+		wantTitle string
+		wantYear  int
+	}{
+		{
+			"překlad s rokem",
+			`<div class='book-details__row'><dt>Originální název</dt>
+			 <dd>The Hitchhiker&#039;s Guide to the Galaxy, 1979</dd></div>
+			 <div class='book-details__row'><dt>Počet stran</dt><dd>146</dd></div>`,
+			"The Hitchhiker's Guide to the Galaxy", 1979,
+		},
+		{
+			"bez roku",
+			`<dt>Originální název</dt><dd>Solaris</dd>`,
+			"Solaris", 0,
+		},
+		{
+			"česká kniha bez řádku",
+			`<dt>Počet stran</dt><dd>240</dd><dt>Jazyk vydání</dt><dd>český</dd>`,
+			"", 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			title, year := parseOriginalEdition(strings.NewReader(tt.fragment))
+			if title != tt.wantTitle || year != tt.wantYear {
+				t.Errorf("= (%q, %d), chtěno (%q, %d)", title, year, tt.wantTitle, tt.wantYear)
+			}
+		})
+	}
+}
+
+// Sérii a díl bere parser z pruhu nad názvem knihy. Šipky na sousední díly
+// jsou ve stejném bloku a nesmí se do názvu ani do čísla dílu připlést.
+func TestParseBookPageSeries(t *testing.T) {
+	tests := []struct {
+		name         string
+		block        string
+		wantSeries   string
+		wantPosition int
+	}{
+		{
+			"série s dílem",
+			`<div class="lora book_detail_serie_info">
+			   <p class="inline"><a class="odright_pet" href='/serie/stoparuv-pruvodce-galaxii-135?lang=cz'
+			      title='Stopařův průvodce Galaxií'>Stopařův průvodce Galaxií</a> série</p>
+			   <span class="nowrap">
+			     <a class="odleft_pet arrow" href="/prehled-knihy/omnibus-259682">&lt;</a>
+			     <span class="odright_pet odleft_pet">1. díl</span>
+			     <a class="arrow" href="/prehled-knihy/restaurant-na-konci-vesmiru-3997">&gt;</a>
+			   </span>
+			 </div>`,
+			"Stopařův průvodce Galaxií", 1,
+		},
+		{
+			"série bez číslování dílů",
+			`<div class="lora book_detail_serie_info">
+			   <p class="inline"><a href='/serie/povidky-999'>Povídky</a> série</p>
+			 </div>`,
+			"Povídky", 0,
+		},
+		{
+			"kniha mimo sérii",
+			`<div class="orangeBoxLight"></div>`,
+			"", 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			page := `<html><body>` + tt.block + `<h1>Stopařův průvodce Galaxií</h1></body></html>`
+
+			meta, err := parseBookPage(strings.NewReader(page))
+			if err != nil {
+				t.Fatalf("parseBookPage: %v", err)
+			}
+			if meta.Series != tt.wantSeries {
+				t.Errorf("series = %q, chtěno %q", meta.Series, tt.wantSeries)
+			}
+			if meta.SeriesPosition != tt.wantPosition {
+				t.Errorf("series position = %d, chtěno %d", meta.SeriesPosition, tt.wantPosition)
+			}
+		})
+	}
+}
+
+// Kniha může mít víc autorů; pseudonym se bere z textu odkazu, protože odkaz
+// sám míří na občanské jméno. Odkazy na autory mimo řádek pod názvem
+// („Další knihy autora“) do seznamu nepatří.
+func TestParseBookPageAuthors(t *testing.T) {
+	const page = `<html><body>
+	<h1>Aréna</h1>
+	<p class="lora oddown_midl"><span>
+	  <span class="author">
+	    <a href="/autori/leos-kysa-12208">František Kotleta</a> <span class='pozn_light'>(p)</span>,
+	  </span>
+	  <span class="author">
+	    <a href="/autori/kristyna-snegonova-11744">Kristýna Sněgoňová</a>
+	  </span>
+	</span></p>
+	<div class="other_books"><a href="/autori/leos-kysa-12208">Leoš Kyša</a></div>
+	</body></html>`
+
+	meta, err := parseBookPage(strings.NewReader(page))
+	if err != nil {
+		t.Fatalf("parseBookPage: %v", err)
+	}
+
+	if meta.Author != "František Kotleta, Kristýna Sněgoňová" {
+		t.Errorf("author = %q", meta.Author)
+	}
+	if meta.AuthorID != 12208 {
+		t.Errorf("author id = %d, chtěno 12208", meta.AuthorID)
+	}
+
+	want := []string{"František Kotleta", "Kristýna Sněgoňová"}
+	var got []string
+	for _, a := range meta.Authors {
+		got = append(got, a.Name)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("authors = %v, chtěno %v", got, want)
+	}
+	if meta.Authors[1].FirstName != "Kristýna" || meta.Authors[1].LastName != "Sněgoňová" {
+		t.Errorf("rozdělení jména = %+v", meta.Authors[1])
+	}
+}
+
+// Autora, který vydává pod pseudonymem, vede web pod občanským jménem
+// a pseudonym má v řádku pod ním. Klient podle seznamu pozná, že jméno
+// ve své knihovně přepisovat nemá.
+func TestParseAuthorPagePseudonyms(t *testing.T) {
+	const page = `<html><body>
+	<h1>Frode Sander Øien</h1>
+	<h2 class="norm">
+	  <a href="/vydane-knihy-pseudonym/samuel-bjork-2596">Samuel Bjørk</a>
+	  <span class='gray'> · pseudonym</span>
+	</h2>
+	</body></html>`
+
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	meta := parseAuthorPage(doc)
+	if meta.Name != "Frode Sander Øien" {
+		t.Errorf("name = %q", meta.Name)
+	}
+	if !reflect.DeepEqual(meta.Pseudonyms, []string{"Samuel Bjørk"}) {
+		t.Errorf("pseudonyms = %v", meta.Pseudonyms)
+	}
+}
+
+// Hledání autorů vypisuje jméno, pod kterým autor vydává, a za ním značku
+// „(pseudonym)“ – ta patří do poznámky, ne do jména.
+func TestParseAuthorSearchResultsPseudonym(t *testing.T) {
+	const page = `<html><body>
+	<div class='autbox'>
+	  <a href='/autori/frode-sander-ien-83556'>
+	    <div class='circle_aut' title='Frode Sander Øien'></div>
+	    Samuel Bjørk
+	    <span class="odleft_pet pozn">(pseudonym)</span>
+	  </a><br /><span class='pozn_light'>1969</span>
+	</div>
+	<div class='autbox'>
+	  <a href='/autori/barbara-samuel-54060'>Barbara Samuel</a>
+	</div>
+	</body></html>`
+
+	doc, err := html.Parse(strings.NewReader(page))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+
+	results := parseAuthorSearchResults(doc)
+	if len(results) != 2 {
+		t.Fatalf("počet výsledků = %d, chtěno 2", len(results))
+	}
+	if results[0].Name != "Samuel Bjørk" || results[0].Note != "pseudonym" {
+		t.Errorf("první výsledek = %q / %q", results[0].Name, results[0].Note)
+	}
+	if results[1].Name != "Barbara Samuel" || results[1].Note != "" {
+		t.Errorf("druhý výsledek = %q / %q", results[1].Name, results[1].Note)
 	}
 }

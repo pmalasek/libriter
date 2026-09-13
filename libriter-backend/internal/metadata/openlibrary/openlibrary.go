@@ -88,7 +88,10 @@ type workResponse struct {
 	Description flexibleText `json:"description"`
 	Subjects    []string     `json:"subjects"`
 	Covers      []int        `json:"covers"`
-	Authors     []struct {
+	// first_publish_date je rok prvního vydání díla ("1979", ale i
+	// "October 12, 1979"); rok z něj vytáhne metadata.YearFromDate.
+	FirstPublishDate string `json:"first_publish_date"`
+	Authors          []struct {
 		Author struct {
 			Key string `json:"key"` // "/authors/OL1155711A"
 		} `json:"author"`
@@ -119,10 +122,11 @@ func (c *Client) FetchByURL(ctx context.Context, rawURL string) (*metadata.BookM
 	if len(work.Covers) > 0 && work.Covers[0] > 0 {
 		meta.CoverURL = fmt.Sprintf("%s/%d-L.jpg", coversURL, work.Covers[0])
 	}
+	meta.Year = metadata.YearFromDate(work.FirstPublishDate)
 
 	// Jméno autora ve work JSONu není, jen odkaz – doplní se dalším dotazem.
-	// Rok vydání a nakladatel patří konkrétnímu vydání, ne dílu, takže
-	// zůstávají prázdné.
+	// Nakladatel patří konkrétnímu vydání, ne dílu, takže zůstává prázdný;
+	// rok prvního vydání díla ale OpenLibrary zná.
 	if len(work.Authors) > 0 {
 		if name := c.authorName(ctx, work.Authors[0].Author.Key); name != "" {
 			meta.Author = name

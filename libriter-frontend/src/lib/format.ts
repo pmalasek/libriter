@@ -1,5 +1,13 @@
 import type { Author } from '@/api/types'
 
+/**
+ * Porovnání jmen a názvů proti zdroji metadat – liší se hlavně velikostí
+ * písmen a mezerami, diakritika se musí shodovat („Čapek“ není „Capek“).
+ */
+export function sameName(a: string, b: string): boolean {
+  return a.trim().localeCompare(b.trim(), 'cs', { sensitivity: 'accent' }) === 0
+}
+
 /** Délka v sekundách → "3:07 h" / "48 min" / "45 s". */
 export function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return 'neznámá délka'

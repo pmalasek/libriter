@@ -83,7 +83,7 @@ export const BOOK_SORT_KEYS = ['title', 'author', 'published', 'added'] as const
 export const BOOK_SORT_OPTIONS: { value: BookSortKey; label: string }[] = [
   { value: 'title', label: 'Název' },
   { value: 'author', label: 'Autor' },
-  { value: 'published', label: 'Rok vydání' },
+  { value: 'published', label: 'První vydání' },
   { value: 'added', label: 'Datum přidání' },
 ]
 

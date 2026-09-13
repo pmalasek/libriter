@@ -31,13 +31,27 @@ type SearchResult struct {
 	Source string `json:"source"`
 }
 
+// BookAuthor je jeden autor knihy se jménem rozděleným stejně, jako se jméno
+// ukládá u autora (model.ParseAuthorName). Seznam skládá SplitAuthors z pole
+// Author, ať klient jméno neparsuje sám a rozdělení je všude stejné.
+type BookAuthor struct {
+	Name       string `json:"name"`
+	FirstName  string `json:"first_name"`
+	MiddleName string `json:"middle_name"`
+	LastName   string `json:"last_name"`
+}
+
 // BookMetadata jsou metadata jedné knihy. Nevyplněná pole zůstávají nulová –
 // zdroje se v tom, co nabízejí, dost liší.
 type BookMetadata struct {
-	ID          int      `json:"id"`
-	Title       string   `json:"title"`
-	Author      string   `json:"author"`
-	AuthorID    int      `json:"author_id"`
+	ID    int    `json:"id"`
+	Title string `json:"title"`
+	// Author je autor (nebo autoři, oddělení čárkou) tak, jak ho uvádí zdroj;
+	// Authors je totéž rozebrané na jednotlivé autory a části jmen.
+	Author   string       `json:"author"`
+	AuthorID int          `json:"author_id"`
+	Authors  []BookAuthor `json:"authors"`
+
 	Description string   `json:"description"`
 	Genres      []string `json:"genres"`
 	CoverURL    string   `json:"cover_url"`
@@ -45,9 +59,19 @@ type BookMetadata struct {
 	// škálu. Není to internal_rating knihy (1–5).
 	Rating    int    `json:"rating"`
 	Publisher string `json:"publisher"`
-	Year      int    `json:"year"`
-	SourceURL string `json:"source_url"`
-	Source    string `json:"source"`
+	// Year je rok prvního vydání díla (u překladů rok originálu), pokud ho
+	// zdroj zná; jinak rok vydání, které zdroj popisuje.
+	Year int `json:"year"`
+	// OriginalTitle je název originálu u překladů; prázdný u původních děl
+	// a u zdrojů, které ho nedávají.
+	OriginalTitle string `json:"original_title"`
+	// Series je název knižní série, do které dílo patří, a SeriesPosition
+	// pořadí dílu v ní. Zná je jen část zdrojů; u knihy mimo sérii zůstávají
+	// obě pole nulová, u série bez číslování jen SeriesPosition.
+	Series         string `json:"series"`
+	SeriesPosition int    `json:"series_position"`
+	SourceURL      string `json:"source_url"`
+	Source         string `json:"source"`
 }
 
 // AuthorMetadata jsou metadata jednoho autora. Nevyplněná pole zůstávají nulová.
@@ -61,6 +85,11 @@ type AuthorMetadata struct {
 	MiddleName string `json:"middle_name"`
 	LastName   string `json:"last_name"`
 	Bio        string `json:"bio"`
+	// Pseudonyms jsou jména, pod kterými autor vydává. Zdroje vedou autora pod
+	// občanským jménem (Frode Sander Øien), ale knihy v knihovně jsou
+	// podepsané pseudonymem (Samuel Bjørk); podle tohoto seznamu klient pozná,
+	// že jméno nemá čím přepisovat.
+	Pseudonyms []string `json:"pseudonyms"`
 	// ImageURL je adresa fotky u zdroje. Stahuje se až na vyžádání
 	// (PUT /authors/{id}/image), do databáze se ukládá soubor, ne odkaz.
 	ImageURL  string `json:"image_url"`
@@ -74,8 +103,8 @@ type AuthorMetadata struct {
 type AuthorSearchResult struct {
 	ID   int    `json:"id"`
 	Name string `json:"name"`
-	// Note je krátký doplněk pro odlišení jmenovců – roky života
-	// nebo nejznámější dílo.
+	// Note je krátký doplněk pro odlišení jmenovců – roky života,
+	// nejznámější dílo, nebo „pseudonym“ u jmen, pod kterými autor vydává.
 	Note      string `json:"note"`
 	BirthYear int    `json:"birth_year"`
 	DeathYear int    `json:"death_year"`
@@ -185,9 +214,34 @@ func (c *Chain) FetchByURL(ctx context.Context, rawURL string) (*BookMetadata, e
 			return nil, fmt.Errorf("%s: %w", p.Name(), err)
 		}
 		meta.Source = p.Name()
+		// Zdroj, který autory uvádí jako samostatné záznamy, si seznam složil
+		// sám a přesněji – přepisovat ho rozborem řetězce nemá smysl.
+		if len(meta.Authors) == 0 {
+			meta.Authors = SplitAuthors(meta.Author)
+		}
 		return meta, nil
 	}
 	return nil, ErrNoProvider
+}
+
+// SplitAuthors rozebere pole Author na jednotlivé autory. Zdroje je uvádějí
+// různě – jedno jméno (databazeknih), nebo víc jmen oddělených čárkou
+// (OpenLibrary, Google Books, cbdb) –, tvar "Příjmení, Křestní" se přitom
+// za seznam nepovažuje.
+//
+// Volá ji Chain; handler, který si zdroj volá sám, ji musí zavolat taky.
+func SplitAuthors(s string) []BookAuthor {
+	names := model.ParseAuthorNames(s)
+	authors := make([]BookAuthor, 0, len(names))
+	for _, n := range names {
+		authors = append(authors, BookAuthor{
+			Name:       n.Full(),
+			FirstName:  n.First,
+			MiddleName: n.Middle,
+			LastName:   n.Last,
+		})
+	}
+	return authors
 }
 
 // --- autoři ---

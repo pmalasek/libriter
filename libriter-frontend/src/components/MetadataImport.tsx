@@ -123,7 +123,8 @@ export function MetadataImport({ defaultQuery, onApply }: Props) {
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        Převezme se název, popis a rok vydání. Obálka ani hodnocení zdroje se nepřebírají.
+        Převezme se název, popis a rok prvního vydání (u překladů rok originálu). Obálka ani
+        hodnocení zdroje se nepřebírají.
       </p>
     </div>
   )

@@ -11,6 +11,7 @@ import (
 type fakeProvider struct {
 	name    string
 	host    string
+	author  string
 	results []SearchResult
 	err     error
 	calls   *int
@@ -33,7 +34,7 @@ func (f *fakeProvider) FetchByURL(context.Context, string) (*BookMetadata, error
 	if f.err != nil {
 		return nil, f.err
 	}
-	return &BookMetadata{Title: f.name + " kniha"}, nil
+	return &BookMetadata{Title: f.name + " kniha", Author: f.author}, nil
 }
 
 func hit(title string) []SearchResult { return []SearchResult{{Title: title}} }
@@ -238,6 +239,50 @@ func TestChainFetchAuthorSplitsName(t *testing.T) {
 			}
 			if meta.Source != "dk" {
 				t.Errorf("source = %q, chtěno dk", meta.Source)
+			}
+		})
+	}
+}
+
+// Autory rozebírá Chain, ne jednotlivé zdroje – klient tak dostane jména
+// rozdělená na části stejně, jako se ukládají v knihovně.
+func TestChainFetchByURLSplitsAuthors(t *testing.T) {
+	chain := NewChain(&fakeProvider{name: "cesky", host: "example.cz", author: "Karel Čapek, Josef Čapek"})
+
+	meta, err := chain.FetchByURL(context.Background(), "https://example.cz/kniha-1")
+	if err != nil {
+		t.Fatalf("FetchByURL: %v", err)
+	}
+
+	want := []BookAuthor{
+		{Name: "Karel Čapek", FirstName: "Karel", LastName: "Čapek"},
+		{Name: "Josef Čapek", FirstName: "Josef", LastName: "Čapek"},
+	}
+	if !reflect.DeepEqual(meta.Authors, want) {
+		t.Errorf("authors = %+v, chtěno %+v", meta.Authors, want)
+	}
+}
+
+func TestSplitAuthors(t *testing.T) {
+	tests := []struct {
+		author string
+		want   []string
+	}{
+		{"Douglas Adams", []string{"Douglas Adams"}},
+		// Čárka odděluje autory, ale ve tvaru „Příjmení, Křestní“ ne.
+		{"Čapek, Karel", []string{"Karel Čapek"}},
+		{"Terry Pratchett & Neil Gaiman", []string{"Terry Pratchett", "Neil Gaiman"}},
+		{"", nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.author, func(t *testing.T) {
+			var got []string
+			for _, a := range SplitAuthors(tt.author) {
+				got = append(got, a.Name)
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("jména = %v, chtěno %v", got, tt.want)
 			}
 		})
 	}

@@ -137,6 +137,21 @@ export function useChangePassword(userId: string) {
   })
 }
 
+/**
+ * Nový autor knihovny. Zakládá se hlavně při importu metadat – zdroj uvádí
+ * autora, kterého knihovna zatím nezná. Stejné jméno backend odmítne (409).
+ */
+export function useCreateAuthor() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (body: AuthorRequest) =>
+      apiFetch<Author>('/authors', { method: 'POST', json: body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.authors })
+    },
+  })
+}
+
 export function useUpdateAuthor(authorId: string) {
   const queryClient = useQueryClient()
   return useMutation({

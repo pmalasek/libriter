@@ -133,19 +133,37 @@ export interface MetadataSearchResult {
   source: string
 }
 
+/** Jeden autor z metadat knihy – jméno je rozdělené stejně jako u autorů knihovny. */
+export interface BookMetadataAuthor {
+  name: string
+  first_name: string
+  middle_name: string
+  last_name: string
+}
+
 /** Odpověď GET /metadata/book?url= – nevyplněná pole zůstávají nulová. */
 export interface BookMetadata {
   id: number
   title: string
+  /** Autor (nebo autoři oddělení čárkou) tak, jak ho píše zdroj. */
   author: string
   author_id: number
+  /** Totéž rozebrané na jednotlivé autory; prázdné, když zdroj autora neuvádí. */
+  authors: BookMetadataAuthor[] | null
   description: string
   genres: string[] | null
   cover_url: string
   /** Hodnocení zdroje v procentech (0–100) – není totéž co internal_rating (1–5). */
   rating: number
   publisher: string
+  /** Rok prvního vydání díla (u překladů rok originálu), pokud ho zdroj zná. */
   year: number
+  /** Název originálu u překladů; jinak prázdný. */
+  original_title: string
+  /** Název knižní série; prázdný u knihy mimo sérii i u zdrojů, které série neznají. */
+  series: string
+  /** Pořadí dílu v sérii; 0, když ho zdroj neuvádí. */
+  series_position: number
   source_url: string
   source: string
 }
@@ -171,6 +189,11 @@ export interface AuthorMetadata {
   middle_name: string
   last_name: string
   bio: string
+  /**
+   * Jména, pod kterými autor vydává. Zdroj vede autora pod občanským jménem
+   * (Frode Sander Øien), ale knihy jsou podepsané pseudonymem (Samuel Bjørk).
+   */
+  pseudonyms: string[] | null
   /** Adresa fotky u zdroje; stahuje se až přes PUT /authors/{id}/image. */
   image_url: string
   birth_year: number

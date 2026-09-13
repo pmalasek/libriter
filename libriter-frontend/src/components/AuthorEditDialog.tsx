@@ -18,6 +18,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { sameName } from '@/lib/format'
 
 interface Props {
   author: Author
@@ -55,6 +56,14 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
   // Fotka nabídnutá zdrojem metadat; stáhne se až při uložení.
   const [pendingImageURL, setPendingImageURL] = useState<string | null>(null)
   const [conflict, setConflict] = useState<string | null>(null)
+
+  /** Jméno tak, jak je právě ve formuláři – kvůli porovnání s pseudonymy. */
+  function currentName(): string {
+    return [firstName, middleName, lastName]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join(' ')
+  }
 
   const updateAuthor = useUpdateAuthor(author.id)
   const setImage = useSetAuthorImage(author.id)
@@ -135,8 +144,13 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
         defaultQuery={author.name}
         onApply={(meta) => {
           // Jméno ze zdroje přepisuje to zadané – jde o opravu překlepů
-          // a zkomolenin z audio tagů, ne o doplnění.
-          if (meta.last_name) {
+          // a zkomolenin z audio tagů. Výjimkou je pseudonym: zdroj vede
+          // autora pod občanským jménem (Frode Sander Øien), ale knihy jsou
+          // podepsané pseudonymem (Samuel Bjørk), a ten je tady ten správný.
+          const pseudonym = (meta.pseudonyms ?? []).find((name) =>
+            sameName(name, currentName()),
+          )
+          if (meta.last_name && !pseudonym) {
             setFirstName(meta.first_name)
             setMiddleName(meta.middle_name)
             setLastName(meta.last_name)
@@ -145,7 +159,11 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
           if (meta.birth_year) setBirthYear(String(meta.birth_year))
           if (meta.death_year) setDeathYear(String(meta.death_year))
           if (meta.image_url) setPendingImageURL(meta.image_url)
-          toast.success('Metadata načtena – zkontroluj je a ulož.')
+          toast.success(
+            pseudonym
+              ? `Metadata načtena. Jméno „${pseudonym}“ zůstalo – zdroj vede autora pod jménem „${meta.name}“.`
+              : 'Metadata načtena – zkontroluj je a ulož.',
+          )
         }}
       />
 

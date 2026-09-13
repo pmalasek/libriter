@@ -240,7 +240,7 @@ světlý i tmavý režim podle systému.
 
 **Seznamy knih a autorů** mají tři zobrazení (dlaždice, malé dlaždice, seznam)
 a volitelné řazení – knihy podle názvu, autora (příjmení, křestní, prostřední
-jméno), roku vydání nebo data přidání; autoři podle příjmení (výchozí, jméno
+jméno), roku prvního vydání nebo data přidání; autoři podle příjmení (výchozí, jméno
 se pak ukazuje katalogově „Čapek, Karel“), křestního jména nebo počtu knih.
 Zvolené zobrazení i řazení si prohlížeč pamatuje (`localStorage`).
 
@@ -249,7 +249,8 @@ Zvolené zobrazení i řazení si prohlížeč pamatuje (`localStorage`).
 (včetně pořadí – první je hlavní), sérii a díl, vypravěče, délku, jazyk, rok
 vydání, vlastní hodnocení a popis; tlačítko *Načíst metadata* vyhledá knihu ve
 zdrojích (databazeknih.cz, cbdb.cz, OpenLibrary, Google Books – viz Metadata
-knih) a předvyplní název, popis a rok vydání. Ukládá se přes
+knih) a předvyplní název, popis a rok prvního vydání (u překladů rok
+originálu). Ukládá se přes
 `PATCH /books/{id}`, takže odchází jen skutečně změněná pole. Tlačítko *Uložit
 a další* (Ctrl+Enter) uloží a rovnou otevře editaci následující knihy v pořadí
 seznamu – hodí se při procházení celé knihovny.
@@ -431,7 +432,7 @@ slouží `PATCH`, který mění výhradně pole obsažená v těle:
 `PATCH` pole `file_path` nepřijímá vůbec (skončí `400`, stejně jako každé jiné
 neznámé pole). Ověřuje se jen to, co klient poslal: `title` nesmí být prázdný,
 `duration_seconds` musí být kladné, `internal_rating` 1–5 nebo `null`,
-`published_year` (rok vydání) 1000 až příští rok nebo `null` a `author_ids`
+`published_year` (rok prvního vydání) 1000 až příští rok nebo `null` a `author_ids`
 musí obsahovat alespoň jednoho autora.
 
 ### Autoři
@@ -506,16 +507,19 @@ GET /metadata/search?q=Sapkowski+Zaklínač
 GET /metadata/book?url=https://www.databazeknih.cz/...
 → { "id": 160, "title": "...", "author": "...", "author_id": 101,
     "description": "...", "genres": [...], "cover_url": "...", "rating": 100,
-    "publisher": "...", "year": 1936, "source_url": "...",
+    "publisher": "...", "year": 1936, "original_title": "", "source_url": "...",
     "source": "databazeknih" }
 
 PATCH /books/{id}   (s daty z metadat)
 ```
 
 Odpovědi jsou v `snake_case` jako zbytek API. `rating` je hodnocení zdroje
-v procentech (0–100) – **není** to `internal_rating` knihy (1–5). Nevyplněná
-pole zůstávají nulová: ne každý zdroj dává autora a rok už v seznamu výsledků
-a ne každý zná nakladatele.
+v procentech (0–100) – **není** to `internal_rating` knihy (1–5). `year` je
+rok **prvního vydání díla** – u překladů rok originálu (databazeknih.cz ho
+bere ze sekce „Více info“, OpenLibrary z `first_publish_year`); Google Books
+zná jen rok konkrétního vydání. `original_title` je název originálu
+u překladů. Nevyplněná pole zůstávají nulová: ne každý zdroj dává autora a rok
+už v seznamu výsledků a ne každý zná nakladatele.
 
 #### Zdroje a jejich pořadí
 
@@ -527,7 +531,7 @@ nezablokuje. Zdroj, který v seznamu není, je vypnutý; prázdná hodnota
 
 | Zdroj | Typ | Poznámka |
 |-------|-----|----------|
-| `databazeknih` | scraper HTML | Nejlepší pokrytí českých titulů. Vrací i žánry, nakladatele a hodnocení. |
+| `databazeknih` | scraper HTML | Nejlepší pokrytí českých titulů. Vrací i žánry, nakladatele, hodnocení a u překladů název a rok originálu (druhý požadavek na sekci „Více info“). |
 | `cbdb` | scraper HTML | Česká databáze, dobrý doplněk. Nedává rok vydání ani nakladatele (patří konkrétnímu vydání). |
 | `openlibrary` | oficiální JSON API | Zdarma, bez klíče a bez limitu. Česká beletrie je děravá. Rok ani nakladatel u díla nejsou. |
 | `googlebooks` | oficiální JSON API | Bez klíče platí anonymní denní kvóta **sdílená pro celou IP** – snadno se vyčerpá (`429`). Vlastní klíč se zadá do `GOOGLE_BOOKS_API_KEY`. Autory jako samostatné záznamy nemá, hledá jen knihy. |

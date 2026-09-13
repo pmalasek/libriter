@@ -202,7 +202,9 @@ function AddToSeriesForm({
             <li key={book.id} className="flex items-center gap-3 px-3 py-2">
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium">{book.title}</p>
-                <p className="truncate text-xs text-muted-foreground">{authorNames(book.authors)}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {[authorNames(book.authors), book.published_year].filter(Boolean).join(' · ')}
+                </p>
               </div>
               <Input
                 type="number"

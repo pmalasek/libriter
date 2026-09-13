@@ -145,6 +145,9 @@ func (h *MetadataHandler) FetchByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	meta.Source = h.dk.Name()
+	if len(meta.Authors) == 0 {
+		meta.Authors = metadata.SplitAuthors(meta.Author)
+	}
 	writeJSON(w, http.StatusOK, meta)
 }
 

@@ -1,10 +1,18 @@
+import { XIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { usePatchBook, useSeriesList } from '@/api/hooks'
+import {
+  useAuthors,
+  useCreateAuthor,
+  useCreateSeries,
+  usePatchBook,
+  useSeriesList,
+} from '@/api/hooks'
 import {
   METADATA_SOURCE_LABELS,
   type Author,
   type Book,
+  type BookMetadataAuthor,
   type BookPatchRequest,
 } from '@/api/types'
 import { BookAuthorsField } from '@/components/BookAuthorsField'
@@ -28,10 +36,16 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { joinDuration, splitDuration } from '@/lib/format'
+import { joinDuration, sameName, splitDuration } from '@/lib/format'
 
 /** Hodnota Selectu pro „nic nevybráno“ – Radix nedovolí prázdný řetězec. */
 const NONE = 'none'
+
+/** Hodnota Selectu pro sérii, která v knihovně ještě není. */
+const NEW = 'new'
+
+/** Autor ze zdroje, kterého knihovna nezná. index drží jeho pořadí u zdroje. */
+type NewAuthor = BookMetadataAuthor & { index: number }
 
 interface Props {
   book: Book
@@ -75,7 +89,9 @@ function BookEditForm({
 
   const [title, setTitle] = useState(book.title)
   const [authors, setAuthors] = useState<Author[]>(book.authors ?? [])
+  const [newAuthors, setNewAuthors] = useState<NewAuthor[]>([])
   const [seriesId, setSeriesId] = useState(book.series_id ?? NONE)
+  const [newSeriesTitle, setNewSeriesTitle] = useState('')
   const [seriesPosition, setSeriesPosition] = useState(String(book.series_position ?? ''))
   const [narrator, setNarrator] = useState(book.narrator ?? '')
   const [hours, setHours] = useState(String(initialDuration.hours))
@@ -85,24 +101,66 @@ function BookEditForm({
   const [publishedYear, setPublishedYear] = useState(String(book.published_year ?? ''))
   const [description, setDescription] = useState(book.description ?? '')
 
+  const authorList = useAuthors()
   const seriesList = useSeriesList()
+  const createAuthor = useCreateAuthor()
+  const createSeries = useCreateSeries()
   const patchBook = usePatchBook(book.id)
+
+  const saving = patchBook.isPending || createSeries.isPending || createAuthor.isPending
+
+  /**
+   * Autoři ze zdroje metadat nahradí dosavadní seznam – zdroj ví, kdo knihu
+   * napsal, líp než jméno, které scanner vytáhl z cesty k souborům, a kniha
+   * jich má často víc. Koho knihovna zná, toho rovnou vybere; koho ne, ten se
+   * založí až při uložení a vrátí se na místo, kde ho uvádí zdroj (první autor
+   * je hlavní). Seznam je vidět před uložením, takže jde ručně doplnit zpátky.
+   */
+  function applyAuthors(imported: BookMetadataAuthor[]) {
+    const known: Author[] = []
+    const missing: NewAuthor[] = []
+
+    imported.forEach((author, index) => {
+      const match = (authorList.data ?? []).find((a) => sameName(a.name, author.name))
+      if (match) {
+        known.push(match)
+      } else {
+        missing.push({ ...author, index })
+      }
+    })
+
+    setAuthors(known)
+    setNewAuthors(missing)
+  }
+
+  /**
+   * Série ze zdroje metadat: stejnojmennou už zavedenou sérii rovnou vybere,
+   * jinak přepne na „Nová série…“ s předvyplněným názvem. Nic se nezakládá,
+   * dokud uživatel neuloží – import zůstává jen předvyplněním formuláře.
+   */
+  function applySeries(name: string, position: number) {
+    const known = (seriesList.data ?? []).find((series) => sameName(series.title, name))
+    setSeriesId(known ? known.id : NEW)
+    if (!known) setNewSeriesTitle(name)
+    if (position > 0) setSeriesPosition(String(position))
+  }
 
   /**
    * Tělo požadavku vzniká porovnáním s načtenou knihou – PATCH nese jen to, co
    * se opravdu změnilo. Díky tomu se délka neposílá (a nezaokrouhlí na celé
    * minuty), dokud s ní uživatel nehne.
+   *
+   * Sérii a autory bere jako parametry: nová série ani nově zakládaný autor
+   * ještě nemají ID, to se doplní až po jejich založení při ukládání.
    */
-  function buildPatch(): BookPatchRequest {
+  function buildPatch(nextSeriesID: string | null, authorIDs: string[]): BookPatchRequest {
     const patch: BookPatchRequest = {}
 
     if (title.trim() !== book.title) patch.title = title.trim()
 
-    const authorIDs = authors.map((a) => a.id)
     const originalIDs = (book.authors ?? []).map((a) => a.id)
     if (authorIDs.join() !== originalIDs.join()) patch.author_ids = authorIDs
 
-    const nextSeriesID = seriesId === NONE ? null : seriesId
     if (nextSeriesID !== (book.series_id ?? null)) patch.series_id = nextSeriesID
 
     // Bez série nedává pořadí dílu smysl – odpojení série ho vyprázdní taky.
@@ -137,25 +195,81 @@ function BookEditForm({
    * Uloží změny; andNext místo zavření dialogu přejde na další knihu.
    * Bez změn se jen zavře / přejde dál – prázdný PATCH nemá smysl posílat.
    */
-  function save(andNext: boolean) {
+  async function save(andNext: boolean) {
     const finish = andNext && onSaveAndNext ? onSaveAndNext : onDone
 
-    if (authors.length === 0) {
+    if (authors.length === 0 && newAuthors.length === 0) {
       toast.error('Kniha musí mít alespoň jednoho autora.')
       return
     }
 
-    const patch = buildPatch()
-    if (Object.keys(patch).length === 0) {
-      finish()
+    const seriesTitle = newSeriesTitle.trim()
+    if (seriesId === NEW && !seriesTitle) {
+      toast.error('Zadejte název nové série.')
       return
     }
+
+    // Kniha v sérii musí mít díl – bez něj ji databáze odmítne. Zdroj metadat
+    // číslo dílu u některých sérií neuvádí, pak ho doplní uživatel.
+    const position = Number(seriesPosition)
+    const positionMissing =
+      seriesPosition.trim() === '' || !Number.isInteger(position) || position < 1
+    if (seriesId !== NONE && positionMissing) {
+      toast.error('U knihy v sérii vyplňte díl (celé kladné číslo).')
+      return
+    }
+
+    const authorIDs = authors.map((a) => a.id)
+    const patch = buildPatch(seriesId === NONE || seriesId === NEW ? null : seriesId, authorIDs)
+
     if (patch.duration_seconds !== undefined && patch.duration_seconds <= 0) {
       toast.error('Délka musí být kladná.')
       return
     }
     if (patch.published_year != null && !Number.isInteger(patch.published_year)) {
       toast.error('Rok vydání musí být celé číslo.')
+      return
+    }
+
+    // Autoři, které knihovna nezná, i nová série vznikají až po kontrolách
+    // formuláře – aby po odmítnutém uložení nezůstali v knihovně viset.
+    if (newAuthors.length > 0) {
+      try {
+        const ids = [...authorIDs]
+        for (const author of newAuthors) {
+          const saved = await createAuthor.mutateAsync({
+            first_name: author.first_name,
+            middle_name: author.middle_name,
+            last_name: author.last_name,
+            bio: null,
+            image_path: null,
+            birth_year: null,
+            death_year: null,
+          })
+          // Zpátky na pozici, na které autora uvádí zdroj. Když uživatel
+          // seznam mezitím zkrátil, přidá se na konec.
+          ids.splice(Math.min(author.index, ids.length), 0, saved.id)
+        }
+        patch.author_ids = ids
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Autora se nepodařilo založit.')
+        return
+      }
+    }
+
+    if (seriesId === NEW) {
+      try {
+        const created = await createSeries.mutateAsync({ title: seriesTitle, description: null })
+        patch.series_id = created.id
+        patch.series_position = position
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Sérii se nepodařilo založit.')
+        return
+      }
+    }
+
+    if (Object.keys(patch).length === 0) {
+      finish()
       return
     }
 
@@ -170,14 +284,14 @@ function BookEditForm({
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
-    save(false)
+    void save(false)
   }
 
   // Ctrl+Enter (na Macu Cmd+Enter) = „Uložit a další“; bez další knihy jen uloží.
   function handleKeyDown(event: React.KeyboardEvent) {
-    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !patchBook.isPending) {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !saving) {
       event.preventDefault()
-      save(true)
+      void save(true)
     }
   }
 
@@ -194,8 +308,10 @@ function BookEditForm({
         defaultQuery={[book.title, book.authors?.[0]?.name].filter(Boolean).join(' ')}
         onApply={(meta) => {
           if (meta.title) setTitle(meta.title)
+          if (meta.authors?.length) applyAuthors(meta.authors)
           if (meta.description) setDescription(meta.description)
           if (meta.year) setPublishedYear(String(meta.year))
+          if (meta.series) applySeries(meta.series, meta.series_position)
           toast.success(
             `Metadata z ${METADATA_SOURCE_LABELS[meta.source] ?? meta.source} načtena – zkontroluj je a ulož.`,
           )
@@ -214,6 +330,33 @@ function BookEditForm({
 
       <BookAuthorsField value={authors} onChange={setAuthors} />
 
+      {newAuthors.length > 0 ? (
+        <div className="space-y-2 rounded-lg border border-dashed p-3">
+          <p className="text-sm text-muted-foreground">
+            Autoři ze zdroje metadat, které knihovna nezná – založí se při uložení knihy:
+          </p>
+          <ul className="flex flex-wrap gap-2">
+            {newAuthors.map((author) => (
+              <li
+                key={author.name}
+                className="inline-flex h-7 items-center gap-1 rounded-4xl border py-0.5 pr-1 pl-2.5 text-xs"
+              >
+                {author.name}
+                <button
+                  type="button"
+                  title={`Nezakládat ${author.name}`}
+                  onClick={() => setNewAuthors(newAuthors.filter((a) => a.name !== author.name))}
+                  className="inline-flex size-5 items-center justify-center rounded-full transition-colors hover:bg-foreground/10 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+                >
+                  <XIcon className="size-3" />
+                  <span className="sr-only">Nezakládat {author.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
         <div className="space-y-2">
           <Label htmlFor="book_series">Série</Label>
@@ -223,6 +366,7 @@ function BookEditForm({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={NONE}>Žádná</SelectItem>
+              <SelectItem value={NEW}>Nová série…</SelectItem>
               {(seriesList.data ?? []).map((series) => (
                 <SelectItem key={series.id} value={series.id}>
                   {series.title}
@@ -243,6 +387,19 @@ function BookEditForm({
           />
         </div>
       </div>
+
+      {seriesId === NEW ? (
+        <div className="space-y-2">
+          <Label htmlFor="book_new_series">Název nové série</Label>
+          <Input
+            id="book_new_series"
+            required
+            value={newSeriesTitle}
+            onChange={(e) => setNewSeriesTitle(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">Série se založí až při uložení knihy.</p>
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <Label htmlFor="book_narrator">Vypravěč</Label>
@@ -289,7 +446,7 @@ function BookEditForm({
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="book_published_year">Rok vydání</Label>
+          <Label htmlFor="book_published_year">Rok prvního vydání</Label>
           <Input
             id="book_published_year"
             type="number"
@@ -328,7 +485,7 @@ function BookEditForm({
       </div>
 
       <DialogFooter>
-        <Button type="button" variant="ghost" onClick={onDone}>
+        <Button type="button" variant="ghost" onClick={onDone} disabled={saving}>
           Zrušit
         </Button>
         {onSaveAndNext ? (
@@ -336,8 +493,8 @@ function BookEditForm({
             type="button"
             variant="outline"
             title="Ctrl+Enter"
-            onClick={() => save(true)}
-            disabled={patchBook.isPending || authors.length === 0}
+            onClick={() => void save(true)}
+            disabled={saving || (authors.length === 0 && newAuthors.length === 0)}
           >
             Uložit a další
             <kbd className="ml-1 hidden rounded border px-1 font-mono text-[10px] text-muted-foreground sm:inline">
@@ -345,8 +502,8 @@ function BookEditForm({
             </kbd>
           </Button>
         ) : null}
-        <Button type="submit" disabled={patchBook.isPending || authors.length === 0}>
-          {patchBook.isPending ? 'Ukládám…' : 'Uložit'}
+        <Button type="submit" disabled={saving || (authors.length === 0 && newAuthors.length === 0)}>
+          {saving ? 'Ukládám…' : 'Uložit'}
         </Button>
       </DialogFooter>
     </form>
