@@ -101,6 +101,13 @@ export function bookCount(count: number): string {
   return `${count} knih`
 }
 
+/** Autoři série; delší seznam se zkrátí, ať se popisek vejde na řádek. */
+export function authorsLabel(authors: Author[]): string {
+  if (authors.length <= 2) return authors.map((author) => author.name).join(', ')
+  const [first, second] = authors
+  return `${first.name}, ${second.name} a další ${authors.length - 2}`
+}
+
 /** Jména autorů knihy oddělená čárkou. */
 export function authorNames(authors: Author[] | undefined): string {
   if (!authors || authors.length === 0) return 'Neznámý autor'

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import { apiFetch, asList } from './client'
 import type {
   Author,
@@ -101,6 +101,15 @@ export function useSeriesById() {
     return m
   }, [query.data])
   return { ...query, map }
+}
+
+/**
+ * Vyhledání názvu série podle ID – knihy nesou jen `series_id`, řazení výpisů
+ * (`sortBooks`) potřebuje název. Bez načteného seznamu sérií vrací undefined.
+ */
+export function useSeriesTitle() {
+  const { map } = useSeriesById()
+  return useCallback((id: string) => map.get(id)?.title, [map])
 }
 
 // --- mutace ---

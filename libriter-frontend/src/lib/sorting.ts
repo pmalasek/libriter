@@ -81,7 +81,7 @@ export type BookSortKey = 'title' | 'author' | 'published' | 'added'
 export const BOOK_SORT_KEYS = ['title', 'author', 'published', 'added'] as const
 
 export const BOOK_SORT_OPTIONS: { value: BookSortKey; label: string }[] = [
-  { value: 'title', label: 'Název' },
+  { value: 'title', label: 'Série a název' },
   { value: 'author', label: 'Autor' },
   { value: 'published', label: 'První vydání' },
   { value: 'added', label: 'Datum přidání' },
@@ -94,21 +94,62 @@ const BOOK_DEFAULT_DIR: Record<BookSortKey, SortDir> = {
   added: 'desc',
 }
 
+/**
+ * Název série k řazení knihy; knihy nesou jen `series_id`, název se dohledává
+ * v seznamu sérií (viz `useSeriesTitle`). Bez načteného seznamu vrací undefined.
+ */
+export type SeriesTitle = (seriesId: string) => string | undefined
+
 function compareByTitle(a: Book, b: Book): number {
   return collator.compare(a.title, b.title)
 }
 
-/** Podle hlavního (prvního) autora, při shodě podle pořadí v sérii a názvu. */
-function compareByAuthor(a: Book, b: Book): number {
+/**
+ * Základní řazení knih: kniha ze série se řadí pod názvem série, samostatná pod
+ * svým názvem – série tak v abecedě stojí tam, kam ji staví její název. Uvnitř
+ * série rozhoduje číslo dílu, díly bez čísla jdou na konec.
+ */
+function compareBySeries(a: Book, b: Book, seriesTitle?: SeriesTitle): number {
+  if (a.series_id && a.series_id === b.series_id) {
+    const ap = a.series_position ?? Number.MAX_SAFE_INTEGER
+    const bp = b.series_position ?? Number.MAX_SAFE_INTEGER
+    return ap - bp || compareByTitle(a, b)
+  }
+  return (
+    collator.compare(sortName(a, seriesTitle), sortName(b, seriesTitle)) || compareByTitle(a, b)
+  )
+}
+
+/** Jméno, pod kterým kniha v seznamu stojí – název série, jinak vlastní název. */
+function sortName(book: Book, seriesTitle?: SeriesTitle): string {
+  const series = book.series_id ? seriesTitle?.(book.series_id) : undefined
+  return series || book.title
+}
+
+/** Podle hlavního (prvního) autora, při shodě podle série a názvu. */
+function compareByAuthor(a: Book, b: Book, seriesTitle?: SeriesTitle): number {
   const aa = a.authors?.[0]
   const ba = b.authors?.[0]
   if (!aa || !ba) return Number(!aa) - Number(!ba)
-  return (
-    compareAuthorNames(aa, ba) ||
-    collator.compare(a.series_id ?? '', b.series_id ?? '') ||
-    (a.series_position ?? 0) - (b.series_position ?? 0) ||
-    compareByTitle(a, b)
-  )
+  return compareAuthorNames(aa, ba) || compareBySeries(a, b, seriesTitle)
+}
+
+/**
+ * Autoři série z jejích knih, bez duplicit. Autor s nejvíc díly jde první – u
+ * série psané ve dvou tak stojí vepředu hlavní autor, host na jednom dílu za ním.
+ */
+export function seriesAuthors(books: Book[]): Author[] {
+  const counted = new Map<string, [Author, number]>()
+  for (const book of books) {
+    for (const author of book.authors ?? []) {
+      const seen = counted.get(author.id)
+      if (seen) seen[1] += 1
+      else counted.set(author.id, [author, 1])
+    }
+  }
+  return [...counted.values()]
+    .sort((a, b) => b[1] - a[1] || compareAuthorNames(a[0], b[0]))
+    .map(([author]) => author)
 }
 
 function addedAt(book: Book): number {
@@ -116,24 +157,35 @@ function addedAt(book: Book): number {
   return Number.isNaN(t) ? 0 : t
 }
 
-export function sortBooks(books: Book[], key: BookSortKey, dir: SortDir): Book[] {
+/**
+ * Seřazené knihy pro výpis. Při shodě hlavního klíče (i u řazení „podle názvu“)
+ * drží série pohromadě v pořadí dílů; `seriesTitle` dodává jejich názvy.
+ */
+export function sortBooks(
+  books: Book[],
+  key: BookSortKey,
+  dir: SortDir,
+  seriesTitle?: SeriesTitle,
+): Book[] {
   const sign = dir === 'asc' ? 1 : -1
   const sorted = [...books]
 
   switch (key) {
     case 'title':
-      return sorted.sort((a, b) => sign * compareByTitle(a, b))
+      return sorted.sort((a, b) => sign * compareBySeries(a, b, seriesTitle))
     case 'author':
-      return sorted.sort((a, b) => sign * compareByAuthor(a, b))
+      return sorted.sort((a, b) => sign * compareByAuthor(a, b, seriesTitle))
     case 'added':
-      return sorted.sort((a, b) => sign * (addedAt(a) - addedAt(b)) || compareByTitle(a, b))
+      return sorted.sort(
+        (a, b) => sign * (addedAt(a) - addedAt(b)) || compareBySeries(a, b, seriesTitle),
+      )
     case 'published':
       // Knihy bez roku vydání jdou vždy na konec, ať se řadí kterýmkoliv směrem.
       return sorted.sort((a, b) => {
         const ay = a.published_year
         const by = b.published_year
-        if (!ay || !by) return Number(!ay) - Number(!by) || compareByAuthor(a, b)
-        return sign * (ay - by) || compareByAuthor(a, b)
+        if (!ay || !by) return Number(!ay) - Number(!by) || compareByAuthor(a, b, seriesTitle)
+        return sign * (ay - by) || compareByAuthor(a, b, seriesTitle)
       })
   }
 }

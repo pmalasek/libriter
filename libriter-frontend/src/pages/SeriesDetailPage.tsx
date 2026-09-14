@@ -7,7 +7,8 @@ import { ErrorState } from '@/components/ErrorState'
 import { LoadingGrid } from '@/components/LoadingGrid'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
-import { bookCount } from '@/lib/format'
+import { authorsLabel, bookCount } from '@/lib/format'
+import { seriesAuthors } from '@/lib/sorting'
 
 export function SeriesDetailPage() {
   const { id = '' } = useParams()
@@ -35,7 +36,12 @@ export function SeriesDetailPage() {
         </Link>
       </Button>
 
-      <PageHeader title={series.data.title} description={bookCount(seriesBooks.length)} />
+      <PageHeader
+        title={series.data.title}
+        description={[authorsLabel(seriesAuthors(seriesBooks)), bookCount(seriesBooks.length)]
+          .filter(Boolean)
+          .join(' · ')}
+      />
 
       {series.data.description ? (
         <p className="mb-8 max-w-3xl whitespace-pre-line text-sm leading-relaxed">

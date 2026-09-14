@@ -1,6 +1,6 @@
 import { LibraryBigIcon, SquareCheckBigIcon, XIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useBooks } from '@/api/hooks'
+import { useBooks, useSeriesTitle } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
 import { canEdit } from '@/auth/permissions'
 import { AddToSeriesDialog } from '@/components/AddToSeriesDialog'
@@ -19,14 +19,15 @@ export function BooksPage() {
   const books = useBooks()
   const { user } = useAuth()
   const prefs = useBookListPrefs()
+  const seriesTitle = useSeriesTitle()
 
   // Hromadný výběr: null = vypnuto, jinak množina ID vybraných knih.
   const [selected, setSelected] = useState<Set<string> | null>(null)
   const [seriesDialog, setSeriesDialog] = useState(false)
 
   const sorted = useMemo(
-    () => sortBooks(books.data ?? [], prefs.sortKey, prefs.sortDir),
-    [books.data, prefs.sortKey, prefs.sortDir],
+    () => sortBooks(books.data ?? [], prefs.sortKey, prefs.sortDir, seriesTitle),
+    [books.data, prefs.sortKey, prefs.sortDir, seriesTitle],
   )
 
   const filtered = useMemo(() => {

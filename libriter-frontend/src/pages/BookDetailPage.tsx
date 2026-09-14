@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { useBook, useBooks, useSeriesOne } from '@/api/hooks'
+import { useBook, useBooks, useSeriesOne, useSeriesTitle } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
 import { canEdit } from '@/auth/permissions'
 import { BookEditDialog } from '@/components/BookEditDialog'
@@ -32,23 +32,25 @@ export function BookDetailPage() {
   const { user } = useAuth()
   const [editing, setEditing] = useState(false)
   const { sortKey, sortDir } = useBookListPrefs()
+  const seriesTitle = useSeriesTitle()
 
   // Další kniha pro „Uložit a další“ – ve stejném pořadí, jaké má seznam knih.
   const nextBook = useMemo(() => {
-    const ordered = sortBooks(allBooks.data ?? [], sortKey, sortDir)
+    const ordered = sortBooks(allBooks.data ?? [], sortKey, sortDir, seriesTitle)
     const index = ordered.findIndex((b) => b.id === id)
     return index >= 0 ? ordered[index + 1] : undefined
-  }, [allBooks.data, id, sortKey, sortDir])
+  }, [allBooks.data, id, sortKey, sortDir, seriesTitle])
 
   // "Další knihy autora" bereme podle hlavního (prvního) autora knihy.
   const mainAuthor = book.data?.authors?.[0]
 
   const moreByAuthor = useMemo(() => {
     if (!book.data || !mainAuthor) return []
-    return (allBooks.data ?? []).filter(
+    const byAuthor = (allBooks.data ?? []).filter(
       (b) => b.id !== book.data.id && b.authors?.some((a) => a.id === mainAuthor.id),
     )
-  }, [allBooks.data, book.data, mainAuthor])
+    return sortBooks(byAuthor, 'title', 'asc', seriesTitle)
+  }, [allBooks.data, book.data, mainAuthor, seriesTitle])
 
   if (book.isPending) {
     return (

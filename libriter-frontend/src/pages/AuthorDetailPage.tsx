@@ -1,7 +1,7 @@
 import { ArrowLeftIcon, PencilIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { useAuthor, useBooks } from '@/api/hooks'
+import { useAuthor, useBooks, useSeriesTitle } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
 import { canEdit } from '@/auth/permissions'
 import { AuthorEditDialog } from '@/components/AuthorEditDialog'
@@ -12,6 +12,7 @@ import { LoadingGrid } from '@/components/LoadingGrid'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { bookCount } from '@/lib/format'
+import { sortBooks } from '@/lib/sorting'
 
 export function AuthorDetailPage() {
   const { id = '' } = useParams()
@@ -19,11 +20,14 @@ export function AuthorDetailPage() {
   const books = useBooks()
   const { user } = useAuth()
   const [editing, setEditing] = useState(false)
+  const seriesTitle = useSeriesTitle()
 
-  const authorBooks = useMemo(
-    () => (books.data ?? []).filter((book) => book.authors?.some((a) => a.id === id)),
-    [books.data, id],
-  )
+  // Knihy autora řadíme jako hlavní seznam: série pohromadě v pořadí dílů,
+  // ostatní podle názvu.
+  const authorBooks = useMemo(() => {
+    const mine = (books.data ?? []).filter((book) => book.authors?.some((a) => a.id === id))
+    return sortBooks(mine, 'title', 'asc', seriesTitle)
+  }, [books.data, id, seriesTitle])
 
   if (author.isPending) return <LoadingGrid count={4} />
   if (author.isError) {

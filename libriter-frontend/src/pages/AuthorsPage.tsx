@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useAuthors, useBooks } from '@/api/hooks'
 import type { Author } from '@/api/types'
@@ -9,7 +9,8 @@ import { SortControl, ViewModeToggle } from '@/components/ListControls'
 import { LoadingList } from '@/components/LoadingGrid'
 import { PageHeader } from '@/components/PageHeader'
 import { Card, CardContent } from '@/components/ui/card'
-import { bookCount } from '@/lib/format'
+import { Input } from '@/components/ui/input'
+import { bookCount, foldName } from '@/lib/format'
 import {
   AUTHOR_SORT_OPTIONS,
   catalogName,
@@ -22,6 +23,7 @@ export function AuthorsPage() {
   const authors = useAuthors()
   const books = useBooks()
   const prefs = useAuthorListPrefs()
+  const [query, setQuery] = useState('')
 
   const countByAuthor = useMemo(() => {
     const counts = new Map<string, number>()
@@ -45,6 +47,17 @@ export function AuthorsPage() {
     () => sortAuthors(withBooks, prefs.sortKey, prefs.sortDir, (id) => countByAuthor.get(id) ?? 0),
     [withBooks, prefs.sortKey, prefs.sortDir, countByAuthor],
   )
+
+  // Hledá se přes celé jméno i jeho části, bez ohledu na diakritiku –
+  // „capek“ najde Čapka stejně jako „karel c“.
+  const filtered = useMemo(() => {
+    const needle = foldName(query)
+    if (!needle) return sorted
+    return sorted.filter((author) => {
+      const name = foldName(author.name)
+      return needle.split(' ').every((part) => name.includes(part))
+    })
+  }, [sorted, query])
 
   if (authors.isPending) {
     return (
@@ -79,6 +92,13 @@ export function AuthorsPage() {
         description={`${withBooks.length} celkem`}
         actions={
           <>
+            <Input
+              type="search"
+              placeholder="Hledat podle jména…"
+              className="w-56"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
             <SortControl
               options={AUTHOR_SORT_OPTIONS}
               value={prefs.sortKey}
@@ -91,13 +111,17 @@ export function AuthorsPage() {
         }
       />
 
-      {withBooks.length === 0 ? (
+      {filtered.length === 0 ? (
         <EmptyState
-          title="Zatím žádní autoři"
-          description="Autoři vznikají automaticky při načtení audio souborů scannerem."
+          title={query ? 'Nic nenalezeno' : 'Zatím žádní autoři'}
+          description={
+            query
+              ? 'Zkuste jiný hledaný výraz.'
+              : 'Autoři vznikají automaticky při načtení audio souborů scannerem.'
+          }
         />
       ) : (
-        <AuthorList view={prefs.view} authors={sorted} name={displayName} details={details} />
+        <AuthorList view={prefs.view} authors={filtered} name={displayName} details={details} />
       )}
     </>
   )
