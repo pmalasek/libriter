@@ -196,6 +196,7 @@ func TestHostMatches(t *testing.T) {
 type fakeAuthorProvider struct {
 	fakeProvider
 	authorName string
+	pseudonyms []string
 }
 
 func (f *fakeAuthorProvider) SupportsAuthorURL(rawURL string) bool { return f.Supports(rawURL) }
@@ -206,7 +207,12 @@ func (f *fakeAuthorProvider) SearchAuthors(context.Context, string) ([]AuthorSea
 }
 
 func (f *fakeAuthorProvider) FetchAuthorByURL(context.Context, string) (*AuthorMetadata, error) {
-	return &AuthorMetadata{Name: f.authorName}, nil
+	meta := &AuthorMetadata{Name: f.authorName}
+	// Zdroje vyplňují u pseudonymu jen celé jméno, části doplňuje Chain.
+	for _, p := range f.pseudonyms {
+		meta.Pseudonyms = append(meta.Pseudonyms, BookAuthor{Name: p})
+	}
+	return meta, nil
 }
 
 func TestChainFetchAuthorSplitsName(t *testing.T) {
@@ -241,6 +247,26 @@ func TestChainFetchAuthorSplitsName(t *testing.T) {
 				t.Errorf("source = %q, chtěno dk", meta.Source)
 			}
 		})
+	}
+}
+
+// Pseudonym se ve formuláři autora ukládá stejně jako jméno, takže ho Chain
+// musí rozdělit na části taky – klient ho pak převezme včetně pravopisu zdroje.
+func TestChainFetchAuthorSplitsPseudonyms(t *testing.T) {
+	chain := NewChain(&fakeAuthorProvider{
+		fakeProvider: fakeProvider{name: "dk", host: "databazeknih.cz"},
+		authorName:   "Aleksander Głowacki",
+		pseudonyms:   []string{"Bolesław Prus"},
+	})
+
+	meta, err := chain.FetchAuthorByURL(context.Background(), "https://www.databazeknih.cz/autori/x-1")
+	if err != nil {
+		t.Fatalf("FetchAuthorByURL: %v", err)
+	}
+
+	want := []BookAuthor{{Name: "Bolesław Prus", FirstName: "Bolesław", LastName: "Prus"}}
+	if !reflect.DeepEqual(meta.Pseudonyms, want) {
+		t.Errorf("pseudonyms = %v, chtěno %v", meta.Pseudonyms, want)
 	}
 }
 

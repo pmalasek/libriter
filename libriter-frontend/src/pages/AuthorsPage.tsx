@@ -33,10 +33,17 @@ export function AuthorsPage() {
     return counts
   }, [books.data])
 
+  // Autoři bez knih v seznamu jen překážejí – zůstávají po přejmenování autora
+  // nebo po importu metadat, které knihu přepsaly na jiného autora. Ve výběru
+  // autorů u knihy zůstávají, takže se přiřazením ke knize zase objeví.
+  const withBooks = useMemo(
+    () => (authors.data ?? []).filter((author) => (countByAuthor.get(author.id) ?? 0) > 0),
+    [authors.data, countByAuthor],
+  )
+
   const sorted = useMemo(
-    () =>
-      sortAuthors(authors.data ?? [], prefs.sortKey, prefs.sortDir, (id) => countByAuthor.get(id) ?? 0),
-    [authors.data, prefs.sortKey, prefs.sortDir, countByAuthor],
+    () => sortAuthors(withBooks, prefs.sortKey, prefs.sortDir, (id) => countByAuthor.get(id) ?? 0),
+    [withBooks, prefs.sortKey, prefs.sortDir, countByAuthor],
   )
 
   if (authors.isPending) {
@@ -69,7 +76,7 @@ export function AuthorsPage() {
     <>
       <PageHeader
         title="Autoři"
-        description={`${authors.data.length} celkem`}
+        description={`${withBooks.length} celkem`}
         actions={
           <>
             <SortControl
@@ -84,7 +91,7 @@ export function AuthorsPage() {
         }
       />
 
-      {authors.data.length === 0 ? (
+      {withBooks.length === 0 ? (
         <EmptyState
           title="Zatím žádní autoři"
           description="Autoři vznikají automaticky při načtení audio souborů scannerem."

@@ -1,11 +1,37 @@
 import type { Author } from '@/api/types'
 
+/** Písmena, která nejsou jen základ + diakritika, takže je NFD nerozloží. */
+const FOLDED_LETTERS: Record<string, string> = {
+  ł: 'l',
+  ø: 'o',
+  đ: 'd',
+  ß: 'ss',
+  æ: 'ae',
+  œ: 'oe',
+}
+
 /**
- * Porovnání jmen a názvů proti zdroji metadat – liší se hlavně velikostí
- * písmen a mezerami, diakritika se musí shodovat („Čapek“ není „Capek“).
+ * Klíč pro porovnávání jmen a názvů: bez diakritiky, malými písmeny, mezery
+ * sjednocené. Jména z názvů složek a audio tagů bývají bez diakritiky
+ * („Boleslaw Prus“, „Capek“), přesto jde o tutéž osobu.
+ */
+export function foldName(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[łøđßæœ]/g, (ch) => FOLDED_LETTERS[ch])
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+/**
+ * Porovnání jmen a názvů proti zdroji metadat. Liší se velikostí písmen,
+ * mezerami i diakritikou, a všechny tyhle rozdíly se ignorují – dva různí
+ * autoři lišící se jen diakritikou reálně nehrozí.
  */
 export function sameName(a: string, b: string): boolean {
-  return a.trim().localeCompare(b.trim(), 'cs', { sensitivity: 'accent' }) === 0
+  return foldName(a) === foldName(b)
 }
 
 /**

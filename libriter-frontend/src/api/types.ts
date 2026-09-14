@@ -190,10 +190,11 @@ export interface AuthorMetadata {
   last_name: string
   bio: string
   /**
-   * Jména, pod kterými autor vydává. Zdroj vede autora pod občanským jménem
-   * (Frode Sander Øien), ale knihy jsou podepsané pseudonymem (Samuel Bjørk).
+   * Jména, pod kterými autor vydává, rozdělená stejně jako `name`. Zdroj vede
+   * autora pod občanským jménem (Frode Sander Øien), ale knihy jsou podepsané
+   * pseudonymem (Samuel Bjørk) – ten se do knihovny ukládá.
    */
-  pseudonyms: string[] | null
+  pseudonyms: BookMetadataAuthor[] | null
   /** Adresa fotky u zdroje; stahuje se až přes PUT /authors/{id}/image. */
   image_url: string
   birth_year: number

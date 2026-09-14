@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"golang.org/x/net/html"
+
+	"libriter/internal/metadata"
 )
 
 // Výřez ze skutečné stránky s výsledky: obálka odkazuje na tutéž adresu jako
@@ -369,7 +371,7 @@ func TestParseAuthorPagePseudonyms(t *testing.T) {
 	if meta.Name != "Frode Sander Øien" {
 		t.Errorf("name = %q", meta.Name)
 	}
-	if !reflect.DeepEqual(meta.Pseudonyms, []string{"Samuel Bjørk"}) {
+	if !reflect.DeepEqual(meta.Pseudonyms, []metadata.BookAuthor{{Name: "Samuel Bjørk"}}) {
 		t.Errorf("pseudonyms = %v", meta.Pseudonyms)
 	}
 }

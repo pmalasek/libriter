@@ -16,7 +16,12 @@ function sourceLabel(source: string): string {
 interface Props {
   /** Předvyplněný dotaz – jméno autora. */
   defaultQuery: string
-  onApply: (meta: AuthorMetadata) => void
+  /**
+   * `picked` je vybraný výsledek hledání. Zdroj vede autora pod občanským
+   * jménem, ale hledání vypisuje jméno, pod kterým vydává – bez něj by se
+   * pseudonym nedal poznat.
+   */
+  onApply: (meta: AuthorMetadata, picked: AuthorSearchResult) => void
 }
 
 /**
@@ -55,7 +60,7 @@ export function AuthorMetadataImport({ defaultQuery, onApply }: Props) {
     setError(null)
     fetchMetadata.mutate(result.url, {
       onSuccess: (meta) => {
-        onApply(meta)
+        onApply(meta, result)
         setOpen(false)
       },
       onError: (err) => setError(err.message),
@@ -122,8 +127,8 @@ export function AuthorMetadataImport({ defaultQuery, onApply }: Props) {
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        Převezme se jméno, životopis, roky života a fotka. Jméno přepíše zadané (pseudonym
-        zůstane); fotka se stáhne až při uložení.
+        Převezme se jméno, životopis, roky života a fotka. Jméno přepíše zadané; u pseudonymu
+        zůstane pseudonym v podobě ze zdroje. Fotka se stáhne až při uložení.
       </p>
     </div>
   )

@@ -142,15 +142,26 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
 
       <AuthorMetadataImport
         defaultQuery={author.name}
-        onApply={(meta) => {
+        onApply={(meta, picked) => {
           // Jméno ze zdroje přepisuje to zadané – jde o opravu překlepů
           // a zkomolenin z audio tagů. Výjimkou je pseudonym: zdroj vede
           // autora pod občanským jménem (Frode Sander Øien), ale knihy jsou
           // podepsané pseudonymem (Samuel Bjørk), a ten je tady ten správný.
-          const pseudonym = (meta.pseudonyms ?? []).find((name) =>
-            sameName(name, currentName()),
-          )
-          if (meta.last_name && !pseudonym) {
+          // Nastaví se v podobě ze zdroje, takže opraví i zkomolený zápis
+          // („Boleslaw Prus“ → „Bolesław Prus“).
+          const pseudonyms = meta.pseudonyms ?? []
+          const pseudonym =
+            pseudonyms.find((p) => sameName(p.name, picked.name)) ??
+            pseudonyms.find((p) => sameName(p.name, currentName()))
+          // Hledání vrátilo pseudonym, ale ve výpisu na stránce autora není –
+          // jméno je pak lepší nechat, než ho přepsat občanským.
+          const keepName = !pseudonym && picked.note === 'pseudonym'
+
+          if (pseudonym) {
+            setFirstName(pseudonym.first_name)
+            setMiddleName(pseudonym.middle_name)
+            setLastName(pseudonym.last_name)
+          } else if (meta.last_name && !keepName) {
             setFirstName(meta.first_name)
             setMiddleName(meta.middle_name)
             setLastName(meta.last_name)
@@ -159,11 +170,17 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
           if (meta.birth_year) setBirthYear(String(meta.birth_year))
           if (meta.death_year) setDeathYear(String(meta.death_year))
           if (meta.image_url) setPendingImageURL(meta.image_url)
-          toast.success(
-            pseudonym
-              ? `Metadata načtena. Jméno „${pseudonym}“ zůstalo – zdroj vede autora pod jménem „${meta.name}“.`
-              : 'Metadata načtena – zkontroluj je a ulož.',
-          )
+          if (pseudonym) {
+            toast.success(
+              `Metadata načtena. Jméno „${pseudonym.name}“ je pseudonym – zdroj vede autora pod jménem „${meta.name}“.`,
+            )
+          } else if (keepName) {
+            toast.success(
+              `Metadata načtena. Jméno zůstalo – zdroj vede autora pod jménem „${meta.name}“.`,
+            )
+          } else {
+            toast.success('Metadata načtena – zkontroluj je a ulož.')
+          }
         }}
       />
 

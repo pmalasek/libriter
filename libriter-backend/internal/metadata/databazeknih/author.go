@@ -207,8 +207,8 @@ func isSearchNote(n *html.Node) bool {
 //	  <span class="gray"> · pseudonym</span></h2>
 //
 // Většina autorů žádný nemá a seznam zůstane prázdný.
-func parsePseudonyms(doc *html.Node) []string {
-	var names []string
+func parsePseudonyms(doc *html.Node) []metadata.BookAuthor {
+	var names []metadata.BookAuthor
 	seen := make(map[string]bool)
 
 	htmlutil.Walk(doc, func(n *html.Node) bool {
@@ -220,7 +220,8 @@ func parsePseudonyms(doc *html.Node) []string {
 		name := htmlutil.Collapse(htmlutil.Text(n))
 		if name != "" && !seen[name] {
 			seen[name] = true
-			names = append(names, name)
+			// Části jména doplní Chain – ten parsuje jména na jednom místě.
+			names = append(names, metadata.BookAuthor{Name: name})
 		}
 		return false
 	})

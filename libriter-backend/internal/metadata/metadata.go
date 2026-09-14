@@ -109,8 +109,9 @@ type AuthorMetadata struct {
 	// Pseudonyms jsou jména, pod kterými autor vydává. Zdroje vedou autora pod
 	// občanským jménem (Frode Sander Øien), ale knihy v knihovně jsou
 	// podepsané pseudonymem (Samuel Bjørk); podle tohoto seznamu klient pozná,
-	// že jméno nemá čím přepisovat.
-	Pseudonyms []string `json:"pseudonyms"`
+	// že jméno nemá čím přepisovat, a převezme pravopis ze zdroje.
+	// Zdroj vyplňuje jen Name, části jména doplní Chain stejně jako u Name.
+	Pseudonyms []BookAuthor `json:"pseudonyms"`
 	// ImageURL je adresa fotky u zdroje. Stahuje se až na vyžádání
 	// (PUT /authors/{id}/image), do databáze se ukládá soubor, ne odkaz.
 	ImageURL  string `json:"image_url"`
@@ -255,14 +256,19 @@ func SplitAuthors(s string) []BookAuthor {
 	names := model.ParseAuthorNames(s)
 	authors := make([]BookAuthor, 0, len(names))
 	for _, n := range names {
-		authors = append(authors, BookAuthor{
-			Name:       n.Full(),
-			FirstName:  n.First,
-			MiddleName: n.Middle,
-			LastName:   n.Last,
-		})
+		authors = append(authors, splitName(n))
 	}
 	return authors
+}
+
+// splitName převede rozdělené jméno na tvar posílaný klientovi.
+func splitName(n model.AuthorName) BookAuthor {
+	return BookAuthor{
+		Name:       n.Full(),
+		FirstName:  n.First,
+		MiddleName: n.Middle,
+		LastName:   n.Last,
+	}
 }
 
 // AuthorMatches říká, jestli jméno autora z výsledku odpovídá hledanému.
@@ -364,6 +370,11 @@ func (c *Chain) FetchAuthorByURL(ctx context.Context, rawURL string) (*AuthorMet
 		meta.Source = p.Name()
 		name := model.ParseAuthorName(meta.Name)
 		meta.FirstName, meta.MiddleName, meta.LastName = name.First, name.Middle, name.Last
+		// Pseudonym se ve formuláři autora ukládá stejně jako jméno, takže
+		// potřebuje rozdělit na části taky – zdroj dává jen celé jméno.
+		for i, p := range meta.Pseudonyms {
+			meta.Pseudonyms[i] = splitName(model.ParseAuthorName(p.Name))
+		}
 		return meta, nil
 	}
 	return nil, ErrNoProvider

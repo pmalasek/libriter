@@ -328,7 +328,11 @@ function BookEditForm({
         />
       </div>
 
-      <BookAuthorsField value={authors} onChange={setAuthors} />
+      <BookAuthorsField
+        value={authors}
+        onChange={setAuthors}
+        hasPending={newAuthors.length > 0}
+      />
 
       {newAuthors.length > 0 ? (
         <div className="space-y-2 rounded-lg border border-dashed p-3">
