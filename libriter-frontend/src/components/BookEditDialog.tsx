@@ -212,10 +212,9 @@ function BookEditForm({
     // Kniha v sérii musí mít díl – bez něj ji databáze odmítne. Zdroj metadat
     // číslo dílu u některých sérií neuvádí, pak ho doplní uživatel.
     const position = Number(seriesPosition)
-    const positionMissing =
-      seriesPosition.trim() === '' || !Number.isInteger(position) || position < 1
+    const positionMissing = seriesPosition.trim() === '' || !Number.isInteger(position)
     if (seriesId !== NONE && positionMissing) {
-      toast.error('U knihy v sérii vyplňte díl (celé kladné číslo).')
+      toast.error('U knihy v sérii vyplňte díl (celé číslo, může být i nula nebo záporné).')
       return
     }
 
@@ -381,7 +380,7 @@ function BookEditForm({
           <Input
             id="book_series_position"
             type="number"
-            min={1}
+            step={1}
             value={seriesPosition}
             onChange={(e) => setSeriesPosition(e.target.value)}
             disabled={seriesId === NONE}

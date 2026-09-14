@@ -17,7 +17,7 @@ export function seriesLabel(
   title: string | null | undefined,
   position: number | null | undefined,
 ): string {
-  return [title, position ? `${position}. díl` : null].filter(Boolean).join(' · ')
+  return [title, position != null ? `${position}. díl` : null].filter(Boolean).join(' · ')
 }
 
 /** Délka v sekundách → "3:07 h" / "48 min" / "45 s". */

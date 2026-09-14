@@ -1,5 +1,5 @@
 import { MenuIcon } from 'lucide-react'
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { Link, Outlet } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -50,7 +50,9 @@ export function AppLayout() {
         </header>
 
         <main className="mx-auto max-w-7xl px-4 py-6">
-          <Outlet />
+          <Suspense fallback={<p role="status" className="py-8 text-center text-muted-foreground">Načítání stránky…</p>}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>

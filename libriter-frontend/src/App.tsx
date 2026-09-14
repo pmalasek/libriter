@@ -1,16 +1,19 @@
+import { lazy } from 'react'
 import { Route, Routes } from 'react-router'
 import { RedirectIfAuthenticated, RequireAuth } from '@/auth/RequireAuth'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { AuthorDetailPage } from '@/pages/AuthorDetailPage'
-import { AuthorsPage } from '@/pages/AuthorsPage'
-import { BookDetailPage } from '@/pages/BookDetailPage'
-import { BooksPage } from '@/pages/BooksPage'
 import { LoginPage } from '@/pages/LoginPage'
-import { NotFoundPage } from '@/pages/NotFoundPage'
-import { ProfilePage } from '@/pages/ProfilePage'
 import { RegisterPage } from '@/pages/RegisterPage'
-import { SeriesDetailPage } from '@/pages/SeriesDetailPage'
-import { SeriesPage } from '@/pages/SeriesPage'
+
+// Kód stránek knihovny načítáme až při jejich otevření.
+const AuthorDetailPage = lazy(() => import('@/pages/AuthorDetailPage').then((module) => ({ default: module.AuthorDetailPage })))
+const AuthorsPage = lazy(() => import('@/pages/AuthorsPage').then((module) => ({ default: module.AuthorsPage })))
+const BookDetailPage = lazy(() => import('@/pages/BookDetailPage').then((module) => ({ default: module.BookDetailPage })))
+const BooksPage = lazy(() => import('@/pages/BooksPage').then((module) => ({ default: module.BooksPage })))
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
+const ProfilePage = lazy(() => import('@/pages/ProfilePage').then((module) => ({ default: module.ProfilePage })))
+const SeriesDetailPage = lazy(() => import('@/pages/SeriesDetailPage').then((module) => ({ default: module.SeriesDetailPage })))
+const SeriesPage = lazy(() => import('@/pages/SeriesPage').then((module) => ({ default: module.SeriesPage })))
 
 export function App() {
   return (

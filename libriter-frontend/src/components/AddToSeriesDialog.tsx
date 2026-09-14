@@ -65,7 +65,7 @@ function defaultPositions(books: Book[], allBooks: Book[], seriesId: string | nu
   let next = 0
   if (seriesId) {
     for (const book of allBooks) {
-      if (book.series_id === seriesId && !selected.has(book.id) && book.series_position) {
+      if (book.series_id === seriesId && !selected.has(book.id) && book.series_position != null) {
         next = Math.max(next, book.series_position)
       }
     }
@@ -73,7 +73,7 @@ function defaultPositions(books: Book[], allBooks: Book[], seriesId: string | nu
 
   const positions: Record<string, string> = {}
   for (const book of books) {
-    if (seriesId && book.series_id === seriesId && book.series_position) {
+    if (seriesId && book.series_id === seriesId && book.series_position != null) {
       positions[book.id] = String(book.series_position)
       next = Math.max(next, book.series_position)
     } else {
@@ -127,8 +127,8 @@ function AddToSeriesForm({
     const entries: { id: string; position: number }[] = []
     for (const book of books) {
       const position = Number(positions[book.id])
-      if (!Number.isInteger(position) || position < 1) {
-        toast.error(`Díl u knihy „${book.title}“ musí být celé kladné číslo.`)
+      if (!Number.isInteger(position)) {
+        toast.error(`Díl u knihy „${book.title}“ musí být celé číslo.`)
         return
       }
       entries.push({ id: book.id, position })
@@ -208,7 +208,7 @@ function AddToSeriesForm({
               </div>
               <Input
                 type="number"
-                min={1}
+                step={1}
                 required
                 aria-label={`Díl: ${book.title}`}
                 className="w-20"

@@ -112,7 +112,7 @@ export function BookDetailPage() {
               <Link to={`/series/${series.data.id}`} className="underline-offset-4 hover:underline">
                 {series.data.title}
               </Link>
-              {data.series_position ? ` · ${data.series_position}. díl` : null}
+              {data.series_position != null ? ` · ${data.series_position}. díl` : null}
             </p>
           ) : null}
 
