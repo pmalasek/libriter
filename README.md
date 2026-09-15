@@ -128,10 +128,14 @@ COVER_ROOT=./data/covers        # kořenový adresář obálek knih
 AUTHOR_IMAGE_ROOT=./data/author-images   # fotky autorů
 MAX_UPLOAD_MB=500
 
-# Zdroje metadat – pořadí, ve kterém se zkoušejí
+# Zdroje metadat – výchozí pořadí, ve kterém se zkoušejí
 METADATA_PROVIDERS=databazeknih,cbdb,openlibrary,googlebooks
 GOOGLE_BOOKS_API_KEY=           # nepovinné, viz Metadata knih
 ```
+
+> **Zdroje metadat** jsou tady jen výchozí hodnota pro prázdnou databázi.
+> Jakmile je admin uloží v administraci, platí nastavení z databáze a změny
+> v `.env` se už neprojeví (viz Administrace).
 
 > **Bezpečnost:** `JWT_SECRET` musí být v produkci silný náhodný řetězec.
 > Vygenerujte ho např. pomocí: `openssl rand -hex 32`
@@ -270,20 +274,40 @@ v seznamu; autor bez fotky má zástupnou ikonu. Čtenář (role reader) tlačí
 nevidí.
 
 **Co ještě ne:** přehrávání audia (chybí kapitoly a streamování) a zakládání či
-mazání záznamů z rozhraní – nové knihy, autory a série zakládá scanner nebo
-přímé volání API. Obálku a cestu k audio souborům nelze z rozhraní měnit,
-spravuje je scanner.
+mazání knih, autorů a sérií z rozhraní – ty zakládá scanner nebo přímé volání
+API. Obálku a cestu k audio souborům nelze z rozhraní měnit, spravuje je
+scanner.
 
-Přihlášený uživatel se drží v `localStorage` (JWT + profil). Role se obnoví až
-při dalším přihlášení, takže po změně role adminem je nutné se odhlásit a
-přihlásit znovu.
+Přihlášený uživatel se drží v `localStorage` (JWT + profil). Profil i role se
+při otevření rozhraní srovnají se serverem, takže změna role se projeví bez
+nového přihlášení.
+
+### Administrace (role admin)
+
+Položka **Administrace** v navigaci vede na `/admin` a vidí ji jen
+administrátor. Má šest záložek:
+
+| Záložka | Co umí |
+|---------|--------|
+| **Přehled** | Počty knih, autorů, sérií, uživatelů a kapitol, celková délka, kolik knih nemá obálku či popis a kolik kapitol má placeholder délku 1 s. Vedle toho verze serveru, prostředí, doba běhu, cesty k datům, dostupnost `ffprobe` a volné místo na disku s audiem. |
+| **Uživatelé** | Seznam účtů, změna role přímo v řádku, reset hesla, smazání a založení nového účtu s libovolnou rolí. |
+| **Zdroje metadat** | Zapnutí a vypnutí jednotlivých zdrojů, změna pořadí šipkami a klíč pro Google Books. Uložení platí okamžitě, server se nerestartuje. |
+| **Knihovna** | Stav scanneru (běží / poslední průchod / počet souborů / chyby), ruční spuštění kontroly knihovny a oprava kapitol s náhledem před provedením. |
+| **Registrace** | Přepínač veřejné registrace a role, kterou nový účet dostane. |
+| **Audit** | Výpis administrativních zásahů – kdo, kdy, co a s jakými detaily. |
+
+Vlastní účet si admin nemůže smazat ani si sám snížit roli a poslední
+administrátor v systému nejde smazat ani degradovat; server takový pokus
+odmítne (`400`, resp. `409`) bez ohledu na to, jestli přijde z rozhraní, nebo
+z CLI.
 
 ---
 
 ## Správa uživatelů z příkazové řádky
 
-Registrace přes API dává vždy roli **reader**, takže prvního administrátora
-vytvořte přes CLI stejné binárky:
+Registrace přes API dává roli podle nastavení (výchozí **reader**), takže
+prvního administrátora vytvořte přes CLI stejné binárky. Další účty už jde
+zakládat i v administraci webového rozhraní.
 
 ```bash
 # nové konto (bez --password se heslo zadá interaktivně, skrytě a dvakrát)
@@ -311,13 +335,16 @@ funguje i na prázdné databázi. Server ani scanner přitom nespouští a **nev
 Před dotazem na heslo vypíše, který `.env` a kterou databázi použil, takže je
 hned vidět, kdyby mířil jinam, než chcete.
 
+`user set-role` odmítne odebrat roli poslednímu administrátorovi – nejdřív
+povyšte někoho dalšího.
+
 ---
 
 ## Audio scanner
 
 Scanner se spustí **automaticky při startu backendu** a:
 
-1. Při startu projde `AUDIO_ROOT` a přidá do databáze všechny audio soubory, které v ní ještě nejsou
+1. Při startu projde `AUDIO_ROOT` a přidá do databáze všechny audio soubory, které v ní ještě nejsou (totéž spustí admin kdykoliv znovu tlačítkem v administraci)
 2. Sleduje `AUDIO_ROOT` (vč. podadresářů) a reaguje na nové soubory v reálném čase
 3. Čeká, dokud se soubor nepřestane měnit (kopírování dokončeno) – kontrola každé 3 s, stabilita 10 s
 4. Extrahuje metadata z audio tagů a vloží knihu do databáze
@@ -370,8 +397,12 @@ Základní URL: `http://localhost:8080/api/v1`
 
 | Metoda | Endpoint | Popis | Přístup |
 |--------|----------|-------|---------|
+| `GET` | `/auth/config` | Je registrace zapnutá a s jakou rolí | veřejné |
 | `POST` | `/auth/register` | Registrace nového uživatele | veřejné |
 | `POST` | `/auth/login` | Přihlášení, vrátí JWT token | veřejné |
+
+Při vypnuté registraci vrací `POST /auth/register` `403`; přepínač je
+v administraci (viz níže).
 
 Všechny ostatní endpointy vyžadují hlavičku:
 ```
@@ -391,6 +422,41 @@ hlavičku `Authorization` poslat neumí. Ochranou je neuhodnutelné UUID knihy.
 | `PUT` | `/users/{id}/password` | Změna hesla | admin / vlastní profil |
 | `PUT` | `/users/{id}/role` | Nastavení role | admin |
 | `DELETE` | `/users/{id}` | Smazání uživatele | admin |
+
+Vlastní účet vrátí na `DELETE` `400` a poslední administrátor `409` (platí
+i pro snížení jeho role).
+
+### Administrace
+
+| Metoda | Endpoint | Popis | Přístup |
+|--------|----------|-------|---------|
+| `POST` | `/admin/users` | Založení účtu s libovolnou rolí | admin |
+| `GET` | `/admin/settings/metadata` | Zdroje metadat, jejich pořadí a stav | admin |
+| `PUT` | `/admin/settings/metadata` | Uložení zdrojů (platí okamžitě) | admin |
+| `GET` | `/admin/settings/registration` | Nastavení registrace | admin |
+| `PUT` | `/admin/settings/registration` | Uložení nastavení registrace | admin |
+| `GET` | `/admin/scanner` | Stav scanneru | admin |
+| `POST` | `/admin/scanner/rescan` | Spuštění průchodu knihovnou | admin |
+| `GET` | `/admin/library/repair` | Náhled opravy kapitol (nic nemění) | admin |
+| `POST` | `/admin/library/repair` | Provedení opravy kapitol | admin |
+| `GET` | `/admin/stats` | Statistiky knihovny | admin |
+| `GET` | `/admin/system` | Verze, cesty, ffprobe, místo na disku | admin |
+| `GET` | `/admin/audit?limit=&before=` | Výpis administrativních akcí | admin |
+
+Zápis zdrojů metadat nahrazuje celý seznam a jeho pořadí je pořadí, ve kterém
+se zdroje zkoušejí:
+
+```jsonc
+// PUT /admin/settings/metadata
+{ "providers": [ { "name": "databazeknih", "enabled": true },
+                 { "name": "googlebooks",  "enabled": false } ],
+  "google_books_api_key": "" }
+```
+
+Průchod knihovnou i oprava kapitol běží na pozadí; druhý souběžný požadavek
+skončí `409`. Plán opravy si server vždy sestaví sám, klient mu seznam knih ke
+smazání neposílá. Audit se stránkuje kurzorem: `next_before` z odpovědi se
+pošle jako `before` v dalším požadavku.
 
 ### Knihy
 
@@ -523,11 +589,15 @@ už v seznamu výsledků a ne každý zná nakladatele.
 
 #### Zdroje a jejich pořadí
 
-`METADATA_PROVIDERS` určuje, které zdroje se používají a v jakém pořadí.
+Které zdroje se používají a v jakém pořadí, nastavuje **admin v administraci**
+(Administrace → Zdroje metadat). Změna platí okamžitě, server se nerestartuje.
+`METADATA_PROVIDERS` a `GOOGLE_BOOKS_API_KEY` z `.env` slouží jen jako výchozí
+hodnota, dokud nastavení nikdo neuložil; potom vyhrává databáze.
+
 Zkouší se odshora a vrátí se výsledky **prvního, který něco najde** – zdroj,
 který spadne nebo nic nevrátí, se přeskočí. Rozbitý scraper tak funkci
-nezablokuje. Zdroj, který v seznamu není, je vypnutý; prázdná hodnota
-(`METADATA_PROVIDERS=`) vypne metadata úplně.
+nezablokuje. Vypnutý zdroj se nepoužije ani pro stahování fotek autorů;
+s vypnutými všemi zdroji metadata nefungují vůbec.
 
 | Zdroj | Typ | Poznámka |
 |-------|-----|----------|
@@ -616,11 +686,16 @@ Neznámé cesty pod `/api/v1/` vracejí JSON `{"error":"endpoint nenalezen"}`.
 
 ## Role a oprávnění
 
-| Role | Čtení knih | Editace knih | Mazání | Správa uživatelů |
-|------|:----------:|:------------:|:------:|:----------------:|
-| **reader** | ✓ | — | — | — |
-| **editor** | ✓ | ✓ | — | — |
-| **admin** | ✓ | ✓ | ✓ | ✓ |
+| Role | Čtení knih | Editace knih | Mazání | Správa uživatelů | Administrace |
+|------|:----------:|:------------:|:------:|:----------------:|:------------:|
+| **reader** | ✓ | — | — | — | — |
+| **editor** | ✓ | ✓ | — | — | — |
+| **admin** | ✓ | ✓ | ✓ | ✓ | ✓ |
 
-Nový uživatel dostane automaticky roli **reader**.
-Role mění pouze admin přes `PUT /users/{id}/role`.
+Roli nově registrovaného uživatele i to, jestli je registrace vůbec otevřená,
+nastavuje admin (výchozí stav: registrace zapnutá, role **reader**). Role
+existujícího účtu mění pouze admin – v administraci nebo přes
+`PUT /users/{id}/role`.
+
+Role se při ověření každého požadavku čte z databáze, ne z tokenu (s desetivteřinovou
+cache), takže snížení role nebo smazání účtu platí hned i pro už vydané tokeny.

@@ -1,5 +1,7 @@
-import { LayersIcon, LibraryIcon, UsersIcon } from 'lucide-react'
+import { LayersIcon, LibraryIcon, SettingsIcon, UsersIcon } from 'lucide-react'
 import { NavLink } from 'react-router'
+import { useAuth } from '@/auth/AuthContext'
+import { isAdmin } from '@/auth/permissions'
 import { cn } from '@/lib/utils'
 
 const links = [
@@ -8,10 +10,16 @@ const links = [
   { to: '/series', label: 'Série', icon: LayersIcon },
 ]
 
+const adminLink = { to: '/admin', label: 'Administrace', icon: SettingsIcon }
+
 export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+  const { user } = useAuth()
+  // Administraci vidí jen admin; skutečnou ochranou je role na serveru.
+  const visible = isAdmin(user) ? [...links, adminLink] : links
+
   return (
     <nav className="flex flex-col gap-1">
-      {links.map(({ to, label, icon: Icon }) => (
+      {visible.map(({ to, label, icon: Icon }) => (
         <NavLink
           key={to}
           to={to}

@@ -86,6 +86,52 @@ export function formatDate(iso: string): string {
   return dateFormatter.format(date)
 }
 
+const dateTimeFormatter = new Intl.DateTimeFormat('cs-CZ', {
+  day: 'numeric',
+  month: 'numeric',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+})
+
+/** Datum a čas – v administraci je potřeba i minuta (běhy scanneru, audit). */
+export function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return '–'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return '–'
+  return dateTimeFormatter.format(date)
+}
+
+const BYTE_UNITS = ['B', 'kB', 'MB', 'GB', 'TB', 'PB']
+
+/** Velikost v bajtech na čitelný tvar (volné místo na disku). */
+export function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '–'
+
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+  const decimals = unit === 0 || value >= 100 ? 0 : 1
+  return `${value.toLocaleString('cs-CZ', { maximumFractionDigits: decimals })} ${BYTE_UNITS[unit]}`
+}
+
+/** Doba běhu serveru na čitelný tvar. */
+export function formatUptime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return '–'
+
+  const total = Math.floor(seconds)
+  const days = Math.floor(total / 86400)
+  const hours = Math.floor((total % 86400) / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+
+  if (days > 0) return `${days} d ${hours} h`
+  if (hours > 0) return `${hours} h ${minutes} min`
+  return `${minutes} min`
+}
+
 /** Iniciály pro avatar – max dva znaky. */
 export function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)

@@ -25,15 +25,20 @@ import (
 	"libriter/internal/scanner"
 	"libriter/internal/service"
 	"libriter/internal/storage"
+	"libriter/internal/version"
 	"libriter/internal/web"
 )
 
 // runServe spustí HTTP server, scanner a obsluhu webového rozhraní.
 func runServe() error {
+	startedAt := time.Now()
+
 	cfg, err := config.Load()
 	if err != nil {
 		return fmt.Errorf("konfigurace: %w", err)
 	}
+
+	slog.Info("libriter", "verze", version.String())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -58,22 +63,34 @@ func runServe() error {
 	scn.Start(appCtx)
 
 	// Zdroje metadat musí vzniknout dřív než služby, které je používají –
-	// stahování fotek autorů si přes ně ověřuje povolené adresy.
-	metadataChain, dkClient := buildMetadata(cfg.Metadata)
+	// stahování fotek autorů si přes ně ověřuje povolené adresy. Registry
+	// drží aktuální řetězec a mění ho, když admin přenastaví zdroje; hodnoty
+	// z .env jsou jen výchozí, uložené nastavení má přednost.
+	registry := metadata.NewRegistry(providerFactories())
+	settingsSvc := service.NewSettings(store, cfg.Metadata, registry.KnownNames())
+
+	providerNames, googleKey, err := settingsSvc.EnabledProviders(ctx)
+	if err != nil {
+		return fmt.Errorf("nastavení zdrojů metadat: %w", err)
+	}
+	registry.Rebuild(providerNames, metadata.ProviderConfig{GoogleBooksAPIKey: googleKey})
 
 	authSvc := service.NewAuth(store, cfg.JWT)
 	userSvc := service.NewUser(store, authSvc)
 	bookSvc := service.NewBook(store)
 	authorSvc := service.NewAuthor(store)
-	authorImageSvc := service.NewAuthorImage(store, metadataChain, cfg.Storage.AuthorImageRoot)
+	authorImageSvc := service.NewAuthorImage(store, registry, cfg.Storage.AuthorImageRoot)
 	seriesSvc := service.NewSeries(store)
+	auditSvc := service.NewAudit(store)
+	systemSvc := service.NewSystem(store, cfg, startedAt)
 
-	authH := handler.NewAuth(authSvc)
-	userH := handler.NewUser(userSvc)
-	bookH := handler.NewBook(bookSvc, cfg.Storage.CoverRoot)
-	authorH := handler.NewAuthor(authorSvc, cfg.Storage.AuthorImageRoot, authorImageSvc)
-	seriesH := handler.NewSeries(seriesSvc)
-	metadataH := handler.NewMetadata(metadataChain, dkClient)
+	authH := handler.NewAuth(authSvc, settingsSvc)
+	userH := handler.NewUser(userSvc, auditSvc)
+	bookH := handler.NewBook(bookSvc, cfg.Storage.CoverRoot, auditSvc)
+	authorH := handler.NewAuthor(authorSvc, cfg.Storage.AuthorImageRoot, authorImageSvc, auditSvc)
+	seriesH := handler.NewSeries(seriesSvc, auditSvc)
+	metadataH := handler.NewMetadata(registry)
+	adminH := handler.NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc)
 
 	// --- router ---
 	r := chi.NewRouter()
@@ -89,6 +106,7 @@ func runServe() error {
 		r.MethodNotAllowed(handler.MethodNotAllowedJSON)
 
 		// --- auth (bez přihlášení) ---
+		r.Get("/auth/config", authH.Config) // je registrace zapnutá?
 		r.Post("/auth/register", authH.Register)
 		r.Post("/auth/login", authH.Login)
 
@@ -149,7 +167,28 @@ func runServe() error {
 				r.Delete("/series/{id}", seriesH.Delete)
 			})
 
-			// Metadata knih - zdroje a jejich pořadí řídí METADATA_PROVIDERS (editor+)
+			// Administrace (admin)
+			r.Route("/admin", func(r chi.Router) {
+				r.Use(middleware.RequireRole("admin"))
+
+				r.Post("/users", adminH.CreateUser)
+
+				r.Get("/settings/metadata", adminH.MetadataSettings)
+				r.Put("/settings/metadata", adminH.SetMetadataSettings)
+				r.Get("/settings/registration", adminH.RegistrationSettings)
+				r.Put("/settings/registration", adminH.SetRegistrationSettings)
+
+				r.Get("/scanner", adminH.ScannerStatus)
+				r.Post("/scanner/rescan", adminH.Rescan)
+				r.Get("/library/repair", adminH.RepairPlan) // náhled, nic nemění
+				r.Post("/library/repair", adminH.Repair)
+
+				r.Get("/stats", adminH.Stats)
+				r.Get("/system", adminH.System)
+				r.Get("/audit", adminH.Audit)
+			})
+
+			// Metadata knih - zdroje a jejich pořadí řídí administrace (editor+)
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole("editor"))
 				r.Get("/metadata/sources", metadataH.Sources) // pořadí zdrojů
@@ -203,23 +242,16 @@ func runServe() error {
 	return nil
 }
 
-// buildMetadata sestaví řetězec zdrojů metadat podle konfigurace. Vrací
-// zároveň klienta databazeknih.cz (nebo nil), protože endpoint /metadata/book/{id}
-// pracuje s číselným ID, které je pro tento zdroj specifické.
-func buildMetadata(cfg config.MetadataConfig) (*metadata.Chain, *databazeknih.Client) {
-	var dkClient *databazeknih.Client
-
-	factories := map[string]metadata.Factory{
-		"databazeknih": func() metadata.Provider {
-			dkClient = databazeknih.NewClient()
-			return dkClient
+// providerFactories vrací všechny zdroje metadat, které binárka umí. Které
+// z nich se použijí a v jakém pořadí, rozhoduje nastavení (viz
+// service.SettingsService); registry podle něj řetězec sestavuje a mění.
+func providerFactories() map[string]metadata.Factory {
+	return map[string]metadata.Factory{
+		"databazeknih": func(metadata.ProviderConfig) metadata.Provider { return databazeknih.NewClient() },
+		"cbdb":         func(metadata.ProviderConfig) metadata.Provider { return cbdb.NewClient() },
+		"openlibrary":  func(metadata.ProviderConfig) metadata.Provider { return openlibrary.NewClient() },
+		"googlebooks": func(cfg metadata.ProviderConfig) metadata.Provider {
+			return googlebooks.NewClient(cfg.GoogleBooksAPIKey)
 		},
-		"cbdb":        func() metadata.Provider { return cbdb.NewClient() },
-		"openlibrary": func() metadata.Provider { return openlibrary.NewClient() },
-		"googlebooks": func() metadata.Provider { return googlebooks.NewClient(cfg.GoogleBooksAPIKey) },
 	}
-
-	chain := metadata.BuildChain(cfg.Providers, factories)
-	slog.Info("zdroje metadat", "pořadí", chain.Providers())
-	return chain, dkClient
 }

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import { useCallback, useMemo } from 'react'
 import { apiFetch, asList } from './client'
 import type {
+  AuthConfig,
   Author,
   AuthorMetadata,
   AuthorRequest,
@@ -28,6 +29,7 @@ export const queryKeys = {
   series: ['series'] as const,
   seriesOne: (id: string) => ['series', id] as const,
   user: (id: string) => ['users', id] as const,
+  authConfig: ['auth', 'config'] as const,
 }
 
 // --- čtení ---
@@ -110,6 +112,18 @@ export function useSeriesById() {
 export function useSeriesTitle() {
   const { map } = useSeriesById()
   return useCallback((id: string) => map.get(id)?.title, [map])
+}
+
+/**
+ * Veřejné nastavení přihlášení – je registrace zapnutá a jakou roli nový účet
+ * dostane. Mění se zřídka, takže stačí načíst jednou za relaci.
+ */
+export function useAuthConfig() {
+  return useQuery({
+    queryKey: queryKeys.authConfig,
+    queryFn: () => apiFetch<AuthConfig>('/auth/config', { anonymous: true }),
+    staleTime: 5 * 60 * 1000,
+  })
 }
 
 // --- mutace ---

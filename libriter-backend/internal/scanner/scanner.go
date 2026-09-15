@@ -13,6 +13,7 @@ package scanner
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -44,6 +45,22 @@ func IsAudioFile(path string) bool {
 	return audioExts[strings.ToLower(filepath.Ext(path))]
 }
 
+// ErrScanRunning znamená, že průchod knihovnou už běží.
+var ErrScanRunning = errors.New("kontrola knihovny už běží")
+
+// Status je snímek práce scanneru pro administraci.
+type Status struct {
+	Running       bool       `json:"running"`
+	Trigger       string     `json:"trigger"` // "startup" | "manual" | ""
+	StartedAt     *time.Time `json:"started_at"`
+	FinishedAt    *time.Time `json:"finished_at"`
+	Processed     int        `json:"processed"` // navštívené audio soubory
+	Ingested      int        `json:"ingested"`  // nově založené kapitoly
+	Errors        int        `json:"errors"`
+	LastError     string     `json:"last_error"`
+	WatcherActive bool       `json:"watcher_active"`
+}
+
 // Scanner sleduje AUDIO_ROOT a při detekci nového audio souboru ho ingestuje do DB.
 type Scanner struct {
 	audioRoot string
@@ -55,6 +72,13 @@ type Scanner struct {
 	pending map[string]struct{} // soubory, pro které běží goroutina waitAndProcess
 
 	ingestMu sync.Mutex // serialisuje zápisy do DB (GetOrCreateAuthor není idempotentní bez UNIQUE)
+
+	statusMu sync.Mutex
+	status   Status
+
+	// appCtx je kontext života aplikace ze Start. Ruční průchod běží na něm,
+	// ne na kontextu HTTP požadavku – ten skončí dřív než scan.
+	appCtx context.Context
 }
 
 // New vytvoří nový Scanner.
@@ -65,14 +89,85 @@ func New(audioRoot, coverRoot string, store *storage.Store) *Scanner {
 		store:     store,
 		log:       slog.Default().With("component", "scanner"),
 		pending:   make(map[string]struct{}),
+		appCtx:    context.Background(),
 	}
 }
 
 // Start spustí počáteční scan a file watcher na pozadí.
 // Vrací okamžitě; veškerá práce běží v goroutinách, které respektují ctx.
 func (s *Scanner) Start(ctx context.Context) {
-	go s.runInitialScan(ctx)
+	s.appCtx = ctx
+	if s.beginScan("startup") {
+		go s.runScan(ctx)
+	}
 	go s.runWatcher(ctx)
+}
+
+// Status vrátí snímek aktuálního stavu.
+func (s *Scanner) Status() Status {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	return s.status
+}
+
+// Rescan spustí průchod knihovnou na pozadí. Když už jeden běží, vrátí
+// ErrScanRunning – dva souběžné průchody by si jen překážely na ingestMu.
+func (s *Scanner) Rescan() error {
+	if !s.beginScan("manual") {
+		return ErrScanRunning
+	}
+	go s.runScan(s.appCtx)
+	return nil
+}
+
+// beginScan označí začátek průchodu. Vrací false, pokud už jeden běží.
+// Volá se synchronně, aby souběžné Rescan dostalo deterministicky odpověď.
+func (s *Scanner) beginScan(trigger string) bool {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+
+	if s.status.Running {
+		return false
+	}
+
+	now := time.Now()
+	s.status = Status{
+		Running:       true,
+		Trigger:       trigger,
+		StartedAt:     &now,
+		WatcherActive: s.status.WatcherActive,
+	}
+	return true
+}
+
+func (s *Scanner) endScan() {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+
+	now := time.Now()
+	s.status.Running = false
+	s.status.FinishedAt = &now
+}
+
+// countFile zaznamená zpracovaný soubor a případnou chybu.
+func (s *Scanner) countFile(ingested bool, err error) {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+
+	s.status.Processed++
+	if ingested {
+		s.status.Ingested++
+	}
+	if err != nil {
+		s.status.Errors++
+		s.status.LastError = err.Error()
+	}
+}
+
+func (s *Scanner) setWatcherActive(active bool) {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+	s.status.WatcherActive = active
 }
 
 // ---- interní pomocné metody ----
@@ -107,12 +202,16 @@ func (s *Scanner) clearPending(path string) {
 	s.mu.Unlock()
 }
 
-// ---- počáteční scan ----
+// ---- průchod knihovnou ----
 
-// runInitialScan projde AUDIO_ROOT a ingestuje soubory, které v DB chybí.
+// runScan projde AUDIO_ROOT a ingestuje soubory, které v DB chybí.
 // Soubory se zpracovávají sériově, aby nebylo zatížení při startu příliš velké.
-func (s *Scanner) runInitialScan(ctx context.Context) {
-	s.log.Info("spouštím počáteční scan", "root", s.audioRoot)
+// Volá se po beginScan, takže vždy zavře stav přes endScan.
+func (s *Scanner) runScan(ctx context.Context) {
+	defer s.endScan()
+
+	trigger := s.Status().Trigger
+	s.log.Info("spouštím scan knihovny", "root", s.audioRoot, "spuštěno", trigger)
 	count := 0
 
 	err := filepath.WalkDir(s.audioRoot, func(path string, d fs.DirEntry, err error) error {
@@ -124,15 +223,17 @@ func (s *Scanner) runInitialScan(ctx context.Context) {
 			return filepath.SkipAll
 		default:
 		}
-		s.processFile(ctx, path)
+		ingested, perr := s.processFile(ctx, path)
+		s.countFile(ingested, perr)
 		count++
 		return nil
 	})
 
 	if err != nil {
-		s.log.Warn("počáteční scan ukončen s chybou", "err", err)
+		s.log.Warn("scan knihovny ukončen s chybou", "err", err)
+		s.countFile(false, err)
 	} else {
-		s.log.Info("počáteční scan dokončen", "zpracováno_souborů", count)
+		s.log.Info("scan knihovny dokončen", "zpracováno_souborů", count)
 	}
 }
 
@@ -156,6 +257,8 @@ func (s *Scanner) runWatcher(ctx context.Context) {
 	})
 
 	s.log.Info("file watcher aktivní", "root", s.audioRoot)
+	s.setWatcherActive(true)
+	defer s.setWatcherActive(false)
 
 	for {
 		select {
@@ -232,7 +335,8 @@ func (s *Scanner) waitAndProcess(ctx context.Context, absPath string) {
 			s.log.Debug("soubor stabilní", "path", s.relPath(absPath),
 				"size_bytes", currentSize, "stable_for", stableFor)
 			if stableFor >= stabilizeFor {
-				s.processFile(ctx, absPath)
+				ingested, err := s.processFile(ctx, absPath)
+				s.countFile(ingested, err)
 				return
 			}
 		} else {
@@ -249,18 +353,19 @@ func (s *Scanner) waitAndProcess(ctx context.Context, absPath string) {
 // ---- ingest pipeline ----
 
 // processFile ověří, zda kapitola v DB chybí, a případně ji ingestuje.
-func (s *Scanner) processFile(ctx context.Context, absPath string) {
+// Vrací, jestli kapitola vznikla, a chybu pro statistiku průchodu.
+func (s *Scanner) processFile(ctx context.Context, absPath string) (bool, error) {
 	rel := s.relPath(absPath)
 
 	// Rychlá kontrola mimo zámek – kapitola identifikována cestou k souboru
 	exists, err := s.store.ChapterExistsByFilePath(ctx, rel)
 	if err != nil {
 		s.log.Error("chyba dotazu do DB", "path", rel, "err", err)
-		return
+		return false, err
 	}
 	if exists {
 		s.log.Debug("soubor již v DB, přeskakuji", "path", rel)
-		return
+		return false, nil
 	}
 
 	// Serialisovaný zápis
@@ -270,10 +375,12 @@ func (s *Scanner) processFile(ctx context.Context, absPath string) {
 	// Dvojitá kontrola po získání zámku
 	exists, err = s.store.ChapterExistsByFilePath(ctx, rel)
 	if err != nil || exists {
-		return
+		return false, err
 	}
 
 	if err := s.ingest(ctx, absPath, rel); err != nil {
 		s.log.Error("ingest selhal", "path", rel, "err", err)
+		return false, err
 	}
+	return true, nil
 }

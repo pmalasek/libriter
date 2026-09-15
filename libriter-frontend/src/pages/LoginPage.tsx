@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
-import { useLogin } from '@/api/hooks'
+import { useAuthConfig, useLogin } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
 import { Logo } from '@/components/layout/Logo'
 import { Button } from '@/components/ui/button'
@@ -15,6 +15,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const login = useLogin()
+  const authConfig = useAuthConfig()
 
   const from = (location.state as { from?: string } | null)?.from ?? '/'
 
@@ -76,12 +77,16 @@ export function LoginPage() {
               </Button>
             </form>
 
-            <p className="mt-4 text-center text-sm text-muted-foreground">
-              Nemáte účet?{' '}
-              <Link to="/register" className="font-medium text-foreground underline-offset-4 hover:underline">
-                Zaregistrujte se
-              </Link>
-            </p>
+            {/* Odkaz se ukáže, až je jasné, že registrace běží – jinak by
+                při vypnuté registraci blikl a zmizel. */}
+            {authConfig.data?.registration_enabled ? (
+              <p className="mt-4 text-center text-sm text-muted-foreground">
+                Nemáte účet?{' '}
+                <Link to="/register" className="font-medium text-foreground underline-offset-4 hover:underline">
+                  Zaregistrujte se
+                </Link>
+              </p>
+            ) : null}
           </CardContent>
         </Card>
       </div>

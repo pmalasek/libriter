@@ -1,6 +1,7 @@
 package model
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -101,6 +102,20 @@ type User struct {
 	Role         string    `json:"role"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// AuditEntry je záznam administrativní akce. ActorEmail je snímek z doby
+// zápisu – účet mohl mezitím zmizet a ActorID je pak NULL.
+type AuditEntry struct {
+	ID          int64           `json:"id"`
+	ActorID     *uuid.UUID      `json:"actor_id,omitempty"`
+	ActorEmail  string          `json:"actor_email"`
+	Action      string          `json:"action"`
+	TargetType  string          `json:"target_type"`
+	TargetID    string          `json:"target_id"`
+	TargetLabel string          `json:"target_label"`
+	Details     json.RawMessage `json:"details"`
+	CreatedAt   time.Time       `json:"created_at"`
 }
 
 type PlaybackPosition struct {

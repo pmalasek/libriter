@@ -35,7 +35,7 @@ func newCoverTestEnv(t *testing.T) (*storage.Store, http.Handler, string) {
 
 	store := storage.New(conn)
 	coverRoot := t.TempDir()
-	h := NewBook(service.NewBook(store), coverRoot)
+	h := NewBook(service.NewBook(store), coverRoot, nil)
 
 	r := chi.NewRouter()
 	r.Get("/books/{id}/cover", h.Cover)

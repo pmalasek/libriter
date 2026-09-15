@@ -138,9 +138,9 @@ func TestChainFetchByURLRoutesBySource(t *testing.T) {
 
 func TestBuildChainRespectsConfig(t *testing.T) {
 	factories := map[string]Factory{
-		"a": func() Provider { return &fakeProvider{name: "a"} },
-		"b": func() Provider { return &fakeProvider{name: "b"} },
-		"c": func() Provider { return &fakeProvider{name: "c"} },
+		"a": func(ProviderConfig) Provider { return &fakeProvider{name: "a"} },
+		"b": func(ProviderConfig) Provider { return &fakeProvider{name: "b"} },
+		"c": func(ProviderConfig) Provider { return &fakeProvider{name: "c"} },
 	}
 
 	tests := []struct {
@@ -157,7 +157,7 @@ func TestBuildChainRespectsConfig(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := BuildChain(tt.names, factories).Providers()
+			got := BuildChain(tt.names, factories, ProviderConfig{}).Providers()
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Providers() = %v, chtěno %v", got, tt.want)
 			}

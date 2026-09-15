@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
-import { useRegister } from '@/api/hooks'
+import { useAuthConfig, useRegister } from '@/api/hooks'
+import { ROLE_LABELS } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { Logo } from '@/components/layout/Logo'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,7 @@ export function RegisterPage() {
   const { signIn } = useAuth()
   const navigate = useNavigate()
   const register = useRegister()
+  const authConfig = useAuthConfig()
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -40,6 +42,8 @@ export function RegisterPage() {
   }
 
   const error = localError ?? register.error?.message ?? null
+  const disabled = authConfig.data?.registration_enabled === false
+  const defaultRole = authConfig.data?.default_role
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
@@ -50,9 +54,18 @@ export function RegisterPage() {
         <Card>
           <CardHeader>
             <CardTitle>Registrace</CardTitle>
-            <CardDescription>Nový účet získá roli čtenáře.</CardDescription>
+            <CardDescription>
+              {disabled
+                ? 'Nové účty zakládá administrátor.'
+                : `Nový účet získá roli ${defaultRole ? ROLE_LABELS[defaultRole].toLowerCase() : 'čtenáře'}.`}
+            </CardDescription>
           </CardHeader>
           <CardContent>
+            {disabled ? (
+              <p className="text-sm text-muted-foreground">
+                Registrace nových účtů je vypnutá. Účet vám založí administrátor.
+              </p>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="display_name">Jméno</Label>
@@ -95,6 +108,7 @@ export function RegisterPage() {
                 {register.isPending ? 'Zakládám účet…' : 'Vytvořit účet'}
               </Button>
             </form>
+            )}
 
             <p className="mt-4 text-center text-sm text-muted-foreground">
               Už máte účet?{' '}

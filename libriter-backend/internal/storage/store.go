@@ -15,6 +15,10 @@ var ErrNotFound = errors.New("not found")
 // ErrConflict se vrátí při porušení unique constraint.
 var ErrConflict = errors.New("conflict")
 
+// ErrLastAdmin se vrátí při pokusu odebrat roli nebo smazat účet posledního
+// administrátora. Bez admina by knihovnu nešlo spravovat jinak než přes CLI.
+var ErrLastAdmin = errors.New("last admin")
+
 // Store sdružuje všechny DB operace.
 type Store struct {
 	db *sql.DB

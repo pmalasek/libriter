@@ -18,10 +18,12 @@ import (
 type BookHandler struct {
 	svc       *service.BookService
 	coverRoot string // adresář s obálkami (COVER_ROOT)
+	// audit je volitelný (nil = mazání se nezaznamenává).
+	audit *service.AuditService
 }
 
-func NewBook(svc *service.BookService, coverRoot string) *BookHandler {
-	return &BookHandler{svc: svc, coverRoot: coverRoot}
+func NewBook(svc *service.BookService, coverRoot string, audit *service.AuditService) *BookHandler {
+	return &BookHandler{svc: svc, coverRoot: coverRoot, audit: audit}
 }
 
 // GET /api/v1/books
@@ -191,6 +193,12 @@ func (h *BookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Název načteme dřív, než záznam zmizí – audit má být čitelný.
+	var title string
+	if b, err := h.svc.GetByID(r.Context(), id); err == nil {
+		title = b.Title
+	}
+
 	if err := h.svc.Delete(r.Context(), id); errors.Is(err, service.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "kniha nenalezena")
 		return
@@ -198,6 +206,13 @@ func (h *BookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "chyba při mazání knihy")
 		return
 	}
+
+	h.audit.Record(r.Context(), actorID(r), service.AuditEvent{
+		Action:      service.AuditBookDelete,
+		TargetType:  service.AuditTargetBook,
+		TargetID:    id.String(),
+		TargetLabel: title,
+	})
 
 	w.WriteHeader(http.StatusNoContent)
 }

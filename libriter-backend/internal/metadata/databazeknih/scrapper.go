@@ -27,6 +27,11 @@ import (
 	"golang.org/x/net/html"
 )
 
+// ProviderName je jméno zdroje v nastavení. Handler podle něj v řetězci
+// hledá právě tohoto klienta – endpoint /metadata/book/{id} pracuje
+// s číselným ID, které ostatní zdroje nesdílejí.
+const ProviderName = providerName
+
 const (
 	providerName = "databazeknih"
 	baseURL      = "https://www.databazeknih.cz"

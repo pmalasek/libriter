@@ -222,3 +222,158 @@ export const ROLE_LABELS: Record<Role, string> = {
   editor: 'Editor',
   reader: 'Čtenář',
 }
+
+// --- administrace ---
+
+/** GET /auth/config – veřejné, přihlašovací stránka podle toho skrývá registraci. */
+export interface AuthConfig {
+  registration_enabled: boolean
+  default_role: Role
+}
+
+/** POST /admin/users – zakládá účet s libovolnou rolí. */
+export interface CreateUserRequest {
+  display_name: string
+  email: string
+  password: string
+  role: Role
+}
+
+/** PUT /users/{id}/role */
+export interface SetRoleRequest {
+  role: Role
+}
+
+/** Zdroj metadat v nastavení; pořadí v poli je pořadí, ve kterém se zkouší. */
+export interface AdminProvider {
+  name: string
+  enabled: boolean
+  supports_authors: boolean
+  supports_images: boolean
+}
+
+/** GET /admin/settings/metadata */
+export interface MetadataSettings {
+  providers: AdminProvider[]
+  google_books_api_key: string
+}
+
+/** PUT /admin/settings/metadata – backend má DisallowUnknownFields. */
+export interface MetadataSettingsRequest {
+  providers: { name: string; enabled: boolean }[]
+  google_books_api_key: string
+}
+
+/** GET a PUT /admin/settings/registration */
+export interface RegistrationSettings {
+  enabled: boolean
+  default_role: Extract<Role, 'reader' | 'editor'>
+}
+
+/** GET /admin/scanner */
+export interface ScannerStatus {
+  running: boolean
+  /** „startup“ při startu serveru, „manual“ z administrace. */
+  trigger: string
+  started_at: string | null
+  finished_at: string | null
+  processed: number
+  ingested: number
+  errors: number
+  last_error: string
+  watcher_active: boolean
+}
+
+export interface RepairBook {
+  id: string
+  title: string
+  /** Adresář knihy – jinde v API se cesty k audiu nevracejí. */
+  file_path: string
+}
+
+/** GET /admin/library/repair – náhled, nic nemění. */
+export interface RepairPlan {
+  rescan: RepairBook[]
+  duplicates: RepairBook[]
+}
+
+/** POST /admin/library/repair */
+export interface RepairResult {
+  plan: RepairPlan
+  deleted_chapters: number
+  deleted_books: number
+}
+
+/** GET /admin/stats */
+export interface LibraryStats {
+  books: number
+  authors: number
+  series: number
+  users: number
+  chapters: number
+  total_duration_seconds: number
+  books_without_cover: number
+  books_without_description: number
+  /** Kapitoly s délkou 1 s – vzniknou, když na serveru chybí ffprobe. */
+  placeholder_chapters: number
+  books_with_placeholder_chapters: number
+}
+
+export interface DiskUsage {
+  path: string
+  free_bytes: number
+  total_bytes: number
+}
+
+/** GET /admin/system */
+export interface SystemInfo {
+  version: string
+  go_version: string
+  os: string
+  env: string
+  started_at: string
+  uptime_seconds: number
+  db_path: string
+  audio_root: string
+  cover_root: string
+  author_image_root: string
+  ffprobe_available: boolean
+  ffprobe_path: string
+  /** null na systémech, kde volné místo nejde zjistit. */
+  disk: DiskUsage | null
+}
+
+/** Záznam v audit logu (GET /admin/audit). */
+export interface AuditEntry {
+  id: number
+  actor_id?: string
+  /** E-mail v době akce; zůstává i po smazání účtu. */
+  actor_email: string
+  action: string
+  target_type: string
+  target_id: string
+  target_label: string
+  details: Record<string, unknown>
+  created_at: string
+}
+
+/** Stránka auditu; next_before je kurzor pro další stránku. */
+export interface AuditPage {
+  items: AuditEntry[]
+  next_before: number | null
+}
+
+/** Čitelné názvy akcí v auditu. */
+export const AUDIT_ACTION_LABELS: Record<string, string> = {
+  'user.create': 'Založení účtu',
+  'user.role_change': 'Změna role',
+  'user.delete': 'Smazání účtu',
+  'user.password_reset': 'Reset hesla',
+  'settings.metadata_update': 'Změna zdrojů metadat',
+  'settings.registration_update': 'Změna nastavení registrace',
+  'book.delete': 'Smazání knihy',
+  'author.delete': 'Smazání autora',
+  'series.delete': 'Smazání série',
+  'scanner.rescan': 'Spuštění kontroly knihovny',
+  'library.repair_apply': 'Oprava kapitol',
+}

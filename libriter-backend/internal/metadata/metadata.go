@@ -171,6 +171,21 @@ func NewChain(providers ...Provider) *Chain {
 	return &Chain{providers: providers}
 }
 
+// Chain vrací sám sebe, aby statický řetězec šlo předat všude, kde se čeká
+// zdroj řetězce (ChainSource). Server tam posílá Registry, testy Chain.
+func (c *Chain) Chain() *Chain { return c }
+
+// Provider najde zapnutý zdroj podle jména. Používá ho endpoint pracující
+// s číselným ID databazeknih.cz, které ostatní zdroje nesdílejí.
+func (c *Chain) Provider(name string) (Provider, bool) {
+	for _, p := range c.providers {
+		if p.Name() == name {
+			return p, true
+		}
+	}
+	return nil, false
+}
+
 // Providers vrací jména zdrojů v pořadí, ve kterém se zkoušejí.
 func (c *Chain) Providers() []string {
 	names := make([]string, 0, len(c.providers))

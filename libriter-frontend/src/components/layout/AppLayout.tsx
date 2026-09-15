@@ -1,6 +1,7 @@
 import { MenuIcon } from 'lucide-react'
 import { Suspense, useState } from 'react'
 import { Link, Outlet } from 'react-router'
+import { useRefreshProfile } from '@/auth/useRefreshProfile'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Logo } from './Logo'
@@ -10,6 +11,9 @@ import { UserMenu } from './UserMenu'
 
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false)
+
+  // Role v prohlížeči může být z minulého přihlášení – srovnáme ji se serverem.
+  useRefreshProfile()
 
   return (
     <div className="min-h-svh bg-background text-foreground">

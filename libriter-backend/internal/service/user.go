@@ -35,8 +35,9 @@ func (u *UserService) List(ctx context.Context) ([]model.User, error) {
 	return u.store.ListUsers(ctx)
 }
 
-// Create vytvoří uživatele s explicitní rolí. Používá CLI (`libriter user add`);
-// API registrace jde přes AuthService.Register, která vždy přiřadí roli reader.
+// Create vytvoří uživatele s explicitní rolí. Používá ji CLI
+// (`libriter user add`) i administrace; veřejná registrace jde přes
+// AuthService.Register, kde roli určuje nastavení registrace.
 func (u *UserService) Create(ctx context.Context, displayName, email, password, role string) (*model.User, error) {
 	return createUser(ctx, u.store, displayName, email, password, role)
 }
@@ -81,8 +82,14 @@ func (u *UserService) ChangePassword(ctx context.Context, id uuid.UUID, newPassw
 }
 
 func (u *UserService) Delete(ctx context.Context, id uuid.UUID) error {
-	if err := u.store.DeleteUser(ctx, id); errors.Is(err, storage.ErrNotFound) {
+	err := u.store.DeleteUser(ctx, id)
+	switch {
+	case errors.Is(err, storage.ErrNotFound):
 		return ErrNotFound
+	case errors.Is(err, storage.ErrLastAdmin):
+		return ErrLastAdmin
+	case err != nil:
+		return err
 	}
 	u.invalidate(id)
 	return nil
@@ -93,6 +100,9 @@ func (u *UserService) SetRole(ctx context.Context, userID uuid.UUID, roleName st
 		return fmt.Errorf("neznámá role: %s", roleName)
 	}
 	if err := u.store.SetUserRole(ctx, userID, roleName); err != nil {
+		if errors.Is(err, storage.ErrLastAdmin) {
+			return ErrLastAdmin
+		}
 		return err
 	}
 	u.invalidate(userID)

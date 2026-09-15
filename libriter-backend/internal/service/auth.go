@@ -104,9 +104,10 @@ func (a *AuthService) cachedRole(userID uuid.UUID) (string, bool) {
 	return entry.role, true
 }
 
-// Register vytvoří nového uživatele s rolí reader (výchozí) a vrátí JWT token.
-func (a *AuthService) Register(ctx context.Context, displayName, email, password string) (*model.User, string, error) {
-	u, err := createUser(ctx, a.store, displayName, email, password, model.RoleReader)
+// Register vytvoří nového uživatele s danou rolí a vrátí JWT token.
+// Roli určuje nastavení registrace (viz SettingsService), ne klient.
+func (a *AuthService) Register(ctx context.Context, displayName, email, password, role string) (*model.User, string, error) {
+	u, err := createUser(ctx, a.store, displayName, email, password, role)
 	if err != nil {
 		return nil, "", err
 	}
@@ -211,4 +212,5 @@ var (
 	ErrForbidden          = errors.New("nedostatečná oprávnění")
 	ErrNotFound           = errors.New("not found")
 	ErrConflict           = errors.New("záznam již existuje")
+	ErrLastAdmin          = errors.New("poslední administrátor")
 )

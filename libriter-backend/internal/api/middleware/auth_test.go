@@ -56,7 +56,7 @@ func TestAuthenticateRejectsDeletedUser(t *testing.T) {
 	ctx := context.Background()
 	store, authSvc, h := newAuthTestEnv(t)
 
-	u, token, err := authSvc.Register(ctx, "Petr", "petr@example.com", "tajneheslo")
+	u, token, err := authSvc.Register(ctx, "Petr", "petr@example.com", "tajneheslo", model.RoleReader)
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}
@@ -85,6 +85,12 @@ func TestAuthenticateUsesRoleFromDB(t *testing.T) {
 	u, err := userSvc.Create(ctx, "Admin", "admin@example.com", "tajneheslo", model.RoleAdmin)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
+	}
+
+	// Druhý admin je potřeba, aby šlo prvnímu roli snížit – poslednímu
+	// administrátorovi ji odebrat nelze.
+	if _, err := userSvc.Create(ctx, "Záložní admin", "admin2@example.com", "tajneheslo", model.RoleAdmin); err != nil {
+		t.Fatalf("Create druhého admina: %v", err)
 	}
 
 	_, token, err := authSvc.Login(ctx, "admin@example.com", "tajneheslo")

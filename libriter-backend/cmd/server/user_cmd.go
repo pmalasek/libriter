@@ -157,6 +157,9 @@ func runUserSetRole(args []string) error {
 	}
 
 	if err := userSvc.SetRole(ctx, u.ID, *role); err != nil {
+		if errors.Is(err, service.ErrLastAdmin) {
+			return fmt.Errorf("%s je poslední administrátor – nejdřív povyšte někoho jiného", u.Email)
+		}
 		return err
 	}
 

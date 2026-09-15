@@ -18,10 +18,17 @@ type AuthorHandler struct {
 	imageRoot string
 	// images stahuje fotky z povolených zdrojů; nil = zdroje jsou vypnuté.
 	images *service.AuthorImageService
+	// audit je volitelný (nil = mazání se nezaznamenává).
+	audit *service.AuditService
 }
 
-func NewAuthor(svc *service.AuthorService, imageRoot string, images *service.AuthorImageService) *AuthorHandler {
-	return &AuthorHandler{svc: svc, imageRoot: imageRoot, images: images}
+func NewAuthor(
+	svc *service.AuthorService,
+	imageRoot string,
+	images *service.AuthorImageService,
+	audit *service.AuditService,
+) *AuthorHandler {
+	return &AuthorHandler{svc: svc, imageRoot: imageRoot, images: images, audit: audit}
 }
 
 // GET /api/v1/authors
@@ -118,6 +125,11 @@ func (h *AuthorHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	var name string
+	if a, err := h.svc.GetByID(r.Context(), id); err == nil {
+		name = a.Name
+	}
+
 	err := h.svc.Delete(r.Context(), id)
 	switch {
 	case errors.Is(err, service.ErrNotFound):
@@ -130,6 +142,14 @@ func (h *AuthorHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "chyba při mazání autora")
 		return
 	}
+
+	h.audit.Record(r.Context(), actorID(r), service.AuditEvent{
+		Action:      service.AuditAuthorDelete,
+		TargetType:  service.AuditTargetAuthor,
+		TargetID:    id.String(),
+		TargetLabel: name,
+	})
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -292,10 +312,12 @@ func checkLifeYears(birth, death *int) error {
 
 type SeriesHandler struct {
 	svc *service.SeriesService
+	// audit je volitelný (nil = mazání se nezaznamenává).
+	audit *service.AuditService
 }
 
-func NewSeries(svc *service.SeriesService) *SeriesHandler {
-	return &SeriesHandler{svc: svc}
+func NewSeries(svc *service.SeriesService, audit *service.AuditService) *SeriesHandler {
+	return &SeriesHandler{svc: svc, audit: audit}
 }
 
 // GET /api/v1/series
@@ -386,6 +408,11 @@ func (h *SeriesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	var title string
+	if sr, err := h.svc.GetByID(r.Context(), id); err == nil {
+		title = sr.Title
+	}
+
 	if err := h.svc.Delete(r.Context(), id); errors.Is(err, service.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "série nenalezena")
 		return
@@ -393,5 +420,13 @@ func (h *SeriesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "chyba při mazání série")
 		return
 	}
+
+	h.audit.Record(r.Context(), actorID(r), service.AuditEvent{
+		Action:      service.AuditSeriesDelete,
+		TargetType:  service.AuditTargetSeries,
+		TargetID:    id.String(),
+		TargetLabel: title,
+	})
+
 	w.WriteHeader(http.StatusNoContent)
 }

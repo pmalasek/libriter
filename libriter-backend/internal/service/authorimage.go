@@ -18,6 +18,13 @@ import (
 // zdroji metadat.
 var ErrImageNotAllowed = errors.New("adresa obrázku nepatří povolenému zdroji")
 
+// ChainSource dodává aktuální řetězec zdrojů metadat. Server předává
+// metadata.Registry, který řetězec mění, když admin přenastaví zdroje;
+// testům stačí samotný *metadata.Chain.
+type ChainSource interface {
+	Chain() *metadata.Chain
+}
+
 // AuthorImageService stahuje fotky autorů z povolených zdrojů na disk.
 //
 // Adresu určuje klient, proto se stahuje jen z hostitelů, které některý
@@ -25,13 +32,13 @@ var ErrImageNotAllowed = errors.New("adresa obrázku nepatří povolenému zdroj
 // sáhnout kamkoliv (SSRF).
 type AuthorImageService struct {
 	store    *storage.Store
-	chain    *metadata.Chain
+	chain    ChainSource
 	fetcher  *metadata.Fetcher
 	root     string
 	maxBytes int
 }
 
-func NewAuthorImage(store *storage.Store, chain *metadata.Chain, root string) *AuthorImageService {
+func NewAuthorImage(store *storage.Store, chain ChainSource, root string) *AuthorImageService {
 	return &AuthorImageService{
 		store:    store,
 		chain:    chain,
@@ -43,7 +50,7 @@ func NewAuthorImage(store *storage.Store, chain *metadata.Chain, root string) *A
 
 // SetFromURL stáhne obrázek a uloží ho jako fotku autora.
 func (s *AuthorImageService) SetFromURL(ctx context.Context, authorID uuid.UUID, imageURL string) (*model.Author, error) {
-	if !s.chain.SupportsImageURL(imageURL) {
+	if !s.chain.Chain().SupportsImageURL(imageURL) {
 		return nil, ErrImageNotAllowed
 	}
 

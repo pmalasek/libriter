@@ -1,6 +1,7 @@
 import { lazy } from 'react'
 import { Route, Routes } from 'react-router'
 import { RedirectIfAuthenticated, RequireAuth } from '@/auth/RequireAuth'
+import { RequireRole } from '@/auth/RequireRole'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
@@ -14,6 +15,15 @@ const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then((module) => 
 const ProfilePage = lazy(() => import('@/pages/ProfilePage').then((module) => ({ default: module.ProfilePage })))
 const SeriesDetailPage = lazy(() => import('@/pages/SeriesDetailPage').then((module) => ({ default: module.SeriesDetailPage })))
 const SeriesPage = lazy(() => import('@/pages/SeriesPage').then((module) => ({ default: module.SeriesPage })))
+
+// Administrace – kód se stáhne, až když ji admin otevře.
+const AdminLayout = lazy(() => import('@/pages/admin/AdminLayout').then((module) => ({ default: module.AdminLayout })))
+const AdminOverviewPage = lazy(() => import('@/pages/admin/AdminOverviewPage').then((module) => ({ default: module.AdminOverviewPage })))
+const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsersPage').then((module) => ({ default: module.AdminUsersPage })))
+const AdminMetadataPage = lazy(() => import('@/pages/admin/AdminMetadataPage').then((module) => ({ default: module.AdminMetadataPage })))
+const AdminLibraryPage = lazy(() => import('@/pages/admin/AdminLibraryPage').then((module) => ({ default: module.AdminLibraryPage })))
+const AdminSettingsPage = lazy(() => import('@/pages/admin/AdminSettingsPage').then((module) => ({ default: module.AdminSettingsPage })))
+const AdminAuditPage = lazy(() => import('@/pages/admin/AdminAuditPage').then((module) => ({ default: module.AdminAuditPage })))
 
 export function App() {
   return (
@@ -32,6 +42,18 @@ export function App() {
           <Route path="series" element={<SeriesPage />} />
           <Route path="series/:id" element={<SeriesDetailPage />} />
           <Route path="profile" element={<ProfilePage />} />
+
+          <Route element={<RequireRole role="admin" />}>
+            <Route path="admin" element={<AdminLayout />}>
+              <Route index element={<AdminOverviewPage />} />
+              <Route path="users" element={<AdminUsersPage />} />
+              <Route path="metadata" element={<AdminMetadataPage />} />
+              <Route path="library" element={<AdminLibraryPage />} />
+              <Route path="settings" element={<AdminSettingsPage />} />
+              <Route path="audit" element={<AdminAuditPage />} />
+            </Route>
+          </Route>
+
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Route>

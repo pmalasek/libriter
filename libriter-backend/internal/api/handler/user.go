@@ -15,10 +15,12 @@ import (
 
 type UserHandler struct {
 	svc *service.UserService
+	// audit je volitelný (nil = akce se nezaznamenávají).
+	audit *service.AuditService
 }
 
-func NewUser(svc *service.UserService) *UserHandler {
-	return &UserHandler{svc: svc}
+func NewUser(svc *service.UserService, audit *service.AuditService) *UserHandler {
+	return &UserHandler{svc: svc, audit: audit}
 }
 
 // GET /api/v1/users  (admin)
@@ -132,7 +134,7 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Password) < 8 {
+	if len(req.Password) < minPasswordLength {
 		writeError(w, http.StatusBadRequest, "heslo musí mít alespoň 8 znaků")
 		return
 	}
@@ -145,6 +147,16 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Vlastní změna hesla je běžný úkon; do auditu patří jen reset cizího účtu.
+	if callerID != id {
+		h.audit.Record(r.Context(), callerID, service.AuditEvent{
+			Action:      service.AuditUserPasswordReset,
+			TargetType:  service.AuditTargetUser,
+			TargetID:    id.String(),
+			TargetLabel: userLabel(r, h.svc, id),
+		})
+	}
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -155,13 +167,36 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.svc.Delete(r.Context(), id); errors.Is(err, service.ErrNotFound) {
+	// Vlastní účet si admin smazat nemůže: buď by se odstřihl od administrace,
+	// nebo (u posledního admina) nechal knihovnu bez správce.
+	callerID, _ := middleware.UserIDFromCtx(r.Context())
+	if callerID == id {
+		writeError(w, http.StatusBadRequest, "nemůžete smazat vlastní účet")
+		return
+	}
+
+	// Popisek načteme dřív, než záznam zmizí.
+	label := userLabel(r, h.svc, id)
+
+	err := h.svc.Delete(r.Context(), id)
+	switch {
+	case errors.Is(err, service.ErrNotFound):
 		writeError(w, http.StatusNotFound, "uživatel nenalezen")
 		return
-	} else if err != nil {
+	case errors.Is(err, service.ErrLastAdmin):
+		writeError(w, http.StatusConflict, "nelze smazat posledního administrátora")
+		return
+	case err != nil:
 		writeError(w, http.StatusInternalServerError, "chyba při mazání")
 		return
 	}
+
+	h.audit.Record(r.Context(), callerID, service.AuditEvent{
+		Action:      service.AuditUserDelete,
+		TargetType:  service.AuditTargetUser,
+		TargetID:    id.String(),
+		TargetLabel: label,
+	})
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -181,16 +216,42 @@ func (h *UserHandler) SetRole(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var previousRole, label string
+	if u, err := h.svc.GetByID(r.Context(), id); err == nil {
+		previousRole, label = u.Role, u.Email
+	}
+
 	if err := h.svc.SetRole(r.Context(), id, req.Role); err != nil {
-		if errors.Is(err, service.ErrNotFound) {
+		switch {
+		case errors.Is(err, service.ErrNotFound):
 			writeError(w, http.StatusNotFound, "uživatel nenalezen")
-		} else {
+		case errors.Is(err, service.ErrLastAdmin):
+			writeError(w, http.StatusConflict, "nelze odebrat roli poslednímu administrátorovi")
+		default:
 			writeError(w, http.StatusBadRequest, err.Error())
 		}
 		return
 	}
 
+	callerID, _ := middleware.UserIDFromCtx(r.Context())
+	h.audit.Record(r.Context(), callerID, service.AuditEvent{
+		Action:      service.AuditUserRoleChange,
+		TargetType:  service.AuditTargetUser,
+		TargetID:    id.String(),
+		TargetLabel: label,
+		Details:     map[string]string{"from": previousRole, "to": req.Role},
+	})
+
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "role": req.Role})
+}
+
+// userLabel vrátí e-mail uživatele pro čitelný záznam v auditu.
+func userLabel(r *http.Request, svc *service.UserService, id uuid.UUID) string {
+	u, err := svc.GetByID(r.Context(), id)
+	if err != nil {
+		return ""
+	}
+	return u.Email
 }
 
 // --- helper ---

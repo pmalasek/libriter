@@ -7,21 +7,37 @@ import (
 
 	"libriter/internal/metadata"
 	"libriter/internal/metadata/databazeknih"
+	"libriter/internal/service"
 
 	"github.com/go-chi/chi/v5"
 )
 
-// MetadataHandler obsluhuje vyhledávání metadat. Zdroje a jejich pořadí
-// určuje METADATA_PROVIDERS, viz metadata.Chain.
+// MetadataHandler obsluhuje vyhledávání metadat. Které zdroje a v jakém
+// pořadí se zkoušejí, určuje nastavení v administraci – proto se řetězec
+// bere až při požadavku, ne jednou při startu.
 type MetadataHandler struct {
-	chain *metadata.Chain
-	// dk je potřeba jen pro /metadata/book/{id}, kde je číselné ID
-	// specifické pro databazeknih.cz. Může být nil, pokud zdroj není zapnutý.
-	dk *databazeknih.Client
+	source service.ChainSource
 }
 
-func NewMetadata(chain *metadata.Chain, dk *databazeknih.Client) *MetadataHandler {
-	return &MetadataHandler{chain: chain, dk: dk}
+func NewMetadata(source service.ChainSource) *MetadataHandler {
+	return &MetadataHandler{source: source}
+}
+
+// chain vrátí aktuální řetězec zdrojů.
+func (h *MetadataHandler) chain() *metadata.Chain {
+	return h.source.Chain()
+}
+
+// dkClient vrátí klienta databazeknih.cz, pokud je tento zdroj zapnutý.
+// Ostatní zdroje číselné ID knihy nesdílejí, takže endpoint /metadata/book/{id}
+// bez něj obsloužit nejde.
+func (h *MetadataHandler) dkClient() (*databazeknih.Client, bool) {
+	p, ok := h.chain().Provider(databazeknih.ProviderName)
+	if !ok {
+		return nil, false
+	}
+	dk, ok := p.(*databazeknih.Client)
+	return dk, ok
 }
 
 // GET /api/v1/metadata/search?q=<název>&author=<autor>
@@ -40,7 +56,7 @@ func (h *MetadataHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := h.chain.Search(r.Context(), query)
+	results, err := h.chain().Search(r.Context(), query)
 	if err != nil {
 		if errors.Is(err, r.Context().Err()) {
 			writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
@@ -65,8 +81,8 @@ func (h *MetadataHandler) Search(w http.ResponseWriter, r *http.Request) {
 // Přístup: editor+
 func (h *MetadataHandler) Sources(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string][]string{
-		"books":   h.chain.Providers(),
-		"authors": h.chain.AuthorProviders(),
+		"books":   h.chain().Providers(),
+		"authors": h.chain().AuthorProviders(),
 	})
 }
 
@@ -78,7 +94,7 @@ func (h *MetadataHandler) SearchAuthors(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	results, err := h.chain.SearchAuthors(r.Context(), q)
+	results, err := h.chain().SearchAuthors(r.Context(), q)
 	if err != nil {
 		if errors.Is(err, r.Context().Err()) {
 			writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
@@ -104,7 +120,7 @@ func (h *MetadataHandler) FetchAuthorByURL(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	meta, err := h.chain.FetchAuthorByURL(r.Context(), authorURL)
+	meta, err := h.chain().FetchAuthorByURL(r.Context(), authorURL)
 	switch {
 	case errors.Is(err, metadata.ErrNoProvider):
 		writeError(w, http.StatusBadRequest, "url nepatří žádnému zapnutému zdroji metadat")
@@ -126,7 +142,8 @@ func (h *MetadataHandler) FetchAuthorByURL(w http.ResponseWriter, r *http.Reques
 // ID nesdílejí, pro ně slouží varianta s url.
 // Přístup: editor+
 func (h *MetadataHandler) FetchByID(w http.ResponseWriter, r *http.Request) {
-	if h.dk == nil {
+	dk, ok := h.dkClient()
+	if !ok {
 		writeError(w, http.StatusNotFound, "zdroj databazeknih.cz není zapnutý")
 		return
 	}
@@ -138,7 +155,7 @@ func (h *MetadataHandler) FetchByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta, err := h.dk.FetchBook(r.Context(), id)
+	meta, err := dk.FetchBook(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, r.Context().Err()) {
 			writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
@@ -148,7 +165,7 @@ func (h *MetadataHandler) FetchByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta.Source = h.dk.Name()
+	meta.Source = dk.Name()
 	if len(meta.Authors) == 0 {
 		meta.Authors = metadata.SplitAuthors(meta.Author)
 	}
@@ -167,7 +184,7 @@ func (h *MetadataHandler) FetchByURL(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta, err := h.chain.FetchByURL(r.Context(), bookURL)
+	meta, err := h.chain().FetchByURL(r.Context(), bookURL)
 	switch {
 	case errors.Is(err, metadata.ErrNoProvider):
 		writeError(w, http.StatusBadRequest, "url nepatří žádnému zapnutému zdroji metadat")

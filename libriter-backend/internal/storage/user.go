@@ -155,14 +155,73 @@ func (s *Store) UpdateUserPassword(ctx context.Context, id uuid.UUID, passwordHa
 }
 
 // DeleteUser smaže uživatele (kaskáda odstraní role, pozice atd.)
+// Posledního administrátora smazat nelze – vrátí ErrLastAdmin.
 func (s *Store) DeleteUser(ctx context.Context, id uuid.UUID) error {
-	const q = `DELETE FROM users WHERE id = ?1`
-	res, err := s.db.ExecContext(ctx, q, id)
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("delete user: begin: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if err := checkNotLastAdmin(ctx, tx, id); err != nil {
+		return err
+	}
+
+	res, err := tx.ExecContext(ctx, `DELETE FROM users WHERE id = ?1`, id)
 	if err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
 	if rowsAffected(res) == 0 {
 		return ErrNotFound
+	}
+	return tx.Commit()
+}
+
+// CountUsersByRole vrátí počet uživatelů s danou rolí.
+func (s *Store) CountUsersByRole(ctx context.Context, roleName string) (int, error) {
+	n, err := countUsersByRole(ctx, s.db, roleName)
+	if err != nil {
+		return 0, fmt.Errorf("count users by role: %w", err)
+	}
+	return n, nil
+}
+
+func countUsersByRole(ctx context.Context, q querier, roleName string) (int, error) {
+	const sel = `
+		SELECT COUNT(*)
+		FROM user_roles ur
+		JOIN roles r ON r.id = ur.role_id
+		WHERE r.name = ?1`
+
+	var n int
+	err := q.QueryRowContext(ctx, sel, roleName).Scan(&n)
+	return n, err
+}
+
+// checkNotLastAdmin ověří, že uživatel není jediný administrátor. Kontrola
+// běží uvnitř transakce volajícího, takže dva souběžné pokusy nemohou projít
+// oba naráz.
+func checkNotLastAdmin(ctx context.Context, q querier, userID uuid.UUID) error {
+	const sel = `
+		SELECT COUNT(*)
+		FROM user_roles ur
+		JOIN roles r ON r.id = ur.role_id
+		WHERE r.name = ?1 AND ur.user_id = ?2`
+
+	var isAdmin int
+	if err := q.QueryRowContext(ctx, sel, model.RoleAdmin, userID).Scan(&isAdmin); err != nil {
+		return fmt.Errorf("check last admin: %w", err)
+	}
+	if isAdmin == 0 {
+		return nil
+	}
+
+	admins, err := countUsersByRole(ctx, q, model.RoleAdmin)
+	if err != nil {
+		return fmt.Errorf("check last admin: %w", err)
+	}
+	if admins <= 1 {
+		return ErrLastAdmin
 	}
 	return nil
 }
@@ -185,7 +244,8 @@ func (s *Store) GetUserRole(ctx context.Context, userID uuid.UUID) (string, erro
 	return role, err
 }
 
-// SetUserRole nahradí roli uživatele novou rolí.
+// SetUserRole nahradí roli uživatele novou rolí. Poslednímu administrátorovi
+// roli odebrat nelze – vrátí ErrLastAdmin.
 func (s *Store) SetUserRole(ctx context.Context, userID uuid.UUID, roleName string) error {
 	// Validace, že role existuje
 	if _, ok := model.RoleLevel[strings.ToLower(roleName)]; !ok {
@@ -197,6 +257,12 @@ func (s *Store) SetUserRole(ctx context.Context, userID uuid.UUID, roleName stri
 		return err
 	}
 	defer tx.Rollback() //nolint:errcheck
+
+	if roleName != model.RoleAdmin {
+		if err := checkNotLastAdmin(ctx, tx, userID); err != nil {
+			return err
+		}
+	}
 
 	if _, err = tx.ExecContext(ctx, `DELETE FROM user_roles WHERE user_id = ?1`, userID); err != nil {
 		return fmt.Errorf("clear roles: %w", err)
