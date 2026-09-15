@@ -16,6 +16,7 @@ import { BookEditDialog } from '@/components/BookEditDialog'
 import { BookGrid } from '@/components/BookGrid'
 import { BookCover } from '@/components/BookCover'
 import { ErrorState } from '@/components/ErrorState'
+import { ExpandableText } from '@/components/ExpandableText'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
@@ -148,7 +149,7 @@ export function BookDetailPage() {
           </div>
 
           {data.description ? (
-            <p className="mt-6 whitespace-pre-line text-sm leading-relaxed">{data.description}</p>
+            <ExpandableText text={data.description} className="mt-6" />
           ) : (
             <p className="mt-6 text-sm text-muted-foreground">Popis není k dispozici.</p>
           )}

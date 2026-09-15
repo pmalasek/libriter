@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import { useBooks, useSeriesOne } from '@/api/hooks'
 import { BookGrid } from '@/components/BookGrid'
 import { ErrorState } from '@/components/ErrorState'
+import { ExpandableText } from '@/components/ExpandableText'
 import { LoadingGrid } from '@/components/LoadingGrid'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -44,9 +45,7 @@ export function SeriesDetailPage() {
       />
 
       {series.data.description ? (
-        <p className="mb-8 max-w-3xl whitespace-pre-line text-sm leading-relaxed">
-          {series.data.description}
-        </p>
+        <ExpandableText text={series.data.description} className="mb-8 max-w-3xl" />
       ) : null}
 
       <BookGrid

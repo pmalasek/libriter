@@ -73,6 +73,7 @@ type Book struct {
 	Narrator        *string    `json:"narrator,omitempty"`
 	DurationSeconds int        `json:"duration_seconds"`
 	FilePath        string     `json:"-"`
+	AlbumTag        *string    `json:"-"` // album tag, podle kterého scanner páruje soubory ke knize
 	CoverPath       *string    `json:"cover_path,omitempty"`
 	Language        string     `json:"language"`
 	Description     *string    `json:"description,omitempty"`

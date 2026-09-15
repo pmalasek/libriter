@@ -8,6 +8,7 @@ import { AuthorEditDialog } from '@/components/AuthorEditDialog'
 import { AuthorImage, lifeYears } from '@/components/AuthorImage'
 import { BookGrid } from '@/components/BookGrid'
 import { ErrorState } from '@/components/ErrorState'
+import { ExpandableText } from '@/components/ExpandableText'
 import { LoadingGrid } from '@/components/LoadingGrid'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
@@ -62,9 +63,7 @@ export function AuthorDetailPage() {
           />
 
           {author.data.bio ? (
-            <p className="max-w-3xl whitespace-pre-line text-sm leading-relaxed">
-              {author.data.bio}
-            </p>
+            <ExpandableText text={author.data.bio} className="max-w-3xl" />
           ) : null}
         </div>
       </div>

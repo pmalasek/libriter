@@ -38,6 +38,12 @@ var audioExts = map[string]bool{
 	".aac": true, ".wav": true,
 }
 
+// IsAudioFile vrátí true, pokud má cesta příponu audio souboru, který scanner
+// ingestuje. Umožňuje kontrolu dat porovnat DB se stejnou množinou souborů.
+func IsAudioFile(path string) bool {
+	return audioExts[strings.ToLower(filepath.Ext(path))]
+}
+
 // Scanner sleduje AUDIO_ROOT a při detekci nového audio souboru ho ingestuje do DB.
 type Scanner struct {
 	audioRoot string

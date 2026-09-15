@@ -9,6 +9,7 @@
 // Narrator:     Artist, pokud se liší od autorů
 // ChapterTitle: Title tag → název souboru bez přípony
 // TrackNumber:  Track tag → 0 (pořadí z filesystému jako fallback)
+// DiscNumber:   Disc tag → 0 (jednodiskové vydání)
 // Délka:        ffprobe → 0 (zobrazí varování)
 
 package scanner
@@ -37,6 +38,7 @@ type AudioMeta struct {
 	// Metadata na úrovni kapitoly
 	ChapterTitle    string
 	TrackNumber     int // 0 = tag chybí → použije se pořadové číslo
+	DiscNumber      int // 0 = tag chybí; >1 = další disk, track čísla začínají znovu od 1
 	DurationSeconds int // 0 = ffprobe nedostupný
 }
 
@@ -59,9 +61,12 @@ func extractMeta(absPath, dirName string) (*AudioMeta, error) {
 		meta.BookTitle = cleanAlbumTitle(strings.TrimSpace(m.Album()))
 		meta.ChapterTitle = strings.TrimSpace(m.Title())
 
-		// Pořadí kapitoly z track čísla
+		// Pořadí kapitoly z track čísla, u multi-disk vydání i z čísla disku
 		if track, _ := m.Track(); track > 0 {
 			meta.TrackNumber = track
+		}
+		if disc, _ := m.Disc(); disc > 0 {
+			meta.DiscNumber = disc
 		}
 
 		// Autor: AlbumArtist > Composer > Artist

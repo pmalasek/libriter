@@ -11,6 +11,7 @@ const usage = `Libriter - osobní správce a přehrávač audioknih
 Použití:
   libriter [serve]              spustí HTTP server s webovým rozhraním (výchozí)
   libriter user <příkaz>        správa uživatelů z příkazové řádky
+  libriter repair-chapters      zkontroluje kapitoly proti souborům na disku
   libriter help                 vypíše tuto nápovědu
 
 Příkazy user:
@@ -39,6 +40,8 @@ func main() {
 		err = runServe()
 	case "user":
 		err = runUser(args[1:])
+	case "repair-chapters":
+		err = runRepairChapters(args[1:])
 	case "help", "-h", "--help":
 		fmt.Print(usage)
 		return

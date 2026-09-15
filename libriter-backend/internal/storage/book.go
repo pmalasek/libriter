@@ -19,6 +19,7 @@ type BookInput struct {
 	Narrator        *string
 	DurationSeconds int
 	FilePath        string
+	AlbumTag        *string // album tag souborů knihy; nil = kniha z dřívějších scanů
 	CoverPath       *string
 	Language        string
 	Description     *string
@@ -28,14 +29,14 @@ type BookInput struct {
 
 const bookColumns = `id, series_id, series_position, title, narrator,
 	       duration_seconds, file_path, cover_path, language, description,
-	       internal_rating, published_year, created_at, updated_at`
+	       internal_rating, published_year, created_at, updated_at, album_tag`
 
 const insertBookQuery = `
 	INSERT INTO books
 		(id, series_id, series_position, title, narrator,
 		 duration_seconds, file_path, cover_path, language, description, internal_rating,
-		 published_year)
-	VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)
+		 published_year, album_tag)
+	VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13)
 	RETURNING ` + bookColumns
 
 const updateBookQuery = `
@@ -43,7 +44,7 @@ const updateBookQuery = `
 		series_id = ?2, series_position = ?3, title = ?4,
 		narrator = ?5, duration_seconds = ?6, file_path = ?7, cover_path = ?8,
 		language = ?9, description = ?10, internal_rating = ?11,
-		published_year = ?12, updated_at = CURRENT_TIMESTAMP
+		published_year = ?12, album_tag = ?13, updated_at = CURRENT_TIMESTAMP
 	WHERE id = ?1
 	RETURNING ` + bookColumns
 
@@ -88,7 +89,7 @@ func bookRow(ctx context.Context, tx *sql.Tx, query string, id uuid.UUID, in Boo
 	return tx.QueryRowContext(ctx, query,
 		id, in.SeriesID, in.SeriesPosition, in.Title, in.Narrator,
 		in.DurationSeconds, in.FilePath, in.CoverPath, in.Language, in.Description,
-		in.InternalRating, in.PublishedYear,
+		in.InternalRating, in.PublishedYear, in.AlbumTag,
 	)
 }
 
@@ -107,6 +108,7 @@ func bookInputFrom(b *model.Book) BookInput {
 		Narrator:        b.Narrator,
 		DurationSeconds: b.DurationSeconds,
 		FilePath:        b.FilePath,
+		AlbumTag:        b.AlbumTag,
 		CoverPath:       b.CoverPath,
 		Language:        b.Language,
 		Description:     b.Description,
@@ -226,6 +228,88 @@ func (s *Store) GetBookByTitleAndAuthorID(ctx context.Context, title string, aut
 		LIMIT 1`
 
 	return s.getBookBy(ctx, q, title, authorID)
+}
+
+// GetBooksByAlbumTag vrátí všechny knihy s daným album tagem.
+// Stejný album tag může být v knihovně vícekrát (jiné vydání, jiný vypravěč),
+// proto scanner potřebuje vidět všechny a vybrat si podle umístění v adresářích.
+// Autor do dotazu nepatří: import metadat u knihy jméno autora přepíše
+// ("C. S. Lewis") a s podobou z tagu ("Clive Staples Lewis") se pak nepotká.
+// Knihy jsou seřazené od nejstarší, aby byl výběr stabilní mezi scany.
+func (s *Store) GetBooksByAlbumTag(ctx context.Context, albumTag string) ([]model.Book, error) {
+	const q = `SELECT ` + bookColumns + ` FROM books
+		WHERE album_tag = ?1
+		ORDER BY created_at, id`
+
+	rows, err := s.db.QueryContext(ctx, q, albumTag)
+	if err != nil {
+		return nil, fmt.Errorf("get books by album tag: %w", err)
+	}
+	defer rows.Close()
+
+	var books []model.Book
+	for rows.Next() {
+		b, err := scanBook(rows)
+		if err != nil {
+			return nil, err
+		}
+		books = append(books, *b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	for i := range books {
+		if books[i].Authors, err = loadBookAuthors(ctx, s.db, books[i].ID); err != nil {
+			return nil, err
+		}
+	}
+	return books, nil
+}
+
+// GetBookWithoutAlbumTagInDir najde knihu z dřívějších scanů (bez album tagu)
+// v daném adresáři. Když jich tam je víc, nelze rozhodnout, ke které soubor
+// patří, a vrací se ErrNotFound – scanner pak založí knihu novou.
+func (s *Store) GetBookWithoutAlbumTagInDir(ctx context.Context, dirPath string) (*model.Book, error) {
+	const q = `SELECT ` + bookColumns + ` FROM books
+		WHERE file_path = ?1 AND album_tag IS NULL
+		LIMIT 2`
+
+	rows, err := s.db.QueryContext(ctx, q, dirPath)
+	if err != nil {
+		return nil, fmt.Errorf("get book without album tag: %w", err)
+	}
+	defer rows.Close()
+
+	if !rows.Next() {
+		return nil, ErrNotFound
+	}
+	book, err := scanBook(rows)
+	if err != nil {
+		return nil, err
+	}
+	if rows.Next() {
+		return nil, ErrNotFound
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if book.Authors, err = loadBookAuthors(ctx, s.db, book.ID); err != nil {
+		return nil, err
+	}
+	return book, nil
+}
+
+// SetBookAlbumTag doplní album tag knize, která ho ještě nemá. Tím se kniha
+// z dřívějších scanů napojí na svůj album tag a dál se páruje podle něj.
+func (s *Store) SetBookAlbumTag(ctx context.Context, bookID uuid.UUID, albumTag string) error {
+	const q = `UPDATE books SET album_tag = ?2, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?1 AND album_tag IS NULL`
+	if _, err := s.db.ExecContext(ctx, q, bookID, albumTag); err != nil {
+		return fmt.Errorf("set book album tag: %w", err)
+	}
+	return nil
 }
 
 // GetBookByDirPath najde knihu podle relativní cesty k adresáři (books.file_path).
@@ -360,7 +444,7 @@ func scanBook(row scanner) (*model.Book, error) {
 	err := row.Scan(
 		&b.ID, &b.SeriesID, &b.SeriesPosition, &b.Title, &b.Narrator,
 		&b.DurationSeconds, &b.FilePath, &b.CoverPath, &b.Language, &b.Description,
-		&b.InternalRating, &b.PublishedYear, &b.CreatedAt, &b.UpdatedAt,
+		&b.InternalRating, &b.PublishedYear, &b.CreatedAt, &b.UpdatedAt, &b.AlbumTag,
 	)
 	if err != nil {
 		return nil, err
