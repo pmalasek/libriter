@@ -1,3 +1,4 @@
+import { LibraryIcon } from 'lucide-react'
 import { useSeriesById } from '@/api/hooks'
 import type { Book } from '@/api/types'
 import { BookCard, BookRow, BookRowHeader } from '@/components/BookCard'
@@ -14,7 +15,7 @@ export interface GridSelection {
 const GRID_CLASSES: Record<ViewMode, string> = {
   tiles: 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
   small: 'grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8',
-  list: 'divide-y rounded-xl border',
+  list: 'divide-y overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-foreground/6',
 }
 
 export function BookGrid({
@@ -53,7 +54,7 @@ export function BookGrid({
   }
 
   if (books.length === 0) {
-    return <EmptyState title={emptyTitle} description={emptyDescription} />
+    return <EmptyState title={emptyTitle} description={emptyDescription} icon={LibraryIcon} />
   }
 
   if (view === 'list') {

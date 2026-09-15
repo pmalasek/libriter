@@ -13,7 +13,7 @@ export function LoadingGrid({ count = 8, view = 'tiles' }: { count?: number; vie
     <div className={GRID[view]}>
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="space-y-2">
-          <Skeleton className="aspect-square w-full rounded-lg" />
+          <Skeleton className="aspect-square w-full rounded-2xl" />
           <Skeleton className="h-4 w-4/5" />
           <Skeleton className="h-3 w-2/3" />
         </div>
@@ -26,7 +26,7 @@ export function LoadingList({ count = 6 }: { count?: number }) {
   return (
     <div className="space-y-3">
       {Array.from({ length: count }, (_, i) => (
-        <Skeleton key={i} className="h-16 w-full rounded-xl" />
+        <Skeleton key={i} className="h-16 w-full rounded-2xl" />
       ))}
     </div>
   )

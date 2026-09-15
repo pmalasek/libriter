@@ -44,29 +44,37 @@ export function AuthorDetailPage() {
         </Link>
       </Button>
 
-      <div className="mb-6 flex flex-wrap items-start gap-4">
-        <AuthorImage key={author.data.id} author={author.data} className="size-24 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <PageHeader
-            title={author.data.name}
-            description={[lifeYears(author.data), bookCount(authorBooks.length)]
-              .filter(Boolean)
-              .join(' · ')}
-            actions={
-              canEdit(user) ? (
-                <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                  <PencilIcon />
-                  Upravit
-                </Button>
-              ) : null
-            }
+      <section className="mb-8 rounded-3xl bg-brand-glow p-6 md:p-8">
+        <div className="flex flex-wrap items-start gap-6">
+          <AuthorImage
+            key={author.data.id}
+            author={author.data}
+            className="size-28 shrink-0 shadow-xl ring-4 md:size-36"
           />
+          <div className="min-w-0 flex-1">
+            <PageHeader
+              className="mb-0"
+              eyebrow="Autor"
+              title={author.data.name}
+              description={[lifeYears(author.data), bookCount(authorBooks.length)]
+                .filter(Boolean)
+                .join(' · ')}
+              actions={
+                canEdit(user) ? (
+                  <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+                    <PencilIcon />
+                    Upravit
+                  </Button>
+                ) : null
+              }
+            />
 
-          {author.data.bio ? (
-            <ExpandableText text={author.data.bio} className="max-w-3xl" />
-          ) : null}
+            {author.data.bio ? (
+              <ExpandableText text={author.data.bio} className="mt-4 max-w-3xl" />
+            ) : null}
+          </div>
         </div>
-      </div>
+      </section>
 
       <BookGrid books={authorBooks} emptyTitle="U tohoto autora nejsou žádné knihy" />
 

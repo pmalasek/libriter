@@ -13,8 +13,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { initials } from '@/lib/format'
+import { cn } from '@/lib/utils'
 
-export function UserMenu() {
+/**
+ * Účet v hlavičce (jen avatar) nebo v patičce sidebaru (showName – avatar
+ * se jménem a rolí, roztažený na celou šířku).
+ */
+export function UserMenu({ showName = false, className }: { showName?: boolean; className?: string }) {
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
 
@@ -23,13 +28,32 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Uživatelské menu">
-          <Avatar className="size-7">
-            <AvatarFallback className="text-xs">{initials(user.display_name)}</AvatarFallback>
-          </Avatar>
-        </Button>
+        {showName ? (
+          <Button
+            variant="ghost"
+            size="lg"
+            aria-label="Uživatelské menu"
+            className={cn('h-auto min-w-0 flex-1 justify-start gap-2 px-1.5 py-1.5', className)}
+          >
+            <Avatar className="size-8">
+              <AvatarFallback className="text-xs">{initials(user.display_name)}</AvatarFallback>
+            </Avatar>
+            <span className="min-w-0 text-left">
+              <span className="block truncate text-sm font-medium">{user.display_name}</span>
+              <span className="block truncate text-xs font-normal text-muted-foreground">
+                {ROLE_LABELS[user.role] ?? user.role}
+              </span>
+            </span>
+          </Button>
+        ) : (
+          <Button variant="ghost" size="icon" aria-label="Uživatelské menu" className={className}>
+            <Avatar className="size-7">
+              <AvatarFallback className="text-xs">{initials(user.display_name)}</AvatarFallback>
+            </Avatar>
+          </Button>
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
+      <DropdownMenuContent align="end" className="w-56" sideOffset={8}>
         <DropdownMenuLabel>
           <div className="truncate font-medium">{user.display_name}</div>
           <div className="truncate text-xs font-normal text-muted-foreground">{user.email}</div>

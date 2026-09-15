@@ -18,8 +18,8 @@ export function AdminLayout() {
       <PageHeader title="Administrace" description="Uživatelé, zdroje metadat a údržba knihovny." />
 
       {/* Na úzkém displeji se lišta posouvá vodorovně, ať se vejdou všechny záložky. */}
-      <nav className="-mx-4 mb-6 overflow-x-auto border-b px-4">
-        <div className="flex min-w-max gap-1">
+      <nav className="-mx-4 mb-6 overflow-x-auto px-4 pb-1">
+        <div className="inline-flex min-w-max gap-1 rounded-full bg-muted p-1">
           {tabs.map(({ to, label, end }) => (
             <NavLink
               key={to}
@@ -27,10 +27,10 @@ export function AdminLayout() {
               end={end}
               className={({ isActive }) =>
                 cn(
-                  '-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors',
+                  'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
                   isActive
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground',
+                    ? 'bg-card text-primary shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
                 )
               }
             >

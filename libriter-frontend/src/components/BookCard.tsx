@@ -45,7 +45,7 @@ function CardShell({
   children: React.ReactNode
 }) {
   const base = cn(
-    'group block w-full text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
+    'group block w-full rounded-2xl text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
     className,
   )
 
@@ -91,29 +91,33 @@ export function BookCard({
     .join(' · ')
 
   return (
-    <CardShell book={book} selection={selection} className="rounded-xl">
+    <CardShell book={book} selection={selection}>
       <div className="relative">
         <BookCover
           key={book.id}
           book={book}
           className={cn(
-            'transition-opacity group-hover:opacity-80',
-            selection?.selected && 'ring-3 ring-primary',
+            selection?.selected && 'ring-3 ring-primary ring-offset-2 ring-offset-background',
           )}
         />
         {selection ? (
-          <SelectionMark selected={selection.selected} className="absolute top-2 left-2" />
+          <SelectionMark selected={selection.selected} className="absolute top-2 left-2 z-10" />
         ) : null}
       </div>
-      <div className={cn('space-y-0.5', small ? 'mt-1.5' : 'mt-2')}>
-        <p className={cn('line-clamp-2 font-medium leading-snug', small ? 'text-xs' : 'text-sm')}>
+      <div className={cn('space-y-0.5', small ? 'mt-2' : 'mt-3')}>
+        <p
+          className={cn(
+            'line-clamp-2 font-semibold leading-snug transition-colors group-hover:text-primary',
+            small ? 'text-xs' : 'text-sm',
+          )}
+        >
           {book.title}
         </p>
         <p className={cn('truncate text-muted-foreground', small ? 'text-[11px]' : 'text-xs')}>
           {authorNames(book.authors)}
         </p>
         {series ? (
-          <p className={cn('truncate text-muted-foreground', small ? 'text-[11px]' : 'text-xs')}>
+          <p className={cn('truncate text-primary/80', small ? 'text-[11px]' : 'text-xs')}>
             {series}
           </p>
         ) : null}
@@ -133,7 +137,7 @@ export function BookCard({
  */
 export function BookRowHeader({ selecting = false }: { selecting?: boolean }) {
   return (
-    <div className="flex items-center gap-3 bg-muted/40 px-3 py-1.5 text-xs font-medium text-muted-foreground">
+    <div className="flex items-center gap-3 bg-muted/60 px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
       {selecting ? <span className="size-6 shrink-0" /> : null}
       <span className="size-12 shrink-0" />
       <span className="min-w-0 flex-1">Název, autor a série</span>
@@ -160,14 +164,14 @@ export function BookRow({
       book={book}
       selection={selection}
       className={cn(
-        'flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/60',
-        selection?.selected && 'bg-primary/5',
+        'flex items-center gap-3 rounded-none px-3 py-2 transition-colors hover:bg-primary/5',
+        selection?.selected && 'bg-primary/10',
       )}
     >
       {selection ? <SelectionMark selected={selection.selected} className="shrink-0" /> : null}
-      <BookCover key={book.id} book={book} className="size-12 shrink-0 rounded-md" />
+      <BookCover key={book.id} book={book} lift={false} className="size-12 shrink-0 rounded-lg" />
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{book.title}</p>
+        <p className="truncate text-sm font-semibold">{book.title}</p>
         <p className="truncate text-xs text-muted-foreground">
           {[authorNames(book.authors), series].filter(Boolean).join(' · ')}
         </p>

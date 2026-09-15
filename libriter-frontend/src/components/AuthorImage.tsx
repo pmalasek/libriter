@@ -14,7 +14,8 @@ function imageUrl(author: Author) {
 
 // Portréty jsou skoro vždy na výšku, ale poměry se liší – čtvercový rám
 // drží mřížku zarovnanou stejně jako u obálek knih.
-const box = 'relative aspect-square overflow-hidden rounded-full bg-muted'
+const box =
+  'relative aspect-square overflow-hidden rounded-full bg-muted shadow-sm ring-2 ring-background'
 
 /**
  * Fotka autora. Bez image_path nebo při chybě načtení zobrazí zástupnou ikonu.
@@ -26,10 +27,10 @@ export function AuthorImage({ author, className }: { author: Author; className?:
   if (!author.image_path || failed) {
     return (
       <div
-        className={cn(box, 'flex items-center justify-center text-muted-foreground', className)}
+        className={cn(box, 'flex items-center justify-center bg-secondary text-primary/60', className)}
         aria-hidden
       >
-        <UserRoundIcon className="size-1/2 opacity-50" />
+        <UserRoundIcon className="size-1/2" />
       </div>
     )
   }

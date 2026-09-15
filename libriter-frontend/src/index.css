@@ -2,12 +2,16 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/bricolage-grotesque";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: var(--font-sans);
+    --font-heading: 'Bricolage Grotesque Variable', 'Geist Variable', sans-serif;
     --font-sans: 'Geist Variable', sans-serif;
+    --color-highlight: var(--highlight);
+    --color-highlight-foreground: var(--highlight-foreground);
+    --color-highlight-deep: var(--highlight-deep);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,73 +52,102 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Paleta: sytý teal z loga jako hlavní barva, oranžová jako doplněk (--highlight).
+ * Pozor na --accent: používají ho hover stavy položek v dropdownech a selectech,
+ * proto zůstává jemný teal tint, ne sytá barva.
+ */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
+    --background: oklch(0.985 0.006 220);
+    --foreground: oklch(0.22 0.03 235);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    --card-foreground: oklch(0.22 0.03 235);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.22 0.03 235);
+    --primary: oklch(0.52 0.1 195);
+    --primary-foreground: oklch(0.99 0 0);
+    --secondary: oklch(0.95 0.03 195);
+    --secondary-foreground: oklch(0.38 0.08 200);
+    --muted: oklch(0.955 0.01 225);
+    --muted-foreground: oklch(0.5 0.03 235);
+    --accent: oklch(0.94 0.03 195);
+    --accent-foreground: oklch(0.3 0.06 200);
+    --highlight: oklch(0.7 0.18 50);
+    --highlight-foreground: oklch(0.99 0 0);
+    --highlight-deep: oklch(0.5 0.16 45);
+    /* Barvy záře pod hlavičkami detailů – s alfou přímo v tokenu, ať je
+       minifikátor nezjednoduší na plnou barvu (color-mix s var() nesnáší). */
+    --glow-1: oklch(0.52 0.1 195 / 0.14);
+    --glow-2: oklch(0.7 0.18 50 / 0.1);
     --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --border: oklch(0.9 0.015 225);
+    --input: oklch(0.9 0.015 225);
+    --ring: oklch(0.52 0.1 195);
+    --chart-1: oklch(0.52 0.1 195);
+    --chart-2: oklch(0.7 0.18 50);
+    --chart-3: oklch(0.6 0.18 300);
+    --chart-4: oklch(0.65 0.17 150);
+    --chart-5: oklch(0.65 0.2 350);
+    --radius: 0.875rem;
+    --sidebar: oklch(1 0 0);
+    --sidebar-foreground: oklch(0.22 0.03 235);
+    --sidebar-primary: oklch(0.52 0.1 195);
+    --sidebar-primary-foreground: oklch(0.99 0 0);
+    --sidebar-accent: oklch(0.94 0.035 195);
+    --sidebar-accent-foreground: oklch(0.38 0.09 200);
+    --sidebar-border: oklch(0.9 0.015 225);
+    --sidebar-ring: oklch(0.52 0.1 195);
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
+    --background: oklch(0.16 0.02 235);
+    --foreground: oklch(0.96 0.005 220);
+    --card: oklch(0.21 0.02 235);
+    --card-foreground: oklch(0.96 0.005 220);
+    --popover: oklch(0.21 0.02 235);
+    --popover-foreground: oklch(0.96 0.005 220);
+    --primary: oklch(0.78 0.12 190);
+    --primary-foreground: oklch(0.18 0.03 220);
+    --secondary: oklch(0.27 0.02 235);
+    --secondary-foreground: oklch(0.9 0.05 190);
+    --muted: oklch(0.27 0.02 235);
+    --muted-foreground: oklch(0.72 0.02 225);
+    --accent: oklch(0.29 0.03 220);
+    --accent-foreground: oklch(0.92 0.04 190);
+    --highlight: oklch(0.78 0.16 60);
+    --highlight-foreground: oklch(0.2 0.04 50);
+    --highlight-deep: oklch(0.85 0.13 70);
+    --glow-1: oklch(0.78 0.12 190 / 0.12);
+    --glow-2: oklch(0.78 0.16 60 / 0.08);
     --destructive: oklch(0.704 0.191 22.216);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
+    --ring: oklch(0.78 0.12 190);
+    --chart-1: oklch(0.78 0.12 190);
+    --chart-2: oklch(0.78 0.16 60);
+    --chart-3: oklch(0.7 0.16 300);
+    --chart-4: oklch(0.75 0.15 150);
+    --chart-5: oklch(0.72 0.18 350);
+    --sidebar: oklch(0.19 0.02 235);
+    --sidebar-foreground: oklch(0.96 0.005 220);
+    --sidebar-primary: oklch(0.78 0.12 190);
+    --sidebar-primary-foreground: oklch(0.18 0.03 220);
+    --sidebar-accent: oklch(0.78 0.12 190 / 15%);
+    --sidebar-accent-foreground: oklch(0.88 0.08 190);
     --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --sidebar-ring: oklch(0.78 0.12 190);
+}
+
+/* Firemní gradient – tlačítka, přihlašovací panel, velké nadpisy přes bg-clip-text. */
+@utility bg-brand-gradient {
+    background-image: linear-gradient(135deg, var(--primary), oklch(0.62 0.12 185));
+}
+
+/* Jemná záře pod hlavičkami detailů; oranžová jen naznačená, ať nepřebíjí obsah. */
+@utility bg-brand-glow {
+    background-image:
+        radial-gradient(60% 80% at 15% 0%, var(--glow-1), transparent 70%),
+        radial-gradient(50% 70% at 95% 20%, var(--glow-2), transparent 70%);
 }
 
 /*
@@ -136,5 +169,16 @@
     }
   html {
     @apply font-sans;
+    /* Tenký nevtíravý scrollbar, ať nekazí barevnost stránky. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+    }
+  ::selection {
+    background-color: var(--primary);
+    color: var(--primary-foreground);
+    }
+  /* Nadpisy se lámou vyváženě – u dlouhých názvů knih nezůstane osamocené slovo. */
+  h1, h2, h3 {
+    text-wrap: balance;
     }
 }

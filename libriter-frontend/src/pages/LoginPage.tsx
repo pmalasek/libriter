@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useAuthConfig, useLogin } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
-import { Logo } from '@/components/layout/Logo'
+import { AuthShell } from '@/components/layout/AuthShell'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -33,63 +33,58 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-muted/30 p-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-6 flex justify-center">
-          <Logo className="h-9" />
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Přihlášení</CardTitle>
-            <CardDescription>Zadejte své přihlašovací údaje.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">E-mail</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Heslo</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                />
-              </div>
+    <AuthShell>
+      <Card className="shadow-lg [--card-spacing:--spacing(6)]">
+        <CardHeader>
+          <CardTitle className="text-2xl">Přihlášení</CardTitle>
+          <CardDescription>Zadejte své přihlašovací údaje.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">E-mail</Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Heslo</Label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
 
-              {login.error ? (
-                <p className="text-sm text-destructive">{login.error.message}</p>
-              ) : null}
-
-              <Button type="submit" size="lg" className="w-full" disabled={login.isPending}>
-                {login.isPending ? 'Přihlašuji…' : 'Přihlásit se'}
-              </Button>
-            </form>
-
-            {/* Odkaz se ukáže, až je jasné, že registrace běží – jinak by
-                při vypnuté registraci blikl a zmizel. */}
-            {authConfig.data?.registration_enabled ? (
-              <p className="mt-4 text-center text-sm text-muted-foreground">
-                Nemáte účet?{' '}
-                <Link to="/register" className="font-medium text-foreground underline-offset-4 hover:underline">
-                  Zaregistrujte se
-                </Link>
-              </p>
+            {login.error ? (
+              <p className="text-sm text-destructive">{login.error.message}</p>
             ) : null}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+
+            <Button type="submit" size="lg" className="w-full" disabled={login.isPending}>
+              {login.isPending ? 'Přihlašuji…' : 'Přihlásit se'}
+            </Button>
+          </form>
+
+          {/* Odkaz se ukáže, až je jasné, že registrace běží – jinak by
+              při vypnuté registraci blikl a zmizel. */}
+          {authConfig.data?.registration_enabled ? (
+            <p className="mt-4 text-center text-sm text-muted-foreground">
+              Nemáte účet?{' '}
+              <Link to="/register" className="font-medium text-primary underline-offset-4 hover:underline">
+                Zaregistrujte se
+              </Link>
+            </p>
+          ) : null}
+        </CardContent>
+      </Card>
+    </AuthShell>
   )
 }

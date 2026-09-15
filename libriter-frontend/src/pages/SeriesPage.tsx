@@ -1,3 +1,4 @@
+import { LayersIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useBooks, useSeriesList } from '@/api/hooks'
@@ -6,18 +7,21 @@ import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingList } from '@/components/LoadingGrid'
 import { PageHeader } from '@/components/PageHeader'
+import { SeriesCoverStack } from '@/components/SeriesCoverStack'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { authorsLabel, bookCount, foldName } from '@/lib/format'
 import { seriesAuthors } from '@/lib/sorting'
 
-/** Co o sérii víme z knih – počet dílů a autoři, kteří je napsali. */
+/** Co o sérii víme z knih – počet dílů, autoři a obálky prvních dílů. */
 interface SeriesInfo {
   count: number
   authors: Author[]
+  covers: Book[]
 }
 
-const EMPTY: SeriesInfo = { count: 0, authors: [] }
+const EMPTY: SeriesInfo = { count: 0, authors: [], covers: [] }
 
 export function SeriesPage() {
   const series = useSeriesList()
@@ -36,25 +40,41 @@ export function SeriesPage() {
 
     const info = new Map<string, SeriesInfo>()
     for (const [id, group] of bySeries) {
-      info.set(id, { count: group.length, authors: seriesAuthors(group) })
+      // Na kartě série ukazujeme obálky prvních tří dílů; knihy bez pořadí jdou na konec.
+      const covers = [...group]
+        .sort(
+          (a, b) =>
+            (a.series_position ?? Number.MAX_SAFE_INTEGER) -
+            (b.series_position ?? Number.MAX_SAFE_INTEGER),
+        )
+        .slice(0, 3)
+      info.set(id, { count: group.length, authors: seriesAuthors(group), covers })
     }
     return info
   }, [books.data])
 
+  // Prázdné série v seznamu jen překážejí – zůstávají po přesunu knih jinam
+  // nebo po importu metadat. Stejně jako u autorů je schováváme; založit
+  // a naplnit sérii jde dál přes výběr knih.
+  const withBooks = useMemo(
+    () => (series.data ?? []).filter((item) => (infoBySeries.get(item.id)?.count ?? 0) > 0),
+    [series.data, infoBySeries],
+  )
+
   const filtered = useMemo(() => {
     const needle = foldName(query)
-    if (!needle) return series.data ?? []
+    if (!needle) return withBooks
 
     // Hledá se podle názvu série i podle jmen autorů, ať se série najde
     // i pod autorem („weaver“ → David Raker).
-    return (series.data ?? []).filter((item) => {
+    return withBooks.filter((item) => {
       const info = infoBySeries.get(item.id) ?? EMPTY
       return (
         foldName(item.title).includes(needle) ||
         info.authors.some((author) => foldName(author.name).includes(needle))
       )
     })
-  }, [series.data, infoBySeries, query])
+  }, [withBooks, infoBySeries, query])
 
   if (series.isPending) {
     return (
@@ -78,7 +98,7 @@ export function SeriesPage() {
     <>
       <PageHeader
         title="Série"
-        description={`${series.data.length} celkem`}
+        description={`${withBooks.length} celkem`}
         actions={
           <Input
             type="search"
@@ -92,6 +112,7 @@ export function SeriesPage() {
 
       {filtered.length === 0 ? (
         <EmptyState
+          icon={LayersIcon}
           title={query ? 'Nic nenalezeno' : 'Zatím žádné série'}
           description={
             query
@@ -100,17 +121,25 @@ export function SeriesPage() {
           }
         />
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((item) => {
             const info = infoBySeries.get(item.id) ?? EMPTY
             return (
-              <Link key={item.id} to={`/series/${item.id}`} className="group">
-                <Card className="transition-colors group-hover:border-ring/50">
-                  <CardContent>
-                    <p className="truncate font-medium">{item.title}</p>
-                    <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                      {seriesDetails(info)}
-                    </p>
+              <Link key={item.id} to={`/series/${item.id}`} className="group rounded-2xl">
+                <Card className="h-full transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-primary/30">
+                  <CardContent className="flex items-center gap-4">
+                    <SeriesCoverStack books={info.covers} />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-semibold transition-colors group-hover:text-primary">
+                        {item.title}
+                      </p>
+                      <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                        {authorsLabel(info.authors)}
+                      </p>
+                    </div>
+                    <Badge variant="highlight" className="shrink-0">
+                      {bookCount(info.count)}
+                    </Badge>
                   </CardContent>
                 </Card>
               </Link>
@@ -120,9 +149,4 @@ export function SeriesPage() {
       )}
     </>
   )
-}
-
-/** Popisek pod názvem série: „Tim Weaver · 16 knih“. */
-function seriesDetails(info: SeriesInfo): string {
-  return [authorsLabel(info.authors), bookCount(info.count)].filter(Boolean).join(' · ')
 }

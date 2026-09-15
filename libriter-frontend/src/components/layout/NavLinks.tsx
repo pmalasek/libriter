@@ -27,15 +27,28 @@ export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
           onClick={onNavigate}
           className={({ isActive }) =>
             cn(
-              'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+              'group flex items-center gap-2.5 rounded-xl py-1.5 pr-3 pl-1.5 text-sm font-medium transition-colors',
               isActive
                 ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground',
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground',
             )
           }
         >
-          <Icon className="size-4 shrink-0" />
-          {label}
+          {({ isActive }) => (
+            <>
+              <span
+                className={cn(
+                  'flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors',
+                  isActive
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'bg-muted text-muted-foreground group-hover:bg-background',
+                )}
+              >
+                <Icon className="size-4" />
+              </span>
+              {label}
+            </>
+          )}
         </NavLink>
       ))}
     </nav>

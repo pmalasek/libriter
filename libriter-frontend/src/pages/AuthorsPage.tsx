@@ -1,3 +1,4 @@
+import { UsersIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { useAuthors, useBooks } from '@/api/hooks'
@@ -8,9 +9,11 @@ import { ErrorState } from '@/components/ErrorState'
 import { SortControl, ViewModeToggle } from '@/components/ListControls'
 import { LoadingList } from '@/components/LoadingGrid'
 import { PageHeader } from '@/components/PageHeader'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { bookCount, foldName } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import {
   AUTHOR_SORT_OPTIONS,
   catalogName,
@@ -113,6 +116,7 @@ export function AuthorsPage() {
 
       {filtered.length === 0 ? (
         <EmptyState
+          icon={UsersIcon}
           title={query ? 'Nic nenalezeno' : 'Zatím žádní autoři'}
           description={
             query
@@ -121,7 +125,13 @@ export function AuthorsPage() {
           }
         />
       ) : (
-        <AuthorList view={prefs.view} authors={filtered} name={displayName} details={details} />
+        <AuthorList
+          view={prefs.view}
+          authors={filtered}
+          name={displayName}
+          details={details}
+          count={(author) => countByAuthor.get(author.id) ?? 0}
+        />
       )}
     </>
   )
@@ -132,23 +142,33 @@ function AuthorList({
   authors,
   name,
   details,
+  count,
 }: {
   view: ViewMode
   authors: Author[]
   name: (author: Author) => string
   details: (author: Author) => string
+  /** Počet knih autora – na velké kartě stojí samostatně jako štítek. */
+  count: (author: Author) => number
 }) {
+  // Karta autora se při najetí nadzvedne a orámuje firemní barvou – stejně
+  // jako dlaždice knih a série.
+  const cardHover =
+    'h-full transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-primary/30'
+
   if (view === 'list') {
     return (
-      <div className="divide-y rounded-xl border">
+      <div className="divide-y overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-foreground/6">
         {authors.map((author) => (
           <Link
             key={author.id}
             to={`/authors/${author.id}`}
-            className="flex items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/60"
+            className="group flex items-center gap-3 px-3 py-2 transition-colors hover:bg-primary/5"
           >
-            <AuthorImage key={author.id} author={author} className="size-8 shrink-0" />
-            <p className="min-w-0 flex-1 truncate text-sm font-medium">{name(author)}</p>
+            <AuthorImage key={author.id} author={author} className="size-9 shrink-0" />
+            <p className="min-w-0 flex-1 truncate text-sm font-semibold transition-colors group-hover:text-primary">
+              {name(author)}
+            </p>
             <p className="hidden shrink-0 text-xs text-muted-foreground sm:block">{details(author)}</p>
           </Link>
         ))}
@@ -158,14 +178,16 @@ function AuthorList({
 
   if (view === 'small') {
     return (
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {authors.map((author) => (
-          <Link key={author.id} to={`/authors/${author.id}`} className="group">
-            <Card className="py-2 transition-colors group-hover:border-ring/50">
+          <Link key={author.id} to={`/authors/${author.id}`} className="group rounded-2xl">
+            <Card className={cn(cardHover, 'py-2')}>
               <CardContent className="flex items-center gap-2 px-3">
-                <AuthorImage key={author.id} author={author} className="size-8 shrink-0" />
+                <AuthorImage key={author.id} author={author} className="size-9 shrink-0" />
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-medium">{name(author)}</p>
+                  <p className="truncate text-sm font-semibold transition-colors group-hover:text-primary">
+                    {name(author)}
+                  </p>
                   <p className="truncate text-[11px] text-muted-foreground">{details(author)}</p>
                 </div>
               </CardContent>
@@ -177,16 +199,25 @@ function AuthorList({
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {authors.map((author) => (
-        <Link key={author.id} to={`/authors/${author.id}`} className="group">
-          <Card className="transition-colors group-hover:border-ring/50">
-            <CardContent className="flex items-center gap-3">
-              <AuthorImage key={author.id} author={author} className="size-12 shrink-0" />
-              <div className="min-w-0">
-                <p className="truncate font-medium">{name(author)}</p>
-                <p className="mt-0.5 truncate text-sm text-muted-foreground">{details(author)}</p>
+        <Link key={author.id} to={`/authors/${author.id}`} className="group rounded-2xl">
+          <Card className={cardHover}>
+            <CardContent className="flex items-center gap-4">
+              <AuthorImage key={author.id} author={author} className="size-14 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-semibold transition-colors group-hover:text-primary">
+                  {name(author)}
+                </p>
+                {lifeYears(author) ? (
+                  <p className="mt-0.5 truncate text-sm text-muted-foreground">
+                    {lifeYears(author)}
+                  </p>
+                ) : null}
               </div>
+              <Badge variant="brand" className="shrink-0">
+                {bookCount(count(author))}
+              </Badge>
             </CardContent>
           </Card>
         </Link>

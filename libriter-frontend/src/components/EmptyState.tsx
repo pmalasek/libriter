@@ -1,8 +1,25 @@
-export function EmptyState({ title, description }: { title: string; description?: string }) {
+import type { LucideIcon } from 'lucide-react'
+
+export function EmptyState({
+  title,
+  description,
+  icon: Icon,
+}: {
+  title: string
+  description?: string
+  icon?: LucideIcon
+}) {
   return (
-    <div className="rounded-xl border border-dashed p-10 text-center">
-      <p className="font-medium">{title}</p>
-      {description ? <p className="mt-1 text-sm text-muted-foreground">{description}</p> : null}
+    <div className="rounded-3xl border border-dashed border-border bg-card/60 p-12 text-center">
+      {Icon ? (
+        <span className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <Icon className="size-6" />
+        </span>
+      ) : null}
+      <p className="font-heading text-lg font-semibold">{title}</p>
+      {description ? (
+        <p className="mx-auto mt-1.5 max-w-md text-sm text-muted-foreground">{description}</p>
+      ) : null}
     </div>
   )
 }

@@ -8,13 +8,17 @@ import { cn } from '@/lib/utils'
  * URL obálky knihy. Endpoint je veřejný (<img> neumí poslat token),
  * ?v= podle updated_at obchází cache prohlížeče po změně obálky.
  */
-function coverUrl(book: Book) {
+export function coverUrl(book: Book) {
   return `${API_PREFIX}/books/${book.id}/cover?v=${encodeURIComponent(book.updated_at)}`
 }
 
 // Obálky mají různé poměry stran (zhruba 60 % čtverec, 30 % portrét, zbytek na šířku),
 // proto čtvercový rám - drží mřížku zarovnanou a odpovídá mediánu sbírky.
-const box = 'relative aspect-square w-full overflow-hidden rounded-lg bg-muted'
+const box = 'relative aspect-square w-full overflow-hidden rounded-2xl bg-muted ring-1 ring-foreground/5'
+
+// Uvnitř skupiny (dlaždice knihy) se obálka při najetí nadzvedne; v řádku
+// seznamu a ve velké hlavičce detailu se místo toho použije lift={false}.
+const lifted = 'shadow-md transition duration-200 group-hover:-translate-y-1 group-hover:shadow-xl'
 
 /**
  * Obálka knihy. Vždy je vidět celá (object-contain); prázdné místo kolem
@@ -22,16 +26,30 @@ const box = 'relative aspect-square w-full overflow-hidden rounded-lg bg-muted'
  * Bez cover_path nebo při chybě načtení zobrazí zástupnou ikonu.
  * Používat s key={book.id}, aby se stav při přechodu mezi knihami resetoval.
  */
-export function BookCover({ book, className }: { book: Book; className?: string }) {
+export function BookCover({
+  book,
+  className,
+  lift = true,
+}: {
+  book: Book
+  className?: string
+  /** Nadzvednutí při najetí na kartu; vypnout v seznamu a v hlavičce detailu. */
+  lift?: boolean
+}) {
   const [failed, setFailed] = useState(false)
 
   if (!book.cover_path || failed) {
     return (
       <div
-        className={cn(box, 'flex items-center justify-center text-muted-foreground', className)}
+        className={cn(
+          box,
+          lift && lifted,
+          'flex items-center justify-center bg-secondary text-primary/60',
+          className,
+        )}
         aria-hidden
       >
-        <BookHeadphonesIcon className="size-8 opacity-60" />
+        <BookHeadphonesIcon className="size-1/3" />
       </div>
     )
   }
@@ -39,7 +57,7 @@ export function BookCover({ book, className }: { book: Book; className?: string 
   const src = coverUrl(book)
 
   return (
-    <div className={cn(box, className)}>
+    <div className={cn(box, lift && lifted, className)}>
       {/* Výplň pozadí - stejné URL, takže se stahuje jen jednou.
           scale-110 schová rozmazané okraje za hranu rámu. */}
       <img

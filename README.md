@@ -238,6 +238,12 @@ souboru `libriter.db` (při běžícím serveru i souborů `-wal` a `-shm`).
 React + TypeScript + Tailwind v4, komponenty shadcn/ui (Radix), routing
 `react-router`, serverový stav `@tanstack/react-query`. Vše v češtině.
 
+**Vzhled:** hlavní barvou je tyrkysová z loga, oranžová slouží jako doplněk
+pro zvýraznění (počty dílů, nedodělky v administraci). Nadpisy sází
+Bricolage Grotesque, běžný text Geist; obojí je součástí balíčku, nic se
+nenačítá z cizích serverů. Barvy, zaoblení a fonty jsou pohromadě
+v `libriter-frontend/src/index.css` – změna tokenů přebarví celou aplikaci.
+
 **Co první verze umí:** přihlášení a registraci, seznam a detail knih, autory,
 série, profil (změna jména, e-mailu a hesla), hledání v knihách, obálky knih,
 světlý i tmavý režim podle systému.
@@ -247,6 +253,8 @@ a volitelné řazení – knihy podle názvu, autora (příjmení, křestní, pr
 jméno), roku prvního vydání nebo data přidání; autoři podle příjmení (výchozí, jméno
 se pak ukazuje katalogově „Čapek, Karel“), křestního jména nebo počtu knih.
 Zvolené zobrazení i řazení si prohlížeč pamatuje (`localStorage`).
+Autoři ani série bez jediné knihy se v seznamech neukazují – zůstávají
+v databázi a objeví se, jakmile k nim nějaká kniha patří.
 
 **Editace (role editor a vyšší):** na detailu knihy i autora je tlačítko
 *Upravit*, které otevře formulář v dialogu. U knihy jde změnit název, autory

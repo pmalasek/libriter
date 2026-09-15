@@ -5,6 +5,7 @@ import {
   LanguagesIcon,
   MicIcon,
   PencilIcon,
+  PlayIcon,
   StarIcon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -14,12 +15,12 @@ import { useAuth } from '@/auth/AuthContext'
 import { canEdit } from '@/auth/permissions'
 import { BookEditDialog } from '@/components/BookEditDialog'
 import { BookGrid } from '@/components/BookGrid'
-import { BookCover } from '@/components/BookCover'
+import { BookCover, coverUrl } from '@/components/BookCover'
 import { ErrorState } from '@/components/ErrorState'
 import { ExpandableText } from '@/components/ExpandableText'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { formatDate, formatDuration } from '@/lib/format'
 import { sortBooks, useBookListPrefs } from '@/lib/sorting'
@@ -55,10 +56,10 @@ export function BookDetailPage() {
 
   if (book.isPending) {
     return (
-      <div className="grid gap-8 md:grid-cols-[220px_1fr]">
-        <Skeleton className="aspect-square w-full rounded-lg" />
+      <div className="grid gap-8 md:grid-cols-[240px_1fr]">
+        <Skeleton className="aspect-square w-full rounded-2xl" />
         <div className="space-y-3">
-          <Skeleton className="h-8 w-2/3" />
+          <Skeleton className="h-10 w-2/3" />
           <Skeleton className="h-4 w-1/3" />
           <Skeleton className="h-24 w-full" />
         </div>
@@ -81,101 +82,152 @@ export function BookDetailPage() {
         </Link>
       </Button>
 
-      <div className="grid gap-8 md:grid-cols-[220px_1fr]">
-        <div className="max-w-[220px]">
-          <BookCover key={data.id} book={data} />
-        </div>
+      {/* Hlavička s rozmazanou obálkou v pozadí – dává detailu barvu knihy. */}
+      <section className="relative overflow-hidden rounded-3xl bg-brand-glow p-6 md:p-8">
+        {data.cover_path ? (
+          <>
+            <img
+              src={coverUrl(data)}
+              alt=""
+              aria-hidden
+              className="absolute inset-0 size-full scale-125 object-cover opacity-40 blur-3xl dark:opacity-30"
+            />
+            {/* Závoj drží text čitelný i nad pestrou obálkou. */}
+            <div className="absolute inset-0 bg-linear-to-b from-background/70 via-background/80 to-background" />
+          </>
+        ) : null}
 
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <h1 className="font-heading text-2xl font-semibold tracking-tight">{data.title}</h1>
-            {canEdit(user) ? (
-              <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
-                <PencilIcon />
-                Upravit
-              </Button>
-            ) : null}
+        <div className="relative grid gap-8 md:grid-cols-[240px_1fr]">
+          <div className="max-w-[240px]">
+            <BookCover key={data.id} book={data} lift={false} className="shadow-2xl" />
           </div>
 
-          {data.authors?.length ? (
-            <p className="mt-1 text-muted-foreground">
-              {data.authors.map((author, index) => (
-                <span key={author.id}>
-                  {index > 0 ? ', ' : null}
-                  <Link to={`/authors/${author.id}`} className="underline-offset-4 hover:underline">
-                    {author.name}
-                  </Link>
-                </span>
-              ))}
-            </p>
-          ) : null}
+          <div className="min-w-0">
+            {series.data ? (
+              <p className="mb-1.5 text-xs font-semibold tracking-wider text-primary uppercase">
+                <Link to={`/series/${series.data.id}`} className="underline-offset-4 hover:underline">
+                  {series.data.title}
+                </Link>
+                {data.series_position != null ? ` · ${data.series_position}. díl` : null}
+              </p>
+            ) : (
+              <p className="mb-1.5 text-xs font-semibold tracking-wider text-primary uppercase">
+                Audiokniha
+              </p>
+            )}
 
-          {series.data ? (
-            <p className="mt-1 text-sm text-muted-foreground">
-              <Link to={`/series/${series.data.id}`} className="underline-offset-4 hover:underline">
-                {series.data.title}
-              </Link>
-              {data.series_position != null ? ` · ${data.series_position}. díl` : null}
-            </p>
-          ) : null}
+            <h1 className="font-heading text-3xl font-bold tracking-tight md:text-4xl">
+              {data.title}
+            </h1>
 
-          <div className="mt-4 flex flex-wrap gap-2">
-            <Badge variant="secondary">
-              <ClockIcon />
-              {formatDuration(data.duration_seconds)}
-            </Badge>
-            {data.narrator ? (
-              <Badge variant="secondary">
-                <MicIcon />
-                {data.narrator}
-              </Badge>
+            {data.authors?.length ? (
+              <p className="mt-2 text-lg">
+                {data.authors.map((author, index) => (
+                  <span key={author.id}>
+                    {index > 0 ? ', ' : null}
+                    <Link
+                      to={`/authors/${author.id}`}
+                      className="font-medium text-primary underline-offset-4 hover:underline"
+                    >
+                      {author.name}
+                    </Link>
+                  </span>
+                ))}
+              </p>
             ) : null}
-            {data.published_year ? (
-              <Badge variant="secondary">
-                <CalendarIcon />
-                {data.published_year}
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Badge variant="highlight">
+                <ClockIcon />
+                {formatDuration(data.duration_seconds)}
               </Badge>
-            ) : null}
-            <Badge variant="outline">
-              <LanguagesIcon />
-              {data.language.toUpperCase()}
-            </Badge>
-            {data.internal_rating ? (
+              {data.narrator ? (
+                <Badge variant="secondary">
+                  <MicIcon />
+                  {data.narrator}
+                </Badge>
+              ) : null}
+              {data.published_year ? (
+                <Badge variant="secondary">
+                  <CalendarIcon />
+                  {data.published_year}
+                </Badge>
+              ) : null}
               <Badge variant="outline">
-                <StarIcon />
-                {data.internal_rating}/5
+                <LanguagesIcon />
+                {data.language.toUpperCase()}
               </Badge>
-            ) : null}
+              {data.internal_rating ? (
+                <Badge variant="outline">
+                  <StarIcon />
+                  {data.internal_rating}/5
+                </Badge>
+              ) : null}
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-center gap-2">
+              <Button
+                size="lg"
+                disabled
+                title="Přehrávání zatím není k dispozici – backend pro něj ještě nemá endpoint."
+              >
+                <PlayIcon />
+                Přehrát
+              </Button>
+              {canEdit(user) ? (
+                <Button variant="outline" size="lg" onClick={() => setEditing(true)}>
+                  <PencilIcon />
+                  Upravit
+                </Button>
+              ) : null}
+            </div>
           </div>
-
-          {data.description ? (
-            <ExpandableText text={data.description} className="mt-6" />
-          ) : (
-            <p className="mt-6 text-sm text-muted-foreground">Popis není k dispozici.</p>
-          )}
-
-          <Separator className="my-6" />
-
-          <dl className="grid gap-2 text-sm sm:grid-cols-2">
-            <div>
-              <dt className="text-muted-foreground">Přidáno</dt>
-              <dd>{formatDate(data.created_at)}</dd>
-            </div>
-            <div>
-              <dt className="text-muted-foreground">Naposledy změněno</dt>
-              <dd>{formatDate(data.updated_at)}</dd>
-            </div>
-          </dl>
-
-          <p className="mt-6 text-xs text-muted-foreground">
-            Přehrávání zatím není k dispozici – backend pro něj ještě nemá endpoint.
-          </p>
         </div>
+      </section>
+
+      <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_20rem]">
+        <Card>
+          <CardHeader>
+            <CardTitle>O knize</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.description ? (
+              <ExpandableText text={data.description} />
+            ) : (
+              <p className="text-sm text-muted-foreground">Popis není k dispozici.</p>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Podrobnosti</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <dl className="space-y-3 text-sm">
+              <div>
+                <dt className="text-muted-foreground">Přidáno</dt>
+                <dd className="tabular-nums">{formatDate(data.created_at)}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Naposledy změněno</dt>
+                <dd className="tabular-nums">{formatDate(data.updated_at)}</dd>
+              </div>
+              {data.narrator ? (
+                <div>
+                  <dt className="text-muted-foreground">Načetl</dt>
+                  <dd>{data.narrator}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </CardContent>
+        </Card>
       </div>
 
       {moreByAuthor.length > 0 && mainAuthor ? (
-        <section className="mt-10">
-          <h2 className="font-heading mb-4 text-lg font-semibold">
+        <section className="mt-12">
+          <h2 className="font-heading mb-5 flex items-center gap-2.5 text-xl font-bold">
+            <span className="size-2 rounded-full bg-primary" />
             Další knihy autora {mainAuthor.name}
           </h2>
           <BookGrid books={moreByAuthor} />
