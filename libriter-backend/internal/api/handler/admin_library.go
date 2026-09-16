@@ -7,6 +7,8 @@ import (
 	"libriter/internal/metadata"
 	"libriter/internal/scanner"
 	"libriter/internal/service"
+
+	"github.com/google/uuid"
 )
 
 // metadataSettingsResponse je nastavení zdrojů obohacené o schopnosti, které
@@ -212,6 +214,65 @@ func (h *AdminHandler) Repair(w http.ResponseWriter, r *http.Request) {
 				"duplicates":       len(result.Plan.Duplicates),
 				"deleted_chapters": result.DeletedChapters,
 				"deleted_books":    result.DeletedBooks,
+			},
+		})
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+// GET /api/v1/admin/library/merge  (admin)
+//
+// Náhled sloučení: které knihy scanner založil vícekrát. Nic nemění.
+func (h *AdminHandler) MergePlan(w http.ResponseWriter, r *http.Request) {
+	plan, err := h.scanner.PlanMerge(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError,
+			"kontrolu rozdělených knih se nepodařilo provést – "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, plan)
+}
+
+// POST /api/v1/admin/library/merge  (admin)
+//
+// Tělo je nepovinné: {"targets": ["<id cíle>", …]} omezí sloučení na vybrané
+// skupiny. Plán se stejně jako u opravy kapitol sestaví znovu na serveru –
+// klient tedy vybírá jen z toho, co server sám našel.
+func (h *AdminHandler) Merge(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Targets []uuid.UUID `json:"targets"`
+	}
+	if r.ContentLength > 0 {
+		if err := readJSON(r, &body); err != nil {
+			writeError(w, http.StatusBadRequest, "neplatný vstup – "+err.Error())
+			return
+		}
+	}
+
+	result, err := h.scanner.Merge(r.Context(), body.Targets)
+	if errors.Is(err, scanner.ErrScanRunning) {
+		writeError(w, http.StatusConflict, "kontrola knihovny právě běží, zkuste to za chvíli")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "sloučení knih selhalo – "+err.Error())
+		return
+	}
+
+	if !result.Plan.IsEmpty() {
+		titles := make([]string, 0, len(result.Plan.Groups))
+		for _, group := range result.Plan.Groups {
+			titles = append(titles, group.Target.Title)
+		}
+		h.audit.Record(r.Context(), actorID(r), service.AuditEvent{
+			Action:     service.AuditLibraryMerge,
+			TargetType: service.AuditTargetLibrary,
+			Details: map[string]any{
+				"groups":         len(result.Plan.Groups),
+				"merged_books":   result.MergedBooks,
+				"moved_chapters": result.MovedChapters,
+				"titles":         titles,
 			},
 		})
 	}

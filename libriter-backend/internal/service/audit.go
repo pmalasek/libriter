@@ -24,6 +24,7 @@ const (
 	AuditSeriesDelete         = "series.delete"
 	AuditScannerRescan        = "scanner.rescan"
 	AuditLibraryRepair        = "library.repair_apply"
+	AuditLibraryMerge         = "library.merge_books"
 )
 
 // Typy cílů akce (pro rozhraní, ne pro logiku).

@@ -23,6 +23,8 @@ type libraryScanner interface {
 	Rescan() error
 	PlanRepair(ctx context.Context) (scanner.RepairPlan, error)
 	Repair(ctx context.Context) (scanner.RepairResult, error)
+	PlanMerge(ctx context.Context) (scanner.MergePlan, error)
+	Merge(ctx context.Context, targets []uuid.UUID) (scanner.MergeResult, error)
 }
 
 // AdminHandler obsluhuje endpointy pod /api/v1/admin. Skupinu chrání

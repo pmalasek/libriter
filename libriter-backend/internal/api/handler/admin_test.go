@@ -20,6 +20,7 @@ import (
 	"libriter/internal/storage"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
 // fakeScanner nahrazuje skutečný scanner – testy admin rozhraní nepotřebují
@@ -31,6 +32,10 @@ type fakeScanner struct {
 	plan       scanner.RepairPlan
 	repairErr  error
 	repairCall int
+	mergePlan    scanner.MergePlan
+	mergeErr     error
+	mergeCall    int
+	mergeTargets []uuid.UUID
 }
 
 func (f *fakeScanner) Status() scanner.Status { return f.status }
@@ -54,6 +59,20 @@ func (f *fakeScanner) Repair(context.Context) (scanner.RepairResult, error) {
 	}
 	f.repairCall++
 	return scanner.RepairResult{Plan: f.plan, DeletedChapters: 3, DeletedBooks: 1}, nil
+}
+
+func (f *fakeScanner) PlanMerge(context.Context) (scanner.MergePlan, error) {
+	return f.mergePlan, nil
+}
+
+func (f *fakeScanner) Merge(_ context.Context, targets []uuid.UUID) (scanner.MergeResult, error) {
+	if f.mergeErr != nil {
+		return scanner.MergeResult{}, f.mergeErr
+	}
+	f.mergeCall++
+	f.mergeTargets = targets
+	plan := scanner.FilterPlan(f.mergePlan, targets)
+	return scanner.MergeResult{Plan: plan, MergedBooks: 1, MovedChapters: 23}, nil
 }
 
 type adminTestEnv struct {
@@ -88,7 +107,10 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 	settingsSvc := service.NewSettings(store, config.MetadataConfig{}, registry.KnownNames())
 	systemSvc := service.NewSystem(store, cfg, time.Now())
 
-	scn := &fakeScanner{plan: scanner.RepairPlan{Rescan: []scanner.RepairBook{}, Duplicates: []scanner.RepairBook{}}}
+	scn := &fakeScanner{
+		plan:      scanner.RepairPlan{Rescan: []scanner.RepairBook{}, Duplicates: []scanner.RepairBook{}},
+		mergePlan: scanner.MergePlan{Groups: []scanner.MergeGroup{}},
+	}
 	adminH := NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc)
 	authH := NewAuth(authSvc, settingsSvc)
 	userH := NewUser(userSvc, auditSvc)
@@ -115,6 +137,8 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 			r.Post("/scanner/rescan", adminH.Rescan)
 			r.Get("/library/repair", adminH.RepairPlan)
 			r.Post("/library/repair", adminH.Repair)
+			r.Get("/library/merge", adminH.MergePlan)
+			r.Post("/library/merge", adminH.Merge)
 		})
 	})
 
@@ -372,6 +396,61 @@ func TestAdminScannerAndRepair(t *testing.T) {
 	}
 	if len(entries) == 0 || entries[0].Action != service.AuditLibraryRepair {
 		t.Errorf("audit = %+v, chtěn záznam library.repair_apply", entries)
+	}
+}
+
+func TestAdminMergeBooks(t *testing.T) {
+	env := newAdminTestEnv(t)
+	adminToken, _ := env.login(t, "admin@example.com", model.RoleAdmin)
+
+	if rec := env.do(t, http.MethodGet, "/admin/library/merge", adminToken, nil); rec.Code != http.StatusOK {
+		t.Errorf("náhled sloučení: status = %d (%s)", rec.Code, rec.Body.String())
+	}
+
+	// Prázdný plán se do auditu nezapisuje – nic se nestalo.
+	if rec := env.do(t, http.MethodPost, "/admin/library/merge", adminToken, nil); rec.Code != http.StatusOK {
+		t.Fatalf("sloučení prázdného plánu: status = %d (%s)", rec.Code, rec.Body.String())
+	}
+	entries, err := env.audit.List(context.Background(), 10, 0)
+	if err != nil {
+		t.Fatalf("audit: %v", err)
+	}
+	for _, e := range entries {
+		if e.Action == service.AuditLibraryMerge {
+			t.Error("prázdné sloučení se zapsalo do auditu")
+		}
+	}
+
+	target := uuid.New()
+	env.scanner.mergePlan = scanner.MergePlan{Groups: []scanner.MergeGroup{{
+		Target:  scanner.MergeBook{ID: target, Title: "Písečná bouře", FilePath: "rollins/pisecna-boure"},
+		Sources: []scanner.MergeBook{{Title: "Písečná bouře", FilePath: "rollins/pisecna-boure"}},
+	}}}
+
+	// Výběr skupin: klient posílá jen ID cílů, plán si server počítá sám.
+	body := map[string][]string{"targets": {target.String()}}
+	if rec := env.do(t, http.MethodPost, "/admin/library/merge", adminToken, body); rec.Code != http.StatusOK {
+		t.Fatalf("sloučení: status = %d (%s)", rec.Code, rec.Body.String())
+	}
+	if env.scanner.mergeCall != 2 {
+		t.Errorf("sloučení voláno %d×, chtěno 2×", env.scanner.mergeCall)
+	}
+	if len(env.scanner.mergeTargets) != 1 || env.scanner.mergeTargets[0] != target {
+		t.Errorf("vybrané cíle = %v, chtěno [%s]", env.scanner.mergeTargets, target)
+	}
+
+	entries, err = env.audit.List(context.Background(), 10, 0)
+	if err != nil {
+		t.Fatalf("audit: %v", err)
+	}
+	if len(entries) == 0 || entries[0].Action != service.AuditLibraryMerge {
+		t.Errorf("audit = %+v, chtěn záznam library.merge_books", entries)
+	}
+
+	// Běžící scan vrací 409, ne 500.
+	env.scanner.mergeErr = scanner.ErrScanRunning
+	if rec := env.do(t, http.MethodPost, "/admin/library/merge", adminToken, nil); rec.Code != http.StatusConflict {
+		t.Errorf("sloučení během scanu: status = %d, chtěno 409", rec.Code)
 	}
 }
 

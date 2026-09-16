@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -231,5 +232,67 @@ func TestPatchBookKeepsUntouchedFields(t *testing.T) {
 	}
 	if called {
 		t.Error("apply se zavolalo i pro neexistující knihu")
+	}
+}
+
+// Počet kapitol je odvozený sloupec – musí sedět ve všech cestách, kterými
+// kniha z databáze vychází, včetně RETURNING po zápisu.
+func TestBookChapterCount(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	authors, err := store.GetOrCreateAuthors(ctx, []model.AuthorName{{First: "Karel", Last: "Čapek"}})
+	if err != nil {
+		t.Fatalf("GetOrCreateAuthors: %v", err)
+	}
+	albumTag := "Válka s mloky"
+
+	book, err := store.CreateBook(ctx, BookInput{
+		AuthorIDs:       []uuid.UUID{authors[0].ID},
+		Title:           "Válka s mloky",
+		DurationSeconds: 3600,
+		FilePath:        "capek/valka-s-mloky",
+		AlbumTag:        &albumTag,
+		Language:        "cs",
+	})
+	if err != nil {
+		t.Fatalf("CreateBook: %v", err)
+	}
+	if book.ChapterCount != 0 {
+		t.Errorf("nová kniha má %d kapitol, chtěno 0", book.ChapterCount)
+	}
+
+	for i := 1; i <= 2; i++ {
+		if _, err := store.UpsertChapter(ctx, ChapterInput{
+			BookID:          book.ID,
+			Position:        i,
+			Title:           fmt.Sprintf("Kapitola %d", i),
+			FilePath:        fmt.Sprintf("capek/valka-s-mloky/%02d.mp3", i),
+			DurationSeconds: 1800,
+		}); err != nil {
+			t.Fatalf("UpsertChapter: %v", err)
+		}
+	}
+
+	got, err := store.GetBook(ctx, book.ID)
+	if err != nil || got.ChapterCount != 2 {
+		t.Errorf("GetBook: %d kapitol (err %v), chtěno 2", got.ChapterCount, err)
+	}
+
+	books, err := store.ListBooks(ctx)
+	if err != nil || len(books) != 1 || books[0].ChapterCount != 2 {
+		t.Errorf("ListBooks: %+v (err %v), chtěny 2 kapitoly", books, err)
+	}
+
+	// RETURNING po UPDATE musí počet vrátit taky – frontend ukládá odpověď
+	// PATCH rovnou do cache, jinak by v ní kniha měla nula kapitol.
+	patched, err := store.PatchBook(ctx, book.ID, func(in *BookInput) { in.Title = "Válka s mloky (2. vydání)" })
+	if err != nil || patched.ChapterCount != 2 {
+		t.Errorf("PatchBook: %d kapitol (err %v), chtěno 2", patched.ChapterCount, err)
+	}
+
+	byTag, err := store.GetBooksByAlbumTag(ctx, albumTag)
+	if err != nil || len(byTag) != 1 || byTag[0].ChapterCount != 2 {
+		t.Errorf("GetBooksByAlbumTag: %+v (err %v), chtěny 2 kapitoly", byTag, err)
 	}
 }

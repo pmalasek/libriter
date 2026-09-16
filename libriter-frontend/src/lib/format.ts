@@ -147,6 +147,13 @@ export function bookCount(count: number): string {
   return `${count} knih`
 }
 
+/** Skloňování pro počty kapitol. */
+export function chapterCount(count: number): string {
+  if (count === 1) return '1 kapitola'
+  if (count >= 2 && count <= 4) return `${count} kapitoly`
+  return `${count} kapitol`
+}
+
 /** Autoři série; delší seznam se zkrátí, ať se popisek vejde na řádek. */
 export function authorsLabel(authors: Author[]): string {
   if (authors.length <= 2) return authors.map((author) => author.name).join(', ')

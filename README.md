@@ -447,6 +447,8 @@ i pro snížení jeho role).
 | `POST` | `/admin/scanner/rescan` | Spuštění průchodu knihovnou | admin |
 | `GET` | `/admin/library/repair` | Náhled opravy kapitol (nic nemění) | admin |
 | `POST` | `/admin/library/repair` | Provedení opravy kapitol | admin |
+| `GET` | `/admin/library/merge` | Náhled sloučení rozdělených knih (nic nemění) | admin |
+| `POST` | `/admin/library/merge` | Sloučení rozdělených knih | admin |
 | `GET` | `/admin/stats` | Statistiky knihovny | admin |
 | `GET` | `/admin/system` | Verze, cesty, ffprobe, místo na disku | admin |
 | `GET` | `/admin/audit?limit=&before=` | Výpis administrativních akcí | admin |

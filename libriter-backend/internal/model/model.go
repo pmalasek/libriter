@@ -73,8 +73,9 @@ type Book struct {
 	Title           string     `json:"title"`
 	Narrator        *string    `json:"narrator,omitempty"`
 	DurationSeconds int        `json:"duration_seconds"`
-	FilePath        string     `json:"-"`
-	AlbumTag        *string    `json:"-"` // album tag, podle kterého scanner páruje soubory ke knize
+	ChapterCount    int        `json:"chapter_count"` // odvozené – počet řádků v chapters
+	FilePath        string     `json:"file_path"` // adresář knihy relativně k AUDIO_ROOT
+	AlbumTag        *string    `json:"-"`         // album tag, podle kterého scanner páruje soubory ke knize
 	CoverPath       *string    `json:"cover_path,omitempty"`
 	Language        string     `json:"language"`
 	Description     *string    `json:"description,omitempty"`

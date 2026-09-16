@@ -14,6 +14,8 @@ import type {
   AuditPage,
   CreateUserRequest,
   LibraryStats,
+  MergePlan,
+  MergeResult,
   MetadataSettings,
   MetadataSettingsRequest,
   RegistrationSettings,
@@ -187,5 +189,25 @@ export function useApplyRepair() {
   return useAdminMutation(
     () => apiFetch<RepairResult>('/admin/library/repair', { method: 'POST' }),
     [adminKeys.scanner, adminKeys.stats, queryKeys.books],
+  )
+}
+
+/** Náhled sloučení rozdělených knih – mutace ze stejného důvodu jako usePlanRepair. */
+export function usePlanMerge() {
+  return useMutation({
+    mutationFn: () => apiFetch<MergePlan>('/admin/library/merge'),
+  })
+}
+
+/**
+ * Sloučení vybraných skupin; posílají se jen ID cílových knih, plán si server
+ * sestaví znovu sám. Klíč ['books'] zneplatní i detaily jednotlivých knih
+ * (['books', id]) – TanStack porovnává klíče podle prefixu.
+ */
+export function useApplyMerge() {
+  return useAdminMutation(
+    (targets: string[]) =>
+      apiFetch<MergeResult>('/admin/library/merge', { method: 'POST', json: { targets } }),
+    [adminKeys.stats, queryKeys.books],
   )
 }

@@ -182,6 +182,8 @@ func runServe() error {
 				r.Post("/scanner/rescan", adminH.Rescan)
 				r.Get("/library/repair", adminH.RepairPlan) // náhled, nic nemění
 				r.Post("/library/repair", adminH.Repair)
+				r.Get("/library/merge", adminH.MergePlan) // náhled, nic nemění
+				r.Post("/library/merge", adminH.Merge)
 
 				r.Get("/stats", adminH.Stats)
 				r.Get("/system", adminH.System)

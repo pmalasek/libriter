@@ -2,6 +2,7 @@ import {
   ArrowLeftIcon,
   CalendarIcon,
   ClockIcon,
+  InfoIcon,
   LanguagesIcon,
   MicIcon,
   PencilIcon,
@@ -21,8 +22,9 @@ import { ExpandableText } from '@/components/ExpandableText'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
-import { formatDate, formatDuration } from '@/lib/format'
+import { chapterCount, formatDate, formatDuration } from '@/lib/format'
 import { sortBooks, useBookListPrefs } from '@/lib/sorting'
 
 export function BookDetailPage() {
@@ -136,7 +138,7 @@ export function BookDetailPage() {
               </p>
             ) : null}
 
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-5 flex flex-wrap items-center gap-2">
               <Badge variant="highlight">
                 <ClockIcon />
                 {formatDuration(data.duration_seconds)}
@@ -163,6 +165,38 @@ export function BookDetailPage() {
                   {data.internal_rating}/5
                 </Badge>
               ) : null}
+
+              {/* Údaje, které se týkají spíš záznamu než knihy samotné –
+                  v hlavičce by jen odváděly pozornost. */}
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="icon-sm" aria-label="Informace o záznamu">
+                    <InfoIcon />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-3">
+                  <dl className="space-y-2.5 text-sm">
+                    <div>
+                      <dt className="text-muted-foreground">Kapitoly</dt>
+                      <dd className="tabular-nums">{chapterCount(data.chapter_count)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Soubory</dt>
+                      {/* Dlouhou cestu je lepší zalomit než oříznout – jinak
+                          není poznat, o kterou složku jde. */}
+                      <dd className="font-mono text-xs break-all">{data.file_path}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Přidáno</dt>
+                      <dd className="tabular-nums">{formatDate(data.created_at)}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-muted-foreground">Naposledy změněno</dt>
+                      <dd className="tabular-nums">{formatDate(data.updated_at)}</dd>
+                    </div>
+                  </dl>
+                </PopoverContent>
+              </Popover>
             </div>
 
             <div className="mt-6 flex flex-wrap items-center gap-2">
@@ -185,44 +219,18 @@ export function BookDetailPage() {
         </div>
       </section>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_20rem]">
-        <Card>
-          <CardHeader>
-            <CardTitle>O knize</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {data.description ? (
-              <ExpandableText text={data.description} />
-            ) : (
-              <p className="text-sm text-muted-foreground">Popis není k dispozici.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Podrobnosti</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <dl className="space-y-3 text-sm">
-              <div>
-                <dt className="text-muted-foreground">Přidáno</dt>
-                <dd className="tabular-nums">{formatDate(data.created_at)}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Naposledy změněno</dt>
-                <dd className="tabular-nums">{formatDate(data.updated_at)}</dd>
-              </div>
-              {data.narrator ? (
-                <div>
-                  <dt className="text-muted-foreground">Načetl</dt>
-                  <dd>{data.narrator}</dd>
-                </div>
-              ) : null}
-            </dl>
-          </CardContent>
-        </Card>
-      </div>
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>O knize</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {data.description ? (
+            <ExpandableText text={data.description} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Popis není k dispozici.</p>
+          )}
+        </CardContent>
+      </Card>
 
       {moreByAuthor.length > 0 && mainAuthor ? (
         <section className="mt-12">

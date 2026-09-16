@@ -27,9 +27,14 @@ type BookInput struct {
 	PublishedYear   *int
 }
 
+// bookColumns se používá ve všech SELECTech nad books i v RETURNING po
+// INSERT/UPDATE. Počet kapitol je korelovaný poddotaz: SQLite ho v RETURNING
+// dovoluje (zakázané jsou jen agregace na nejvyšší úrovni) a díky indexu
+// chapters_book_idx je levný.
 const bookColumns = `id, series_id, series_position, title, narrator,
 	       duration_seconds, file_path, cover_path, language, description,
-	       internal_rating, published_year, created_at, updated_at, album_tag`
+	       internal_rating, published_year, created_at, updated_at, album_tag,
+	       (SELECT COUNT(*) FROM chapters c WHERE c.book_id = books.id) AS chapter_count`
 
 const insertBookQuery = `
 	INSERT INTO books
@@ -445,6 +450,7 @@ func scanBook(row scanner) (*model.Book, error) {
 		&b.ID, &b.SeriesID, &b.SeriesPosition, &b.Title, &b.Narrator,
 		&b.DurationSeconds, &b.FilePath, &b.CoverPath, &b.Language, &b.Description,
 		&b.InternalRating, &b.PublishedYear, &b.CreatedAt, &b.UpdatedAt, &b.AlbumTag,
+		&b.ChapterCount,
 	)
 	if err != nil {
 		return nil, err

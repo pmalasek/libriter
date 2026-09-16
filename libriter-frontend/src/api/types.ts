@@ -43,6 +43,10 @@ export interface Book {
   title: string
   narrator?: string
   duration_seconds: number
+  /** Počet kapitol (audio souborů) knihy – odvozuje ho backend. */
+  chapter_count: number
+  /** Adresář s audio soubory, relativně ke kořeni knihovny (AUDIO_ROOT). */
+  file_path: string
   cover_path?: string
   language: string
   description?: string
@@ -304,6 +308,35 @@ export interface RepairResult {
   deleted_books: number
 }
 
+/** Kniha v plánu sloučení; cesta a album tag jinde v API nejsou. */
+export interface MergeBook {
+  id: string
+  title: string
+  file_path: string
+  /** Album tag ze souborů; prázdný u knih z dřívějších scanů. */
+  album_tag: string
+  chapter_count: number
+  created_at: string
+}
+
+/** Jedna rozdělená kniha: zdroje se slijí do cíle. */
+export interface MergeGroup {
+  target: MergeBook
+  sources: MergeBook[]
+}
+
+/** GET /admin/library/merge – náhled, nic nemění. */
+export interface MergePlan {
+  groups: MergeGroup[]
+}
+
+/** POST /admin/library/merge */
+export interface MergeResult {
+  plan: MergePlan
+  merged_books: number
+  moved_chapters: number
+}
+
 /** GET /admin/stats */
 export interface LibraryStats {
   books: number
@@ -376,4 +409,5 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'series.delete': 'Smazání série',
   'scanner.rescan': 'Spuštění kontroly knihovny',
   'library.repair_apply': 'Oprava kapitol',
+  'library.merge_books': 'Sloučení rozdělených knih',
 }

@@ -13,9 +13,8 @@ import (
 	"github.com/google/uuid"
 )
 
-// RepairBook je kniha v plánu opravy. Vlastní model.Book cestu k souborům
-// v JSONu nevrací (patří scanneru), v administraci je ale potřeba – podle ní
-// se pozná, o které vydání jde.
+// RepairBook je kniha v plánu opravy – zúžená na to, co administrace potřebuje
+// zobrazit. Podle adresáře se pozná, o které vydání jde.
 type RepairBook struct {
 	ID       uuid.UUID `json:"id"`
 	Title    string    `json:"title"`
