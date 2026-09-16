@@ -299,6 +299,12 @@ Přihlášený uživatel se drží v `localStorage` (JWT + profil). Profil i rol
 při otevření rozhraní srovnají se serverem, takže změna role se projeví bez
 nového přihlášení.
 
+Barevné schéma (tyrkysová, modrá, fialová nebo zelená) a režim zobrazení
+(`light`, `dark`, `system`) se ukládají automaticky do profilu v databázi.
+Po přihlášení na jiném zařízení má profil přednost před místním nastavením.
+Vzhled lze změnit pod ikonou palety i v sekci **Profil → Vzhled**.
+Nepřihlášeným uživatelům se volba ukládá pouze v prohlížeči.
+
 ### Administrace (role admin)
 
 Položka **Administrace** v navigaci vede na `/admin` a vidí ji jen
@@ -449,6 +455,7 @@ hlavičku `Authorization` poslat neumí. Ochranou je neuhodnutelné UUID knihy.
 | `GET` | `/users/{id}` | Detail uživatele | admin / vlastní profil |
 | `PUT` | `/users/{id}` | Aktualizace jména a emailu | admin / vlastní profil |
 | `PUT` | `/users/{id}/password` | Změna hesla | admin / vlastní profil |
+| `PUT` | `/users/{id}/appearance` | Uložení vzhledu (`color_scheme`, `theme_mode`) | vlastní profil |
 | `PUT` | `/users/{id}/role` | Nastavení role | admin |
 | `DELETE` | `/users/{id}` | Smazání uživatele | admin |
 
