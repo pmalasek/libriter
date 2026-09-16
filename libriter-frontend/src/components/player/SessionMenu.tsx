@@ -1,5 +1,6 @@
 import { CheckIcon, ListMusicIcon, Trash2Icon } from 'lucide-react'
 import { useState } from 'react'
+import { Link } from 'react-router'
 import { useBooks, useSeriesById, useSessions } from '@/api/hooks'
 import type { PlaySession } from '@/api/types'
 import { Button } from '@/components/ui/button'
@@ -16,11 +17,12 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { bookCount, formatClock } from '@/lib/format'
 import { usePlayer } from '@/player/playerContext'
+import { sessionProgress, sessionTitle } from '@/player/sessionLabels'
 import { cn } from '@/lib/utils'
 
 /**
- * Přepínání mezi rozposlouchanými poslechy. Název knihy ani série se neukládá
- * do poslechu, dohledává se v knihovně – přejmenování se tak projeví i tady.
+ * Rychlé přepínání mezi rozposlouchanými poslechy přímo z lišty. Celý přehled
+ * i s úklidem je na stránce Poslechy, sem se vejde jen řádka na poslech.
  */
 export function SessionMenu() {
   const { session, switchSession, removeSession } = usePlayer()
@@ -31,27 +33,13 @@ export function SessionMenu() {
   const { map: seriesById } = useSeriesById()
 
   const bookById = new Map((books.data ?? []).map((book) => [book.id, book]))
-
-  function title(item: PlaySession): string {
-    if (item.title) return item.title
-    if (item.kind === 'series') {
-      const series = item.source_id ? seriesById.get(item.source_id) : undefined
-      return series ? `Série: ${series.title}` : 'Série'
-    }
-    const bookId = item.current_book_id ?? item.items[0]?.book_id
-    return (bookId && bookById.get(bookId)?.title) || 'Poslech'
-  }
+  const title = (item: PlaySession) => sessionTitle(item, bookById, seriesById)
 
   function subtitle(item: PlaySession): string {
+    const progress = sessionProgress(item)
     const parts: string[] = []
-    if (item.items.length > 1) {
-      const index = item.items.findIndex((i) => i.book_id === item.current_book_id)
-      parts.push(`Kniha ${Math.max(0, index) + 1} z ${item.items.length}`)
-    }
-    const current = item.items.find((i) => i.book_id === item.current_book_id) ?? item.items[0]
-    if (current && current.position_seconds > 0) {
-      parts.push(formatClock(current.position_seconds))
-    }
+    if (progress.bookCount > 1) parts.push(`Kniha ${progress.bookNumber} z ${progress.bookCount}`)
+    if (progress.positionSeconds > 0) parts.push(formatClock(progress.positionSeconds))
     if (item.finished_at) parts.push('doposlechnuto')
     return parts.join(' · ')
   }
@@ -67,9 +55,16 @@ export function SessionMenu() {
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" side="top" className="w-80 max-w-[calc(100vw-2rem)] p-2">
-          <p className="px-2 pb-2 pt-1 text-xs font-medium text-muted-foreground">
-            Rozposlouchané poslechy
-          </p>
+          <div className="flex items-center justify-between gap-2 px-2 pt-1 pb-2">
+            <p className="text-xs font-medium text-muted-foreground">Rozposlouchané poslechy</p>
+            <Link
+              to="/sessions"
+              onClick={() => setOpen(false)}
+              className="text-xs text-primary underline-offset-4 hover:underline"
+            >
+              Přehled
+            </Link>
+          </div>
 
           {sessions.isPending ? (
             <p className="px-2 py-3 text-sm text-muted-foreground">Načítání…</p>

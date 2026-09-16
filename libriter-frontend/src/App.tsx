@@ -15,6 +15,7 @@ const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then((module) => 
 const ProfilePage = lazy(() => import('@/pages/ProfilePage').then((module) => ({ default: module.ProfilePage })))
 const SeriesDetailPage = lazy(() => import('@/pages/SeriesDetailPage').then((module) => ({ default: module.SeriesDetailPage })))
 const SeriesPage = lazy(() => import('@/pages/SeriesPage').then((module) => ({ default: module.SeriesPage })))
+const SessionsPage = lazy(() => import('@/pages/SessionsPage').then((module) => ({ default: module.SessionsPage })))
 
 // Administrace – kód se stáhne, až když ji admin otevře.
 const AdminLayout = lazy(() => import('@/pages/admin/AdminLayout').then((module) => ({ default: module.AdminLayout })))
@@ -41,6 +42,7 @@ export function App() {
           <Route path="authors/:id" element={<AuthorDetailPage />} />
           <Route path="series" element={<SeriesPage />} />
           <Route path="series/:id" element={<SeriesDetailPage />} />
+          <Route path="sessions" element={<SessionsPage />} />
           <Route path="profile" element={<ProfilePage />} />
 
           <Route element={<RequireRole role="admin" />}>

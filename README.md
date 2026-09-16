@@ -298,10 +298,13 @@ kapitola i pozice v ní se drží na serveru, ne v prohlížeči – na jiném z
 tedy poslech pokračuje tam, kde skončil. Zapisuje se každých 10 sekund a při
 každé změně (pauza, převíjení, změna kapitoly i zavření stránky).
 
-Rozposlouchaných poslechů může být víc naráz a přepíná se mezi nimi ikonou
-seznamu v liště. *Přehrát* u knihy, která už v nějakém poslechu je, pokračuje
-v něm místo zakládání nového. Po doposlechnutí kapitoly navazuje další, po
-poslední kapitole další kniha poslechu.
+Rozposlouchaných poslechů může být víc naráz. Přepíná se mezi nimi ikonou
+seznamu v liště a celý přehled je na stránce *Poslechy* – ta se v navigaci
+objeví, jakmile je co poslouchat, a dá se z ní pokračovat i uklidit
+doposlechnuté. *Přehrát* u knihy, která už v nějakém poslechu je, pokračuje
+v něm místo zakládání nového. Tlačítko se u právě hrané knihy mění na
+*Pozastavit*. Po doposlechnutí kapitoly navazuje další, po poslední kapitole
+další kniha poslechu.
 
 **Co ještě ne:** zakládání či
 mazání knih, autorů a sérií z rozhraní – ty zakládá scanner nebo přímé volání

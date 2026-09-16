@@ -6,6 +6,7 @@ import {
   LanguagesIcon,
   ListPlusIcon,
   MicIcon,
+  PauseIcon,
   PencilIcon,
   PlayIcon,
   StarIcon,
@@ -50,6 +51,10 @@ export function BookDetailPage() {
   )
   const inSession = started !== undefined
   const resumeAt = started && started.position_seconds > 0 ? started.position_seconds : null
+
+  // Kniha, kterou drží přehrávač – pak tlačítko ovládá přehrávání, ne otevření.
+  const isOpenBook = player.book?.id === id
+  const isPlayingBook = isOpenBook && player.playing
 
   // Další kniha pro „Uložit a další“ – ve stejném pořadí, jaké má seznam knih.
   const nextBook = useMemo(() => {
@@ -213,9 +218,21 @@ export function BookDetailPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap items-center gap-2">
-              <Button size="lg" onClick={() => player.playBook(data.id)} disabled={player.loading}>
-                <PlayIcon />
-                {resumeAt != null ? `Pokračovat (${formatClock(resumeAt)})` : 'Přehrát'}
+              {/* Knihu, která je právě v přehrávači, tohle tlačítko jen
+                  pozastaví a rozjede – načítat ji znovu by zahodilo pozici. */}
+              <Button
+                size="lg"
+                onClick={() => (isOpenBook ? player.toggle() : player.playBook(data.id))}
+                disabled={player.loading}
+              >
+                {isPlayingBook ? <PauseIcon /> : <PlayIcon />}
+                {isPlayingBook
+                  ? 'Pozastavit'
+                  : isOpenBook
+                    ? 'Přehrát'
+                    : resumeAt != null
+                      ? `Pokračovat (${formatClock(resumeAt)})`
+                      : 'Přehrát'}
               </Button>
               {player.session && !inSession ? (
                 <Button

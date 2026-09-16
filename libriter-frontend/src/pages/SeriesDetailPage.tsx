@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, ListPlusIcon, PlayIcon } from 'lucide-react'
+import { ArrowLeftIcon, ListPlusIcon, PauseIcon, PlayIcon } from 'lucide-react'
 import { useMemo } from 'react'
 import { Link, useParams } from 'react-router'
 import { useBooks, useSeriesOne, useSessions } from '@/api/hooks'
@@ -25,6 +25,10 @@ export function SeriesDetailPage() {
     () => (sessions.data ?? []).some((s) => s.kind === 'series' && s.source_id === id && !s.finished_at),
     [id, sessions.data],
   )
+
+  // Přehrávač právě drží některý díl téhle série (i když vznikl jako seznam).
+  const playingFromSeries = player.book?.series_id === id
+  const isPlayingSeries = playingFromSeries && player.playing
 
   // V sérii řadíme podle pořadí dílu; knihy bez pozice jdou na konec.
   const seriesBooks = useMemo(() => {
@@ -65,9 +69,21 @@ export function SeriesDetailPage() {
 
             {seriesBooks.length > 0 ? (
               <div className="mt-5 flex flex-wrap items-center gap-2">
-                <Button size="lg" onClick={() => player.playSeries(id)} disabled={player.loading}>
-                  <PlayIcon />
-                  {openSeries ? 'Pokračovat v sérii' : 'Přehrát sérii'}
+                {/* Když přehrávač drží některý díl téhle série, tlačítko ho
+                    ovládá; jinak sérii otevře nebo v ní pokračuje. */}
+                <Button
+                  size="lg"
+                  onClick={() => (playingFromSeries ? player.toggle() : player.playSeries(id))}
+                  disabled={player.loading}
+                >
+                  {isPlayingSeries ? <PauseIcon /> : <PlayIcon />}
+                  {isPlayingSeries
+                    ? 'Pozastavit'
+                    : playingFromSeries
+                      ? 'Přehrát'
+                      : openSeries
+                        ? 'Pokračovat v sérii'
+                        : 'Přehrát sérii'}
                 </Button>
                 {player.session && !openSeries ? (
                   <Button

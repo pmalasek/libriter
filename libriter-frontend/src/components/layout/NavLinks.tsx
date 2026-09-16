@@ -1,5 +1,6 @@
-import { LayersIcon, LibraryIcon, SettingsIcon, UsersIcon } from 'lucide-react'
+import { HeadphonesIcon, LayersIcon, LibraryIcon, SettingsIcon, UsersIcon } from 'lucide-react'
 import { NavLink } from 'react-router'
+import { useSessions } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
 import { isAdmin } from '@/auth/permissions'
 import { cn } from '@/lib/utils'
@@ -10,12 +11,18 @@ const links = [
   { to: '/series', label: 'Série', icon: LayersIcon },
 ]
 
+const sessionsLink = { to: '/sessions', label: 'Poslechy', icon: HeadphonesIcon }
 const adminLink = { to: '/admin', label: 'Administrace', icon: SettingsIcon }
 
 export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useAuth()
+  const sessions = useSessions()
+
+  // Poslechy mají smysl, teprve když je co poslouchat – dokud uživatel nic
+  // nerozposlouchal, byla by to prázdná položka navíc.
+  const withSessions = (sessions.data ?? []).length > 0 ? [...links, sessionsLink] : links
   // Administraci vidí jen admin; skutečnou ochranou je role na serveru.
-  const visible = isAdmin(user) ? [...links, adminLink] : links
+  const visible = isAdmin(user) ? [...withSessions, adminLink] : withSessions
 
   return (
     <nav className="flex flex-col gap-1">
