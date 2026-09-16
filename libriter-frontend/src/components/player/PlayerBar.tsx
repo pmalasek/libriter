@@ -15,7 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider'
 import { formatClock } from '@/lib/format'
 import { SKIP_BACK, SKIP_FORWARD, SPEEDS, usePlayer } from '@/player/playerContext'
+import { PlayerQueue } from './PlayerQueue'
 import { SessionMenu } from './SessionMenu'
+import { VolumeControl } from './VolumeControl'
 
 /**
  * Lišta přehrávače. Drží se u spodní hrany na všech stránkách, aby poslech
@@ -124,8 +126,9 @@ export function PlayerBar() {
             </Button>
           </div>
 
-          {/* Rychlost, přepínání poslechů a zavření lišty */}
+          {/* Hlasitost, rychlost, obsah poslechu a zavření lišty */}
           <div className="flex flex-1 items-center justify-end gap-0.5">
+            <VolumeControl />
             <Select value={String(speed)} onValueChange={(value) => player.setSpeed(Number(value))}>
               <SelectTrigger
                 size="sm"
@@ -143,6 +146,7 @@ export function PlayerBar() {
                 ))}
               </SelectContent>
             </Select>
+            <PlayerQueue />
             <SessionMenu />
             <Button
               variant="ghost"

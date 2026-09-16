@@ -6,21 +6,21 @@ import { isAdmin } from '@/auth/permissions'
 import { cn } from '@/lib/utils'
 
 const links = [
-  { to: '/', label: 'Knihy', icon: LibraryIcon },
+  { to: '/books', label: 'Knihy', icon: LibraryIcon },
   { to: '/authors', label: 'Autoři', icon: UsersIcon },
   { to: '/series', label: 'Série', icon: LayersIcon },
 ]
 
-const sessionsLink = { to: '/sessions', label: 'Poslechy', icon: HeadphonesIcon }
+const sessionsLink = { to: '/sessions', label: 'Právě posloucháno', icon: HeadphonesIcon }
 const adminLink = { to: '/admin', label: 'Administrace', icon: SettingsIcon }
 
 export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useAuth()
   const sessions = useSessions()
 
-  // Poslechy mají smysl, teprve když je co poslouchat – dokud uživatel nic
-  // nerozposlouchal, byla by to prázdná položka navíc.
-  const withSessions = (sessions.data ?? []).length > 0 ? [...links, sessionsLink] : links
+  // Rozposlouchané patří nahoru: kdo něco poslouchá, jde pokračovat, ne
+  // procházet knihovnu. Dokud není co poslouchat, je to prázdná položka navíc.
+  const withSessions = (sessions.data ?? []).length > 0 ? [sessionsLink, ...links] : links
   // Administraci vidí jen admin; skutečnou ochranou je role na serveru.
   const visible = isAdmin(user) ? [...withSessions, adminLink] : withSessions
 
@@ -30,7 +30,7 @@ export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
         <NavLink
           key={to}
           to={to}
-          end={to === '/'}
+          end={to === '/books'}
           onClick={onNavigate}
           className={({ isActive }) =>
             cn(

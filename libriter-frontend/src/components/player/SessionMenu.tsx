@@ -1,4 +1,4 @@
-import { CheckIcon, ListMusicIcon, Trash2Icon } from 'lucide-react'
+import { CheckIcon, HeadphonesIcon, Trash2Icon } from 'lucide-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { useBooks, useSeriesById, useSessions } from '@/api/hooks'
@@ -22,7 +22,7 @@ import { cn } from '@/lib/utils'
 
 /**
  * Rychlé přepínání mezi rozposlouchanými poslechy přímo z lišty. Celý přehled
- * i s úklidem je na stránce Poslechy, sem se vejde jen řádka na poslech.
+ * i s úklidem je na stránce Právě posloucháno, sem se vejde řádka na poslech.
  */
 export function SessionMenu() {
   const { session, switchSession, removeSession } = usePlayer()
@@ -50,13 +50,13 @@ export function SessionMenu() {
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label="Rozposlouchané poslechy" title="Rozposlouchané poslechy">
-            <ListMusicIcon />
+          <Button variant="ghost" size="icon" aria-label="Právě posloucháno" title="Právě posloucháno">
+            <HeadphonesIcon />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" side="top" className="w-80 max-w-[calc(100vw-2rem)] p-2">
           <div className="flex items-center justify-between gap-2 px-2 pt-1 pb-2">
-            <p className="text-xs font-medium text-muted-foreground">Rozposlouchané poslechy</p>
+            <p className="text-xs font-medium text-muted-foreground">Právě posloucháno</p>
             <Link
               to="/sessions"
               onClick={() => setOpen(false)}

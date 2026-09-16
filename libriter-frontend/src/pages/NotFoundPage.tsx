@@ -10,7 +10,7 @@ export function NotFoundPage() {
       <p className="font-heading mt-4 text-xl font-semibold">Tato stránka neexistuje.</p>
       <p className="mt-1 text-muted-foreground">Možná se přesunula, nebo je odkaz překlepnutý.</p>
       <Button asChild size="lg" className="mt-8">
-        <Link to="/">Zpět na knihy</Link>
+        <Link to="/books">Zpět na knihy</Link>
       </Button>
     </div>
   )

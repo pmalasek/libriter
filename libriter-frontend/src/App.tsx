@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router'
 import { RedirectIfAuthenticated, RequireAuth } from '@/auth/RequireAuth'
 import { RequireRole } from '@/auth/RequireRole'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { HomeRedirect } from '@/pages/HomeRedirect'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 
@@ -36,7 +37,9 @@ export function App() {
 
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
-          <Route index element={<BooksPage />} />
+          {/* Kořen jen rozhodne, kam vede první pohled po otevření. */}
+          <Route index element={<HomeRedirect />} />
+          <Route path="books" element={<BooksPage />} />
           <Route path="books/:id" element={<BookDetailPage />} />
           <Route path="authors" element={<AuthorsPage />} />
           <Route path="authors/:id" element={<AuthorDetailPage />} />

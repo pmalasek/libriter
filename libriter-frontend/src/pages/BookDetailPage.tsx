@@ -96,7 +96,7 @@ export function BookDetailPage() {
   return (
     <>
       <Button variant="ghost" size="sm" asChild className="mb-4 -ml-2">
-        <Link to="/">
+        <Link to="/books">
           <ArrowLeftIcon />
           Zpět na knihy
         </Link>

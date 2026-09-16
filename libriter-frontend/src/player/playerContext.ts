@@ -4,6 +4,12 @@ import type { Book, Chapter, PlaySession } from '@/api/types'
 /** Klíč, pod kterým si prohlížeč pamatuje naposledy otevřený poslech. */
 export const STORAGE_KEY = 'libriter.player.session'
 
+/**
+ * Hlasitost zůstává v prohlížeči, ne v profilu na serveru: je to vlastnost
+ * zařízení (sluchátka versus reproduktor v kuchyni), ne poslechu.
+ */
+export const VOLUME_KEY = 'libriter.player.volume'
+
 /** Nabídka rychlostí přehrávání; musí se vejít do rozsahu, který hlídá server. */
 export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2] as const
 
@@ -29,6 +35,9 @@ export interface PlayerValue {
   /** Čeká se na data (zakládá se poslech, načítá se soubor). */
   loading: boolean
   speed: number
+  /** Hlasitost 0–1; při ztlumení si drží hodnotu, na kterou se vrátí. */
+  volume: number
+  muted: boolean
 
   /** Přehraje knihu; volitelně rovnou konkrétní kapitolu od začátku. */
   playBook: (bookId: string, chapterId?: string) => void
@@ -48,6 +57,8 @@ export interface PlayerValue {
   nextChapter: () => void
   prevChapter: () => void
   setSpeed: (speed: number) => void
+  setVolume: (volume: number) => void
+  toggleMute: () => void
   /** Zavře lištu přehrávače; poslech zůstane v seznamu i s pozicí. */
   close: () => void
 }

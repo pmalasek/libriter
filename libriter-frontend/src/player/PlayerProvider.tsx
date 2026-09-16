@@ -20,8 +20,29 @@ import {
   SAVE_INTERVAL_MS,
   sessionItem,
   STORAGE_KEY,
+  VOLUME_KEY,
   type PlayerValue,
 } from './playerContext'
+
+/**
+ * Uložená hlasitost. Bez záznamu, s poškozenou hodnotou i mimo rozsah hraje
+ * přehrávač naplno – zticha startovat nemá.
+ *
+ * Prázdná hodnota se musí odchytit dřív, než se převede na číslo: `Number(null)`
+ * je nula a ta by prošla kontrolou rozsahu jako platné ztlumení.
+ */
+function readVolume(): number {
+  try {
+    const stored = localStorage.getItem(VOLUME_KEY)
+    if (stored === null || stored.trim() === '') return 1
+
+    const value = Number(stored)
+    if (Number.isFinite(value) && value >= 0 && value <= 1) return value
+  } catch {
+    // Zakázané úložiště nesmí přehrávač shodit.
+  }
+  return 1
+}
 
 /**
  * Token pro adresu audio souboru. Platí 24 hodin, takže ho stačí načíst
@@ -67,6 +88,10 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
   const [playing, setPlaying] = useState(false)
   const [loading, setLoading] = useState(false)
   const [speed, setSpeedState] = useState(1)
+  const [volume, setVolumeState] = useState(readVolume)
+  // Stažení posuvníku na nulu je ztlumení, i když ho přežilo načtení stránky –
+  // ikona pak sedí a jedno kliknutí zvuk vrátí.
+  const [muted, setMuted] = useState(() => volume === 0)
 
   // Zvuk musí přežít překreslení, proto element i vše, co se čte v jeho
   // událostech, drží ref – z posluchače by uzávěr viděl starý stav.
@@ -436,6 +461,33 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
     [savePosition],
   )
 
+  const setVolume = useCallback((value: number) => {
+    const next = Math.min(1, Math.max(0, value))
+    setVolumeState(next)
+    // Tažení posuvníku na nulu a zpátky je přirozenější než hledat tlačítko.
+    setMuted(next === 0)
+    try {
+      localStorage.setItem(VOLUME_KEY, String(next))
+    } catch {
+      // Bez uložení se hlasitost příště vrátí na výchozí, jinak nevadí.
+    }
+  }, [])
+
+  const toggleMute = useCallback(() => {
+    setMuted((current) => {
+      // Ztlumení z nuly nemá co vracet, tak zvedne zvuk na polovinu.
+      if (current && volume === 0) setVolume(0.5)
+      return !current
+    })
+  }, [setVolume, volume])
+
+  // Hlasitost se nastavuje i po výměně souboru – nový zdroj ji nepřebírá sám.
+  useEffect(() => {
+    const audio = audioElement()
+    audio.volume = volume
+    audio.muted = muted
+  }, [muted, track, volume])
+
   // --- události přehrávače ---
 
   useEffect(() => {
@@ -655,6 +707,8 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
     playing,
     loading: loading || createSession.isPending,
     speed,
+    volume,
+    muted,
     playBook,
     playSeries,
     playList,
@@ -668,6 +722,8 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
     nextChapter,
     prevChapter,
     setSpeed,
+    setVolume,
+    toggleMute,
     close,
   }
 

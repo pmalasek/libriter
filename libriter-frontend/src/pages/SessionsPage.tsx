@@ -32,9 +32,10 @@ import {
 } from '@/player/sessionLabels'
 
 /**
- * Přehled rozposlouchaných poslechů. Lišta přehrávače umí přepínat mezi nimi
- * taky, ale ta ukazuje jen jednu řádku na poslech – tady je vidět, co je kde
- * rozečtené, a dá se to uklidit.
+ * Přehled rozposlouchaných poslechů a zároveň první pohled po otevření
+ * aplikace, když je co poslouchat (viz HomeRedirect). Lišta přehrávače umí
+ * přepínat taky, ale vejde se do ní jen řádka na poslech – tady je vidět, co
+ * je kde rozečtené, a dá se to uklidit.
  */
 export function SessionsPage() {
   const sessions = useSessions()
@@ -59,7 +60,7 @@ export function SessionsPage() {
   if (sessions.isPending) {
     return (
       <>
-        <PageHeader title="Poslechy" />
+        <PageHeader title="Právě posloucháno" />
         <LoadingGrid count={3} view="list" />
       </>
     )
@@ -68,7 +69,7 @@ export function SessionsPage() {
   if (sessions.isError) {
     return (
       <>
-        <PageHeader title="Poslechy" />
+        <PageHeader title="Právě posloucháno" />
         <ErrorState error={sessions.error} onRetry={() => void sessions.refetch()} />
       </>
     )
@@ -79,7 +80,7 @@ export function SessionsPage() {
   return (
     <>
       <PageHeader
-        title="Poslechy"
+        title="Právě posloucháno"
         description={
           open.length > 0
             ? `${open.length} rozposlouchaných · pokračujte tam, kde jste skončili`

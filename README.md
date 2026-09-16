@@ -298,13 +298,20 @@ kapitola i pozice v ní se drží na serveru, ne v prohlížeči – na jiném z
 tedy poslech pokračuje tam, kde skončil. Zapisuje se každých 10 sekund a při
 každé změně (pauza, převíjení, změna kapitoly i zavření stránky).
 
+V liště je hlasitost (na širokých obrazovkách; telefon a tablet mají vlastní
+tlačítka a iOS hlasitost přes `<audio>` nastavit nedovolí) a panel *Obsah
+poslechu* se všemi knihami poslechu i jejich soubory. Kapitoly se v něm
+stahují až při otevření a rozbalená je ta kniha, která hraje – kliknutím na
+kterýkoliv soubor se přejde přímo na něj.
+
 Rozposlouchaných poslechů může být víc naráz. Přepíná se mezi nimi ikonou
-seznamu v liště a celý přehled je na stránce *Poslechy* – ta se v navigaci
-objeví, jakmile je co poslouchat, a dá se z ní pokračovat i uklidit
-doposlechnuté. *Přehrát* u knihy, která už v nějakém poslechu je, pokračuje
-v něm místo zakládání nového. Tlačítko se u právě hrané knihy mění na
-*Pozastavit*. Po doposlechnutí kapitoly navazuje další, po poslední kapitole
-další kniha poslechu.
+sluchátek v liště a celý přehled je na stránce *Právě posloucháno* – ta se
+v navigaci objeví jako první položka, jakmile je co poslouchat, a je to
+i první pohled po otevření aplikace (kořenová adresa jinak vede do knihovny).
+Dá se z ní pokračovat i uklidit doposlechnuté. *Přehrát* u knihy, která už
+v nějakém poslechu je, pokračuje v něm místo zakládání nového. Tlačítko se
+u právě hrané knihy mění na *Pozastavit*. Po doposlechnutí kapitoly navazuje
+další, po poslední kapitole další kniha poslechu.
 
 **Co ještě ne:** zakládání či
 mazání knih, autorů a sérií z rozhraní – ty zakládá scanner nebo přímé volání
