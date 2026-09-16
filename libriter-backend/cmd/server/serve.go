@@ -139,6 +139,7 @@ func runServe() error {
 				r.Use(middleware.RequireRole("reader"))
 				r.Get("/books", bookH.List)
 				r.Get("/books/{id}", bookH.Get)
+				r.Get("/books/{id}/chapters", bookH.ListChapters)
 				r.Get("/authors", authorH.List)
 				r.Get("/authors/{id}", authorH.Get)
 				r.Get("/series", seriesH.List)
@@ -151,6 +152,7 @@ func runServe() error {
 				r.Post("/books", bookH.Create)
 				r.Put("/books/{id}", bookH.Update)
 				r.Patch("/books/{id}", bookH.Patch) // částečná aktualizace (webové rozhraní)
+				r.Put("/books/{id}/chapters/order", bookH.ReorderChapters)
 				r.Post("/authors", authorH.Create)
 				r.Put("/authors/{id}", authorH.Update)
 				r.Put("/authors/{id}/image", authorH.SetImage) // stáhne fotku ze zdroje

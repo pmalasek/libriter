@@ -57,6 +57,24 @@ export interface Book {
   updated_at: string
 }
 
+/** Kapitola knihy = jeden audio soubor (GET /books/{id}/chapters). */
+export interface Chapter {
+  id: string
+  /** Pořadí v knize; po ručním seřazení jde o řadu 1..N. */
+  position: number
+  title: string
+  /** Název souboru bez adresáře – podle něj se pozná správné pořadí. */
+  file_name: string
+  /** Začátek kapitoly v rámci celé knihy (součet délek předchozích). */
+  start_offset_seconds: number
+  duration_seconds: number
+}
+
+/** PUT /books/{id}/chapters/order – všechny kapitoly knihy v novém pořadí. */
+export interface ReorderChaptersRequest {
+  chapter_ids: string[]
+}
+
 export interface AuthResponse {
   user: User
   token: string

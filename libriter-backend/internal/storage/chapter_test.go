@@ -270,3 +270,167 @@ func TestGetBookWithoutAlbumTagInDir(t *testing.T) {
 		t.Errorf("nejednoznačný adresář vrátil knihu: %v", err)
 	}
 }
+
+// upsertChapters založí kapitoly v daném pořadí pozic a vrátí je v tom pořadí.
+func upsertChapters(t *testing.T, store *Store, bookID uuid.UUID, positions []int) []model.Chapter {
+	t.Helper()
+	ctx := context.Background()
+
+	chapters := make([]model.Chapter, 0, len(positions))
+	for i, position := range positions {
+		c, err := store.UpsertChapter(ctx, ChapterInput{
+			BookID: bookID, Position: position, Title: "K",
+			FilePath: "cole/loutkar/" + string(rune('a'+i)) + ".mp3", DurationSeconds: 10 * (i + 1),
+		})
+		if err != nil {
+			t.Fatalf("UpsertChapter(%d): %v", position, err)
+		}
+		chapters = append(chapters, *c)
+	}
+	return chapters
+}
+
+// Ruční pořadí přečísluje kapitoly hustě od 1 i z řídkých pozic (multi-disk
+// vydání) a přepočítá offsety.
+func TestReorderChaptersRenumbersDensely(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+	bookID := bookForChapters(t, store)
+	c := upsertChapters(t, store, bookID, []int{1, 1001, 1002})
+
+	got, err := store.ReorderChapters(ctx, bookID, []uuid.UUID{c[2].ID, c[0].ID, c[1].ID})
+	if err != nil {
+		t.Fatalf("ReorderChapters: %v", err)
+	}
+
+	wantIDs := []uuid.UUID{c[2].ID, c[0].ID, c[1].ID}
+	wantOffsets := []int{0, 30, 40}
+	if len(got) != 3 {
+		t.Fatalf("kapitol = %d, chtěny 3", len(got))
+	}
+	for i := range got {
+		if got[i].ID != wantIDs[i] || got[i].Position != i+1 {
+			t.Errorf("kapitola %d = %s na pozici %d, chtěna %s na %d",
+				i, got[i].ID, got[i].Position, wantIDs[i], i+1)
+		}
+		if got[i].StartOffsetSeconds != wantOffsets[i] {
+			t.Errorf("offset kapitoly %d = %d, chtěno %d", i, got[i].StartOffsetSeconds, wantOffsets[i])
+		}
+	}
+
+	stored, err := store.GetChaptersByBookID(ctx, bookID)
+	if err != nil {
+		t.Fatalf("GetChaptersByBookID: %v", err)
+	}
+	for i := range stored {
+		if stored[i].ID != wantIDs[i] {
+			t.Errorf("uložené pořadí %d = %s, chtěno %s", i, stored[i].ID, wantIDs[i])
+		}
+	}
+}
+
+// Seznam musí přesně odpovídat kapitolám knihy; jinak zůstane vše beze změny.
+func TestReorderChaptersRejectsWrongSet(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+	bookID := bookForChapters(t, store)
+	c := upsertChapters(t, store, bookID, []int{1, 2, 3})
+
+	otherBook := bookForChaptersAt(t, store, "cole/jina")
+	other, err := store.UpsertChapter(ctx, ChapterInput{
+		BookID: otherBook, Position: 1, Title: "K", FilePath: "cole/jina/a.mp3", DurationSeconds: 5,
+	})
+	if err != nil {
+		t.Fatalf("UpsertChapter (jiná kniha): %v", err)
+	}
+
+	tests := map[string][]uuid.UUID{
+		"chybějící":  {c[0].ID, c[1].ID},
+		"duplicitní": {c[0].ID, c[1].ID, c[1].ID},
+		"cizí":       {c[0].ID, c[1].ID, other.ID},
+		"prázdný":    {},
+	}
+	for name, ids := range tests {
+		if _, err := store.ReorderChapters(ctx, bookID, ids); !errors.Is(err, ErrChapterSetMismatch) {
+			t.Errorf("%s seznam: err = %v, chtěno ErrChapterSetMismatch", name, err)
+		}
+	}
+
+	stored, err := store.GetChaptersByBookID(ctx, bookID)
+	if err != nil {
+		t.Fatalf("GetChaptersByBookID: %v", err)
+	}
+	for i := range stored {
+		if stored[i].ID != c[i].ID || stored[i].Position != i+1 {
+			t.Errorf("pozice po odmítnutí změněna: %+v", stored[i])
+		}
+	}
+
+	if _, err := store.ReorderChapters(ctx, uuid.New(), nil); !errors.Is(err, ErrNotFound) {
+		t.Errorf("neznámá kniha: err = %v, chtěno ErrNotFound", err)
+	}
+}
+
+// Ruční pořadí se pamatuje podle cesty k souboru, další seřazení ho nahradí
+// a se smazáním knihy zmizí.
+func TestReorderChaptersWritesOverrides(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+	bookID := bookForChapters(t, store)
+	c := upsertChapters(t, store, bookID, []int{1, 2})
+
+	if _, err := store.ReorderChapters(ctx, bookID, []uuid.UUID{c[1].ID, c[0].ID}); err != nil {
+		t.Fatalf("ReorderChapters: %v", err)
+	}
+	assertOverride := func(path string, want int) {
+		t.Helper()
+		got, ok, err := store.ChapterOrderOverride(ctx, bookID, path)
+		if err != nil {
+			t.Fatalf("ChapterOrderOverride(%s): %v", path, err)
+		}
+		if !ok || got != want {
+			t.Errorf("override %s = %d (ok=%v), chtěno %d", path, got, ok, want)
+		}
+	}
+	assertOverride(c[1].FilePath, 1)
+	assertOverride(c[0].FilePath, 2)
+
+	if _, err := store.ReorderChapters(ctx, bookID, []uuid.UUID{c[0].ID, c[1].ID}); err != nil {
+		t.Fatalf("ReorderChapters (znovu): %v", err)
+	}
+	assertOverride(c[0].FilePath, 1)
+	assertOverride(c[1].FilePath, 2)
+
+	if _, ok, err := store.ChapterOrderOverride(ctx, bookID, "cole/loutkar/nikdy.mp3"); err != nil || ok {
+		t.Errorf("neznámý soubor: ok=%v, err=%v; chtěno ok=false", ok, err)
+	}
+
+	if err := store.DeleteBook(ctx, bookID); err != nil {
+		t.Fatalf("DeleteBook: %v", err)
+	}
+	if _, ok, err := store.ChapterOrderOverride(ctx, bookID, c[0].FilePath); err != nil || ok {
+		t.Errorf("override po smazání knihy: ok=%v, err=%v; chtěno ok=false", ok, err)
+	}
+}
+
+// bookForChaptersAt je bookForChapters s vlastním adresářem (druhá kniha v testu).
+func bookForChaptersAt(t *testing.T, store *Store, dir string) uuid.UUID {
+	t.Helper()
+	ctx := context.Background()
+
+	authors, err := store.GetOrCreateAuthors(ctx, []model.AuthorName{{First: "Daniel", Last: "Cole"}})
+	if err != nil {
+		t.Fatalf("GetOrCreateAuthors: %v", err)
+	}
+	book, err := store.CreateBook(ctx, BookInput{
+		AuthorIDs:       []uuid.UUID{authors[0].ID},
+		Title:           "Jiná",
+		DurationSeconds: 60,
+		FilePath:        dir,
+		Language:        "cs",
+	})
+	if err != nil {
+		t.Fatalf("CreateBook: %v", err)
+	}
+	return book.ID
+}

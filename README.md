@@ -267,6 +267,14 @@ originálu). Ukládá se přes
 a další* (Ctrl+Enter) uloží a rovnou otevře editaci následující knihy v pořadí
 seznamu – hodí se při procházení celé knihovny.
 
+**Kapitoly:** detail knihy má sbalenou kartu *Kapitoly* se seznamem audio
+souborů, jejich názvy a délkami. Editor ji může přepnout tlačítkem *Změnit
+pořadí* do režimu přeskládání: řádky jdou přetahovat myší i prstem, posouvat
+šipkami, nebo hromadně seřadit podle názvu souboru či názvu kapitoly. Hodí se
+u souborů bez track tagů, kde pořadí odvozené z názvů nesedí. Uložené ruční
+pořadí zůstává zachované i po opravě kapitol v administraci; soubory přidané
+později se zařadí na konec.
+
 **Hromadné zařazení do série:** v seznamu knih zapne tlačítko *Vybrat* režim
 výběru; kliknutí na knihu ji označí. *Přidat do série* pak vybrané knihy
 zařadí do existující nebo nové série a nechá upravit čísla dílů (předvyplní se
@@ -281,7 +289,8 @@ Nabídnutá fotka se stáhne až při uložení (`PUT /authors/{id}/image`), tak
 v seznamu; autor bez fotky má zástupnou ikonu. Čtenář (role reader) tlačítka
 nevidí.
 
-**Co ještě ne:** přehrávání audia (chybí kapitoly a streamování) a zakládání či
+**Co ještě ne:** přehrávání audia (kapitoly už detail knihy ukazuje, chybí
+streamování) a zakládání či
 mazání knih, autorů a sérií z rozhraní – ty zakládá scanner nebo přímé volání
 API. Obálku a cestu k audio souborům nelze z rozhraní měnit, spravuje je
 scanner.
@@ -358,6 +367,18 @@ Scanner se spustí **automaticky při startu backendu** a:
 4. Extrahuje metadata z audio tagů a vloží knihu do databáze
 
 **Podporované formáty:** `.mp3`, `.m4a`, `.m4b`, `.ogg`, `.flac`, `.opus`, `.aac`, `.wav`
+
+**Pořadí kapitol** (`chapters.position`) se určuje v tomto pořadí priority:
+
+1. **Ruční pořadí** nastavené editorem v rozhraní – přežije i opravu kapitol
+2. **Číslo disku a tracku z tagů** (`Disc`, `Track`); každý disk má vlastní
+   rozsah tisícovek, takže si CD1 a CD2 nesahají na pozice
+3. **Přirozené pořadí názvu souboru** mezi audio soubory adresáře – čísla se
+   porovnávají jako čísla, takže `2.mp3` je před `10.mp3`
+4. Jinak další v řadě
+
+Obsazenou pozici scanner nikdy nepřepíše, jen posune na první volnou. Mezery
+v číslování ničemu nevadí, kapitoly se řadí podle relativního pořadí.
 
 **Priorita metadat z tagů:**
 
@@ -475,9 +496,11 @@ pošle jako `before` v dalším požadavku.
 | `GET` | `/books` | Seznam knih | reader+ |
 | `GET` | `/books/{id}` | Detail knihy | reader+ |
 | `GET` | `/books/{id}/cover` | Obrázek obálky (soubor z `COVER_ROOT`) | veřejné |
+| `GET` | `/books/{id}/chapters` | Kapitoly (audio soubory) v pořadí přehrávání | reader+ |
 | `POST` | `/books` | Přidání knihy | editor+ |
 | `PUT` | `/books/{id}` | Aktualizace knihy (úplná náhrada) | editor+ |
 | `PATCH` | `/books/{id}` | Aktualizace jen poslaných polí | editor+ |
+| `PUT` | `/books/{id}/chapters/order` | Ruční pořadí kapitol | editor+ |
 | `DELETE` | `/books/{id}` | Smazání knihy | admin |
 
 Kniha má autory ve vazbě M:N. Při zápisu se posílá `author_ids` (alespoň jedno
@@ -493,6 +516,20 @@ záznamy autorů:
 { "id": "<uuid>", "title": "Ze života hmyzu",
   "authors": [ { "id": "<uuid>", "first_name": "Karel", "middle_name": "",
                  "last_name": "Čapek", "name": "Karel Čapek" }, ... ] }
+```
+
+Kapitola je jeden audio soubor. Celá cesta k souboru se nevystavuje (adresář
+knihy je v `file_path` knihy), klient dostane jen název souboru – podle něj se
+pozná, jestli pořadí sedí. `start_offset_seconds` je začátek kapitoly v rámci
+celé knihy, počítá se ze součtu délek předchozích kapitol.
+
+```jsonc
+// GET /books/{id}/chapters
+[ { "id": "<uuid>", "position": 1, "title": "Kapitola 1", "file_name": "01.mp3",
+    "start_offset_seconds": 0, "duration_seconds": 1834 }, ... ]
+
+// PUT /books/{id}/chapters/order – všechny kapitoly knihy, každá právě jednou
+{ "chapter_ids": ["<uuid>", "<uuid>", "<uuid>"] }
 ```
 
 **`PUT` vs. `PATCH`:** `PUT` je úplná náhrada a vyžaduje i `file_path`. Ten se

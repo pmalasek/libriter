@@ -17,6 +17,7 @@ import { canEdit } from '@/auth/permissions'
 import { BookEditDialog } from '@/components/BookEditDialog'
 import { BookGrid } from '@/components/BookGrid'
 import { BookCover, coverUrl } from '@/components/BookCover'
+import { ChapterList } from '@/components/ChapterList'
 import { ErrorState } from '@/components/ErrorState'
 import { ExpandableText } from '@/components/ExpandableText'
 import { Badge } from '@/components/ui/badge'
@@ -231,6 +232,10 @@ export function BookDetailPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* key resetuje rozbalení i rozepsané pořadí při přechodu na další knihu –
+          stránka se nepřemountuje, jen se změní parametr v URL. */}
+      <ChapterList key={data.id} book={data} />
 
       {moreByAuthor.length > 0 && mainAuthor ? (
         <section className="mt-12">

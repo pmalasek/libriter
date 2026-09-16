@@ -19,6 +19,10 @@ var ErrConflict = errors.New("conflict")
 // administrátora. Bez admina by knihovnu nešlo spravovat jinak než přes CLI.
 var ErrLastAdmin = errors.New("last admin")
 
+// ErrChapterSetMismatch vrací ReorderChapters, když poslaný seznam ID
+// neodpovídá kapitolám knihy (chybějící, duplicitní nebo cizí kapitola).
+var ErrChapterSetMismatch = errors.New("chapter set mismatch")
+
 // Store sdružuje všechny DB operace.
 type Store struct {
 	db *sql.DB

@@ -126,7 +126,8 @@ func PlanRepair(ctx context.Context, store *storage.Store, audioRoot string) (Re
 
 // ApplyRepair smaže kapitoly dotčených knih a nadbytečné duplikáty. Kapitoly
 // jsou odvozená data – scanner je při dalším průchodu načte znovu se
-// správnými pozicemi.
+// správnými pozicemi. Ruční pořadí kapitol se drží zvlášť
+// (chapter_order_overrides) a při novém načtení se obnoví.
 func ApplyRepair(ctx context.Context, store *storage.Store, plan RepairPlan) (RepairResult, error) {
 	result := RepairResult{Plan: plan}
 

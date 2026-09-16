@@ -26,12 +26,12 @@ import (
 // fakeScanner nahrazuje skutečný scanner – testy admin rozhraní nepotřebují
 // souborový systém ani běžící goroutiny.
 type fakeScanner struct {
-	status     scanner.Status
-	rescanErr  error
-	rescans    int
-	plan       scanner.RepairPlan
-	repairErr  error
-	repairCall int
+	status       scanner.Status
+	rescanErr    error
+	rescans      int
+	plan         scanner.RepairPlan
+	repairErr    error
+	repairCall   int
 	mergePlan    scanner.MergePlan
 	mergeErr     error
 	mergeCall    int
@@ -114,6 +114,7 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 	adminH := NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc)
 	authH := NewAuth(authSvc, settingsSvc)
 	userH := NewUser(userSvc, auditSvc)
+	bookH := NewBook(service.NewBook(store), t.TempDir(), auditSvc)
 
 	r := chi.NewRouter()
 	r.Get("/auth/config", authH.Config)
@@ -121,6 +122,14 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(authSvc))
 		r.Put("/users/{id}/password", userH.ChangePassword)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(model.RoleReader))
+			r.Get("/books/{id}/chapters", bookH.ListChapters)
+		})
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireRole(model.RoleEditor))
+			r.Put("/books/{id}/chapters/order", bookH.ReorderChapters)
+		})
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireRole(model.RoleAdmin))
 			r.Delete("/users/{id}", userH.Delete)

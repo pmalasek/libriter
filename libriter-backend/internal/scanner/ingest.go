@@ -9,8 +9,9 @@
 //
 // books.file_path    = relativní cesta k adresáři od AUDIO_ROOT
 // chapters.file_path = relativní cesta k souboru od AUDIO_ROOT
-// chapters.position  = číslo disku + track číslo z tagu, nebo pořadové číslo
-//                      jako fallback; kolize pozic se posouvají na první volnou
+// chapters.position  = ruční pořadí od editora, jinak číslo disku + track
+//                      z tagu, jinak přirozené pořadí názvu souboru v adresáři,
+//                      nakonec další v řadě; kolize se posouvají na první volnou
 
 package scanner
 
@@ -67,14 +68,9 @@ func (s *Scanner) ingest(ctx context.Context, absPath, relPath string) error {
 	// Obálka: obrázek v adresáři, jinak obrázek vložený v audio souboru
 	s.ensureCover(ctx, book, filepath.Dir(absPath), absPath)
 
-	// Urči pozici kapitoly: z tagů, nebo jako další v pořadí
-	position := tagPosition(meta)
-	if position <= 0 {
-		count, _, cerr := s.store.GetBookChapterStats(ctx, book.ID)
-		if cerr != nil {
-			return fmt.Errorf("get chapter stats: %w", cerr)
-		}
-		position = count + 1
+	position, err := s.desiredPosition(ctx, book.ID, absPath, relPath, meta)
+	if err != nil {
+		return err
 	}
 
 	// Pozici už může držet jiný soubor (chybějící nebo opakující se track tagy).
@@ -189,6 +185,38 @@ func (s *Scanner) createBook(
 	s.log.Info("kniha vytvořena", "title", book.Title,
 		"autoři", authorLabel(authors), "dir", relDir)
 	return book, nil
+}
+
+// desiredPosition určí pozici kapitoly, v tomto pořadí: ruční pořadí nastavené
+// editorem (přežívá opravu kapitol), disk a track z tagů, přirozené pořadí
+// názvu mezi audio soubory adresáře ("2" před "10"), nakonec další v řadě.
+func (s *Scanner) desiredPosition(
+	ctx context.Context,
+	bookID uuid.UUID,
+	absPath, relPath string,
+	meta *AudioMeta,
+) (int, error) {
+	position, ok, err := s.store.ChapterOrderOverride(ctx, bookID, relPath)
+	if err != nil {
+		return 0, err
+	}
+	if ok {
+		return position, nil
+	}
+
+	if position := tagPosition(meta); position > 0 {
+		return position, nil
+	}
+
+	if rank := naturalRank(filepath.Dir(absPath), filepath.Base(absPath)); rank > 0 {
+		return rank, nil
+	}
+
+	count, _, err := s.store.GetBookChapterStats(ctx, bookID)
+	if err != nil {
+		return 0, fmt.Errorf("get chapter stats: %w", err)
+	}
+	return count + 1, nil
 }
 
 // tagPosition spočítá pozici kapitoly z tagů. U multi-disk vydání začínají

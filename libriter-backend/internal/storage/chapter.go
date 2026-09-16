@@ -104,7 +104,11 @@ func (s *Store) CreateChapter(ctx context.Context, in ChapterInput) (*model.Chap
 // GetChaptersByBookID vrátí všechny kapitoly knihy seřazené podle pořadí.
 // start_offset_seconds se počítá dynamicky jako součet delék předešlých kapitol.
 func (s *Store) GetChaptersByBookID(ctx context.Context, bookID uuid.UUID) ([]model.Chapter, error) {
-	const q = `
+	return getChaptersByBookID(ctx, s.db, bookID)
+}
+
+func getChaptersByBookID(ctx context.Context, q querier, bookID uuid.UUID) ([]model.Chapter, error) {
+	const query = `
 		SELECT
 			id, book_id, position, title, file_path,
 			COALESCE(
@@ -119,7 +123,7 @@ func (s *Store) GetChaptersByBookID(ctx context.Context, bookID uuid.UUID) ([]mo
 		WHERE book_id = ?1
 		ORDER BY position`
 
-	rows, err := s.db.QueryContext(ctx, q, bookID)
+	rows, err := q.QueryContext(ctx, query, bookID)
 	if err != nil {
 		return nil, fmt.Errorf("get chapters: %w", err)
 	}
@@ -136,6 +140,111 @@ func (s *Store) GetChaptersByBookID(ctx context.Context, bookID uuid.UUID) ([]mo
 	return chapters, rows.Err()
 }
 
+// ReorderChapters nastaví kapitolám knihy pořadí podle seznamu ID a přečísluje
+// je hustě 1..N. Seznam musí obsahovat všechny kapitoly knihy, každou právě
+// jednou – jinak vrátí ErrChapterSetMismatch a nic nezmění.
+//
+// Nové pořadí se zároveň uloží do chapter_order_overrides podle cesty
+// k souboru, aby přežilo opravu kapitol (ta řádky maže a scanner je načítá
+// znovu). Po přečíslování na 1..N se nově přidané soubory zařadí na konec:
+// jejich pozice z tagů nebo názvu už bývá obsazená a NextFreeChapterPosition
+// je posune za poslední kapitolu.
+func (s *Store) ReorderChapters(ctx context.Context, bookID uuid.UUID, ids []uuid.UUID) ([]model.Chapter, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("reorder chapters: begin: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	if err := bookExists(ctx, tx, bookID); err != nil {
+		return nil, err
+	}
+
+	existing, err := chapterIDs(ctx, tx, bookID)
+	if err != nil {
+		return nil, err
+	}
+	if len(ids) != len(existing) {
+		return nil, ErrChapterSetMismatch
+	}
+	seen := make(map[uuid.UUID]bool, len(ids))
+	for _, id := range ids {
+		if !existing[id] || seen[id] {
+			return nil, ErrChapterSetMismatch
+		}
+		seen[id] = true
+	}
+
+	// UNIQUE (book_id, position) SQLite kontroluje po jednotlivých řádcích,
+	// takže přímé přepsání by cestou kolidovalo. Pozice se nejdřív překlopí
+	// do záporných čísel (tam nic není) a pak se přidělí 1..N.
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE chapters SET position = -position WHERE book_id = ?1`, bookID); err != nil {
+		return nil, fmt.Errorf("reorder chapters: uvolnění pozic: %w", err)
+	}
+	for i, id := range ids {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE chapters SET position = ?1 WHERE id = ?2 AND book_id = ?3`,
+			i+1, id, bookID); err != nil {
+			return nil, fmt.Errorf("reorder chapters: pozice %d: %w", i+1, err)
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx,
+		`DELETE FROM chapter_order_overrides WHERE book_id = ?1`, bookID); err != nil {
+		return nil, fmt.Errorf("reorder chapters: smazání ručního pořadí: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO chapter_order_overrides (book_id, file_path, position)
+		SELECT book_id, file_path, position FROM chapters WHERE book_id = ?1`, bookID); err != nil {
+		return nil, fmt.Errorf("reorder chapters: uložení ručního pořadí: %w", err)
+	}
+
+	chapters, err := getChaptersByBookID(ctx, tx, bookID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("reorder chapters: commit: %w", err)
+	}
+	return chapters, nil
+}
+
+// chapterIDs vrátí množinu ID kapitol knihy.
+func chapterIDs(ctx context.Context, q querier, bookID uuid.UUID) (map[uuid.UUID]bool, error) {
+	rows, err := q.QueryContext(ctx, `SELECT id FROM chapters WHERE book_id = ?1`, bookID)
+	if err != nil {
+		return nil, fmt.Errorf("chapter ids: %w", err)
+	}
+	defer rows.Close()
+
+	ids := make(map[uuid.UUID]bool)
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("chapter ids: %w", err)
+		}
+		ids[id] = true
+	}
+	return ids, rows.Err()
+}
+
+// ChapterOrderOverride vrátí ručně nastavenou pozici souboru v knize, pokud
+// ji editor někdy určil. ok=false znamená, že pořadí určují tagy a název.
+func (s *Store) ChapterOrderOverride(ctx context.Context, bookID uuid.UUID, filePath string) (int, bool, error) {
+	var position int
+	err := s.db.QueryRowContext(ctx,
+		`SELECT position FROM chapter_order_overrides WHERE book_id = ?1 AND file_path = ?2`,
+		bookID, filePath).Scan(&position)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("chapter order override: %w", err)
+	}
+	return position, true, nil
+}
+
 // ChapterExistsByFilePath vrátí true, pokud v DB existuje kapitola s danou cestou souboru.
 func (s *Store) ChapterExistsByFilePath(ctx context.Context, filePath string) (bool, error) {
 	var exists bool
@@ -148,6 +257,7 @@ func (s *Store) ChapterExistsByFilePath(ctx context.Context, filePath string) (b
 
 // DeleteChaptersByBookID smaže všechny kapitoly knihy a vrátí jejich počet.
 // Kapitoly jsou odvozená data – scanner je při dalším průchodu načte znovu.
+// Ruční pořadí zůstává v chapter_order_overrides a při novém načtení se obnoví.
 func (s *Store) DeleteChaptersByBookID(ctx context.Context, bookID uuid.UUID) (int, error) {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM chapters WHERE book_id = ?1`, bookID)
 	if err != nil {

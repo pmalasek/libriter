@@ -58,6 +58,34 @@ func (b *BookService) Delete(ctx context.Context, id uuid.UUID) error {
 	return nil
 }
 
+// ErrChapterSetMismatch znamená, že seznam kapitol k seřazení neodpovídá
+// kapitolám knihy – typicky scanner mezitím přidal soubor.
+var ErrChapterSetMismatch = errors.New("seznam kapitol neodpovídá knize")
+
+// Chapters vrátí kapitoly knihy v pořadí přehrávání.
+func (b *BookService) Chapters(ctx context.Context, id uuid.UUID) ([]model.Chapter, error) {
+	if _, err := b.store.GetBook(ctx, id); err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	return b.store.GetChaptersByBookID(ctx, id)
+}
+
+// ReorderChapters nastaví pořadí kapitol podle seznamu ID (všechny kapitoly
+// knihy, každá právě jednou) a vrátí je v novém pořadí.
+func (b *BookService) ReorderChapters(ctx context.Context, id uuid.UUID, chapterIDs []uuid.UUID) ([]model.Chapter, error) {
+	chapters, err := b.store.ReorderChapters(ctx, id, chapterIDs)
+	switch {
+	case errors.Is(err, storage.ErrNotFound):
+		return nil, ErrNotFound
+	case errors.Is(err, storage.ErrChapterSetMismatch):
+		return nil, ErrChapterSetMismatch
+	}
+	return chapters, err
+}
+
 // --- Authors ---
 
 type AuthorService struct {

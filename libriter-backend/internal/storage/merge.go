@@ -20,6 +20,8 @@ var ErrSameBook = errors.New("cílová kniha je zároveň zdrojem")
 // Všechno běží v jedné transakci – při chybě zůstane knihovna beze změny.
 // Kapitoly se přesouvají, ne mažou: na rozdíl od opravy kapitol se kniha
 // nenačítá znovu, takže scanner nemá šanci ji podle album tagu zase rozdělit.
+// Ruční pořadí kapitol zdrojů (chapter_order_overrides) odejde kaskádou s jejich
+// smazáním; sloučené kapitoly ho získají zpět až dalším ručním seřazením cíle.
 func (s *Store) MergeBooks(ctx context.Context, targetID uuid.UUID, sourceIDs []uuid.UUID) (int, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -69,7 +71,7 @@ func bookExists(ctx context.Context, q querier, id uuid.UUID) error {
 		return ErrNotFound
 	}
 	if err != nil {
-		return fmt.Errorf("merge books: kniha %s: %w", id, err)
+		return fmt.Errorf("kniha %s: %w", id, err)
 	}
 	return nil
 }

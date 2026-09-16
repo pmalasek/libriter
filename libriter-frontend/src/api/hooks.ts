@@ -12,9 +12,11 @@ import type {
   BookMetadata,
   BookPatchRequest,
   ChangePasswordRequest,
+  Chapter,
   LoginRequest,
   MetadataSearchResult,
   RegisterRequest,
+  ReorderChaptersRequest,
   Series,
   SeriesRequest,
   UpdateUserRequest,
@@ -24,6 +26,7 @@ import type {
 export const queryKeys = {
   books: ['books'] as const,
   book: (id: string) => ['books', id] as const,
+  chapters: (id: string) => ['books', id, 'chapters'] as const,
   authors: ['authors'] as const,
   author: (id: string) => ['authors', id] as const,
   series: ['series'] as const,
@@ -51,6 +54,19 @@ export function useBook(id: string) {
     // knihami (např. „Uložit a další“) není třeba čekat na server.
     placeholderData: () =>
       queryClient.getQueryData<Book[]>(queryKeys.books)?.find((book) => book.id === id),
+  })
+}
+
+/**
+ * Kapitoly knihy. Načítají se až na vyžádání (rozbalená karta kapitol) –
+ * do hlavičky stačí `chapter_count` z knihy a u dlouhých audioknih jde
+ * o stovky řádků, které většina návštěv nikdy nerozbalí.
+ */
+export function useChapters(bookId: string, enabled = true): UseQueryResult<Chapter[], Error> {
+  return useQuery({
+    queryKey: queryKeys.chapters(bookId),
+    queryFn: async () => asList(await apiFetch<Chapter[] | null>(`/books/${bookId}/chapters`)),
+    enabled: Boolean(bookId) && enabled,
   })
 }
 
@@ -207,6 +223,28 @@ export function usePatchBook(bookId: string) {
     onSuccess: (book) => {
       queryClient.setQueryData(queryKeys.book(bookId), book)
       void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+    },
+  })
+}
+
+/**
+ * Ruční pořadí kapitol. Posílá se celý seznam ID; když mezitím scanner přidá
+ * soubor, backend nesouhlasící seznam odmítne (400) a kapitoly se načtou znovu,
+ * aby editor viděl aktuální stav.
+ */
+export function useReorderChapters(bookId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (chapterIds: string[]) =>
+      apiFetch<Chapter[]>(`/books/${bookId}/chapters/order`, {
+        method: 'PUT',
+        json: { chapter_ids: chapterIds } satisfies ReorderChaptersRequest,
+      }),
+    onSuccess: (chapters) => {
+      queryClient.setQueryData(queryKeys.chapters(bookId), chapters)
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.chapters(bookId) })
     },
   })
 }

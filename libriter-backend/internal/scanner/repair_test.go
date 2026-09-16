@@ -198,3 +198,120 @@ func TestPlanRepairEmptyWhenConsistent(t *testing.T) {
 		t.Errorf("plán = %+v, chtěno prázdno", plan)
 	}
 }
+
+// chapterFiles vrátí názvy souborů kapitol knihy v pořadí přehrávání.
+func chapterFiles(t *testing.T, store *storage.Store, bookID uuid.UUID) []string {
+	t.Helper()
+
+	chapters, err := store.GetChaptersByBookID(context.Background(), bookID)
+	if err != nil {
+		t.Fatalf("GetChaptersByBookID: %v", err)
+	}
+	names := make([]string, 0, len(chapters))
+	for _, c := range chapters {
+		names = append(names, filepath.Base(c.FilePath))
+	}
+	return names
+}
+
+func assertOrder(t *testing.T, got, want []string) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("kapitoly = %v, chtěno %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("kapitoly = %v, chtěno %v", got, want)
+		}
+	}
+}
+
+// Soubory bez track tagu se řadí podle názvu tak, jak ho čte člověk – "2"
+// před "10". Prázdné soubory tagy nemají, takže scanner sáhne po názvu.
+func TestScanUsesNaturalOrderWithoutTags(t *testing.T) {
+	store, audioRoot := newRepairEnv(t)
+	for _, name := range []string{"1.mp3", "10.mp3", "2.mp3"} {
+		writeAudio(t, audioRoot, "capek/hmyz/"+name)
+	}
+
+	s := New(audioRoot, "", store)
+	if err := s.Rescan(); err != nil {
+		t.Fatalf("Rescan: %v", err)
+	}
+	waitForIdle(t, s)
+
+	book, err := store.GetBookByDirPath(context.Background(), "capek/hmyz")
+	if err != nil {
+		t.Fatalf("GetBookByDirPath: %v", err)
+	}
+	assertOrder(t, chapterFiles(t, store, book.ID), []string{"1.mp3", "2.mp3", "10.mp3"})
+}
+
+// Ruční pořadí má přednost před vším ostatním a přežije smazání kapitol.
+func TestScanHonoursManualOrder(t *testing.T) {
+	ctx := context.Background()
+	store, audioRoot := newRepairEnv(t)
+
+	book := createRepairBook(t, store, "Ze života hmyzu", "capek/hmyz", "hmyz")
+	files := []string{"capek/hmyz/01.mp3", "capek/hmyz/02.mp3", "capek/hmyz/03.mp3"}
+	for i, f := range files {
+		writeAudio(t, audioRoot, f)
+		addChapter(t, store, book.ID, i+1, f)
+	}
+	chapters, err := store.GetChaptersByBookID(ctx, book.ID)
+	if err != nil {
+		t.Fatalf("GetChaptersByBookID: %v", err)
+	}
+	if _, err := store.ReorderChapters(ctx, book.ID,
+		[]uuid.UUID{chapters[2].ID, chapters[0].ID, chapters[1].ID}); err != nil {
+		t.Fatalf("ReorderChapters: %v", err)
+	}
+	if _, err := store.DeleteChaptersByBookID(ctx, book.ID); err != nil {
+		t.Fatalf("DeleteChaptersByBookID: %v", err)
+	}
+
+	s := New(audioRoot, "", store)
+	if err := s.Rescan(); err != nil {
+		t.Fatalf("Rescan: %v", err)
+	}
+	waitForIdle(t, s)
+
+	assertOrder(t, chapterFiles(t, store, book.ID), []string{"03.mp3", "01.mp3", "02.mp3"})
+}
+
+// Oprava kapitol knihu načte znovu, ruční pořadí ale zůstane; nový soubor
+// bez ručně určené pozice se zařadí na konec.
+func TestRepairKeepsManualOrder(t *testing.T) {
+	ctx := context.Background()
+	store, audioRoot := newRepairEnv(t)
+
+	book := createRepairBook(t, store, "Ze života hmyzu", "capek/hmyz", "hmyz")
+	files := []string{"capek/hmyz/01.mp3", "capek/hmyz/02.mp3", "capek/hmyz/03.mp3"}
+	for i, f := range files {
+		writeAudio(t, audioRoot, f)
+		addChapter(t, store, book.ID, i+1, f)
+	}
+	chapters, err := store.GetChaptersByBookID(ctx, book.ID)
+	if err != nil {
+		t.Fatalf("GetChaptersByBookID: %v", err)
+	}
+	if _, err := store.ReorderChapters(ctx, book.ID,
+		[]uuid.UUID{chapters[2].ID, chapters[0].ID, chapters[1].ID}); err != nil {
+		t.Fatalf("ReorderChapters: %v", err)
+	}
+
+	// Soubor na disku bez kapitoly → kniha je v plánu opravy.
+	writeAudio(t, audioRoot, "capek/hmyz/04.mp3")
+
+	s := New(audioRoot, "", store)
+	result, err := s.Repair(ctx)
+	if err != nil {
+		t.Fatalf("Repair: %v", err)
+	}
+	if result.DeletedChapters != 3 {
+		t.Errorf("smazáno kapitol = %d, chtěny 3", result.DeletedChapters)
+	}
+	waitForIdle(t, s)
+
+	assertOrder(t, chapterFiles(t, store, book.ID), []string{"03.mp3", "01.mp3", "02.mp3", "04.mp3"})
+}
