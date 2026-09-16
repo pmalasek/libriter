@@ -66,6 +66,7 @@
     --popover-foreground: oklch(0.22 0.03 235);
     --primary: oklch(0.52 0.1 195);
     --primary-foreground: oklch(0.99 0 0);
+    --brand-gradient-end: oklch(0.62 0.12 185);
     --secondary: oklch(0.95 0.03 195);
     --secondary-foreground: oklch(0.38 0.08 200);
     --muted: oklch(0.955 0.01 225);
@@ -138,9 +139,81 @@
     --sidebar-ring: oklch(0.78 0.12 190);
 }
 
+/* Barevné schéma je nezávislé na světlém/tmavém režimu. */
+:root[data-color-scheme="blue"] {
+    --scheme-hue: 255;
+    --scheme-highlight-hue: 65;
+}
+
+:root[data-color-scheme="violet"] {
+    --scheme-hue: 300;
+    --scheme-highlight-hue: 25;
+}
+
+:root[data-color-scheme="green"] {
+    --scheme-hue: 150;
+    --scheme-highlight-hue: 80;
+}
+
+:root:is([data-color-scheme="blue"], [data-color-scheme="violet"], [data-color-scheme="green"]) {
+    --background: oklch(0.985 0.006 var(--scheme-hue));
+    --foreground: oklch(0.22 0.03 var(--scheme-hue));
+    --card-foreground: var(--foreground);
+    --popover-foreground: var(--foreground);
+    --primary: oklch(0.52 0.14 var(--scheme-hue));
+    --primary-foreground: oklch(0.99 0 0);
+    --secondary: oklch(0.95 0.025 var(--scheme-hue));
+    --secondary-foreground: oklch(0.38 0.08 var(--scheme-hue));
+    --muted: oklch(0.955 0.01 var(--scheme-hue));
+    --muted-foreground: oklch(0.5 0.03 var(--scheme-hue));
+    --accent: oklch(0.94 0.03 var(--scheme-hue));
+    --accent-foreground: oklch(0.3 0.06 var(--scheme-hue));
+    --highlight: oklch(0.7 0.15 var(--scheme-highlight-hue));
+    --highlight-foreground: oklch(0.2 0.03 var(--scheme-highlight-hue));
+    --highlight-deep: oklch(0.48 0.12 var(--scheme-highlight-hue));
+    --glow-1: oklch(0.52 0.14 var(--scheme-hue) / 0.14);
+    --glow-2: oklch(0.7 0.15 var(--scheme-highlight-hue) / 0.1);
+    --border: oklch(0.9 0.015 var(--scheme-hue));
+    --input: var(--border);
+    --ring: var(--primary);
+    --chart-1: var(--primary);
+    --chart-2: var(--highlight);
+    --sidebar-foreground: var(--foreground);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: var(--primary-foreground);
+    --sidebar-accent: var(--accent);
+    --sidebar-accent-foreground: var(--accent-foreground);
+    --sidebar-border: var(--border);
+    --sidebar-ring: var(--ring);
+    --brand-gradient-end: oklch(0.56 0.12 var(--scheme-hue));
+}
+
+:root.dark:is([data-color-scheme="blue"], [data-color-scheme="violet"], [data-color-scheme="green"]) {
+    --background: oklch(0.16 0.02 var(--scheme-hue));
+    --foreground: oklch(0.96 0.005 var(--scheme-hue));
+    --card: oklch(0.21 0.02 var(--scheme-hue));
+    --popover: var(--card);
+    --primary: oklch(0.78 0.12 var(--scheme-hue));
+    --primary-foreground: oklch(0.18 0.03 var(--scheme-hue));
+    --secondary: oklch(0.27 0.02 var(--scheme-hue));
+    --secondary-foreground: oklch(0.9 0.05 var(--scheme-hue));
+    --muted: var(--secondary);
+    --muted-foreground: oklch(0.72 0.02 var(--scheme-hue));
+    --accent: oklch(0.29 0.03 var(--scheme-hue));
+    --accent-foreground: oklch(0.92 0.04 var(--scheme-hue));
+    --highlight: oklch(0.78 0.13 var(--scheme-highlight-hue));
+    --highlight-deep: oklch(0.85 0.1 var(--scheme-highlight-hue));
+    --glow-1: oklch(0.78 0.12 var(--scheme-hue) / 0.12);
+    --glow-2: oklch(0.78 0.13 var(--scheme-highlight-hue) / 0.08);
+    --border: oklch(1 0 0 / 10%);
+    --input: oklch(1 0 0 / 15%);
+    --sidebar: oklch(0.19 0.02 var(--scheme-hue));
+    --brand-gradient-end: oklch(0.68 0.12 var(--scheme-hue));
+}
+
 /* Firemní gradient – tlačítka, přihlašovací panel, velké nadpisy přes bg-clip-text. */
 @utility bg-brand-gradient {
-    background-image: linear-gradient(135deg, var(--primary), oklch(0.62 0.12 185));
+    background-image: linear-gradient(135deg, var(--primary), var(--brand-gradient-end));
 }
 
 /* Jemná záře pod hlavičkami detailů; oranžová jen naznačená, ať nepřebíjí obsah. */

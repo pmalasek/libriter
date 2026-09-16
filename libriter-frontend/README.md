@@ -35,7 +35,8 @@ sestaveného frontendu; po každém buildu ho Vite plugin obnoví.
 | `src/api/` | Typy zrcadlící Go modely, `apiFetch` a react-query hooky |
 | `src/auth/` | Session v `localStorage`, kontext přihlášení, ochrana rout |
 | `src/components/ui/` | Komponenty shadcn/ui (generované, lze upravovat) |
-| `src/components/layout/` | Sidebar, topbar, logo (inline SVG), rámec přihlašovacích stránek, přepínač témat, uživatelské menu |
+| `src/components/layout/` | Sidebar, topbar, loga z `../_image/` pro světlý a tmavý režim, rámec přihlašovacích stránek, přepínač vzhledu, uživatelské menu |
+| `src/theme/` | Světlý/tmavý/systémový režim a nezávislá barevná schémata (tyrkysová, modrá, fialová, zelená), uložená v prohlížeči |
 | `src/index.css` | Barvy, fonty a zaoblení celé aplikace (Tailwind v4 tokeny) |
 | `src/pages/` | Jedna komponenta na stránku |
 | `src/lib/format.ts` | České formátování délky, datumů a skloňování |

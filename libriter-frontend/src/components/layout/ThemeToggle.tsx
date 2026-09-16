@@ -1,23 +1,53 @@
-import { MoonIcon, SunIcon } from 'lucide-react'
+import { MonitorIcon, MoonIcon, PaletteIcon, SunIcon } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
+import { COLOR_SCHEMES, useColorScheme } from '@/theme/colorScheme'
 
 export function ThemeToggle({ className }: { className?: string }) {
-  const { resolvedTheme, setTheme } = useTheme()
+  const { theme, setTheme } = useTheme()
+  const { colorScheme, setColorScheme } = useColorScheme()
 
-  // Ikony přepínáme čistě v CSS podle třídy `dark` na <html>. Nepotřebujeme tak
-  // stav "mounted" – před hydratací už je správná ikona vidět.
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label="Přepnout světlý/tmavý režim"
-      className={cn('shrink-0', className)}
-      onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
-    >
-      <MoonIcon className="dark:hidden" />
-      <SunIcon className="hidden dark:block" />
-    </Button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label="Nastavení vzhledu"
+          title="Nastavení vzhledu"
+          className={cn('shrink-0', className)}
+        >
+          <PaletteIcon />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48">
+        <DropdownMenuLabel>Režim zobrazení</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={theme} onValueChange={setTheme} aria-label="Režim zobrazení">
+          <DropdownMenuRadioItem value="light"><SunIcon /> Světlý</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="dark"><MoonIcon /> Tmavý</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="system"><MonitorIcon /> Podle systému</DropdownMenuRadioItem>
+        </DropdownMenuRadioGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuLabel>Barevné schéma</DropdownMenuLabel>
+        <DropdownMenuRadioGroup value={colorScheme} onValueChange={setColorScheme} aria-label="Barevné schéma">
+          {COLOR_SCHEMES.map(({ value, label, color }) => (
+            <DropdownMenuRadioItem key={value} value={value}>
+              <span aria-hidden="true" className="size-4 shrink-0 rounded-full border border-foreground/15" style={{ backgroundColor: color }} />
+              {label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

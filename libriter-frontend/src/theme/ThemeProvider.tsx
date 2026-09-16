@@ -1,4 +1,5 @@
 import { ThemeProvider as NextThemesProvider } from 'next-themes'
+import { ColorSchemeProvider } from './ColorSchemeProvider'
 
 /**
  * next-themes je framework-agnostický – přepíná třídu `dark` na <html>,
@@ -14,7 +15,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       storageKey="libriter.theme"
       disableTransitionOnChange
     >
-      {children}
+      <ColorSchemeProvider>{children}</ColorSchemeProvider>
     </NextThemesProvider>
   )
 }

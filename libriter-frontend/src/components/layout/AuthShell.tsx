@@ -1,5 +1,6 @@
 import { LayersIcon, LibraryIcon, UsersIcon } from 'lucide-react'
 import { Logo } from './Logo'
+import { ThemeToggle } from './ThemeToggle'
 
 const FEATURES = [
   { icon: LibraryIcon, label: 'Celá sbírka audioknih na jednom místě' },
@@ -15,7 +16,9 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       <aside className="bg-brand-gradient relative hidden flex-col justify-between p-12 text-primary-foreground lg:flex">
-        <Logo tone="invert" size="lg" />
+        <div className="self-start rounded-2xl bg-background p-3">
+          <Logo size="lg" />
+        </div>
 
         <div>
           <p className="font-heading max-w-md text-4xl font-bold tracking-tight text-balance">
@@ -36,7 +39,8 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
         <p className="text-sm opacity-70">Osobní správce a přehrávač audioknih.</p>
       </aside>
 
-      <main className="flex items-center justify-center p-6">
+      <main className="relative flex items-center justify-center p-6 pt-16">
+        <ThemeToggle className="absolute right-4 top-4" />
         <div className="w-full max-w-sm">
           <div className="mb-8 flex justify-center lg:hidden">
             <Logo size="lg" />

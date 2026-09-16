@@ -1,83 +1,46 @@
+import logoLight from '../../../../_image/libriter-logo-light.png'
+import logoDark from '../../../../_image/libriter-logo-dark.png'
+import logoBlueLight from '../../../../_image/libriter-logo-blue-light.png'
+import logoBlueDark from '../../../../_image/libriter-logo-blue-dark.png'
+import logoVioletLight from '../../../../_image/libriter-logo-violet-light.png'
+import logoVioletDark from '../../../../_image/libriter-logo-violet-dark.png'
+import logoGreenLight from '../../../../_image/libriter-logo-green-light.png'
+import logoGreenDark from '../../../../_image/libriter-logo-green-dark.png'
 import { cn } from '@/lib/utils'
+import { useColorScheme } from '@/theme/colorScheme'
 
-/**
- * Značka Libriteru jako inline SVG – přehrávací disk se zvukovými vlnami.
- * Barvy jdou z tokenů, takže značka funguje ve světlém i tmavém režimu
- * bez druhého obrázku. Na firemním gradientu (přihlášení) se použije
- * tone="invert".
- */
-const TONES = {
-  brand: '[--logo-square:var(--primary)] [--logo-disc:var(--primary-foreground)] [--logo-glyph:var(--primary)]',
-  invert: '[--logo-square:oklch(1_0_0_/_0.18)] [--logo-disc:white] [--logo-glyph:oklch(0.52_0.1_195)]',
+const LOGOS = {
+  teal: { light: logoLight, dark: logoDark },
+  blue: { light: logoBlueLight, dark: logoBlueDark },
+  violet: { light: logoVioletLight, dark: logoVioletDark },
+  green: { light: logoGreenLight, dark: logoGreenDark },
 } as const
 
 const SIZES = {
-  sm: { mark: 'size-7', text: 'text-base' },
-  md: { mark: 'size-8', text: 'text-lg' },
-  lg: { mark: 'size-11', text: 'text-2xl' },
+  sm: 'h-8 w-32',
+  md: 'h-11 w-44',
+  lg: 'h-16 w-64',
 } as const
-
-export function LogoMark({
-  className,
-  tone = 'brand',
-}: {
-  className?: string
-  tone?: keyof typeof TONES
-}) {
-  return (
-    <svg
-      viewBox="0 0 32 32"
-      aria-hidden
-      className={cn('shrink-0', TONES[tone], className)}
-      fill="none"
-    >
-      <rect x="1" y="1" width="30" height="30" rx="9" className="fill-(--logo-square)" />
-      {/* Oblouk kolem disku – zůstal z původního loga, dává značce pohyb. */}
-      <path
-        d="M6.2 11.6A11 11 0 0 1 17 5.2"
-        className="stroke-(--logo-disc)"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        opacity="0.55"
-      />
-      <circle cx="16" cy="16.5" r="9.5" className="fill-(--logo-disc)" />
-      <path d="M14 12.6 21 16.5 14 20.4Z" className="fill-(--logo-glyph)" />
-      <g
-        className="stroke-(--logo-glyph)"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        fill="none"
-      >
-        <path d="M22.6 13.4a5 5 0 0 1 0 6.2" />
-        <path d="M11.8 14.2v4.6" />
-        <path d="M9.4 15.4v2.2" />
-        <path d="M8.2 21.8c2.1-1.5 4.2-1.5 6.3 0s4.2 1.5 6.3 0" strokeWidth="1.5" />
-      </g>
-    </svg>
-  )
-}
 
 export function Logo({
   className,
-  tone = 'brand',
   size = 'md',
-  wordmark = true,
 }: {
   className?: string
-  tone?: keyof typeof TONES
   size?: keyof typeof SIZES
-  wordmark?: boolean
 }) {
-  const scale = SIZES[size]
+  const { colorScheme } = useColorScheme()
+  const logo = LOGOS[colorScheme]
 
   return (
-    <span className={cn('inline-flex items-center gap-2', className)}>
-      <LogoMark tone={tone} className={scale.mark} />
-      {wordmark ? (
-        <span className={cn('font-heading font-bold tracking-tight', scale.text)}>Libriter</span>
-      ) : (
-        <span className="sr-only">Libriter</span>
-      )}
+    <span role="img" aria-label="Libriter" className={cn('inline-flex shrink-0', SIZES[size], className)}>
+      {/* ViewBox skryje průhledné okraje originálů, bez úprav zdrojových PNG. */}
+      <svg viewBox="95 260 1500 410" aria-hidden="true" className="size-full dark:hidden">
+        <image href={logo.light} width="1672" height="941" />
+      </svg>
+      <svg viewBox="95 260 1500 410" aria-hidden="true" className="hidden size-full dark:block">
+        <image href={logo.dark} width="1672" height="941" />
+      </svg>
     </span>
   )
 }
