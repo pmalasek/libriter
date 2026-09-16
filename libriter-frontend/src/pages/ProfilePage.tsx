@@ -4,6 +4,7 @@ import { useChangePassword, useUpdateProfile } from '@/api/hooks'
 import { ROLE_LABELS } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { PageHeader } from '@/components/PageHeader'
+import { ThemeToggle } from '@/components/layout/ThemeToggle'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -110,6 +111,18 @@ export function ProfilePage() {
             </Button>
           </form>
         </CardContent>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader className="flex-row items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <CardTitle>Vzhled</CardTitle>
+            <CardDescription>
+              Barevné schéma a světlý, tmavý nebo systémový režim se ukládají automaticky do vašeho profilu.
+            </CardDescription>
+          </div>
+          <ThemeToggle />
+        </CardHeader>
       </Card>
 
       <Card className="mt-6">

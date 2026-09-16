@@ -111,6 +111,38 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, u)
 }
 
+// PUT /api/v1/users/{id}/appearance (pouze vlastní profil)
+func (h *UserHandler) UpdateAppearance(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	callerID, authenticated := middleware.UserIDFromCtx(r.Context())
+	if !authenticated || callerID != id {
+		writeError(w, http.StatusForbidden, "vzhled lze měnit pouze ve vlastním profilu")
+		return
+	}
+	var req struct {
+		ColorScheme string `json:"color_scheme"`
+		ThemeMode   string `json:"theme_mode"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		return
+	}
+	u, err := h.svc.UpdateAppearance(r.Context(), id, req.ColorScheme, req.ThemeMode)
+	switch {
+	case errors.Is(err, service.ErrInvalidSetting):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, service.ErrNotFound):
+		writeError(w, http.StatusNotFound, "uživatel nenalezen")
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "vzhled se nepodařilo uložit do profilu")
+	default:
+		writeJSON(w, http.StatusOK, u)
+	}
+}
+
 // PUT /api/v1/users/{id}/password  (admin nebo vlastní profil)
 func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUID(w, r, "id")

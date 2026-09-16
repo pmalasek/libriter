@@ -53,7 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateUser = useCallback((user: User) => {
     setSession((current) => {
-      if (!current) return current
+      if (!current || current.user.id !== user.id) return current
       const next: Session = { ...current, user }
       saveSession(next)
       return next

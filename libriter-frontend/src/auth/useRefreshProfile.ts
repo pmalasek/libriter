@@ -19,7 +19,9 @@ export function useRefreshProfile() {
     if (
       data.role === user.role &&
       data.display_name === user.display_name &&
-      data.email === user.email
+      data.email === user.email &&
+      data.color_scheme === user.color_scheme &&
+      data.theme_mode === user.theme_mode
     ) {
       return
     }

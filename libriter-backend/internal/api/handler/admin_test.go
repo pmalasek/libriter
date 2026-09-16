@@ -122,6 +122,9 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(authSvc))
 		r.Put("/users/{id}/password", userH.ChangePassword)
+		r.Get("/users/{id}", userH.Get)
+		r.Put("/users/{id}", userH.Update)
+		r.Put("/users/{id}/appearance", userH.UpdateAppearance)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireRole(model.RoleReader))
 			r.Get("/books/{id}/chapters", bookH.ListChapters)

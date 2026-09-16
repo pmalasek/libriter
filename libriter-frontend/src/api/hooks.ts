@@ -103,8 +103,9 @@ export function useSeriesOne(id: string) {
 export function useUser(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.user(id ?? ''),
-    queryFn: () => apiFetch<User>(`/users/${id}`),
+    queryFn: ({ signal }) => apiFetch<User>(`/users/${id}`, { signal }),
     enabled: Boolean(id),
+    refetchOnWindowFocus: true,
   })
 }
 

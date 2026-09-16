@@ -2,8 +2,15 @@
 // Pole s `omitempty` na Go straně jsou zde volitelná.
 
 export type Role = 'admin' | 'editor' | 'reader'
+export type ColorScheme = 'teal' | 'blue' | 'violet' | 'green'
+export type ThemeMode = 'light' | 'dark' | 'system'
 
-export interface User {
+export interface UserAppearance {
+  color_scheme: ColorScheme
+  theme_mode: ThemeMode
+}
+
+export interface User extends UserAppearance {
   id: string
   display_name: string
   email: string

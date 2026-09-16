@@ -70,6 +70,24 @@ func (u *UserService) Update(ctx context.Context, id uuid.UUID, displayName, ema
 	return usr, err
 }
 
+func (u *UserService) UpdateAppearance(ctx context.Context, id uuid.UUID, colorScheme, themeMode string) (*model.User, error) {
+	switch colorScheme {
+	case "teal", "blue", "violet", "green":
+	default:
+		return nil, fmt.Errorf("%w: neznámé barevné schéma", ErrInvalidSetting)
+	}
+	switch themeMode {
+	case "light", "dark", "system":
+	default:
+		return nil, fmt.Errorf("%w: neznámý režim zobrazení", ErrInvalidSetting)
+	}
+	usr, err := u.store.UpdateUserAppearance(ctx, id, colorScheme, themeMode)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	return usr, err
+}
+
 func (u *UserService) ChangePassword(ctx context.Context, id uuid.UUID, newPassword string) error {
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcryptCost)
 	if err != nil {

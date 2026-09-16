@@ -125,6 +125,7 @@ func runServe() error {
 			r.Get("/users/{id}", userH.Get)
 			r.Put("/users/{id}", userH.Update)
 			r.Put("/users/{id}/password", userH.ChangePassword)
+			r.Put("/users/{id}/appearance", userH.UpdateAppearance)
 
 			// Uživatelé - pouze admin
 			r.Group(func(r chi.Router) {

@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { ColorScheme } from '@/api/types'
 
 export const COLOR_SCHEMES = [
   { value: 'teal', label: 'Tyrkysová', color: 'oklch(0.52 0.1 195)' },
@@ -7,7 +8,6 @@ export const COLOR_SCHEMES = [
   { value: 'green', label: 'Zelená', color: 'oklch(0.52 0.14 150)' },
 ] as const
 
-type ColorScheme = (typeof COLOR_SCHEMES)[number]['value']
 export const STORAGE_KEY = 'libriter.color-scheme'
 
 export function parseScheme(value: string | null): ColorScheme {
@@ -25,6 +25,8 @@ export function readScheme(): ColorScheme {
 export const ColorSchemeContext = createContext<{
   colorScheme: ColorScheme
   setColorScheme: (value: string) => void
+  setThemeMode: (value: string) => void
+  isSaving: boolean
 } | null>(null)
 
 export function useColorScheme() {

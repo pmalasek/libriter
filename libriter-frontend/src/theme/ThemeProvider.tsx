@@ -1,5 +1,6 @@
 import { ThemeProvider as NextThemesProvider } from 'next-themes'
 import { ColorSchemeProvider } from './ColorSchemeProvider'
+import { useAuth } from '@/auth/AuthContext'
 
 /**
  * next-themes je framework-agnostický – přepíná třídu `dark` na <html>,
@@ -7,6 +8,7 @@ import { ColorSchemeProvider } from './ColorSchemeProvider'
  * Používá ho i shadcn Toaster (sonner) přes useTheme().
  */
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
   return (
     <NextThemesProvider
       attribute="class"
@@ -15,7 +17,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       storageKey="libriter.theme"
       disableTransitionOnChange
     >
-      <ColorSchemeProvider>{children}</ColorSchemeProvider>
+      <ColorSchemeProvider key={user?.id ?? 'anonymous'}>{children}</ColorSchemeProvider>
     </NextThemesProvider>
   )
 }

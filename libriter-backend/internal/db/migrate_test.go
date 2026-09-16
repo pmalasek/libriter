@@ -193,3 +193,33 @@ func TestMigrateKeepsBookForeignKeys(t *testing.T) {
 		t.Errorf("book_authors nezkaskádovaly: %d", links)
 	}
 }
+
+func TestMigrateExistingUserAppearance(t *testing.T) {
+	conn := openLegacy(t)
+	id := uuid.New().String()
+	if _, err := conn.Exec(`INSERT INTO users (id, display_name, email, password_hash) VALUES (?1, 'Původní účet', 'legacy@example.com', 'hash')`, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(context.Background(), conn); err != nil {
+		t.Fatal(err)
+	}
+	var name, email, scheme, mode string
+	if err := conn.QueryRow(`SELECT display_name, email, color_scheme, theme_mode FROM users WHERE id = ?1`, id).Scan(&name, &email, &scheme, &mode); err != nil {
+		t.Fatal(err)
+	}
+	if name != "Původní účet" || email != "legacy@example.com" || scheme != "teal" || mode != "system" {
+		t.Fatalf("migrated user: %q %q %q %q", name, email, scheme, mode)
+	}
+	if _, err := conn.Exec(`UPDATE users SET color_scheme = 'violet', theme_mode = 'dark' WHERE id = ?1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(context.Background(), conn); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.QueryRow(`SELECT color_scheme, theme_mode FROM users WHERE id = ?1`, id).Scan(&scheme, &mode); err != nil {
+		t.Fatal(err)
+	}
+	if scheme != "violet" || mode != "dark" {
+		t.Fatal("repeated migration reset appearance")
+	}
+}

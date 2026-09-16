@@ -74,8 +74,8 @@ type Book struct {
 	Narrator        *string    `json:"narrator,omitempty"`
 	DurationSeconds int        `json:"duration_seconds"`
 	ChapterCount    int        `json:"chapter_count"` // odvozené – počet řádků v chapters
-	FilePath        string     `json:"file_path"` // adresář knihy relativně k AUDIO_ROOT
-	AlbumTag        *string    `json:"-"`         // album tag, podle kterého scanner páruje soubory ke knize
+	FilePath        string     `json:"file_path"`     // adresář knihy relativně k AUDIO_ROOT
+	AlbumTag        *string    `json:"-"`             // album tag, podle kterého scanner páruje soubory ke knize
 	CoverPath       *string    `json:"cover_path,omitempty"`
 	Language        string     `json:"language"`
 	Description     *string    `json:"description,omitempty"`
@@ -101,6 +101,8 @@ type User struct {
 	Email        string    `json:"email"`
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"`
+	ColorScheme  string    `json:"color_scheme"`
+	ThemeMode    string    `json:"theme_mode"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
