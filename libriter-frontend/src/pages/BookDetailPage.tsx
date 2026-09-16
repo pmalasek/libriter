@@ -4,6 +4,7 @@ import {
   ClockIcon,
   InfoIcon,
   LanguagesIcon,
+  ListPlusIcon,
   MicIcon,
   PencilIcon,
   PlayIcon,
@@ -11,7 +12,7 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { useBook, useBooks, useSeriesOne, useSeriesTitle } from '@/api/hooks'
+import { useBook, useBooks, useSeriesOne, useSeriesTitle, useSessions } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
 import { canEdit } from '@/auth/permissions'
 import { BookEditDialog } from '@/components/BookEditDialog'
@@ -25,8 +26,9 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
-import { chapterCount, formatDate, formatDuration } from '@/lib/format'
+import { chapterCount, formatClock, formatDate, formatDuration } from '@/lib/format'
 import { sortBooks, useBookListPrefs } from '@/lib/sorting'
+import { usePlayer } from '@/player/playerContext'
 
 export function BookDetailPage() {
   const { id = '' } = useParams()
@@ -38,6 +40,16 @@ export function BookDetailPage() {
   const [editing, setEditing] = useState(false)
   const { sortKey, sortDir } = useBookListPrefs()
   const seriesTitle = useSeriesTitle()
+  const player = usePlayer()
+  const sessions = useSessions()
+
+  // Rozposlouchaná pozice knihy – z libovolného poslechu, který ji obsahuje.
+  const started = useMemo(
+    () => (sessions.data ?? []).flatMap((s) => s.items).find((item) => item.book_id === id),
+    [id, sessions.data],
+  )
+  const inSession = started !== undefined
+  const resumeAt = started && started.position_seconds > 0 ? started.position_seconds : null
 
   // Další kniha pro „Uložit a další“ – ve stejném pořadí, jaké má seznam knih.
   const nextBook = useMemo(() => {
@@ -201,14 +213,21 @@ export function BookDetailPage() {
             </div>
 
             <div className="mt-6 flex flex-wrap items-center gap-2">
-              <Button
-                size="lg"
-                disabled
-                title="Přehrávání zatím není k dispozici – backend pro něj ještě nemá endpoint."
-              >
+              <Button size="lg" onClick={() => player.playBook(data.id)} disabled={player.loading}>
                 <PlayIcon />
-                Přehrát
+                {resumeAt != null ? `Pokračovat (${formatClock(resumeAt)})` : 'Přehrát'}
               </Button>
+              {player.session && !inSession ? (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => player.addToSession({ bookIds: [data.id] })}
+                  title="Zařadit knihu na konec právě otevřeného poslechu"
+                >
+                  <ListPlusIcon />
+                  Přidat do poslechu
+                </Button>
+              ) : null}
               {canEdit(user) ? (
                 <Button variant="outline" size="lg" onClick={() => setEditing(true)}>
                   <PencilIcon />

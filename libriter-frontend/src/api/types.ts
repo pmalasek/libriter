@@ -82,6 +82,71 @@ export interface ReorderChaptersRequest {
   chapter_ids: string[]
 }
 
+/** Z čeho poslech vznikl: jedna kniha, celá série, nebo vlastní seznam. */
+export type PlaySessionKind = 'book' | 'series' | 'list'
+
+/**
+ * Poslech (session) – to, co se právě přehrává. Rozposlouchaných může být víc
+ * naráz; pozice se drží na serveru, aby šlo pokračovat na jiném zařízení.
+ */
+export interface PlaySession {
+  id: string
+  kind: PlaySessionKind
+  /** Kniha nebo série, ze které poslech vznikl; u seznamu chybí. */
+  source_id?: string
+  /** Název nese jen seznam – u knihy a série se bere z knihovny. */
+  title?: string
+  current_book_id?: string
+  playback_speed: number
+  /** Vyplněné, když se poslech dostal na konec poslední kapitoly. */
+  finished_at?: string
+  created_at: string
+  updated_at: string
+  items: PlaySessionItem[]
+}
+
+/** Jedna kniha poslechu i s vlastní rozposlouchanou pozicí. */
+export interface PlaySessionItem {
+  book_id: string
+  position: number
+  /** Chybí, když kapitola zmizela při opravě knihovny – začne se od začátku. */
+  chapter_id?: string
+  /** Pozice v kapitole, ne v celé knize. */
+  position_seconds: number
+}
+
+/** POST /sessions – založení nebo pokračování poslechu. */
+export type CreateSessionRequest =
+  | { kind: 'book'; book_id: string }
+  | { kind: 'series'; series_id: string }
+  | { kind: 'list'; title?: string; book_ids?: string[]; series_ids?: string[] }
+
+/** PUT /sessions/{id}/position */
+export interface SessionPositionRequest {
+  book_id: string
+  chapter_id?: string
+  position_seconds: number
+  playback_speed: number
+  /** Doposlechnuto do konce; další změna pozice příznak zase zruší. */
+  finished?: boolean
+}
+
+/** POST /sessions/{id}/items – přidání knih a sérií na konec poslechu. */
+export interface SessionItemsRequest {
+  book_ids?: string[]
+  series_ids?: string[]
+}
+
+/**
+ * GET /auth/stream-token – krátkodobý token pro adresu audio souboru.
+ * Prvek <audio> neumí poslat hlavičku Authorization, přihlašovací token ale
+ * do adresy nepatří.
+ */
+export interface StreamToken {
+  token: string
+  expires_at: string
+}
+
 export interface AuthResponse {
   user: User
   token: string

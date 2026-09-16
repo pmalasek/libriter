@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"libriter/internal/api/middleware"
 	"libriter/internal/service"
 )
 
@@ -83,6 +84,30 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"user":  user,
 		"token": token,
+	})
+}
+
+// GET /api/v1/auth/stream-token  (přihlášený uživatel)
+//
+// Vydá krátkodobý token, kterým přehrávač otevírá audio soubory. Prvek <audio>
+// neumí poslat hlavičku Authorization, takže token putuje v adrese – a do
+// adresy přihlašovací token nepatří.
+func (h *AuthHandler) StreamToken(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "chybí autorizační token")
+		return
+	}
+
+	token, expiresAt, err := h.svc.GenerateStreamToken(userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "token pro přehrávání se nepodařilo vydat")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"token":      token,
+		"expires_at": expiresAt,
 	})
 }
 

@@ -83,6 +83,7 @@ func runServe() error {
 	seriesSvc := service.NewSeries(store)
 	auditSvc := service.NewAudit(store)
 	systemSvc := service.NewSystem(store, cfg, startedAt)
+	playSessionSvc := service.NewPlaySession(store)
 
 	authH := handler.NewAuth(authSvc, settingsSvc)
 	userH := handler.NewUser(userSvc, auditSvc)
@@ -91,6 +92,8 @@ func runServe() error {
 	seriesH := handler.NewSeries(seriesSvc, auditSvc)
 	metadataH := handler.NewMetadata(registry)
 	adminH := handler.NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc)
+	sessionH := handler.NewPlaySession(playSessionSvc)
+	audioH := handler.NewAudio(bookSvc, authSvc, cfg.Storage.AudioRoot)
 
 	// --- router ---
 	r := chi.NewRouter()
@@ -117,9 +120,19 @@ func runServe() error {
 		r.Get("/authors/{id}/image", authorH.Image)
 		r.Head("/authors/{id}/image", authorH.Image)
 
+		// --- audio kapitoly (mimo Authenticate) ---
+		// <audio> neumí poslat hlavičku Authorization, takže se ověřuje
+		// krátkodobým tokenem v adrese (?t=). Není to přihlašovací token –
+		// platí jen na streamování a vydává ho /auth/stream-token.
+		r.Get("/chapters/{id}/audio", audioH.Stream)
+		r.Head("/chapters/{id}/audio", audioH.Stream)
+
 		// --- chráněné endpointy ---
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticate(authSvc))
+
+			// Token pro přehrávač (viz /chapters/{id}/audio výše)
+			r.Get("/auth/stream-token", authH.StreamToken)
 
 			// Uživatelé - vlastní profil
 			r.Get("/users/{id}", userH.Get)
@@ -145,6 +158,14 @@ func runServe() error {
 				r.Get("/authors/{id}", authorH.Get)
 				r.Get("/series", seriesH.List)
 				r.Get("/series/{id}", seriesH.Get)
+
+				// Poslechové session – vlastní data přihlášeného uživatele
+				r.Get("/sessions", sessionH.List)
+				r.Post("/sessions", sessionH.Create)
+				r.Get("/sessions/{id}", sessionH.Get)
+				r.Put("/sessions/{id}/position", sessionH.SavePosition)
+				r.Post("/sessions/{id}/items", sessionH.AddItems)
+				r.Delete("/sessions/{id}", sessionH.Delete)
 			})
 
 			// Knihy / autoři / série - zápis (editor+)

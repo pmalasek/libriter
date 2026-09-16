@@ -2,8 +2,11 @@ import { MenuIcon } from 'lucide-react'
 import { Suspense, useState } from 'react'
 import { Link, Outlet } from 'react-router'
 import { useRefreshProfile } from '@/auth/useRefreshProfile'
+import { PlayerBar } from '@/components/player/PlayerBar'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { cn } from '@/lib/utils'
+import { usePlayer } from '@/player/playerContext'
 import { Logo } from './Logo'
 import { NavLinks } from './NavLinks'
 import { ThemeToggle } from './ThemeToggle'
@@ -11,6 +14,7 @@ import { UserMenu } from './UserMenu'
 
 export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false)
+  const player = usePlayer()
 
   // Role v prohlížeči může být z minulého přihlášení – srovnáme ji se serverem.
   useRefreshProfile()
@@ -64,12 +68,21 @@ export function AppLayout() {
           <UserMenu className="md:hidden" />
         </header>
 
-        <main className="mx-auto max-w-7xl px-4 pb-16 pt-2 sm:px-6 lg:px-8">
+        {/* Lišta přehrávače překrývá spodek stránky, proto se pod obsahem
+            uvolní místo právě tehdy, když je vidět. */}
+        <main
+          className={cn(
+            'mx-auto max-w-7xl px-4 pt-2 sm:px-6 lg:px-8',
+            player.session ? 'pb-36' : 'pb-16',
+          )}
+        >
           <Suspense fallback={<p role="status" className="py-8 text-center text-muted-foreground">Načítání stránky…</p>}>
             <Outlet />
           </Suspense>
         </main>
       </div>
+
+      <PlayerBar />
     </div>
   )
 }

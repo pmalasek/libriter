@@ -223,3 +223,80 @@ func TestMigrateExistingUserAppearance(t *testing.T) {
 		t.Fatal("repeated migration reset appearance")
 	}
 }
+
+// Poslechové session vzniknou i v databázi z dřívější verze a přežijí
+// opakované spuštění migrací.
+func TestMigrateAddsPlaySessionsToExistingDatabase(t *testing.T) {
+	conn := openLegacy(t)
+	authorID := insertLegacyAuthor(t, conn, "Karel Čapek", "2024-01-01 00:00:00")
+	bookID := insertLegacyBook(t, conn, authorID, "Válka s mloky")
+
+	userID := uuid.New().String()
+	if _, err := conn.Exec(`INSERT INTO users (id, display_name, email, password_hash)
+		VALUES (?1, 'Posluchač', 'listener@example.com', 'hash')`, userID); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(context.Background(), conn); err != nil {
+		t.Fatal(err)
+	}
+
+	var chapterID string
+	if err := conn.QueryRow(`SELECT id FROM chapters WHERE book_id = ?1`, bookID).Scan(&chapterID); err != nil {
+		t.Fatal(err)
+	}
+
+	sessionID := uuid.New().String()
+	if _, err := conn.Exec(`INSERT INTO play_sessions (id, user_id, kind, source_id, current_book_id)
+		VALUES (?1, ?2, 'book', ?3, ?3)`, sessionID, userID, bookID); err != nil {
+		t.Fatalf("založení session: %v", err)
+	}
+	if _, err := conn.Exec(`INSERT INTO play_session_items
+		(session_id, book_id, position, chapter_id, position_seconds)
+		VALUES (?1, ?2, 1, ?3, 128)`, sessionID, bookID, chapterID); err != nil {
+		t.Fatalf("položka session: %v", err)
+	}
+
+	// Opakovaná migrace nesmí uloženou pozici ani session zahodit.
+	if err := Migrate(context.Background(), conn); err != nil {
+		t.Fatal(err)
+	}
+	var seconds int
+	var speed float64
+	if err := conn.QueryRow(`SELECT i.position_seconds, s.playback_speed
+		FROM play_session_items i JOIN play_sessions s ON s.id = i.session_id
+		WHERE i.session_id = ?1`, sessionID).Scan(&seconds, &speed); err != nil {
+		t.Fatal(err)
+	}
+	if seconds != 128 || speed != 1.0 {
+		t.Fatalf("pozice po migraci: %d s, rychlost %v", seconds, speed)
+	}
+
+	// Smazání knihy odnese i položky session (kaskáda), session zůstane
+	// bez aktuální knihy místo toho, aby ukazovala na neexistující řádek.
+	if _, err := conn.Exec(`DELETE FROM books WHERE id = ?1`, bookID); err != nil {
+		t.Fatalf("smazání knihy: %v", err)
+	}
+	var items int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM play_session_items WHERE session_id = ?1`, sessionID).Scan(&items); err != nil {
+		t.Fatal(err)
+	}
+	var currentBook *string
+	if err := conn.QueryRow(`SELECT current_book_id FROM play_sessions WHERE id = ?1`, sessionID).Scan(&currentBook); err != nil {
+		t.Fatal(err)
+	}
+	if items != 0 || currentBook != nil {
+		t.Fatalf("po smazání knihy: %d položek, current_book_id %v", items, currentBook)
+	}
+
+	// Smazání účtu odnese celou session.
+	if _, err := conn.Exec(`DELETE FROM users WHERE id = ?1`, userID); err != nil {
+		t.Fatal(err)
+	}
+	var sessions int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM play_sessions`).Scan(&sessions); err != nil {
+		t.Fatal(err)
+	}
+	if sessions != 0 {
+		t.Fatalf("session po smazání účtu: %d", sessions)
+	}
+}

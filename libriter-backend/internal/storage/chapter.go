@@ -107,6 +107,22 @@ func (s *Store) GetChaptersByBookID(ctx context.Context, bookID uuid.UUID) ([]mo
 	return getChaptersByBookID(ctx, s.db, bookID)
 }
 
+// GetChapterByID vrátí jednu kapitolu i s cestou k audio souboru.
+// Offset v rámci knihy se počítá stejně jako v seznamu kapitol, jen pro
+// jediný řádek – poddotaz sečte délky kapitol před ní.
+func (s *Store) GetChapterByID(ctx context.Context, id uuid.UUID) (*model.Chapter, error) {
+	const q = `
+		SELECT
+			c.id, c.book_id, c.position, c.title, c.file_path,
+			(SELECT COALESCE(SUM(p.duration_seconds), 0) FROM chapters p
+			 WHERE p.book_id = c.book_id AND p.position < c.position) AS start_offset_seconds,
+			c.duration_seconds
+		FROM chapters c
+		WHERE c.id = ?1`
+
+	return scanChapter(s.db.QueryRowContext(ctx, q, id))
+}
+
 func getChaptersByBookID(ctx context.Context, q querier, bookID uuid.UUID) ([]model.Chapter, error) {
 	const query = `
 		SELECT

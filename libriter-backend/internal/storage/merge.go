@@ -112,6 +112,12 @@ func mergeOneBook(ctx context.Context, tx *sql.Tx, targetID, sourceID uuid.UUID)
 		`UPDATE OR IGNORE playback_positions SET book_id = ?1 WHERE book_id = ?2`,
 		`UPDATE           bookmarks          SET book_id = ?1 WHERE book_id = ?2`,
 		`UPDATE           listening_sessions SET book_id = ?1 WHERE book_id = ?2`,
+		// Poslechové session: kniha se v seznamu nahradí cílovou. Když už tam
+		// cílová je, zůstane její vlastní pozice a zdrojová položka odejde
+		// kaskádou. source_id není cizí klíč, přepíše se ručně.
+		`UPDATE OR IGNORE play_session_items SET book_id = ?1 WHERE book_id = ?2`,
+		`UPDATE play_sessions SET current_book_id = ?1 WHERE current_book_id = ?2`,
+		`UPDATE play_sessions SET source_id = ?1 WHERE source_id = ?2 AND kind = 'book'`,
 	}
 	for _, q := range updates {
 		if _, err := tx.ExecContext(ctx, q, targetID, sourceID); err != nil {

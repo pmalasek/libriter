@@ -140,3 +140,40 @@ type Bookmark struct {
 	Note            *string    `json:"note,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 }
+
+// Druhy poslechové session.
+const (
+	PlaySessionBook   = "book"
+	PlaySessionSeries = "series"
+	PlaySessionList   = "list"
+)
+
+// PlaySession je to, co uživatel poslouchá: kniha, série nebo vlastní seznam.
+// Rozposlouchaných session může mít víc naráz a přepíná se mezi nimi.
+type PlaySession struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+	Kind   string    `json:"kind"`
+	// SourceID je kniha nebo série, ze které session vznikla; u seznamu je prázdné.
+	SourceID *uuid.UUID `json:"source_id,omitempty"`
+	// Title nese jen seznam. Název knihy a série si rozhraní dohledá samo,
+	// aby přejmenování v knihovně nezůstalo v session viset ve staré podobě.
+	Title         *string           `json:"title,omitempty"`
+	CurrentBookID *uuid.UUID        `json:"current_book_id,omitempty"`
+	PlaybackSpeed float64           `json:"playback_speed"`
+	FinishedAt    *time.Time        `json:"finished_at,omitempty"`
+	CreatedAt     time.Time         `json:"created_at"`
+	UpdatedAt     time.Time         `json:"updated_at"`
+	Items         []PlaySessionItem `json:"items"`
+}
+
+// PlaySessionItem je jedna kniha session i s vlastní rozposlouchanou pozicí.
+type PlaySessionItem struct {
+	BookID   uuid.UUID `json:"book_id"`
+	Position int       `json:"position"`
+	// ChapterID je prázdné, když kapitola zmizela při opravě knihovny –
+	// přehrávání pak začne první kapitolou knihy.
+	ChapterID *uuid.UUID `json:"chapter_id,omitempty"`
+	// PositionSeconds je pozice v kapitole, ne v celé knize.
+	PositionSeconds int `json:"position_seconds"`
+}

@@ -289,8 +289,21 @@ Nabídnutá fotka se stáhne až při uložení (`PUT /authors/{id}/image`), tak
 v seznamu; autor bez fotky má zástupnou ikonu. Čtenář (role reader) tlačítka
 nevidí.
 
-**Co ještě ne:** přehrávání audia (kapitoly už detail knihy ukazuje, chybí
-streamování) a zakládání či
+**Poslech:** *Přehrát* v detailu knihy, *Přehrát sérii* u série a *Poslouchat
+výběr* v režimu výběru knih otevřou poslech v liště u spodního okraje. Lišta je
+vidět na všech stránkách, takže poslech nepřeruší procházení knihovny.
+
+Poslech (session) je kniha, celá série, nebo ručně poskládaný seznam. Aktuální
+kapitola i pozice v ní se drží na serveru, ne v prohlížeči – na jiném zařízení
+tedy poslech pokračuje tam, kde skončil. Zapisuje se každých 10 sekund a při
+každé změně (pauza, převíjení, změna kapitoly i zavření stránky).
+
+Rozposlouchaných poslechů může být víc naráz a přepíná se mezi nimi ikonou
+seznamu v liště. *Přehrát* u knihy, která už v nějakém poslechu je, pokračuje
+v něm místo zakládání nového. Po doposlechnutí kapitoly navazuje další, po
+poslední kapitole další kniha poslechu.
+
+**Co ještě ne:** zakládání či
 mazání knih, autorů a sérií z rozhraní – ty zakládá scanner nebo přímé volání
 API. Obálku a cestu k audio souborům nelze z rozhraní měnit, spravuje je
 scanner.
@@ -435,6 +448,7 @@ Základní URL: `http://localhost:8080/api/v1`
 | `GET` | `/auth/config` | Je registrace zapnutá a s jakou rolí | veřejné |
 | `POST` | `/auth/register` | Registrace nového uživatele | veřejné |
 | `POST` | `/auth/login` | Přihlášení, vrátí JWT token | veřejné |
+| `GET` | `/auth/stream-token` | Krátkodobý token pro adresu audia (24 h) | přihlášený |
 
 Při vypnuté registraci vrací `POST /auth/register` `403`; přepínač je
 v administraci (viz níže).
@@ -446,6 +460,12 @@ Authorization: Bearer <token>
 
 Výjimkou je `GET /books/{id}/cover` – obálky se načítají přes `<img>`, které
 hlavičku `Authorization` poslat neumí. Ochranou je neuhodnutelné UUID knihy.
+
+Druhou výjimkou je `GET /chapters/{id}/audio`: `<audio>` hlavičku poslat také
+neumí, ale audio je proti obálce citlivější, takže se ověřuje tokenem v adrese.
+Není to přihlašovací token – `GET /auth/stream-token` vydá samostatný token
+platný 24 hodin, který **umí jen streamovat**. Opačně to platí taky: stream
+token API nikam jinam nepustí.
 
 ### Uživatelé
 
@@ -605,6 +625,69 @@ endpoint nejde server donutit sáhnout kamkoliv. Odpověď musí být obrázek
 | `POST` | `/series` | Přidání série | editor+ |
 | `PUT` | `/series/{id}` | Aktualizace série | editor+ |
 | `DELETE` | `/series/{id}` | Smazání série | admin |
+
+### Poslech
+
+Poslech (session) drží, co uživatel právě poslouchá: jednu knihu, celou sérii,
+nebo ručně poskládaný seznam. Rozposlouchaných může být víc naráz. Session vidí
+a mění jen její vlastník – cizí ID vrací `404`, aby o cizím účtu nic neprozradilo.
+
+| Metoda | Endpoint | Popis | Přístup |
+|--------|----------|-------|---------|
+| `GET` | `/sessions` | Poslechy uživatele (nedoposlechnuté první) | reader+ |
+| `POST` | `/sessions` | Založení nebo pokračování poslechu | reader+ |
+| `GET` | `/sessions/{id}` | Detail poslechu | reader+ |
+| `PUT` | `/sessions/{id}/position` | Uložení kapitoly a pozice | reader+ |
+| `POST` | `/sessions/{id}/items` | Přidání knih a sérií na konec | reader+ |
+| `DELETE` | `/sessions/{id}` | Smazání poslechu | reader+ |
+
+Tělo `POST /sessions` určuje `kind`:
+
+```jsonc
+{ "kind": "book",   "book_id": "<uuid>" }
+{ "kind": "series", "series_id": "<uuid>" }
+{ "kind": "list",   "title": "Na cesty", "book_ids": ["<uuid>"], "series_ids": ["<uuid>"] }
+```
+
+U knihy a série vrací `200` s **existujícím** rozposlouchaným poslechem a `201`
+jen u opravdu nového – druhé „Přehrát“ u téže knihy tak pokračuje místo
+zakládání duplicity. Kniha se přitom hledá i uvnitř sérií a seznamů. Série se
+rozbalí na díly podle `series_position` (díl bez pořadí jde na konec), seznam
+vzniká vždy nový a duplicitní knihy v něm padají. Prázdný výběr vrací `400`.
+
+`PUT /sessions/{id}/position` je zápis, který posílá přehrávač každých 10 sekund
+poslechu a při každé změně:
+
+```jsonc
+{
+  "book_id": "<uuid>",
+  "chapter_id": "<uuid>",      // pozice se měří v kapitole, ne v celé knize
+  "position_seconds": 124,
+  "playback_speed": 1.25,      // 0.5 až 3.0
+  "finished": false            // true = doposlechnuto; další zápis příznak zruší
+}
+```
+
+Každá kniha poslechu si nese vlastní kapitolu a pozici, takže skok na jiný díl
+série nic neztratí. Kniha mimo poslech vrací `400`, stejně jako kapitola cizí
+knihy nebo rychlost mimo rozsah.
+
+### Audio
+
+| Metoda | Endpoint | Popis | Přístup |
+|--------|----------|-------|---------|
+| `GET`, `HEAD` | `/chapters/{id}/audio?t=<token>` | Stream audio souboru kapitoly | stream token |
+
+Odpovídá `http.ServeContent`, takže umí `Range` a vrací `206 Partial Content` –
+přetáčení nestahuje soubor od začátku. Token do `t` vydá
+`GET /auth/stream-token` (platnost 24 h, pouze streamování).
+
+Cesta z `chapters.file_path` se před otevřením ověřuje proti `AUDIO_ROOT`, takže
+ani ručně upravený záznam v databázi nepustí ven z knihovny.
+
+Za reverzní proxy patří audio vlastní `location` s dlouhým čtecím timeoutem:
+v pauze přestane prohlížeč číst a proxy by spojení jinak po pár minutách shodila.
+Hotová konfigurace je v `deploy/nginx/`.
 
 ### Metadata knih
 

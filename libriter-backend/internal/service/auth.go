@@ -24,9 +24,20 @@ const bcryptCost = 12
 // serveru – se projeví nejpozději po této době.
 const authCacheTTL = 10 * time.Second
 
-// Claims jsou data zakódovaná v JWT tokenu.
+// ScopeStream označuje token, který smí jen streamovat audio. Prvek <audio>
+// neumí poslat hlavičku Authorization, takže token putuje v adrese – a tam
+// přihlašovací token patřit nemá (zůstává v historii i v logu proxy).
+const ScopeStream = "stream"
+
+// streamTokenTTL je platnost tokenu na audio. Delší poslech ho přežije,
+// odcizená adresa zestárne do druhého dne.
+const streamTokenTTL = 24 * time.Hour
+
+// Claims jsou data zakódovaná v JWT tokenu. Prázdný Scope má přihlašovací
+// token; cokoliv jiného je token s omezeným oprávněním (viz ScopeStream).
 type Claims struct {
-	Role string `json:"role"`
+	Role  string `json:"role"`
+	Scope string `json:"scope,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -165,8 +176,58 @@ func (a *AuthService) Login(ctx context.Context, email, password string) (*model
 	return u, token, nil
 }
 
-// ParseToken ověří a dekóduje JWT token.
+// ParseToken ověří a dekóduje přihlašovací JWT token. Token s omezeným
+// oprávněním (například na streamování) odmítne – jinak by adresa audia
+// posloužila jako přihlášení do celého API.
 func (a *AuthService) ParseToken(tokenStr string) (*Claims, error) {
+	claims, err := a.parseClaims(tokenStr)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Scope != "" {
+		return nil, ErrInvalidToken
+	}
+	return claims, nil
+}
+
+// GenerateStreamToken vydá krátkodobý token pro přehrávání audia a čas jeho
+// vypršení. Přehrávač si ho vyžádá běžným přihlášeným požadavkem a přidává ho
+// do adresy audio souboru.
+func (a *AuthService) GenerateStreamToken(userID uuid.UUID) (string, time.Time, error) {
+	expiresAt := time.Now().Add(streamTokenTTL)
+	token, err := a.signToken(Claims{
+		Scope: ScopeStream,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   userID.String(),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+		},
+	})
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return token, expiresAt, nil
+}
+
+// ParseStreamToken ověří token na streamování a vrátí ID jeho uživatele.
+// Přihlašovací token tudy neprojde – ať se v adresách objevuje jen to, co do
+// nich patří.
+func (a *AuthService) ParseStreamToken(tokenStr string) (uuid.UUID, error) {
+	claims, err := a.parseClaims(tokenStr)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if claims.Scope != ScopeStream {
+		return uuid.Nil, ErrInvalidToken
+	}
+	userID, err := uuid.Parse(claims.Subject)
+	if err != nil {
+		return uuid.Nil, ErrInvalidToken
+	}
+	return userID, nil
+}
+
+func (a *AuthService) parseClaims(tokenStr string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("neočekávaná podpisová metoda: %v", t.Header["alg"])
@@ -187,15 +248,17 @@ func (a *AuthService) ParseToken(tokenStr string) (*Claims, error) {
 
 func (a *AuthService) generateToken(userID uuid.UUID, role string) (string, error) {
 	now := time.Now()
-	claims := Claims{
+	return a.signToken(Claims{
 		Role: role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Subject:   userID.String(),
 			IssuedAt:  jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(a.cfg.ExpiryHours)),
 		},
-	}
+	})
+}
 
+func (a *AuthService) signToken(claims Claims) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, err := token.SignedString([]byte(a.cfg.Secret))
 	if err != nil {

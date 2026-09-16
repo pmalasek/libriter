@@ -82,6 +82,8 @@ type adminTestEnv struct {
 	auth    *service.AuthService
 	audit   *service.AuditService
 	scanner *fakeScanner
+	// audioRoot je kořen, pod který testy zapisují audio soubory kapitol.
+	audioRoot string
 }
 
 // newAdminTestEnv postaví router se stejnými skupinami jako server: veřejná
@@ -111,16 +113,25 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 		plan:      scanner.RepairPlan{Rescan: []scanner.RepairBook{}, Duplicates: []scanner.RepairBook{}},
 		mergePlan: scanner.MergePlan{Groups: []scanner.MergeGroup{}},
 	}
+	bookSvc := service.NewBook(store)
+	audioRoot := t.TempDir()
+
 	adminH := NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc)
 	authH := NewAuth(authSvc, settingsSvc)
 	userH := NewUser(userSvc, auditSvc)
-	bookH := NewBook(service.NewBook(store), t.TempDir(), auditSvc)
+	bookH := NewBook(bookSvc, t.TempDir(), auditSvc)
+	sessionH := NewPlaySession(service.NewPlaySession(store))
+	audioH := NewAudio(bookSvc, authSvc, audioRoot)
 
 	r := chi.NewRouter()
 	r.Get("/auth/config", authH.Config)
 	r.Post("/auth/register", authH.Register)
+	// Audio se streamuje mimo Authenticate – token je v adrese.
+	r.Get("/chapters/{id}/audio", audioH.Stream)
+	r.Head("/chapters/{id}/audio", audioH.Stream)
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(authSvc))
+		r.Get("/auth/stream-token", authH.StreamToken)
 		r.Put("/users/{id}/password", userH.ChangePassword)
 		r.Get("/users/{id}", userH.Get)
 		r.Put("/users/{id}", userH.Update)
@@ -128,6 +139,12 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireRole(model.RoleReader))
 			r.Get("/books/{id}/chapters", bookH.ListChapters)
+			r.Get("/sessions", sessionH.List)
+			r.Post("/sessions", sessionH.Create)
+			r.Get("/sessions/{id}", sessionH.Get)
+			r.Put("/sessions/{id}/position", sessionH.SavePosition)
+			r.Post("/sessions/{id}/items", sessionH.AddItems)
+			r.Delete("/sessions/{id}", sessionH.Delete)
 		})
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireRole(model.RoleEditor))
@@ -154,7 +171,10 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 		})
 	})
 
-	return &adminTestEnv{router: r, store: store, users: userSvc, auth: authSvc, audit: auditSvc, scanner: scn}
+	return &adminTestEnv{
+		router: r, store: store, users: userSvc, auth: authSvc,
+		audit: auditSvc, scanner: scn, audioRoot: audioRoot,
+	}
 }
 
 // login vytvoří uživatele dané role a vrátí jeho token a ID.
@@ -175,10 +195,17 @@ func (e *adminTestEnv) login(t *testing.T, email, role string) (string, string) 
 
 func (e *adminTestEnv) do(t *testing.T, method, path, token string, body any) *httptest.ResponseRecorder {
 	t.Helper()
+	return e.serve(e.request(t, method, path, token, body))
+}
+
+// request sestaví požadavek, aniž by ho rovnou odeslal – testy, které potřebují
+// vlastní hlavičku (například Range), si ji doplní a pošlou přes serve.
+func (e *adminTestEnv) request(t *testing.T, method, path, token string, body ...any) *http.Request {
+	t.Helper()
 
 	var reader *bytes.Reader
-	if body != nil {
-		raw, err := json.Marshal(body)
+	if len(body) > 0 && body[0] != nil {
+		raw, err := json.Marshal(body[0])
 		if err != nil {
 			t.Fatalf("marshal: %v", err)
 		}
@@ -191,9 +218,20 @@ func (e *adminTestEnv) do(t *testing.T, method, path, token string, body any) *h
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
+	return req
+}
+
+func (e *adminTestEnv) serve(req *http.Request) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	e.router.ServeHTTP(rec, req)
 	return rec
+}
+
+func decodeJSON(t *testing.T, raw []byte, v any) {
+	t.Helper()
+	if err := json.Unmarshal(raw, v); err != nil {
+		t.Fatalf("rozbalení odpovědi: %v (%s)", err, raw)
+	}
 }
 
 // Administrace patří jen adminovi; editor na ni nesmí.

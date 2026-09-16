@@ -1,0 +1,675 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { toast } from 'sonner'
+import { API_PREFIX, ApiError, apiFetch } from '@/api/client'
+import { chaptersQuery, queryKeys, useBooks } from '@/api/hooks'
+import type {
+  Chapter,
+  CreateSessionRequest,
+  PlaySession,
+  SessionItemsRequest,
+  SessionPositionRequest,
+  StreamToken,
+} from '@/api/types'
+import { useAuth } from '@/auth/AuthContext'
+import { coverUrl } from '@/components/BookCover'
+import { authorsLabel } from '@/lib/format'
+import {
+  currentBookId,
+  PlayerContext,
+  SAVE_INTERVAL_MS,
+  sessionItem,
+  STORAGE_KEY,
+  type PlayerValue,
+} from './playerContext'
+
+/**
+ * Token pro adresu audio souboru. Platí 24 hodin, takže ho stačí načíst
+ * jednou za relaci; delší poslech ho obnoví přes vyprázdnění cache.
+ */
+const streamTokenQuery = {
+  queryKey: ['auth', 'stream-token'] as const,
+  queryFn: () => apiFetch<StreamToken>('/auth/stream-token'),
+  staleTime: 12 * 60 * 60 * 1000,
+}
+
+/** Rozdíl pozice, od kterého se přebírá stav z jiného zařízení. */
+const REMOTE_DRIFT_SECONDS = 3
+
+interface Track {
+  bookId: string
+  chapterId: string
+}
+
+/**
+ * Přehrávač žije nad celou aplikací, aby poslech nepřerušila změna stránky.
+ * Nepřihlášenému uživateli nemá co nabídnout, takže se vůbec nesestavuje;
+ * klíč podle účtu zajistí, že po přepnutí účtu nezůstane cizí rozposlouchaný
+ * poslech (stejně jako u ColorSchemeProvider).
+ */
+export function PlayerProvider({ children }: { children: React.ReactNode }) {
+  const { user, isAuthenticated } = useAuth()
+  // Uložená relace s prošlým tokenem má uživatele, ale ne přístup k API;
+  // přehrávač by pak na přihlašovací stránce marně sahal na server.
+  if (!user || !isAuthenticated) return <>{children}</>
+  return <ActivePlayer key={user.id}>{children}</ActivePlayer>
+}
+
+function ActivePlayer({ children }: { children: React.ReactNode }) {
+  const queryClient = useQueryClient()
+  const books = useBooks()
+
+  const [session, setSession] = useState<PlaySession | null>(null)
+  const [track, setTrack] = useState<Track | null>(null)
+  const [chapters, setChapters] = useState<Chapter[]>([])
+  const [currentTime, setCurrentTime] = useState(0)
+  const [duration, setDuration] = useState(0)
+  const [playing, setPlaying] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [speed, setSpeedState] = useState(1)
+
+  // Zvuk musí přežít překreslení, proto element i vše, co se čte v jeho
+  // událostech, drží ref – z posluchače by uzávěr viděl starý stav.
+  const audioRef = useRef<HTMLAudioElement | null>(null)
+  const sessionRef = useRef<PlaySession | null>(null)
+  const trackRef = useRef<Track | null>(null)
+  const chaptersRef = useRef<Chapter[]>([])
+  const speedRef = useRef(1)
+  const pendingSeekRef = useRef<number | null>(null)
+  const lastSavedRef = useRef<string>('')
+  const tokenRetryRef = useRef(false)
+
+  function audioElement() {
+    if (!audioRef.current) {
+      audioRef.current = new Audio()
+      audioRef.current.preload = 'metadata'
+    }
+    return audioRef.current
+  }
+
+  const book = useMemo(() => {
+    if (!track) return null
+    return (books.data ?? []).find((b) => b.id === track.bookId) ?? null
+  }, [books.data, track])
+
+  const chapter = useMemo(() => {
+    if (!track) return null
+    return chapters.find((c) => c.id === track.chapterId) ?? null
+  }, [chapters, track])
+
+  // --- ukládání pozice ---
+
+  /** Zapíše čerstvý stav poslechu do cache i do stavu, bez dotazu na server. */
+  const cacheSession = useCallback(
+    (updated: PlaySession) => {
+      if (sessionRef.current?.id === updated.id) {
+        sessionRef.current = updated
+        setSession(updated)
+      }
+      queryClient.setQueryData(queryKeys.session(updated.id), updated)
+      queryClient.setQueryData<PlaySession[]>(queryKeys.sessions, (old) => {
+        if (!old) return old
+        const without = old.filter((s) => s.id !== updated.id)
+        return [updated, ...without]
+      })
+    },
+    [queryClient],
+  )
+
+  /**
+   * Uloží pozici na server. Volá se každých pár sekund poslechu a při každé
+   * změně, aby se dalo pokračovat na jiném zařízení; tělo se skládá synchronně,
+   * takže i odchod ze stránky odešle to, co v tu chvíli hrálo.
+   */
+  const savePosition = useCallback(
+    (options: { finished?: boolean; keepalive?: boolean; force?: boolean } = {}) => {
+      const openSession = sessionRef.current
+      const openTrack = trackRef.current
+      const audio = audioRef.current
+      if (!openSession || !openTrack || !audio) return
+
+      // Mezi nastavením souboru a doskočením na uloženou pozici hlásí element
+      // nulu. Zápis v tu chvíli by rozposlouchané místo přepsal začátkem.
+      if (pendingSeekRef.current != null) return
+
+      const body: SessionPositionRequest = {
+        book_id: openTrack.bookId,
+        chapter_id: openTrack.chapterId,
+        position_seconds: Math.max(0, Math.round(audio.currentTime)),
+        playback_speed: speedRef.current,
+        finished: options.finished,
+      }
+
+      // Pauza a přepínání stránek umí zavolat uložení několikrát za sebou;
+      // beze změny není co posílat.
+      const fingerprint = JSON.stringify(body)
+      if (!options.force && fingerprint === lastSavedRef.current) return
+      lastSavedRef.current = fingerprint
+
+      const sessionId = openSession.id
+      apiFetch<PlaySession>(`/sessions/${sessionId}/position`, {
+        method: 'PUT',
+        json: body,
+        keepalive: options.keepalive,
+      })
+        .then((updated) => cacheSession(updated))
+        .catch((error: unknown) => {
+          // Výpadek sítě nemá přerušit poslech; příští zápis to dožene.
+          if (error instanceof ApiError && error.status >= 500) return
+          if (error instanceof ApiError && error.status === 404) return
+        })
+    },
+    [cacheSession],
+  )
+
+  // --- načtení kapitoly do přehrávače ---
+
+  const load = useCallback(
+    async (input: { bookId: string; chapterId?: string; position: number; autoplay: boolean }) => {
+      setLoading(true)
+      try {
+        const list = await queryClient.fetchQuery(chaptersQuery(input.bookId))
+        chaptersRef.current = list
+        setChapters(list)
+
+        const next = list.find((c) => c.id === input.chapterId) ?? list[0]
+        if (!next) {
+          toast.error('Kniha nemá žádné kapitoly k přehrání.')
+          return
+        }
+
+        const { token } = await queryClient.fetchQuery(streamTokenQuery)
+        const audio = audioElement()
+        const target: Track = { bookId: input.bookId, chapterId: next.id }
+        trackRef.current = target
+        setTrack(target)
+
+        // Pozici nelze nastavit dřív, než prohlížeč zná délku souboru; podle
+        // ní se také ořízne. Délka z databáze na to nestačí – u souboru, kterému
+        // scanner délku nezjistil, je uložená jen zástupná jedna sekunda.
+        pendingSeekRef.current = Math.max(0, input.position)
+        setCurrentTime(pendingSeekRef.current)
+        setDuration(next.duration_seconds)
+
+        audio.src = `${API_PREFIX}/chapters/${next.id}/audio?t=${encodeURIComponent(token)}`
+        audio.playbackRate = speedRef.current
+        audio.load()
+
+        if (input.autoplay) {
+          try {
+            await audio.play()
+          } catch {
+            // Prohlížeč umí přehrání odmítnout, dokud uživatel neklikne –
+            // lišta pak zůstane připravená v pauze.
+          }
+        }
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Kapitolu se nepodařilo načíst.')
+      } finally {
+        setLoading(false)
+      }
+    },
+    [queryClient],
+  )
+
+  /** Otevře poslech v liště a začne u jeho rozposlouchaného místa. */
+  const openSession = useCallback(
+    (next: PlaySession, options: { bookId?: string; chapterId?: string; autoplay: boolean }) => {
+      sessionRef.current = next
+      setSession(next)
+      cacheSession(next)
+      try {
+        localStorage.setItem(STORAGE_KEY, next.id)
+      } catch {
+        // Bez místní cache se poslech po reloadu neobnoví, jinak nevadí.
+      }
+
+      speedRef.current = next.playback_speed
+      setSpeedState(next.playback_speed)
+
+      const bookId = options.bookId ?? currentBookId(next)
+      if (!bookId) {
+        toast.error('Poslech nemá žádné knihy.')
+        return
+      }
+      const item = sessionItem(next, bookId)
+      // Kliknutí na konkrétní kapitolu znamená začít ji od začátku.
+      const chapterId = options.chapterId ?? item?.chapter_id
+      const position = options.chapterId ? 0 : (item?.position_seconds ?? 0)
+
+      void load({ bookId, chapterId, position, autoplay: options.autoplay })
+    },
+    [cacheSession, load],
+  )
+
+  // --- akce uživatele ---
+
+  const createSession = useMutation({
+    mutationFn: (body: CreateSessionRequest) =>
+      apiFetch<PlaySession>('/sessions', { method: 'POST', json: body }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
+    },
+    onError: (error: Error) => toast.error(`Poslech se nepodařilo spustit: ${error.message}`),
+  })
+
+  const start = useCallback(
+    (body: CreateSessionRequest, options: { chapterId?: string; bookId?: string } = {}) => {
+      // Rozehraný poslech se nesmí zapomenout jen proto, že uživatel klikl jinam.
+      savePosition()
+      createSession.mutate(body, {
+        onSuccess: (next) => openSession(next, { ...options, autoplay: true }),
+      })
+    },
+    [createSession, openSession, savePosition],
+  )
+
+  const playBook = useCallback(
+    (bookId: string, chapterId?: string) => {
+      const open = sessionRef.current
+      // Kniha z právě otevřeného poslechu nemusí přes server – stačí přepnout.
+      if (open && sessionItem(open, bookId)) {
+        savePosition()
+        openSession(open, { bookId, chapterId, autoplay: true })
+        return
+      }
+      start({ kind: 'book', book_id: bookId }, { bookId, chapterId })
+    },
+    [openSession, savePosition, start],
+  )
+
+  const playSeries = useCallback(
+    (seriesId: string) => start({ kind: 'series', series_id: seriesId }),
+    [start],
+  )
+
+  const playList = useCallback(
+    (input: { bookIds?: string[]; seriesIds?: string[]; title?: string }) =>
+      start({
+        kind: 'list',
+        title: input.title,
+        book_ids: input.bookIds,
+        series_ids: input.seriesIds,
+      }),
+    [start],
+  )
+
+  const addItems = useMutation({
+    mutationFn: ({ sessionId, body }: { sessionId: string; body: SessionItemsRequest }) =>
+      apiFetch<PlaySession>(`/sessions/${sessionId}/items`, { method: 'POST', json: body }),
+    onSuccess: (updated) => {
+      cacheSession(updated)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
+      toast.success('Přidáno do poslechu.')
+    },
+    onError: (error: Error) => toast.error(`Do poslechu se nepodařilo přidat: ${error.message}`),
+  })
+
+  const addToSession = useCallback(
+    (input: { bookIds?: string[]; seriesIds?: string[] }) => {
+      const open = sessionRef.current
+      if (!open) return
+      addItems.mutate({
+        sessionId: open.id,
+        body: { book_ids: input.bookIds, series_ids: input.seriesIds },
+      })
+    },
+    [addItems],
+  )
+
+  const switchSession = useCallback(
+    (sessionId: string) => {
+      savePosition()
+      // Pozice mohla mezitím povyrůst na jiném zařízení, proto čerstvě ze serveru.
+      apiFetch<PlaySession>(`/sessions/${sessionId}`)
+        .then((next) => openSession(next, { autoplay: true }))
+        .catch((error: Error) => toast.error(`Poslech se nepodařilo otevřít: ${error.message}`))
+    },
+    [openSession, savePosition],
+  )
+
+  const playItem = useCallback(
+    (bookId: string) => {
+      const open = sessionRef.current
+      if (!open) return
+      savePosition()
+      openSession(open, { bookId, autoplay: true })
+    },
+    [openSession, savePosition],
+  )
+
+  const close = useCallback(() => {
+    audioRef.current?.pause()
+    savePosition()
+    sessionRef.current = null
+    trackRef.current = null
+    setSession(null)
+    setTrack(null)
+    setChapters([])
+    setPlaying(false)
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch {
+      // Zavření lišty nesmí spadnout na zakázaném úložišti.
+    }
+  }, [savePosition])
+
+  const removeSession = useCallback(
+    (sessionId: string) => {
+      if (sessionRef.current?.id === sessionId) close()
+      apiFetch<void>(`/sessions/${sessionId}`, { method: 'DELETE' })
+        .then(() => {
+          queryClient.removeQueries({ queryKey: queryKeys.session(sessionId) })
+          void queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
+        })
+        .catch((error: Error) => toast.error(`Poslech se nepodařilo smazat: ${error.message}`))
+    },
+    [close, queryClient],
+  )
+
+  const toggle = useCallback(() => {
+    const audio = audioRef.current
+    if (!audio || !trackRef.current) return
+    if (audio.paused) {
+      void audio.play().catch(() => toast.error('Přehrávání se nepodařilo spustit.'))
+    } else {
+      audio.pause()
+    }
+  }, [])
+
+  const seek = useCallback((seconds: number) => {
+    const audio = audioRef.current
+    if (!audio || !trackRef.current) return
+    const limit = Number.isFinite(audio.duration) ? audio.duration : seconds
+    audio.currentTime = Math.min(Math.max(0, seconds), limit)
+    setCurrentTime(audio.currentTime)
+  }, [])
+
+  const skip = useCallback(
+    (delta: number) => seek((audioRef.current?.currentTime ?? 0) + delta),
+    [seek],
+  )
+
+  /** Přepne na sousední kapitolu; za poslední pokračuje další knihou poslechu. */
+  const step = useCallback(
+    (delta: number, autoplay = true) => {
+      const openTrack = trackRef.current
+      const open = sessionRef.current
+      if (!openTrack || !open) return false
+
+      const index = chaptersRef.current.findIndex((c) => c.id === openTrack.chapterId)
+      const next = index >= 0 ? chaptersRef.current[index + delta] : undefined
+      if (next) {
+        savePosition()
+        void load({ bookId: openTrack.bookId, chapterId: next.id, position: 0, autoplay })
+        return true
+      }
+
+      // Za hranicí knihy pokračuje poslech další knihou v pořadí.
+      const items = open.items
+      const itemIndex = items.findIndex((i) => i.book_id === openTrack.bookId)
+      const nextItem = items[itemIndex + delta]
+      if (!nextItem) return false
+
+      savePosition()
+      void load({
+        bookId: nextItem.book_id,
+        chapterId: nextItem.chapter_id,
+        position: nextItem.position_seconds,
+        autoplay,
+      })
+      return true
+    },
+    [load, savePosition],
+  )
+
+  const nextChapter = useCallback(() => void step(1), [step])
+  const prevChapter = useCallback(() => void step(-1), [step])
+
+  const setSpeed = useCallback(
+    (value: number) => {
+      speedRef.current = value
+      setSpeedState(value)
+      if (audioRef.current) audioRef.current.playbackRate = value
+      savePosition({ force: true })
+    },
+    [savePosition],
+  )
+
+  // --- události přehrávače ---
+
+  useEffect(() => {
+    const audio = audioElement()
+
+    const onLoaded = () => {
+      const known = Number.isFinite(audio.duration) ? audio.duration : 0
+      if (known > 0) setDuration(known)
+
+      const pending = pendingSeekRef.current
+      if (pending != null) {
+        pendingSeekRef.current = null
+        // Uložená pozice za koncem souboru (přeuložená kapitola) by přehrávání
+        // rovnou ukončila, proto se ořízne kousek před konec.
+        const target = known > 0 ? Math.min(pending, Math.max(0, known - 1)) : pending
+        if (target > 0) audio.currentTime = target
+      }
+      tokenRetryRef.current = false
+    }
+    const onTime = () => setCurrentTime(audio.currentTime)
+    const onPlay = () => setPlaying(true)
+    const onPause = () => {
+      setPlaying(false)
+      savePosition()
+    }
+    const onSeeked = () => savePosition()
+    const onEnded = () => {
+      // Na konci poslední kapitoly poslední knihy je poslech doposlechnutý.
+      if (!step(1)) savePosition({ finished: true, force: true })
+    }
+    const onError = async () => {
+      if (tokenRetryRef.current || !trackRef.current) return
+      tokenRetryRef.current = true
+      // Nejčastější příčina je vypršelý token v adrese – zkusíme nový.
+      const position = audio.currentTime
+      await queryClient.invalidateQueries({ queryKey: streamTokenQuery.queryKey })
+      const openTrack = trackRef.current
+      void load({
+        bookId: openTrack.bookId,
+        chapterId: openTrack.chapterId,
+        position,
+        autoplay: !audio.paused,
+      })
+    }
+
+    audio.addEventListener('loadedmetadata', onLoaded)
+    audio.addEventListener('durationchange', onLoaded)
+    audio.addEventListener('timeupdate', onTime)
+    audio.addEventListener('play', onPlay)
+    audio.addEventListener('pause', onPause)
+    audio.addEventListener('seeked', onSeeked)
+    audio.addEventListener('ended', onEnded)
+    audio.addEventListener('error', onError)
+    return () => {
+      audio.removeEventListener('loadedmetadata', onLoaded)
+      audio.removeEventListener('durationchange', onLoaded)
+      audio.removeEventListener('timeupdate', onTime)
+      audio.removeEventListener('play', onPlay)
+      audio.removeEventListener('pause', onPause)
+      audio.removeEventListener('seeked', onSeeked)
+      audio.removeEventListener('ended', onEnded)
+      audio.removeEventListener('error', onError)
+    }
+  }, [load, queryClient, savePosition, step])
+
+  // Pravidelný zápis během poslechu; v pauze není co ukládat.
+  useEffect(() => {
+    if (!playing) return
+    const timer = setInterval(() => savePosition(), SAVE_INTERVAL_MS)
+    return () => clearInterval(timer)
+  }, [playing, savePosition])
+
+  // Odchod ze stránky: uložit poslední pozici tak, aby požadavek doběhl.
+  useEffect(() => {
+    const onHide = () => savePosition({ keepalive: true })
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        savePosition({ keepalive: true })
+        return
+      }
+      // Návrat k záložce: mezitím se mohlo poslouchat jinde.
+      if (!audioRef.current?.paused) return
+      const open = sessionRef.current
+      if (!open) return
+      apiFetch<PlaySession>(`/sessions/${open.id}`)
+        .then((fresh) => {
+          if (sessionRef.current?.id !== fresh.id) return
+          if (fresh.updated_at <= open.updated_at) return
+          cacheSession(fresh)
+
+          const bookId = currentBookId(fresh)
+          const item = sessionItem(fresh, bookId)
+          const openTrack = trackRef.current
+          if (!bookId || !item || !openTrack) return
+
+          const movedElsewhere = bookId !== openTrack.bookId || item.chapter_id !== openTrack.chapterId
+          if (movedElsewhere) {
+            void load({
+              bookId,
+              chapterId: item.chapter_id,
+              position: item.position_seconds,
+              autoplay: false,
+            })
+            return
+          }
+          const audio = audioRef.current
+          if (audio && Math.abs(audio.currentTime - item.position_seconds) > REMOTE_DRIFT_SECONDS) {
+            audio.currentTime = item.position_seconds
+            setCurrentTime(item.position_seconds)
+          }
+        })
+        .catch(() => {
+          // Nedostupný server nemá důvod rušit rozehraný poslech.
+        })
+    }
+
+    window.addEventListener('pagehide', onHide)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('pagehide', onHide)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [cacheSession, load, savePosition])
+
+  // Obnovení po načtení stránky: poslech se otevře v pauze tam, kde skončil.
+  useEffect(() => {
+    let stored: string | null = null
+    try {
+      stored = localStorage.getItem(STORAGE_KEY)
+    } catch {
+      return
+    }
+    if (!stored) return
+
+    let cancelled = false
+    apiFetch<PlaySession>(`/sessions/${stored}`)
+      .then((restored) => {
+        if (!cancelled) openSession(restored, { autoplay: false })
+      })
+      .catch((error: unknown) => {
+        // Smazaný poslech nemá smysl zkoušet znovu.
+        if (error instanceof ApiError && error.status === 404) {
+          try {
+            localStorage.removeItem(STORAGE_KEY)
+          } catch {
+            // nevadí
+          }
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+    // Záměrně jen při prvním sestavení – dál poslech řídí uživatel.
+  }, [openSession])
+
+  // Ovládání ze sluchátek, zamčené obrazovky a lišty systému.
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return
+    const media = navigator.mediaSession
+
+    if (book && chapter) {
+      media.metadata = new MediaMetadata({
+        title: chapter.title,
+        artist: authorsLabel(book.authors),
+        album: book.title,
+        artwork: book.cover_path ? [{ src: coverUrl(book), sizes: '512x512' }] : undefined,
+      })
+    } else {
+      media.metadata = null
+    }
+    media.playbackState = playing ? 'playing' : 'paused'
+
+    const handlers: [MediaSessionAction, MediaSessionActionHandler][] = [
+      ['play', () => toggle()],
+      ['pause', () => toggle()],
+      ['seekbackward', () => skip(-15)],
+      ['seekforward', () => skip(30)],
+      ['previoustrack', () => prevChapter()],
+      ['nexttrack', () => nextChapter()],
+      ['seekto', (details) => details.seekTime != null && seek(details.seekTime)],
+    ]
+    for (const [action, handler] of handlers) {
+      try {
+        media.setActionHandler(action, handler)
+      } catch {
+        // Starší prohlížeč nemusí akci znát; zbytek ovládání funguje dál.
+      }
+    }
+    return () => {
+      for (const [action] of handlers) {
+        try {
+          media.setActionHandler(action, null)
+        } catch {
+          // nevadí
+        }
+      }
+    }
+  }, [book, chapter, nextChapter, playing, prevChapter, seek, skip, toggle])
+
+  // Odchod z aplikace (odhlášení, přepnutí účtu) nesmí nechat hrát zvuk.
+  useEffect(() => {
+    const audio = audioElement()
+    return () => {
+      audio.pause()
+      audio.removeAttribute('src')
+      audio.load()
+    }
+  }, [])
+
+  const value: PlayerValue = {
+    session,
+    book,
+    chapter,
+    chapters,
+    currentTime,
+    duration,
+    playing,
+    loading: loading || createSession.isPending,
+    speed,
+    playBook,
+    playSeries,
+    playList,
+    addToSession,
+    switchSession,
+    removeSession,
+    playItem,
+    toggle,
+    seek,
+    skip,
+    nextChapter,
+    prevChapter,
+    setSpeed,
+    close,
+  }
+
+  return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
+}

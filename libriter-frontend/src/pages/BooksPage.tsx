@@ -1,4 +1,4 @@
-import { LibraryBigIcon, SquareCheckBigIcon, XIcon } from 'lucide-react'
+import { HeadphonesIcon, LibraryBigIcon, ListPlusIcon, SquareCheckBigIcon, XIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useBooks, useSeriesTitle } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { authorNames, bookCount } from '@/lib/format'
 import { BOOK_SORT_OPTIONS, sortBooks, useBookListPrefs } from '@/lib/sorting'
+import { usePlayer } from '@/player/playerContext'
 
 export function BooksPage() {
   const [query, setQuery] = useState('')
@@ -20,6 +21,7 @@ export function BooksPage() {
   const { user } = useAuth()
   const prefs = useBookListPrefs()
   const seriesTitle = useSeriesTitle()
+  const player = usePlayer()
 
   // Hromadný výběr: null = vypnuto, jinak množina ID vybraných knih.
   const [selected, setSelected] = useState<Set<string> | null>(null)
@@ -106,7 +108,9 @@ export function BooksPage() {
               onDirChange={prefs.setSortDir}
             />
             <ViewModeToggle value={prefs.view} onChange={prefs.setView} />
-            {canEdit(user) && !selecting ? (
+            {/* Výběr slouží i k poskládání poslechu, takže ho má i čtenář;
+                zásahy do knihovny uvnitř zůstávají editorovi. */}
+            {!selecting ? (
               <Button variant="outline" onClick={() => setSelected(new Set())}>
                 <SquareCheckBigIcon />
                 Vybrat
@@ -133,10 +137,43 @@ export function BooksPage() {
           >
             Zrušit výběr
           </Button>
-          <Button size="sm" onClick={() => setSeriesDialog(true)} disabled={selected.size === 0}>
-            <LibraryBigIcon />
-            Přidat do série
+          {player.session ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                player.addToSession({ bookIds: selectedBooks.map((book) => book.id) })
+                setSelected(null)
+              }}
+              disabled={selected.size === 0}
+              title="Zařadit vybrané knihy na konec otevřeného poslechu"
+            >
+              <ListPlusIcon />
+              Přidat do poslechu
+            </Button>
+          ) : null}
+          <Button
+            size="sm"
+            onClick={() => {
+              player.playList({ bookIds: selectedBooks.map((book) => book.id) })
+              setSelected(null)
+            }}
+            disabled={selected.size === 0}
+          >
+            <HeadphonesIcon />
+            Poslouchat výběr
           </Button>
+          {canEdit(user) ? (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSeriesDialog(true)}
+              disabled={selected.size === 0}
+            >
+              <LibraryBigIcon />
+              Přidat do série
+            </Button>
+          ) : null}
           <Button variant="outline" size="sm" onClick={() => setSelected(null)} aria-label="Ukončit výběr">
             <XIcon />
             Hotovo

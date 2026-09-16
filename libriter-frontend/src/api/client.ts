@@ -38,6 +38,11 @@ interface RequestOptions {
   /** Neposílat Authorization ani nespouštět odhlášení při 401 (login, registrace). */
   anonymous?: boolean
   signal?: AbortSignal
+  /**
+   * Nechá požadavek doběhnout i po zavření stránky. Používá přehrávač při
+   * ukládání pozice na odchodu – sendBeacon by neuměl poslat token v hlavičce.
+   */
+  keepalive?: boolean
 }
 
 /**
@@ -70,7 +75,7 @@ async function parseErrorMessage(res: Response): Promise<string> {
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', json, anonymous = false, signal } = options
+  const { method = 'GET', json, anonymous = false, signal, keepalive } = options
 
   const headers = new Headers({ Accept: 'application/json' })
   const token = anonymous ? null : authToken
@@ -84,6 +89,7 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       headers,
       body: json === undefined ? undefined : JSON.stringify(json),
       signal,
+      keepalive,
     })
   } catch {
     throw new ApiError(0, 'Server je nedostupný')

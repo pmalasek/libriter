@@ -5,6 +5,7 @@ import { BrowserRouter } from 'react-router'
 import { ApiError } from '@/api/client'
 import { AuthProvider } from '@/auth/AuthContext'
 import { Toaster } from '@/components/ui/sonner'
+import { PlayerProvider } from '@/player/PlayerProvider'
 import { ThemeProvider } from '@/theme/ThemeProvider'
 import { App } from './App'
 import './index.css'
@@ -32,8 +33,11 @@ createRoot(rootElement).render(
       <BrowserRouter>
         <AuthProvider>
           <ThemeProvider>
-            <App />
-            <Toaster />
+            {/* Přehrávač stojí nad routerem, aby poslech přežil změnu stránky. */}
+            <PlayerProvider>
+              <App />
+              <Toaster />
+            </PlayerProvider>
           </ThemeProvider>
         </AuthProvider>
       </BrowserRouter>

@@ -1,4 +1,4 @@
-import { ChevronDownIcon, ListOrderedIcon } from 'lucide-react'
+import { ChevronDownIcon, ListOrderedIcon, PauseIcon, PlayIcon } from 'lucide-react'
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useChapters, useReorderChapters } from '@/api/hooks'
@@ -13,6 +13,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from 'cn'
 import { chapterCount, formatClock, formatDuration } from '@/lib/format'
+import { usePlayer } from '@/player/playerContext'
 
 /**
  * Kapitoly (audio soubory) knihy. Sbalené, protože u většiny návštěv jde jen
@@ -26,6 +27,7 @@ export function ChapterList({ book }: { book: Book }) {
   const [editing, setEditing] = useState(false)
   const chapters = useChapters(book.id, open)
   const reorder = useReorderChapters(book.id)
+  const player = usePlayer()
 
   const list = chapters.data ?? []
   const canReorder = canEdit(user) && open && !editing && list.length > 1
@@ -95,24 +97,44 @@ export function ChapterList({ book }: { book: Book }) {
               />
             ) : (
               <ol className="divide-y rounded-lg border">
-                {list.map((chapter, index) => (
-                  <li key={chapter.id} className="flex items-center gap-3 px-3 py-2.5">
-                    <span className="w-6 text-sm text-muted-foreground tabular-nums">
-                      {index + 1}.
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{chapter.title}</p>
-                      <p className="truncate font-mono text-xs text-muted-foreground">
-                        {chapter.file_name}
-                      </p>
-                    </div>
-                    <span className="text-sm text-muted-foreground tabular-nums">
-                      {formatClock(chapter.duration_seconds)}
-                    </span>
-                    {/* Místo pro tlačítko Přehrát – přehrávání je další krok. */}
-                    <span className="w-8" />
-                  </li>
-                ))}
+                {list.map((chapter, index) => {
+                  const isCurrent = player.chapter?.id === chapter.id
+                  return (
+                    <li
+                      key={chapter.id}
+                      className={cn('flex items-center gap-3 px-3 py-2.5', isCurrent && 'bg-accent/50')}
+                    >
+                      <span className="w-6 text-sm text-muted-foreground tabular-nums">
+                        {index + 1}.
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className={cn('truncate font-medium', isCurrent && 'text-primary')}>
+                          {chapter.title}
+                        </p>
+                        <p className="truncate font-mono text-xs text-muted-foreground">
+                          {chapter.file_name}
+                        </p>
+                      </div>
+                      <span className="text-sm text-muted-foreground tabular-nums">
+                        {formatClock(chapter.duration_seconds)}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={
+                          isCurrent && player.playing
+                            ? `Pozastavit kapitolu ${chapter.title}`
+                            : `Přehrát kapitolu ${chapter.title}`
+                        }
+                        onClick={() =>
+                          isCurrent ? player.toggle() : player.playBook(book.id, chapter.id)
+                        }
+                      >
+                        {isCurrent && player.playing ? <PauseIcon /> : <PlayIcon />}
+                      </Button>
+                    </li>
+                  )
+                })}
               </ol>
             )}
           </CardContent>

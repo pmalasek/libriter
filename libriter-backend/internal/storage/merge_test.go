@@ -257,3 +257,76 @@ func playbackPosition(t *testing.T, store *Store, userID, bookID uuid.UUID) int 
 	}
 	return seconds
 }
+
+// Rozdělená kniha se v rozposlouchané session nahradí cílovou, aby poslech
+// po opravě knihovny nespadl na neexistující knihu.
+func TestMergeBooksKeepsPlaySessions(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	target := mergeTestBook(t, store, "Krakatit", "capek/krakatit", "Krakatit")
+	source := mergeTestBook(t, store, "Krakatit", "capek/krakatit", "KRAKATIT")
+	other := mergeTestBook(t, store, "Matka", "capek/matka", "Matka")
+	user := mergeTestUser(t, store, "session@example.com")
+
+	// Session, která zná jen zdrojovou knihu – ta se musí překlopit na cíl.
+	moved, err := store.CreatePlaySession(ctx, PlaySessionInput{
+		UserID: user.ID, Kind: model.PlaySessionBook,
+		SourceID: &source.ID, BookIDs: []uuid.UUID{source.ID},
+	})
+	if err != nil {
+		t.Fatalf("CreatePlaySession: %v", err)
+	}
+	if _, err := store.UpdatePlaySessionPosition(ctx, user.ID, moved.ID, PlaySessionPosition{
+		BookID: source.ID, PositionSeconds: 42, PlaybackSpeed: 1.0,
+	}); err != nil {
+		t.Fatalf("UpdatePlaySessionPosition: %v", err)
+	}
+
+	// Seznam, který obsahuje obě knihy – duplicita nesmí porušit klíč a
+	// vlastní pozice cílové knihy má zůstat.
+	both, err := store.CreatePlaySession(ctx, PlaySessionInput{
+		UserID: user.ID, Kind: model.PlaySessionList,
+		BookIDs: []uuid.UUID{target.ID, source.ID, other.ID},
+	})
+	if err != nil {
+		t.Fatalf("CreatePlaySession seznamu: %v", err)
+	}
+	if _, err := store.UpdatePlaySessionPosition(ctx, user.ID, both.ID, PlaySessionPosition{
+		BookID: target.ID, PositionSeconds: 7, PlaybackSpeed: 1.0,
+	}); err != nil {
+		t.Fatalf("UpdatePlaySessionPosition seznamu: %v", err)
+	}
+
+	if _, err := store.MergeBooks(ctx, target.ID, []uuid.UUID{source.ID}); err != nil {
+		t.Fatalf("MergeBooks: %v", err)
+	}
+
+	got, err := store.GetPlaySession(ctx, user.ID, moved.ID)
+	if err != nil {
+		t.Fatalf("GetPlaySession: %v", err)
+	}
+	if len(got.Items) != 1 || got.Items[0].BookID != target.ID || got.Items[0].PositionSeconds != 42 {
+		t.Fatalf("přesunutá session: %+v", got.Items)
+	}
+	if got.CurrentBookID == nil || *got.CurrentBookID != target.ID {
+		t.Errorf("aktuální kniha: %v", got.CurrentBookID)
+	}
+	if got.SourceID == nil || *got.SourceID != target.ID {
+		t.Errorf("zdroj session: %v", got.SourceID)
+	}
+
+	list, err := store.GetPlaySession(ctx, user.ID, both.ID)
+	if err != nil {
+		t.Fatalf("GetPlaySession seznamu: %v", err)
+	}
+	if len(list.Items) != 2 {
+		t.Fatalf("seznam po sloučení: %+v", list.Items)
+	}
+	if list.Items[0].BookID != target.ID || list.Items[0].PositionSeconds != 7 {
+		t.Errorf("pozice cílové knihy se ztratila: %+v", list.Items[0])
+	}
+	if list.Items[1].BookID != other.ID {
+		t.Errorf("zbytek seznamu: %+v", list.Items[1])
+	}
+}

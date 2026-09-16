@@ -15,6 +15,7 @@ import type {
   Chapter,
   LoginRequest,
   MetadataSearchResult,
+  PlaySession,
   RegisterRequest,
   ReorderChaptersRequest,
   Series,
@@ -33,6 +34,8 @@ export const queryKeys = {
   seriesOne: (id: string) => ['series', id] as const,
   user: (id: string) => ['users', id] as const,
   authConfig: ['auth', 'config'] as const,
+  sessions: ['sessions'] as const,
+  session: (id: string) => ['sessions', id] as const,
 }
 
 // --- čtení ---
@@ -58,14 +61,25 @@ export function useBook(id: string) {
 }
 
 /**
+ * Popis dotazu na kapitoly. Vedle hooku ho používá i přehrávač, který si
+ * kapitoly dotahuje mimo render (queryClient.fetchQuery) – díky sdílenému
+ * klíči se o ně obě cesty dělí a kniha se nestahuje dvakrát.
+ */
+export function chaptersQuery(bookId: string) {
+  return {
+    queryKey: queryKeys.chapters(bookId),
+    queryFn: async () => asList(await apiFetch<Chapter[] | null>(`/books/${bookId}/chapters`)),
+  }
+}
+
+/**
  * Kapitoly knihy. Načítají se až na vyžádání (rozbalená karta kapitol) –
  * do hlavičky stačí `chapter_count` z knihy a u dlouhých audioknih jde
  * o stovky řádků, které většina návštěv nikdy nerozbalí.
  */
 export function useChapters(bookId: string, enabled = true): UseQueryResult<Chapter[], Error> {
   return useQuery({
-    queryKey: queryKeys.chapters(bookId),
-    queryFn: async () => asList(await apiFetch<Chapter[] | null>(`/books/${bookId}/chapters`)),
+    ...chaptersQuery(bookId),
     enabled: Boolean(bookId) && enabled,
   })
 }
@@ -106,6 +120,19 @@ export function useUser(id: string | undefined) {
     queryFn: ({ signal }) => apiFetch<User>(`/users/${id}`, { signal }),
     enabled: Boolean(id),
     refetchOnWindowFocus: true,
+  })
+}
+
+/**
+ * Rozposlouchané poslechy přihlášeného uživatele. Pozici do nich zapisuje
+ * přehrávač sám (viz PlayerProvider), tady jde hlavně o seznam pro přepínání
+ * a o zjištění, kde uživatel u dané knihy skončil.
+ */
+export function useSessions(enabled = true): UseQueryResult<PlaySession[], Error> {
+  return useQuery({
+    queryKey: queryKeys.sessions,
+    queryFn: async () => asList(await apiFetch<PlaySession[] | null>('/sessions')),
+    enabled,
   })
 }
 

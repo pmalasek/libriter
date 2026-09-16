@@ -62,6 +62,16 @@ func (b *BookService) Delete(ctx context.Context, id uuid.UUID) error {
 // kapitolám knihy – typicky scanner mezitím přidal soubor.
 var ErrChapterSetMismatch = errors.New("seznam kapitol neodpovídá knize")
 
+// Chapter vrátí jednu kapitolu i s cestou k audio souboru (ta se do JSONu
+// neserializuje, slouží streamování).
+func (b *BookService) Chapter(ctx context.Context, id uuid.UUID) (*model.Chapter, error) {
+	chapter, err := b.store.GetChapterByID(ctx, id)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	return chapter, err
+}
+
 // Chapters vrátí kapitoly knihy v pořadí přehrávání.
 func (b *BookService) Chapters(ctx context.Context, id uuid.UUID) ([]model.Chapter, error) {
 	if _, err := b.store.GetBook(ctx, id); err != nil {
