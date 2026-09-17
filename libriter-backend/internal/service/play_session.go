@@ -20,6 +20,10 @@ var ErrEmptySession = errors.New("session nemá žádné knihy")
 // ErrBookNotInSession znamená, že pozice míří na knihu, která do session nepatří.
 var ErrBookNotInSession = errors.New("kniha není v session")
 
+// ErrStalePosition znamená, že zápis nesl starší razítko než pozice uložená
+// na serveru. Není to chyba volajícího – jen se nic nepřepsalo.
+var ErrStalePosition = errors.New("pozici mezitím přepsal novější zápis")
+
 // Rozsah rychlosti přehrávání; musí odpovídat CHECK v migraci 010.
 const (
 	minPlaybackSpeed = 0.5
@@ -210,6 +214,10 @@ func (p *PlaySessionService) SavePosition(ctx context.Context, userID, id uuid.U
 		return nil, ErrNotFound
 	case errors.Is(err, storage.ErrBookNotInSession):
 		return nil, ErrBookNotInSession
+	case errors.Is(err, storage.ErrStalePosition):
+		// Pozici mezitím přepsalo novější místo z jiného zařízení. Poslech se
+		// do deníku připsal, volající dostane aktuální stav session.
+		return session, ErrStalePosition
 	}
 	return session, err
 }
@@ -228,7 +236,14 @@ func (p *PlaySessionService) Delete(ctx context.Context, userID, id uuid.UUID) e
 // ListenedSeconds ani BookFinished se nenastavují – přepnutí knihy není
 // poslech, jen se knize připíše, že je rozposlouchaná.
 func (p *PlaySessionService) switchToBook(ctx context.Context, userID uuid.UUID, session *model.PlaySession, bookID uuid.UUID) (*model.PlaySession, error) {
-	in := storage.PlaySessionPosition{BookID: bookID, PlaybackSpeed: session.PlaybackSpeed}
+	// PreserveRecordedAt: zapisuje se pozice, která v databázi už je. Čerstvé
+	// razítko by z ní udělalo "nejnovější poslech" a dávka čekající v telefonu
+	// by celá propadla jako zastaralá.
+	in := storage.PlaySessionPosition{
+		BookID:             bookID,
+		PlaybackSpeed:      session.PlaybackSpeed,
+		PreserveRecordedAt: true,
+	}
 	for _, item := range session.Items {
 		if item.BookID == bookID {
 			in.ChapterID = item.ChapterID

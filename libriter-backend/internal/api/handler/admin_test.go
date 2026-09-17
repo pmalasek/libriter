@@ -132,6 +132,7 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(authSvc))
 		r.Get("/auth/stream-token", authH.StreamToken)
+		r.Post("/auth/mobile-token", authH.MobileToken)
 		r.Put("/users/{id}/password", userH.ChangePassword)
 		r.Get("/users/{id}", userH.Get)
 		r.Put("/users/{id}", userH.Update)
@@ -144,6 +145,9 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 			r.Delete("/books/{id}/progress", bookH.ResetProgress)
 			r.Get("/sessions", sessionH.List)
 			r.Post("/sessions", sessionH.Create)
+			// Dávka pozic z offline zařízení; musí být nad /sessions/{id},
+			// ať se "sync" nečte jako UUID session.
+			r.Post("/sessions/sync", sessionH.Sync)
 			r.Get("/sessions/{id}", sessionH.Get)
 			r.Put("/sessions/{id}/position", sessionH.SavePosition)
 			r.Post("/sessions/{id}/items", sessionH.AddItems)

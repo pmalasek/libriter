@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
+import { queryKeys } from 'libriter-shared'
 import { apiFetch, asList } from './client'
 import type {
   AuthConfig,
@@ -26,22 +27,9 @@ import type {
   User,
 } from './types'
 
-export const queryKeys = {
-  books: ['books'] as const,
-  book: (id: string) => ['books', id] as const,
-  chapters: (id: string) => ['books', id, 'chapters'] as const,
-  authors: ['authors'] as const,
-  author: (id: string) => ['authors', id] as const,
-  series: ['series'] as const,
-  seriesOne: (id: string) => ['series', id] as const,
-  user: (id: string) => ['users', id] as const,
-  authConfig: ['auth', 'config'] as const,
-  sessions: ['sessions'] as const,
-  session: (id: string) => ['sessions', id] as const,
-  // Záměrně mimo prefix ['books'] – zneplatnění knihovny po úpravě knihy
-  // nemá důvod znovu tahat stav poslechu.
-  bookProgress: ['book-progress'] as const,
-}
+// Klíče cache se sdílí s mobilní aplikací (libriter-shared/src/queryKeys.ts);
+// hooky samotné zůstávají tady, protože mobil čte data z lokální databáze.
+export { queryKeys }
 
 // --- čtení ---
 

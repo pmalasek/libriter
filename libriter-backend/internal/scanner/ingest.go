@@ -19,6 +19,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -81,7 +82,18 @@ func (s *Scanner) ingest(ctx context.Context, absPath, relPath string) error {
 		return err
 	}
 
-	return s.appendChapter(ctx, relPath, book, meta, position, duration)
+	return s.appendChapter(ctx, relPath, book, meta, position, duration, fileSize(absPath))
+}
+
+// fileSize vrátí velikost souboru v bajtech, nebo 0, když se ji zjistit
+// nepodaří. Nula znamená "neznámo" i v databázi, takže chyba tady nemá důvod
+// zastavit ingest celé kapitoly.
+func fileSize(absPath string) int64 {
+	fi, err := os.Stat(absPath)
+	if err != nil || fi.Size() < 0 {
+		return 0
+	}
+	return fi.Size()
 }
 
 // findOrCreateBook najde knihu podle album tagu (+ hlavní autor) nebo adresáře.
@@ -290,6 +302,7 @@ func (s *Scanner) appendChapter(
 	meta *AudioMeta,
 	position int,
 	duration int,
+	sizeBytes int64,
 ) error {
 	if _, err := s.store.UpsertChapter(ctx, storage.ChapterInput{
 		BookID:          book.ID,
@@ -297,6 +310,7 @@ func (s *Scanner) appendChapter(
 		Title:           meta.ChapterTitle,
 		FilePath:        relPath,
 		DurationSeconds: duration,
+		SizeBytes:       sizeBytes,
 	}); err != nil {
 		return fmt.Errorf("upsert chapter: %w", err)
 	}

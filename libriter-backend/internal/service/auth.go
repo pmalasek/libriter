@@ -33,8 +33,17 @@ const ScopeStream = "stream"
 // odcizená adresa zestárne do druhého dne.
 const streamTokenTTL = 24 * time.Hour
 
+// ScopeMobile označuje dlouhodobý token mobilní aplikace. Do API pouští
+// stejně jako přihlašovací token, na audio ale nestačí – to má vlastní scope,
+// aby se mobilní token nikdy neocitl v adrese souboru.
+const ScopeMobile = "mobile"
+
+// defaultMobileTokenTTL platí, když konfigurace mlčí (třeba v testech).
+const defaultMobileTokenTTL = 365 * 24 * time.Hour
+
 // Claims jsou data zakódovaná v JWT tokenu. Prázdný Scope má přihlašovací
-// token; cokoliv jiného je token s omezeným oprávněním (viz ScopeStream).
+// token; cokoliv jiného je token s vlastními pravidly (viz ScopeStream,
+// ScopeMobile).
 type Claims struct {
 	Role  string `json:"role"`
 	Scope string `json:"scope,omitempty"`
@@ -176,18 +185,44 @@ func (a *AuthService) Login(ctx context.Context, email, password string) (*model
 	return u, token, nil
 }
 
-// ParseToken ověří a dekóduje přihlašovací JWT token. Token s omezeným
-// oprávněním (například na streamování) odmítne – jinak by adresa audia
-// posloužila jako přihlášení do celého API.
+// ParseToken ověří a dekóduje token, kterým se chodí do API: přihlašovací
+// (prázdný scope) nebo mobilní. Token na streamování odmítne – jinak by
+// adresa audia posloužila jako přihlášení do celého API.
 func (a *AuthService) ParseToken(tokenStr string) (*Claims, error) {
 	claims, err := a.parseClaims(tokenStr)
 	if err != nil {
 		return nil, err
 	}
-	if claims.Scope != "" {
+	if claims.Scope != "" && claims.Scope != ScopeMobile {
 		return nil, ErrInvalidToken
 	}
 	return claims, nil
+}
+
+// GenerateMobileToken vydá dlouhodobý token pro mobilní aplikaci a čas jeho
+// vypršení. Mobil ho dostane výměnou za běžné přihlášení a uloží si ho do
+// bezpečného úložiště; do API chodí místo přihlašovacího tokenu, který by mu
+// vypršel dřív, než se telefon zase dostane na síť.
+func (a *AuthService) GenerateMobileToken(userID uuid.UUID, role string) (string, time.Time, error) {
+	ttl := a.cfg.MobileExpiry
+	if ttl <= 0 {
+		ttl = defaultMobileTokenTTL
+	}
+
+	expiresAt := time.Now().Add(ttl)
+	token, err := a.signToken(Claims{
+		Role:  role,
+		Scope: ScopeMobile,
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   userID.String(),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
+		},
+	})
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return token, expiresAt, nil
 }
 
 // GenerateStreamToken vydá krátkodobý token pro přehrávání audia a čas jeho

@@ -36,6 +36,10 @@ type DBConfig struct {
 type JWTConfig struct {
 	Secret      string
 	ExpiryHours time.Duration
+	// MobileExpiry je platnost tokenu mobilní aplikace. Ta se nepřihlašuje
+	// znovu každých pár dní – offline telefon by se k serveru nedostal a
+	// přehrávání stažené knihy by uvázlo na přihlašovací obrazovce.
+	MobileExpiry time.Duration
 }
 
 type StorageConfig struct {
@@ -89,8 +93,9 @@ func load() *Config {
 			Path: env.path("DB_PATH", "./data/libriter.db"),
 		},
 		JWT: JWTConfig{
-			Secret:      envStr("JWT_SECRET", ""),
-			ExpiryHours: time.Duration(envInt("JWT_EXPIRY_HOURS", 72)) * time.Hour,
+			Secret:       envStr("JWT_SECRET", ""),
+			ExpiryHours:  time.Duration(envInt("JWT_EXPIRY_HOURS", 72)) * time.Hour,
+			MobileExpiry: time.Duration(envInt("JWT_MOBILE_EXPIRY_DAYS", 365)) * 24 * time.Hour,
 		},
 		Storage: StorageConfig{
 			AudioRoot:       env.path("AUDIO_ROOT", "/var/lib/libriter/audio"),

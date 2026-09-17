@@ -18,6 +18,7 @@ type contextKey string
 const (
 	ctxKeyUserID contextKey = "user_id"
 	ctxKeyRole   contextKey = "role"
+	ctxKeyScope  contextKey = "scope"
 )
 
 // Authenticate ověří JWT token z hlavičky Authorization: Bearer <token>.
@@ -60,6 +61,7 @@ func Authenticate(authSvc *service.AuthService) func(http.Handler) http.Handler 
 
 			ctx := context.WithValue(r.Context(), ctxKeyUserID, userID)
 			ctx = context.WithValue(ctx, ctxKeyRole, role)
+			ctx = context.WithValue(ctx, ctxKeyScope, claims.Scope)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -93,4 +95,11 @@ func UserIDFromCtx(ctx context.Context) (uuid.UUID, bool) {
 func RoleFromCtx(ctx context.Context) string {
 	role, _ := ctx.Value(ctxKeyRole).(string)
 	return role
+}
+
+// ScopeFromCtx vrátí scope tokenu, kterým se volající prokázal. Prázdný
+// řetězec je běžné přihlášení, service.ScopeMobile mobilní aplikace.
+func ScopeFromCtx(ctx context.Context) string {
+	scope, _ := ctx.Value(ctxKeyScope).(string)
+	return scope
 }

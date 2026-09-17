@@ -434,3 +434,81 @@ func bookForChaptersAt(t *testing.T, store *Store, dir string) uuid.UUID {
 	}
 	return book.ID
 }
+
+// Velikost souboru přežije opakovaný scan i změnu délky – mobil podle ní
+// odhaduje místo na disku a průběh stahování.
+func TestUpsertChapterStoresSizeBytes(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+	bookID := bookForChapters(t, store)
+
+	created, err := store.UpsertChapter(ctx, ChapterInput{
+		BookID: bookID, Position: 1, Title: "Prolog",
+		FilePath: "cole/loutkar/01.mp3", DurationSeconds: 100, SizeBytes: 1_234_567,
+	})
+	if err != nil {
+		t.Fatalf("UpsertChapter: %v", err)
+	}
+	if created.SizeBytes != 1_234_567 {
+		t.Errorf("size_bytes po vložení = %d, chtěno 1234567", created.SizeBytes)
+	}
+
+	updated, err := store.UpsertChapter(ctx, ChapterInput{
+		BookID: bookID, Position: 1, Title: "Prolog",
+		FilePath: "cole/loutkar/01.mp3", DurationSeconds: 100, SizeBytes: 999,
+	})
+	if err != nil {
+		t.Fatalf("UpsertChapter (znovu): %v", err)
+	}
+	if updated.SizeBytes != 999 {
+		t.Errorf("size_bytes po přepsání = %d, chtěno 999", updated.SizeBytes)
+	}
+
+	stored, err := store.GetChapterByID(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetChapterByID: %v", err)
+	}
+	if stored.SizeBytes != 999 {
+		t.Errorf("size_bytes z databáze = %d, chtěno 999", stored.SizeBytes)
+	}
+
+	list, err := store.GetChaptersByBookID(ctx, bookID)
+	if err != nil {
+		t.Fatalf("GetChaptersByBookID: %v", err)
+	}
+	if len(list) != 1 || list[0].SizeBytes != 999 {
+		t.Errorf("size_bytes v seznamu = %+v, chtěno 999", list)
+	}
+}
+
+// Změna pořadí kapitol je změna knihy: mobil se ptá books.updated_at, jestli
+// má kapitoly stáhnout znovu.
+func TestReorderChaptersTouchesBook(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+	bookID := bookForChapters(t, store)
+	c := upsertChapters(t, store, bookID, []int{1, 2, 3})
+
+	// CURRENT_TIMESTAMP má vteřinovou přesnost; bez posunu zpět by se razítko
+	// v testu nemuselo vůbec lišit.
+	if _, err := store.db.ExecContext(ctx,
+		`UPDATE books SET updated_at = datetime('now', '-1 hour') WHERE id = ?1`, bookID); err != nil {
+		t.Fatalf("posun updated_at: %v", err)
+	}
+	before, err := store.GetBook(ctx, bookID)
+	if err != nil {
+		t.Fatalf("GetBook: %v", err)
+	}
+
+	if _, err := store.ReorderChapters(ctx, bookID, []uuid.UUID{c[2].ID, c[1].ID, c[0].ID}); err != nil {
+		t.Fatalf("ReorderChapters: %v", err)
+	}
+
+	after, err := store.GetBook(ctx, bookID)
+	if err != nil {
+		t.Fatalf("GetBook po přeřazení: %v", err)
+	}
+	if !after.UpdatedAt.After(before.UpdatedAt) {
+		t.Errorf("updated_at = %v, chtěno novější než %v", after.UpdatedAt, before.UpdatedAt)
+	}
+}

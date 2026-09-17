@@ -17,6 +17,8 @@ type ChapterInput struct {
 	Title           string
 	FilePath        string
 	DurationSeconds int
+	// SizeBytes je velikost souboru na disku; 0 = neznámá.
+	SizeBytes int64
 	// StartOffsetSeconds se neukládá – počítá se dynamicky při čtení (window funkce)
 }
 
@@ -30,17 +32,18 @@ type ChapterInput struct {
 func (s *Store) UpsertChapter(ctx context.Context, in ChapterInput) (*model.Chapter, error) {
 	const q = `
 		INSERT INTO chapters
-			(id, book_id, position, title, file_path, start_offset_seconds, duration_seconds)
-		VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6)
+			(id, book_id, position, title, file_path, start_offset_seconds, duration_seconds, size_bytes)
+		VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7)
 		ON CONFLICT (file_path) DO UPDATE SET
 			book_id          = excluded.book_id,
 			position         = excluded.position,
 			title            = excluded.title,
-			duration_seconds = excluded.duration_seconds
-		RETURNING id, book_id, position, title, file_path, 0, duration_seconds`
+			duration_seconds = excluded.duration_seconds,
+			size_bytes       = excluded.size_bytes
+		RETURNING id, book_id, position, title, file_path, 0, duration_seconds, size_bytes`
 
 	row := s.db.QueryRowContext(ctx, q,
-		uuid.New(), in.BookID, in.Position, in.Title, in.FilePath, in.DurationSeconds,
+		uuid.New(), in.BookID, in.Position, in.Title, in.FilePath, in.DurationSeconds, in.SizeBytes,
 	)
 	return scanChapter(row)
 }
@@ -91,12 +94,12 @@ func (s *Store) NextFreeChapterPosition(
 func (s *Store) CreateChapter(ctx context.Context, in ChapterInput) (*model.Chapter, error) {
 	const q = `
 		INSERT INTO chapters
-			(id, book_id, position, title, file_path, start_offset_seconds, duration_seconds)
-		VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6)
-		RETURNING id, book_id, position, title, file_path, 0, duration_seconds`
+			(id, book_id, position, title, file_path, start_offset_seconds, duration_seconds, size_bytes)
+		VALUES (?1, ?2, ?3, ?4, ?5, 0, ?6, ?7)
+		RETURNING id, book_id, position, title, file_path, 0, duration_seconds, size_bytes`
 
 	row := s.db.QueryRowContext(ctx, q,
-		uuid.New(), in.BookID, in.Position, in.Title, in.FilePath, in.DurationSeconds,
+		uuid.New(), in.BookID, in.Position, in.Title, in.FilePath, in.DurationSeconds, in.SizeBytes,
 	)
 	return scanChapter(row)
 }
@@ -116,7 +119,7 @@ func (s *Store) GetChapterByID(ctx context.Context, id uuid.UUID) (*model.Chapte
 			c.id, c.book_id, c.position, c.title, c.file_path,
 			(SELECT COALESCE(SUM(p.duration_seconds), 0) FROM chapters p
 			 WHERE p.book_id = c.book_id AND p.position < c.position) AS start_offset_seconds,
-			c.duration_seconds
+			c.duration_seconds, c.size_bytes
 		FROM chapters c
 		WHERE c.id = ?1`
 
@@ -134,7 +137,7 @@ func getChaptersByBookID(ctx context.Context, q querier, bookID uuid.UUID) ([]mo
 					ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
 				), 0
 			) AS start_offset_seconds,
-			duration_seconds
+			duration_seconds, size_bytes
 		FROM chapters
 		WHERE book_id = ?1
 		ORDER BY position`
@@ -214,6 +217,14 @@ func (s *Store) ReorderChapters(ctx context.Context, bookID uuid.UUID, ids []uui
 		INSERT INTO chapter_order_overrides (book_id, file_path, position)
 		SELECT book_id, file_path, position FROM chapters WHERE book_id = ?1`, bookID); err != nil {
 		return nil, fmt.Errorf("reorder chapters: uložení ručního pořadí: %w", err)
+	}
+
+	// Pořadí kapitol je součástí knihy, jen leží v jiné tabulce. Mobilní
+	// aplikace se ptá, jestli má znovu stáhnout kapitoly, právě podle
+	// books.updated_at – bez tohohle dotyku by jí zůstalo staré pořadí.
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE books SET updated_at = CURRENT_TIMESTAMP WHERE id = ?1`, bookID); err != nil {
+		return nil, fmt.Errorf("reorder chapters: dotyk knihy: %w", err)
 	}
 
 	chapters, err := getChaptersByBookID(ctx, tx, bookID)
@@ -326,7 +337,7 @@ func scanChapter(row scanner) (*model.Chapter, error) {
 	var c model.Chapter
 	err := row.Scan(
 		&c.ID, &c.BookID, &c.Position, &c.Title,
-		&c.FilePath, &c.StartOffsetSeconds, &c.DurationSeconds,
+		&c.FilePath, &c.StartOffsetSeconds, &c.DurationSeconds, &c.SizeBytes,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound

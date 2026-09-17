@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -104,6 +105,53 @@ func (h *AuthHandler) StreamToken(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "token pro přehrávání se nepodařilo vydat")
 		return
 	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"token":      token,
+		"expires_at": expiresAt,
+	})
+}
+
+// POST /api/v1/auth/mobile-token  (přihlášený uživatel)
+//
+// Vymění běžné přihlášení za dlouhodobý token mobilní aplikace. Ta se
+// přihlašuje jednou a pak jede i offline – s 72hodinovým přihlašovacím
+// tokenem by po víkendu bez signálu žádala heslo u stažené knihy.
+//
+// Mobilní token další mobilní token nevyrazí: uniklý token by se sám
+// prodlužoval donekonečna a odhlášení by ho nikdy nedohnalo.
+func (h *AuthHandler) MobileToken(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "chybí autorizační token")
+		return
+	}
+	if middleware.ScopeFromCtx(r.Context()) == service.ScopeMobile {
+		writeError(w, http.StatusForbidden, "mobilní token nelze obnovit mobilním tokenem – přihlaste se znovu")
+		return
+	}
+
+	var req struct {
+		// DeviceName jde jen do logu, ať je v serverovém záznamu poznat,
+		// komu se token vydal. Nikde se neukládá.
+		DeviceName string `json:"device_name"`
+	}
+	// Prázdné tělo je v pořádku – jméno zařízení je nepovinné.
+	if r.ContentLength > 0 {
+		if err := readJSON(r, &req); err != nil {
+			writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+			return
+		}
+	}
+
+	token, expiresAt, err := h.svc.GenerateMobileToken(userID, middleware.RoleFromCtx(r.Context()))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "token pro mobilní aplikaci se nepodařilo vydat")
+		return
+	}
+
+	slog.Info("vydán mobilní token", "user_id", userID,
+		"device", strings.TrimSpace(req.DeviceName), "expires_at", expiresAt)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token":      token,

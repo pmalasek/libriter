@@ -6,9 +6,11 @@ Osobní správce a přehrávač audioknih s webovým rozhraním a mobilní aplik
 
 ```
 libriter/
-├── Makefile            # build frontendu i backendu
+├── justfile            # build frontendu i backendu (just build)
+├── package.json        # kořen npm workspaces (shared + web + mobil)
 ├── libriter-backend/   # REST API + server webového rozhraní (Go)
 │   └── internal/web/dist/   # sem se sestaví frontend, vkompiluje se do binárky
+├── libriter-shared/    # Kód společný webu a mobilu (typy API, klient, přehrávač)
 ├── libriter-frontend/  # Webové rozhraní (React + Vite + Tailwind)
 ├── libriter-mobile/    # Mobilní aplikace (plán: docs/mobile-app-plan.md)
 ├── _scripts/           # Pomocné skripty
@@ -211,22 +213,39 @@ stroji než prohlížeč, otevřete adresu, kterou Vite vypíše na řádku **Ne
 (např. `http://172.24.0.46:5173`). Stejně tak produkční binárka je dostupná na
 `http://<ip-serveru>:8080`.
 
-První spuštění frontendu si vyžádá závislosti:
+První spuštění frontendu si vyžádá závislosti. Instalují se **v kořeni
+repozitáře**, ne v podadresáři:
 
 ```bash
-cd libriter-frontend && npm install
+npm install
 ```
+
+Web, mobilní aplikace a společný balíček `libriter-shared` jsou npm workspaces
+s jedním `package-lock.json` v kořeni. `libriter-shared` drží to, co by se
+jinak psalo dvakrát a rozešlo by se: typy API, klienta nad `fetch`, konstanty
+přehrávače a popisky poslechu. Publikuje TypeScript zdroj bez build kroku
+(Vite i Metro si `.ts` přeloží samy) a nezávisí na Reactu ani na DOM –
+ukládání session, react-query hooky a komponenty zůstávají v aplikacích.
+
+Soubory jako `src/api/types.ts` nebo `src/auth/permissions.ts` ve frontendu
+zůstaly jako tenké re-exporty z `libriter-shared`, takže importy uvnitř webu
+se přesunem nezměnily.
 
 ### Přehled cílů (justfile)
 
 | Cíl | Popis |
 |-----|-------|
 | `just build` | Frontend i backend → `bin/libriter` |
-| `just frontend` | `npm ci && npm run build` (výstup do `libriter-backend/internal/web/dist`) |
+| `just frontend` | `npm ci` v kořeni + build webu (výstup do `libriter-backend/internal/web/dist`) |
 | `just backend` | `go build` s aktuálně sestaveným frontendem |
 | `just dev-backend` | `go run ./cmd/server` |
 | `just dev-frontend` | `npm run dev` |
 | `just vet` | `go vet ./...` |
+| `just typecheck` | `tsc` ve všech workspaces (shared, web, mobil) |
+| `just mobile-start` | Metro bundler mobilní aplikace (dev build) |
+| `just mobile-ios` | Sestaví a spustí aplikaci na připojeném iPhonu |
+| `just mobile-android` | Totéž pro Android |
+| `just mobile-apk` | Release APK k ruční instalaci |
 | `just setup` | Nainstaluje vývojové nástroje (viz Požadavky) |
 | `just doctor` | Zkontroluje, co z nástrojů je a co chybí |
 | `just clean` | Smaže `bin/` a sestavený frontend |
@@ -396,6 +415,33 @@ z CLI.
 
 ---
 
+## Mobilní aplikace
+
+`libriter-mobile/` je offline-first přehrávač pro iOS a Android (React Native
++ Expo). Podrobnosti jsou v [libriter-mobile/README.md](libriter-mobile/README.md),
+plán a jeho stav v [docs/mobile-app-plan.md](docs/mobile-app-plan.md).
+
+Aplikace je **jen přehrávač**: přihlášení, knihovna, detail knihy, přehrávač,
+stažené knihy a nastavení. Úpravy knih, metadata, pořadí kapitol i administrace
+zůstávají ve webovém rozhraní.
+
+| Vlastnost | Jak to funguje |
+|-----------|----------------|
+| Přihlášení | Adresa serveru + e-mail a heslo. Přihlašovací token se hned vymění za mobilní (rok platnosti) a zahodí; mobilní leží v Keychain / Keystore. |
+| Offline | Kniha se celá stáhne do telefonu. Rozhraní čte z lokální SQLite, takže v letadle vypadá stejně jako doma. |
+| Pozice | Každé uložení jde do fronty a odesílá se dávkově přes `POST /sessions/sync`. O tom, čí pozice vyhraje, rozhoduje čas vzniku na klientovi. |
+| Přehrávání | react-native-track-player: běh na pozadí, ovládání ze zamčené obrazovky, rychlosti, skoky a časovač vypnutí. |
+| Stahování | Po kapitolách, dvě naráz, s pauzou a pokračováním; volitelně jen na Wi-Fi. |
+
+Vývoj potřebuje **dev build**, ne Expo Go (track-player je nativní modul):
+
+```bash
+npm install          # v kořeni – web, mobil i shared jsou npm workspaces
+just mobile-ios      # nebo just mobile-android
+```
+
+---
+
 ## Správa uživatelů z příkazové řádky
 
 Registrace přes API dává roli podle nastavení (výchozí **reader**), takže
@@ -506,6 +552,7 @@ Základní URL: `http://localhost:8080/api/v1`
 | `POST` | `/auth/register` | Registrace nového uživatele | veřejné |
 | `POST` | `/auth/login` | Přihlášení, vrátí JWT token | veřejné |
 | `GET` | `/auth/stream-token` | Krátkodobý token pro adresu audia (24 h) | přihlášený |
+| `POST` | `/auth/mobile-token` | Dlouhodobý token pro mobilní aplikaci | přihlášený |
 
 Při vypnuté registraci vrací `POST /auth/register` `403`; přepínač je
 v administraci (viz níže).
@@ -523,6 +570,23 @@ neumí, ale audio je proti obálce citlivější, takže se ověřuje tokenem v 
 Není to přihlašovací token – `GET /auth/stream-token` vydá samostatný token
 platný 24 hodin, který **umí jen streamovat**. Opačně to platí taky: stream
 token API nikam jinam nepustí.
+
+Mobilní aplikace má třetí druh tokenu. S přihlašovacím tokenem (72 h) by po
+víkendu bez signálu žádala heslo u knihy, kterou má celou staženou v telefonu,
+proto si hned po přihlášení vymění `POST /auth/mobile-token` za token s delší
+platností (`JWT_MOBILE_EXPIRY_DAYS`, výchozí 365 dní):
+
+```jsonc
+// POST /auth/mobile-token   (tělo je nepovinné, device_name jde jen do logu)
+{ "device_name": "Pixel 8" }
+→ { "token": "<jwt>", "expires_at": "2027-09-17T18:22:03Z" }
+```
+
+Mobilní token otevírá API stejně jako přihlašovací, ale **ne audio** – tam dál
+platí jen stream token v adrese. Další mobilní token jím vyrazit nejde (`403`),
+aby se uniklý token nemohl prodlužovat donekonečna; obnovuje se skutečným
+přihlášením. Smazání účtu ho zneplatní okamžitě, protože se uživatel při každém
+požadavku dohledává v databázi.
 
 ### Uživatelé
 
@@ -610,12 +674,14 @@ záznamy autorů:
 Kapitola je jeden audio soubor. Celá cesta k souboru se nevystavuje (adresář
 knihy je v `file_path` knihy), klient dostane jen název souboru – podle něj se
 pozná, jestli pořadí sedí. `start_offset_seconds` je začátek kapitoly v rámci
-celé knihy, počítá se ze součtu délek předchozích kapitol.
+celé knihy, počítá se ze součtu délek předchozích kapitol. `size_bytes` je
+velikost souboru; `0` znamená neznámou (záznam z doby před migrací 012) a
+doplní ji další průchod scanneru nebo „Rescan“ v administraci.
 
 ```jsonc
 // GET /books/{id}/chapters
 [ { "id": "<uuid>", "position": 1, "title": "Kapitola 1", "file_name": "01.mp3",
-    "start_offset_seconds": 0, "duration_seconds": 1834 }, ... ]
+    "start_offset_seconds": 0, "duration_seconds": 1834, "size_bytes": 29344512 }, ... ]
 
 // PUT /books/{id}/chapters/order – všechny kapitoly knihy, každá právě jednou
 { "chapter_ids": ["<uuid>", "<uuid>", "<uuid>"] }
@@ -700,6 +766,7 @@ a mění jen její vlastník – cizí ID vrací `404`, aby o cizím účtu nic 
 | `POST` | `/sessions` | Založení nebo pokračování poslechu | reader+ |
 | `GET` | `/sessions/{id}` | Detail poslechu | reader+ |
 | `PUT` | `/sessions/{id}/position` | Uložení kapitoly a pozice | reader+ |
+| `POST` | `/sessions/sync` | Dávka pozic z offline zařízení | reader+ |
 | `POST` | `/sessions/{id}/items` | Přidání knih a sérií na konec | reader+ |
 | `DELETE` | `/sessions/{id}` | Smazání poslechu | reader+ |
 
@@ -742,6 +809,61 @@ rozdíl od `finished` celého poslechu.
 Každá kniha poslechu si nese vlastní kapitolu a pozici, takže skok na jiný díl
 série nic neztratí. Kniha mimo poslech vrací `400`, stejně jako kapitola cizí
 knihy nebo rychlost mimo rozsah.
+
+Volitelně lze poslat i `recorded_at` (čas vzniku pozice na klientovi) a
+`device_id`. Webový přehrávač je neposílá a server dosadí své „teď“; mobilní
+aplikace je vyplňuje, aby dávka nasbíraná offline nepřepsala novější pozici
+z jiného zařízení. Zastaralý zápis vrací `200` s tím, co na serveru platí –
+klient se podle odpovědi srovná.
+
+#### Dávková synchronizace offline poslechu
+
+Mobilní aplikace poslouchá i bez spojení a pozice si ukládá do fronty. Po
+připojení je odešle najednou:
+
+```jsonc
+// POST /sessions/sync   (nejvýš 500 událostí na dávku)
+{
+  "device_id": "<uuid zařízení>",
+  "events": [{
+    "id": "<uuid události, přiděluje klient>",
+    "session_id": "<uuid>",
+    "book_id": "<uuid>",
+    "chapter_id": "<uuid>",
+    "position_seconds": 1234,
+    "playback_speed": 1.25,
+    "listened_seconds": 10,
+    "finished": false,
+    "book_finished": false,
+    "recorded_at": "2026-09-17T18:22:03+02:00"
+  }]
+}
+
+→ {
+  "results":  [ { "id": "<uuid>", "status": "applied" } ],
+  "sessions": [ /* aktuální stav dotčených poslechů */ ]
+}
+```
+
+Události se zpracují v pořadí, ve kterém vznikly, a každá zvlášť – jedna vadná
+nezhatí zbytek dávky. `status` je jeden ze čtyř:
+
+| Stav | Význam |
+|------|--------|
+| `applied` | pozice i deník poslechu se zapsaly |
+| `stale` | poslech se připsal, pozici ale drží novější zápis odjinud |
+| `duplicate` | tuhle událost server už jednou započetl |
+| `rejected` | událost neprošla kontrolou; `error` říká proč |
+
+Klient smaže z fronty všechny vrácené `id` bez ohledu na stav – opakováním se
+žádný z nich nezlepší. Podle `id` se pozná opakovaně poslaná dávka (ztracená
+odpověď, restart aplikace), takže se minuty v deníku poslechu nezapočítají
+dvakrát; server si už zpracovaná ID pamatuje 30 dní.
+
+Den v deníku poslechu se bere z `recorded_at` (v UTC), ne ze serverových hodin –
+poslech z telefonu, který byl přes noc offline, tak patří do včerejška. Razítko
+víc než 5 minut v budoucnosti (špatně nastavené hodiny) se ořízne na serverové
+„teď“; minulost se přijímá, jaká je.
 
 ### Audio
 

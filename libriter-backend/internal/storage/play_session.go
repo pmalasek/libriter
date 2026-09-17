@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"libriter/internal/model"
 
@@ -175,6 +176,11 @@ func (s *Store) FindPlaySessionBySource(ctx context.Context, userID uuid.UUID, k
 	return session, nil
 }
 
+// ErrStalePosition znamená, že pozici už přebilo novější místo z jiného
+// zařízení. Zápis proběhl jen zčásti: deník poslechu a stav knihy se připsaly
+// (ten poslech se opravdu stal), samotná pozice zůstala, kde byla.
+var ErrStalePosition = errors.New("stale position")
+
 // PlaySessionPosition je zápis pozice přehrávání.
 type PlaySessionPosition struct {
 	BookID          uuid.UUID
@@ -188,6 +194,20 @@ type PlaySessionPosition struct {
 	// BookFinished znamená doposlechnutou poslední kapitolu téhle knihy –
 	// posílá se před přechodem na další knihu poslechu.
 	BookFinished bool
+	// RecordedAt je čas, kdy pozice vznikla na klientovi. Nulová hodnota
+	// znamená "teď" – tak píše webový přehrávač, který posílá zápisy hned.
+	// Offline dávka z mobilu nese razítko staré klidně hodiny a podle něj se
+	// rozhoduje, co je novější.
+	RecordedAt time.Time
+	// PreserveRecordedAt nechá razítko poslední pozice, kde bylo. Používá se
+	// při přepnutí knihy na webu: to jen přepisuje pozici na tutéž hodnotu a
+	// čerstvým razítkem by označilo všechny čekající mobilní události za staré.
+	PreserveRecordedAt bool
+	// SyncEventID je ID události z dávkové synchronizace. Zapíše se do
+	// sync_events v téže transakci; opakovaná dávka skončí na ErrDuplicateEvent
+	// a poslech se nepřipíše podruhé. Nil u běžného zápisu z webu.
+	SyncEventID *uuid.UUID
+	DeviceID    string
 }
 
 // UpdatePlaySessionPosition uloží rozposlouchané místo. Píše se každých ~10
@@ -195,41 +215,88 @@ type PlaySessionPosition struct {
 // tam, kde poslech skončil. V téže transakci připíše odposlouchané sekundy do
 // deníku poslechu a stav knihy (rozposlouchaná / doposlechnutá), aby se
 // tři pohledy na tentýž poslech nemohly rozejít.
+//
+// O tom, který zápis vyhrává, rozhoduje in.RecordedAt – čas vzniku pozice na
+// klientovi. Starší zápis (typicky dávka z telefonu, který byl mezitím offline)
+// pozici nepřepíše a vrátí ErrStalePosition; odposlouchané sekundy a stav
+// knihy se připíšou i tak, protože ten poslech se opravdu stal.
 func (s *Store) UpdatePlaySessionPosition(ctx context.Context, userID, id uuid.UUID, in PlaySessionPosition) (*model.PlaySession, error) {
+	recordedAt := in.RecordedAt
+	if recordedAt.IsZero() {
+		recordedAt = time.Now()
+	}
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("update play session: begin: %w", err)
 	}
 	defer tx.Rollback() //nolint:errcheck
 
+	// Událost z dávky se zapisuje jako první: opakovaná dávka tu skončí a nic
+	// se nezapíše podruhé.
+	if in.SyncEventID != nil {
+		if err := insertSyncEvent(ctx, tx, *in.SyncEventID, userID, in.DeviceID); err != nil {
+			return nil, err
+		}
+	}
+
 	// Existenci session i vlastnictví ověříme dřív, než cokoliv zapíšeme.
-	const qOwner = `SELECT 1 FROM play_sessions WHERE id = ?1 AND user_id = ?2`
-	var exists int
-	switch err := tx.QueryRowContext(ctx, qOwner, id, userID).Scan(&exists); {
+	const qOwner = `SELECT position_recorded_at FROM play_sessions WHERE id = ?1 AND user_id = ?2`
+	var sessionStamp sql.NullString
+	switch err := tx.QueryRowContext(ctx, qOwner, id, userID).Scan(&sessionStamp); {
 	case errors.Is(err, sql.ErrNoRows):
 		return nil, ErrNotFound
 	case err != nil:
 		return nil, fmt.Errorf("update play session: %w", err)
 	}
 
-	const qItem = `
-		UPDATE play_session_items
-		SET chapter_id = ?3, position_seconds = ?4
+	const qItemStamp = `
+		SELECT position_recorded_at FROM play_session_items
 		WHERE session_id = ?1 AND book_id = ?2`
-
-	res, err := tx.ExecContext(ctx, qItem, id, in.BookID, in.ChapterID, in.PositionSeconds)
-	if err != nil {
-		if isForeignKeyViolation(err) {
-			return nil, ErrNotFound
-		}
-		return nil, fmt.Errorf("update play session: pozice: %w", err)
-	}
-	if rowsAffected(res) == 0 {
+	var itemStamp sql.NullString
+	switch err := tx.QueryRowContext(ctx, qItemStamp, id, in.BookID).Scan(&itemStamp); {
+	case errors.Is(err, sql.ErrNoRows):
 		return nil, ErrBookNotInSession
+	case err != nil:
+		return nil, fmt.Errorf("update play session: %w", err)
+	}
+
+	// Razítka se porovnávají v Go: sloupec DATETIME může nést hned několik
+	// formátů podle toho, kdo ho zapsal (viz sqliteTimeLayouts).
+	itemStale, err := olderThanStamp(recordedAt, itemStamp, in.PreserveRecordedAt)
+	if err != nil {
+		return nil, fmt.Errorf("update play session: razítko pozice: %w", err)
+	}
+	sessionStale, err := olderThanStamp(recordedAt, sessionStamp, in.PreserveRecordedAt)
+	if err != nil {
+		return nil, fmt.Errorf("update play session: razítko session: %w", err)
+	}
+
+	if !itemStale {
+		// Při PreserveRecordedAt se razítko nechává být (?4 je NULL a COALESCE
+		// vrátí původní hodnotu) – přepnutí knihy není nový poslech.
+		const qItem = `
+			UPDATE play_session_items
+			SET chapter_id           = ?3,
+			    position_seconds     = ?4,
+			    position_recorded_at = COALESCE(?5, position_recorded_at)
+			WHERE session_id = ?1 AND book_id = ?2`
+
+		res, err := tx.ExecContext(ctx, qItem, id, in.BookID, in.ChapterID,
+			in.PositionSeconds, stampArg(recordedAt, in.PreserveRecordedAt))
+		if err != nil {
+			if isForeignKeyViolation(err) {
+				return nil, ErrNotFound
+			}
+			return nil, fmt.Errorf("update play session: pozice: %w", err)
+		}
+		if rowsAffected(res) == 0 {
+			return nil, ErrBookNotInSession
+		}
 	}
 
 	if in.ListenedSeconds > 0 {
-		if err := addListeningLog(ctx, tx, userID, in.BookID, in.ListenedSeconds); err != nil {
+		if err := addListeningLog(ctx, tx, userID, in.BookID, in.ListenedSeconds, recordedAt); err != nil {
 			return nil, err
 		}
 	}
@@ -238,19 +305,9 @@ func (s *Store) UpdatePlaySessionPosition(ctx context.Context, userID, id uuid.U
 		return nil, err
 	}
 
-	// Pokračování v poslechu ruší příznak doposlechnuto.
-	const qSession = `
-		UPDATE play_sessions
-		SET current_book_id = ?2,
-		    playback_speed  = ?3,
-		    finished_at     = CASE WHEN ?4 THEN COALESCE(finished_at, CURRENT_TIMESTAMP) ELSE NULL END,
-		    updated_at      = CURRENT_TIMESTAMP
-		WHERE id = ?1
-		RETURNING ` + playSessionColumns
-
-	session, err := scanPlaySession(tx.QueryRowContext(ctx, qSession, id, in.BookID, in.PlaybackSpeed, in.Finished))
+	session, err := updateSessionHead(ctx, tx, id, in, recordedAt, sessionStale)
 	if err != nil {
-		return nil, fmt.Errorf("update play session: %w", err)
+		return nil, err
 	}
 	if session.Items, err = playSessionItems(ctx, tx, session.ID); err != nil {
 		return nil, err
@@ -258,7 +315,70 @@ func (s *Store) UpdatePlaySessionPosition(ctx context.Context, userID, id uuid.U
 	if err := tx.Commit(); err != nil {
 		return nil, fmt.Errorf("update play session: commit: %w", err)
 	}
+	if itemStale {
+		return session, ErrStalePosition
+	}
 	return session, nil
+}
+
+// updateSessionHead přepíše aktuální knihu, rychlost a příznak doposlechnuto.
+// U staršího zápisu se jen načte stávající stav – jinak by dávka z telefonu
+// přepnula na webu rozposlouchanou knihu zpátky.
+func updateSessionHead(
+	ctx context.Context,
+	tx *sql.Tx,
+	id uuid.UUID,
+	in PlaySessionPosition,
+	recordedAt time.Time,
+	stale bool,
+) (*model.PlaySession, error) {
+	if stale {
+		const q = `SELECT ` + playSessionColumns + ` FROM play_sessions WHERE id = ?1`
+		session, err := scanPlaySession(tx.QueryRowContext(ctx, q, id))
+		if err != nil {
+			return nil, fmt.Errorf("update play session: %w", err)
+		}
+		return session, nil
+	}
+
+	// Pokračování v poslechu ruší příznak doposlechnuto.
+	const q = `
+		UPDATE play_sessions
+		SET current_book_id      = ?2,
+		    playback_speed       = ?3,
+		    finished_at          = CASE WHEN ?4 THEN COALESCE(finished_at, CURRENT_TIMESTAMP) ELSE NULL END,
+		    position_recorded_at = COALESCE(?5, position_recorded_at),
+		    updated_at           = CURRENT_TIMESTAMP
+		WHERE id = ?1
+		RETURNING ` + playSessionColumns
+
+	session, err := scanPlaySession(tx.QueryRowContext(ctx, q,
+		id, in.BookID, in.PlaybackSpeed, in.Finished, stampArg(recordedAt, in.PreserveRecordedAt)))
+	if err != nil {
+		return nil, fmt.Errorf("update play session: %w", err)
+	}
+	return session, nil
+}
+
+// olderThanStamp řekne, jestli je zápis starší než to, co už v databázi je.
+// Prázdné razítko (řádek z doby před migrací 013) nikdy nic neblokuje.
+func olderThanStamp(recordedAt time.Time, stamp sql.NullString, preserve bool) (bool, error) {
+	if preserve || !stamp.Valid || stamp.String == "" {
+		return false, nil
+	}
+	stored, err := parseSQLiteTime(stamp.String)
+	if err != nil {
+		return false, err
+	}
+	return !recordedAt.UTC().After(stored), nil
+}
+
+// stampArg vrátí razítko k zápisu, nebo nil, když se má zachovat původní.
+func stampArg(recordedAt time.Time, preserve bool) any {
+	if preserve {
+		return nil
+	}
+	return sqliteTime(recordedAt)
 }
 
 // AppendPlaySessionItems přidá knihy na konec session. Knihy, které v ní už

@@ -39,17 +39,22 @@ type ListeningDay struct {
 	SecondsListened int64     `json:"seconds_listened"`
 }
 
-// addListeningLog připíše sekundy k dnešnímu dni (UTC). Volá se uvnitř
-// transakce zápisu pozice, proto bere querier místo *Store.
-func addListeningLog(ctx context.Context, q querier, userID, bookID uuid.UUID, seconds int) error {
+// addListeningLog připíše sekundy ke dni, ve kterém poslech proběhl (UTC).
+// Volá se uvnitř transakce zápisu pozice, proto bere querier místo *Store.
+//
+// Dnem je datum z `at`, ne ze serverových hodin: dávka z telefonu, který byl
+// přes noc offline, patří do včerejška. Webový přehrávač posílá zápisy hned,
+// takže mu `at` vychází na serverové "teď" jako dřív.
+func addListeningLog(ctx context.Context, q querier, userID, bookID uuid.UUID, seconds int, at time.Time) error {
 	const query = `
-		INSERT INTO listening_log (user_id, book_id, day, seconds_listened)
-		VALUES (?1, ?2, date('now'), ?3)
+		INSERT INTO listening_log (user_id, book_id, day, seconds_listened, first_at, last_at)
+		VALUES (?1, ?2, date(?4), ?3, ?4, ?4)
 		ON CONFLICT (user_id, book_id, day) DO UPDATE SET
 		  seconds_listened = seconds_listened + excluded.seconds_listened,
-		  last_at          = CURRENT_TIMESTAMP`
+		  first_at         = MIN(first_at, excluded.first_at),
+		  last_at          = MAX(last_at, excluded.last_at)`
 
-	if _, err := q.ExecContext(ctx, query, userID, bookID, seconds); err != nil {
+	if _, err := q.ExecContext(ctx, query, userID, bookID, seconds, sqliteTime(at)); err != nil {
 		if isForeignKeyViolation(err) {
 			return ErrNotFound
 		}

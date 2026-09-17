@@ -21,6 +21,10 @@ type chapterResponse struct {
 	FileName           string    `json:"file_name"`
 	StartOffsetSeconds int       `json:"start_offset_seconds"`
 	DurationSeconds    int       `json:"duration_seconds"`
+	// SizeBytes je velikost souboru; 0 = neznámá (řádek z doby před
+	// migrací 012). Mobilní aplikace podle ní počítá místo na stažení
+	// a při 0 se spolehne na Content-Length při stahování.
+	SizeBytes int64 `json:"size_bytes"`
 }
 
 // chapterResponses převede kapitoly pro odpověď; kniha bez kapitol dostane
@@ -35,6 +39,7 @@ func chapterResponses(chapters []model.Chapter) []chapterResponse {
 			FileName:           filepath.Base(c.FilePath),
 			StartOffsetSeconds: c.StartOffsetSeconds,
 			DurationSeconds:    c.DurationSeconds,
+			SizeBytes:          c.SizeBytes,
 		})
 	}
 	return out

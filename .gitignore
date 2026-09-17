@@ -33,3 +33,6 @@ libriter-frontend/build/
 libriter-mobile/.expo/
 libriter-mobile/node_modules/
 libriter-mobile/dist/
+# Výstup `expo prebuild` – generuje se ze konfigurace, do gitu nepatří
+libriter-mobile/ios/
+libriter-mobile/android/

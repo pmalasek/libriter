@@ -2,8 +2,10 @@ package handler
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"libriter/internal/api/middleware"
 	"libriter/internal/model"
@@ -159,6 +161,11 @@ func (h *PlaySessionHandler) SavePosition(w http.ResponseWriter, r *http.Request
 		// Doposlechnutá poslední kapitola téhle knihy – posílá se před
 		// přechodem na další knihu poslechu.
 		BookFinished bool `json:"book_finished"`
+		// Čas vzniku pozice na klientovi a zařízení, ze kterého přišla.
+		// Webový přehrávač je neposílá a server dosadí své "teď"; mobil je
+		// vyplňuje, aby offline dávka nepřebila novější pozici odjinud.
+		RecordedAt *time.Time `json:"recorded_at"`
+		DeviceID   string     `json:"device_id"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
@@ -178,6 +185,10 @@ func (h *PlaySessionHandler) SavePosition(w http.ResponseWriter, r *http.Request
 		Finished:        req.Finished,
 		ListenedSeconds: req.ListenedSeconds,
 		BookFinished:    req.BookFinished,
+		DeviceID:        req.DeviceID,
+	}
+	if req.RecordedAt != nil {
+		in.RecordedAt = *req.RecordedAt
 	}
 	if req.ChapterID != "" {
 		chapterID, err := parseUUIDStr(req.ChapterID, "chapter_id")
@@ -190,6 +201,10 @@ func (h *PlaySessionHandler) SavePosition(w http.ResponseWriter, r *http.Request
 
 	session, err := h.svc.SavePosition(r.Context(), userID, id, in)
 	switch {
+	// Zastaralý zápis není chyba: session se vrací taková, jaká na serveru
+	// platí, a klient se podle ní srovná.
+	case errors.Is(err, service.ErrStalePosition):
+		writeJSON(w, http.StatusOK, session)
 	case errors.Is(err, service.ErrInvalidSetting):
 		writeError(w, http.StatusBadRequest, err.Error())
 	case errors.Is(err, service.ErrBookNotInSession):
@@ -201,6 +216,105 @@ func (h *PlaySessionHandler) SavePosition(w http.ResponseWriter, r *http.Request
 	default:
 		writeJSON(w, http.StatusOK, session)
 	}
+}
+
+// syncEventRequest je jedna položka dávky – totéž co tělo PUT
+// /sessions/{id}/position, jen s vlastním ID a session přímo v události.
+type syncEventRequest struct {
+	ID              string    `json:"id"`
+	SessionID       string    `json:"session_id"`
+	BookID          string    `json:"book_id"`
+	ChapterID       string    `json:"chapter_id"`
+	PositionSeconds int       `json:"position_seconds"`
+	PlaybackSpeed   float64   `json:"playback_speed"`
+	ListenedSeconds int       `json:"listened_seconds"`
+	Finished        bool      `json:"finished"`
+	BookFinished    bool      `json:"book_finished"`
+	RecordedAt      time.Time `json:"recorded_at"`
+}
+
+// POST /api/v1/sessions/sync
+//
+// Přijme dávku pozic, které vznikly, když klient neměl spojení. Každá událost
+// má vlastní ID a čas vzniku: podle ID se pozná opakovaně poslaná dávka,
+// podle času se rozhodne, jestli pozici přepsat, nebo nechat tu novější
+// z jiného zařízení. Odpověď nese osud každé události a aktuální stav
+// dotčených session.
+func (h *PlaySessionHandler) Sync(w http.ResponseWriter, r *http.Request) {
+	userID, ok := callerID(w, r)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		DeviceID string             `json:"device_id"`
+		Events   []syncEventRequest `json:"events"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		return
+	}
+
+	events, err := parseSyncEvents(req.Events)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	results, sessions, err := h.svc.Sync(r.Context(), userID, strings.TrimSpace(req.DeviceID), events)
+	switch {
+	case errors.Is(err, service.ErrInvalidSetting):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "dávku se nepodařilo zpracovat")
+	default:
+		writeJSON(w, http.StatusOK, map[string]any{
+			"results":  results,
+			"sessions": sessions,
+		})
+	}
+}
+
+// parseSyncEvents převede dávku na typy service vrstvy. Vadné UUID shodí celý
+// požadavek: to není chyba jedné události, ale rozbitý klient.
+func parseSyncEvents(raw []syncEventRequest) ([]service.SyncEvent, error) {
+	events := make([]service.SyncEvent, 0, len(raw))
+	for i, item := range raw {
+		event := service.SyncEvent{
+			PositionSeconds: item.PositionSeconds,
+			PlaybackSpeed:   item.PlaybackSpeed,
+			ListenedSeconds: item.ListenedSeconds,
+			Finished:        item.Finished,
+			BookFinished:    item.BookFinished,
+			RecordedAt:      item.RecordedAt,
+		}
+
+		for _, field := range []struct {
+			name  string
+			value string
+			into  *uuid.UUID
+		}{
+			{"id", item.ID, &event.ID},
+			{"session_id", item.SessionID, &event.SessionID},
+			{"book_id", item.BookID, &event.BookID},
+		} {
+			parsed, err := parseUUIDStr(field.value, field.name)
+			if err != nil {
+				return nil, fmt.Errorf("událost %d: %w", i, err)
+			}
+			*field.into = parsed
+		}
+
+		if item.ChapterID != "" {
+			chapterID, err := parseUUIDStr(item.ChapterID, "chapter_id")
+			if err != nil {
+				return nil, fmt.Errorf("událost %d: %w", i, err)
+			}
+			event.ChapterID = &chapterID
+		}
+		events = append(events, event)
+	}
+	return events, nil
 }
 
 // POST /api/v1/sessions/{id}/items

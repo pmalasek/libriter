@@ -7,6 +7,7 @@
 bin          := "bin/libriter"
 frontend_dir := "libriter-frontend"
 backend_dir  := "libriter-backend"
+mobile_dir   := "libriter-mobile"
 dist         := backend_dir / "internal/web/dist"
 
 [private]
@@ -16,11 +17,13 @@ default:
 # Sestaví frontend i backend do bin/libriter
 build: frontend backend
 
+# Závislosti se instalují v kořeni: web, mobil i libriter-shared jsou npm
+# workspaces s jedním společným package-lock.json.
+#
 # npm ci && npm run build (výstup do internal/web/dist)
-[working-directory('libriter-frontend')]
 frontend:
     npm ci
-    npm run build
+    npm run build -w {{frontend_dir}}
 
 # go build -o bin/libriter (vkompiluje aktuální dist)
 # Verzi vkládá linker; administrace ji ukazuje v přehledu systému.
@@ -44,6 +47,31 @@ dev-frontend:
 [working-directory('libriter-backend')]
 vet:
     go vet ./...
+
+# tsc ve všech npm workspaces (shared, web, mobil)
+typecheck:
+    npm run typecheck
+
+# Metro bundler mobilní aplikace (dev build, ne Expo Go)
+[working-directory('libriter-mobile')]
+mobile-start:
+    npx expo start --dev-client
+
+# Sestaví a spustí aplikaci na připojeném iPhonu (jen macOS + Xcode)
+[working-directory('libriter-mobile')]
+mobile-ios:
+    npx expo run:ios --device
+
+# Sestaví a spustí aplikaci na připojeném Androidu
+[working-directory('libriter-mobile')]
+mobile-android:
+    npx expo run:android --device
+
+# Podepsané APK k ruční instalaci (android/app/build/outputs/apk/release/)
+[working-directory('libriter-mobile')]
+mobile-apk:
+    npx expo prebuild --platform android
+    cd android && ./gradlew assembleRelease
 
 # Nainstaluje vývojové nástroje: Go, Node, Android SDK; na macOS i iOS (Xcode CLT, CocoaPods)
 setup:

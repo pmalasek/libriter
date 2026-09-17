@@ -1,18 +1,18 @@
 # Plán: mobilní přehrávač Libriter (iOS + Android, offline-first)
 
-> Stav: schváleno, čeká na implementaci. Fáze se odškrtávají v tabulce níže.
-> Spuštění na jiném počítači: otevřít Claude Code v kořeni repa a zadat např.
-> „Implementuj fázi 1 podle docs/mobile-app-plan.md“.
+> Stav: implementováno. Fáze 1–3 jsou ověřené automatickými testy a buildem,
+> fáze 4–7 typovou kontrolou, sestavením bundlu (`expo export`) a `expo prebuild`;
+> chování na skutečném telefonu je potřeba ověřit ručně (viz Zbývá ověřit).
 
 | Fáze | Stav |
 |---|---|
-| 1. Backend: mobilní token + velikost kapitol | ☐ |
-| 2. Backend: dávková synchronizace pozic | ☐ |
-| 3. npm workspaces + libriter-shared | ☐ |
-| 4. Mobil: kostra jen online | ☐ |
-| 5. Mobil: lokální DB + stahování | ☐ |
-| 6. Mobil: offline fronta + sync engine | ☐ |
-| 7. Leštění + distribuce | ☐ |
+| 1. Backend: mobilní token + velikost kapitol | ☑ |
+| 2. Backend: dávková synchronizace pozic | ☑ |
+| 3. npm workspaces + libriter-shared | ☑ |
+| 4. Mobil: kostra jen online | ☑ |
+| 5. Mobil: lokální DB + stahování | ☑ |
+| 6. Mobil: offline fronta + sync engine | ☑ |
+| 7. Leštění + distribuce | ☑ |
 
 ## Kontext
 
@@ -313,16 +313,45 @@ Volitelně později CarPlay/Android Auto.
 
 ---
 
+## Zbývá ověřit na zařízení
+
+Ověřeno na iOS simulátoru: `expo run:ios` projde bez chyby (včetně kompilace
+a linkování react-native-track-player), aplikace naběhne a vykreslí přihlášení.
+
+Tohle ještě čeká:
+
+- Android: nativní build a spuštění (`just mobile-android`).
+- Přehrávání se zamčeným displejem a ovládání z notifikace / ovládacího centra.
+- `file://` URL a content-type u `.m4b` / `.mp3` na Androidu (fáze 5).
+- Stažení knihy, režim letadlo, restart aplikace, přehrání; smazání a kontrola
+  uvolněného místa.
+- Pět minut poslechu offline → připojit → web ukazuje pozici a admin přehled
+  minuty ve správný den.
+
 ## Rizika a otevřené body
 
-- Dvě verze Reactu v jednom workspace (web 19.2 vs. verze pinovaná Expo). Shared na
-  Reactu nezávisí, ale hoisting může zmást Metro. Řešení: sjednotit verze nebo per-app
-  `overrides`.
+- **Scénový životní cyklus UIKit (UIScene).** Nejnovější iOS SDK bez něj
+  aplikaci při startu vůbec nepustí („UIScene life cycle is required for apps
+  built with this SDK“). Expo SDK 58 tak projekt generuje rovnou, SDK 57 ještě
+  ne – třídu `ExpoAppSceneDelegate` už ale v balíčku `expo` má. Doplňuje to
+  vlastní config plugin `libriter-mobile/plugins/withIosSceneLifecycle.js`
+  (scene manifest v Info.plist, `SceneDelegate.swift`, úprava `AppDelegate`).
+  **Po přechodu na SDK 58 se plugin i zápis v `app.json` můžou smazat.**
+- **react-native-track-player na nové architektuře.** Knihovna nemá
+  `codegenConfig` a v katalogu React Native je vedená jako nepodporovaná na
+  nové architektuře, na které Expo SDK 57 stojí; jede přes vrstvu zpětné
+  kompatibility. Na iOS se přeloží a slinkuje bez chyby. Při startu hlásí čtyři
+  varování o metodách časovače spánku, které v nativním modulu nejsou – ty
+  aplikace nepoužívá (časovač je vlastní, v JS). Kdyby přehrávání selhalo,
+  náhradou je `expo-audio`.
+- **Dvě verze Reactu v jednom workspace.** Web vyžaduje ≥ 19.2.7 (react-router),
+  Expo SDK pinuje 19.2.3 – jedna společná verze tedy nejde. Do mobilního bundlu
+  se dostane právě jedna díky `metro.config.js`: `nodeModulesPaths` v pevném
+  pořadí (mobil před kořenem) a `disableHierarchicalLookup`. `expo-doctor`
+  proto hlásí dvě varování; jsou to dvě strany téhož rozhodnutí.
 - Špatně nastavené hodiny na zařízení: budoucí `recorded_at` se ořízne, minulost se přijme.
 - Streamovací token 24 h: stahování dlouhých knih a streamování musí umět obnovit token.
 - Web dál posílá bez `recorded_at` (server dosadí "teď"), pravidlo "novější vyhrává"
   platí. Upgrade webu na posílání `recorded_at` je volitelný krok.
 - `sync_events` roste ~1 řádek na 10 s poslechu, 30denní prune stačí.
-- Track-player a lokální soubory: `file://` URL a správné content-type pro `.m4b`/`.mp3`
-  na Androidu ověřit brzy (fáze 5).
 - Expo Go neumí track-player, od začátku se pracuje s dev buildem.

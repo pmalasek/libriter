@@ -1,0 +1,12 @@
+{
+  "name": "libriter",
+  "private": true,
+  "workspaces": [
+    "libriter-shared",
+    "libriter-frontend",
+    "libriter-mobile"
+  ],
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  }
+}

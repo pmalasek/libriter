@@ -93,6 +93,9 @@ type Chapter struct {
 	FilePath           string    `json:"-"` // relativní cesta k audio souboru od AUDIO_ROOT
 	StartOffsetSeconds int       `json:"start_offset_seconds"`
 	DurationSeconds    int       `json:"duration_seconds"`
+	// SizeBytes je velikost audio souboru. 0 znamená neznámou velikost –
+	// řádek vznikl před migrací 012 a čeká na další průchod scanneru.
+	SizeBytes int64 `json:"size_bytes"`
 }
 
 type User struct {

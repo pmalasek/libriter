@@ -134,6 +134,8 @@ func runServe() error {
 
 			// Token pro přehrávač (viz /chapters/{id}/audio výše)
 			r.Get("/auth/stream-token", authH.StreamToken)
+			// Dlouhodobý token pro mobilní aplikaci (offline přehrávač)
+			r.Post("/auth/mobile-token", authH.MobileToken)
 
 			// Uživatelé - vlastní profil
 			r.Get("/users/{id}", userH.Get)
@@ -168,6 +170,9 @@ func runServe() error {
 				// Poslechové session – vlastní data přihlášeného uživatele
 				r.Get("/sessions", sessionH.List)
 				r.Post("/sessions", sessionH.Create)
+				// Dávka pozic z offline zařízení; musí být nad /sessions/{id},
+				// ať se "sync" nečte jako UUID session.
+				r.Post("/sessions/sync", sessionH.Sync)
 				r.Get("/sessions/{id}", sessionH.Get)
 				r.Put("/sessions/{id}/position", sessionH.SavePosition)
 				r.Post("/sessions/{id}/items", sessionH.AddItems)
