@@ -57,10 +57,24 @@ typecheck:
 mobile-start:
     npx expo start --dev-client
 
+# `pod install` musí předcházet buildu: podspec expo-sqlite si při instalaci
+# kopíruje vendorované sqlite3.c a .h do node_modules/expo-sqlite/ios/ a
+# `npm ci` (viz recept frontend) node_modules přeinstaluje, takže je smaže.
+# Bez nich build padá na „cannot find 'exsqlite3_open' in scope“.
+#
 # Sestaví a spustí aplikaci na připojeném iPhonu (jen macOS + Xcode)
 [working-directory('libriter-mobile')]
-mobile-ios:
+mobile-ios: mobile-pods
     npx expo run:ios --device
+
+# Doinstaluje CocoaPods, pokud už existuje vygenerovaný projekt ios/
+[working-directory('libriter-mobile')]
+[private]
+mobile-pods:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -d ios ] || exit 0
+    cd ios && pod install
 
 # Sestaví a spustí aplikaci na připojeném Androidu
 [working-directory('libriter-mobile')]

@@ -31,12 +31,6 @@ obstará `src/sync/syncEngine.ts` dávkově přes `POST /sessions/sync` – v on
 režimu do dvou sekund, offline po připojení. Každá událost má vlastní UUID,
 takže opakovaně poslaná dávka v deníku poslechu minuty nezdvojí.
 
-Poslech se ukládá do fronty (`pending_events`) i tehdy, když je telefon
-online. Jedna cesta ven znamená, že se pozice nemůže ztratit mezi dvěma
-větvemi kódu; odeslání obstará `src/sync/syncEngine.ts` dávkově přes
-`POST /sessions/sync`. Každá událost má vlastní UUID, takže opakovaně poslaná
-dávka (ztracená odpověď, restart) v deníku poslechu minuty nezdvojí.
-
 | Soubor | Co dělá |
 |--------|---------|
 | `src/data/mode.ts`, `ModeProvider.tsx` | Režim online / offline |
@@ -136,6 +130,31 @@ nadřazených adresářů je vypnuté, takže `require('react')` z čehokoliv sk
 u verze, kterou má u sebe mobil. `npx expo-doctor` proto hlásí dvě varování
 (duplicitní React, upravený Metro config); jsou to dvě strany téhož vědomého
 rozhodnutí.
+
+## `npm ci` rozbije iOS build
+
+Vygenerovaný projekt `ios/` odkazuje na soubory, které vznikají **uvnitř**
+`node_modules` při `pod install`:
+
+- podspec `expo-sqlite` si tam kopíruje vendorované `sqlite3.c` a `sqlite3.h`,
+- React Native codegen generuje hlavičky (`RNCNetInfoSpec.h`,
+  `ReactCodegen/…`, `rngesturehandler_codegen/…`) do `ios/build/generated/`.
+
+`npm ci` – který spouští `just frontend` – přeinstaluje `node_modules` a tím je
+smaže. `Podfile.lock` se přitom nemění, takže si toho `expo run:ios` nevšimne
+a build spadne na `cannot find 'exsqlite3_open' in scope` nebo `… file not
+found` u codegen hlaviček.
+
+`just mobile-ios` proto spouští `pod install` před buildem, což pokryje běžný
+případ. Když už build jednou spadl na chybějící codegen hlavičky, je potřeba
+vygenerovat projekt načisto:
+
+```bash
+rm -rf libriter-mobile/ios && just mobile-ios
+```
+
+`ios/` je celý generovaný z konfigurace a je v `.gitignore`, takže se tím nic
+neztratí.
 
 ## Známá varování při startu
 
