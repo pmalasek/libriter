@@ -14,11 +14,14 @@ export function coverUrl(book: Book) {
 
 // Obálky mají různé poměry stran (zhruba 60 % čtverec, 30 % portrét, zbytek na šířku),
 // proto čtvercový rám - drží mřížku zarovnanou a odpovídá mediánu sbírky.
-const box = 'relative aspect-square w-full overflow-hidden rounded-2xl bg-muted ring-1 ring-foreground/5'
+// after:* kreslí lesklou vnitřní hranu; inset stín by skryl <img> nad ním.
+const box =
+  'relative aspect-square w-full overflow-hidden rounded-2xl bg-foreground/8 ring-1 ring-foreground/8 after:pointer-events-none after:absolute after:inset-0 after:z-10 after:rounded-[inherit] after:ring-1 after:ring-inset after:ring-white/20 dark:after:ring-white/10'
 
 // Uvnitř skupiny (dlaždice knihy) se obálka při najetí nadzvedne; v řádku
 // seznamu a ve velké hlavičce detailu se místo toho použije lift={false}.
-const lifted = 'shadow-md transition duration-200 group-hover:-translate-y-1 group-hover:shadow-xl'
+const lifted =
+  'shadow-glass transition duration-200 group-hover:-translate-y-1 group-hover:shadow-glass-lg motion-reduce:transition-none'
 
 /**
  * Obálka knihy. Vždy je vidět celá (object-contain); prázdné místo kolem

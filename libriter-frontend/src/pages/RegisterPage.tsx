@@ -47,7 +47,7 @@ export function RegisterPage() {
 
   return (
     <AuthShell>
-      <Card className="shadow-lg [--card-spacing:--spacing(6)]">
+      <Card surface="strong" className="rounded-3xl shadow-glass-lg [--card-spacing:--spacing(6)]">
         <CardHeader>
           <CardTitle className="text-2xl">Registrace</CardTitle>
           <CardDescription>

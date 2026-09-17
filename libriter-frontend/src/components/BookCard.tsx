@@ -20,7 +20,7 @@ function SelectionMark({ selected, className }: { selected: boolean; className?:
         'flex size-6 items-center justify-center rounded-md border-2 shadow-sm transition-colors',
         selected
           ? 'border-primary bg-primary text-primary-foreground'
-          : 'border-background/80 bg-background/60 text-transparent backdrop-blur-sm',
+          : 'border-white/60 bg-glass-strong text-transparent backdrop-blur-sm',
         className,
       )}
     >
@@ -47,7 +47,7 @@ function BookStatusMark({ status, className }: { status: BookStatus; className?:
         'flex size-6 items-center justify-center rounded-full shadow-sm backdrop-blur-sm',
         status === 'finished'
           ? 'bg-primary text-primary-foreground'
-          : 'bg-background/80 text-primary',
+          : 'bg-glass-strong text-primary',
         className,
       )}
     >
@@ -139,7 +139,7 @@ export function BookCard({
       <div className={cn('space-y-0.5', small ? 'mt-2' : 'mt-3')}>
         <p
           className={cn(
-            'line-clamp-2 font-semibold leading-snug transition-colors group-hover:text-primary',
+            'font-heading line-clamp-2 leading-snug font-semibold tracking-tight text-pretty transition-colors group-hover:text-primary',
             small ? 'text-xs' : 'text-sm',
           )}
         >
@@ -169,7 +169,7 @@ export function BookCard({
  */
 export function BookRowHeader({ selecting = false }: { selecting?: boolean }) {
   return (
-    <div className="flex items-center gap-3 bg-muted/60 px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+    <div className="flex items-center gap-3 bg-foreground/4 px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
       {selecting ? <span className="size-6 shrink-0" /> : null}
       <span className="size-12 shrink-0" />
       <span className="min-w-0 flex-1">Název, autor a série</span>
@@ -209,7 +209,7 @@ export function BookRow({
         <BookStatusMark status={status} className="absolute -top-1 -right-1 size-5" />
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold">{book.title}</p>
+        <p className="font-heading truncate text-sm font-semibold tracking-tight">{book.title}</p>
         <p className="truncate text-xs text-muted-foreground">
           {[authorNames(book.authors), series].filter(Boolean).join(' · ')}
         </p>

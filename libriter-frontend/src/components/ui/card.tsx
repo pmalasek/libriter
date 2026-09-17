@@ -1,17 +1,32 @@
 import * as React from "react"
 import { cn } from "cn"
 
+/**
+ * Krytí skla karty. Třídy `glass*` nastavují tutéž vlastnost a tailwind-merge
+ * vlastní utility nezná, takže se nedají přebít přes className – proto prop.
+ */
+const CARD_SURFACES = {
+  glass: "glass",
+  strong: "glass-strong",
+  popover: "glass-popover",
+} as const
+
 function Card({
   className,
   size = "default",
+  surface = "glass",
   ...props
-}: React.ComponentProps<"div"> & { size?: "default" | "sm" }) {
+}: React.ComponentProps<"div"> & {
+  size?: "default" | "sm"
+  surface?: keyof typeof CARD_SURFACES
+}) {
   return (
     <div
       data-slot="card"
       data-size={size}
       className={cn(
-        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-2xl bg-card py-(--card-spacing) text-sm text-card-foreground shadow-sm ring-1 ring-foreground/6 [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-2xl *:[img:last-child]:rounded-b-2xl",
+        "group/card inset-shadow-glass flex flex-col gap-(--card-spacing) overflow-hidden rounded-2xl py-(--card-spacing) text-sm text-card-foreground shadow-glass ring-1 ring-glass-edge [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-2xl *:[img:last-child]:rounded-b-2xl",
+        CARD_SURFACES[surface],
         className
       )}
       {...props}
@@ -83,7 +98,7 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="card-footer"
       className={cn(
-        "flex items-center rounded-b-2xl border-t bg-muted/50 p-(--card-spacing)",
+        "flex items-center rounded-b-2xl border-t border-foreground/6 bg-foreground/3 p-(--card-spacing)",
         className
       )}
       {...props}

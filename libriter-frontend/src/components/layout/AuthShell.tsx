@@ -1,4 +1,5 @@
 import { LayersIcon, LibraryIcon, UsersIcon } from 'lucide-react'
+import { AuroraBackdrop } from './AuroraBackdrop'
 import { Logo } from './Logo'
 import { ThemeToggle } from './ThemeToggle'
 
@@ -14,9 +15,12 @@ const FEATURES = [
  */
 export function AuthShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="grid min-h-svh lg:grid-cols-2">
-      <aside className="bg-brand-gradient relative hidden flex-col justify-between p-12 text-primary-foreground lg:flex">
-        <div className="self-start rounded-2xl bg-background p-3">
+    <div className="relative grid min-h-svh lg:grid-cols-2">
+      {/* Přehrávač tu není, takže pozadí nemá co rozmazávat – jen aurora. */}
+      <AuroraBackdrop className="fixed -z-10" />
+
+      <aside className="bg-brand-gradient relative m-4 hidden flex-col justify-between rounded-4xl p-12 text-primary-foreground shadow-glass-lg ring-1 ring-white/20 inset-shadow-[0_1px_0_0_oklch(1_0_0/0.35)] lg:flex">
+        <div className="self-start rounded-2xl bg-white/90 p-3 shadow-glass dark:bg-background/90">
           <Logo size="lg" />
         </div>
 
@@ -27,7 +31,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           <ul className="mt-8 space-y-4">
             {FEATURES.map(({ icon: Icon, label }) => (
               <li key={label} className="flex items-center gap-3">
-                <span className="flex size-9 items-center justify-center rounded-xl bg-white/15">
+                <span className="flex size-9 items-center justify-center rounded-xl bg-white/15 ring-1 ring-white/25 inset-shadow-[0_1px_0_0_oklch(1_0_0/0.3)]">
                   <Icon className="size-4.5" />
                 </span>
                 <span className="text-sm">{label}</span>

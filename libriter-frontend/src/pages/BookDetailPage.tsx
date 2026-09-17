@@ -131,24 +131,22 @@ export function BookDetailPage() {
         </Link>
       </Button>
 
-      {/* Hlavička s rozmazanou obálkou v pozadí – dává detailu barvu knihy. */}
-      <section className="relative overflow-hidden rounded-3xl bg-brand-glow p-6 md:p-8">
+      {/* Hlavička s rozmazanou obálkou v pozadí – dává detailu barvu knihy.
+          Pozadí aplikace barví hraná kniha, tahle vrstva ta prohlížená. */}
+      <section className="glass inset-shadow-glass relative isolate overflow-hidden rounded-3xl bg-brand-glow p-6 shadow-glass ring-1 ring-glass-edge md:p-8">
         {data.cover_path ? (
-          <>
-            <img
-              src={coverUrl(data)}
-              alt=""
-              aria-hidden
-              className="absolute inset-0 size-full scale-125 object-cover opacity-40 blur-3xl dark:opacity-30"
-            />
-            {/* Závoj drží text čitelný i nad pestrou obálkou. */}
-            <div className="absolute inset-0 bg-linear-to-b from-background/70 via-background/80 to-background" />
-          </>
+          <img
+            src={coverUrl(data)}
+            alt=""
+            aria-hidden
+            decoding="async"
+            className="absolute inset-0 -z-10 size-full scale-125 object-cover opacity-25 blur-3xl dark:opacity-20"
+          />
         ) : null}
 
         <div className="relative grid gap-8 md:grid-cols-[240px_1fr]">
           <div className="max-w-[240px]">
-            <BookCover key={data.id} book={data} lift={false} className="shadow-2xl" />
+            <BookCover key={data.id} book={data} lift={false} className="shadow-glass-lg" />
           </div>
 
           <div className="min-w-0">
@@ -165,7 +163,7 @@ export function BookDetailPage() {
               </p>
             )}
 
-            <h1 className="font-heading text-3xl font-bold tracking-tight md:text-4xl">
+            <h1 className="font-heading text-3xl font-semibold tracking-tight md:text-4xl">
               {data.title}
             </h1>
 

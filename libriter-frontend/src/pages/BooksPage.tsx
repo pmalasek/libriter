@@ -89,6 +89,7 @@ export function BooksPage() {
   return (
     <>
       <PageHeader
+        sticky
         title="Knihy"
         description={bookCount(books.data.length)}
         actions={
@@ -118,68 +119,70 @@ export function BooksPage() {
             ) : null}
           </>
         }
-      />
-
-      {selecting ? (
-        <div className="sticky top-14 z-30 mb-4 flex flex-wrap items-center gap-2 rounded-xl border bg-background/95 px-3 py-2 backdrop-blur">
-          <p className="text-sm font-medium">
-            {selected.size === 0 ? 'Klikněte na knihy, které chcete vybrat.' : `Vybráno: ${bookCount(selected.size)}`}
-          </p>
-          <div className="flex-1" />
-          <Button variant="ghost" size="sm" onClick={selectAllFiltered} disabled={filtered.length === 0}>
-            Vybrat vše{query ? ' nalezené' : ''}
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSelected(new Set())}
-            disabled={selected.size === 0}
-          >
-            Zrušit výběr
-          </Button>
-          {player.session ? (
+      >
+        {/* Lišta výběru patří do přilepené hlavičky – jinak by se odrolovala
+            pryč zrovna ve chvíli, kdy uživatel vybírá knihy dole v seznamu. */}
+        {selecting ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl bg-foreground/5 px-3 py-2 ring-1 ring-inset ring-foreground/5">
+            <p className="text-sm font-medium">
+              {selected.size === 0 ? 'Klikněte na knihy, které chcete vybrat.' : `Vybráno: ${bookCount(selected.size)}`}
+            </p>
+            <div className="flex-1" />
+            <Button variant="ghost" size="sm" onClick={selectAllFiltered} disabled={filtered.length === 0}>
+              Vybrat vše{query ? ' nalezené' : ''}
+            </Button>
             <Button
-              variant="outline"
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelected(new Set())}
+              disabled={selected.size === 0}
+            >
+              Zrušit výběr
+            </Button>
+            {player.session ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  player.addToSession({ bookIds: selectedBooks.map((book) => book.id) })
+                  setSelected(null)
+                }}
+                disabled={selected.size === 0}
+                title="Zařadit vybrané knihy na konec otevřeného poslechu"
+              >
+                <ListPlusIcon />
+                Přidat do poslechu
+              </Button>
+            ) : null}
+            <Button
               size="sm"
               onClick={() => {
-                player.addToSession({ bookIds: selectedBooks.map((book) => book.id) })
+                player.playList({ bookIds: selectedBooks.map((book) => book.id) })
                 setSelected(null)
               }}
               disabled={selected.size === 0}
-              title="Zařadit vybrané knihy na konec otevřeného poslechu"
             >
-              <ListPlusIcon />
-              Přidat do poslechu
+              <HeadphonesIcon />
+              Poslouchat výběr
             </Button>
-          ) : null}
-          <Button
-            size="sm"
-            onClick={() => {
-              player.playList({ bookIds: selectedBooks.map((book) => book.id) })
-              setSelected(null)
-            }}
-            disabled={selected.size === 0}
-          >
-            <HeadphonesIcon />
-            Poslouchat výběr
-          </Button>
-          {canEdit(user) ? (
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSeriesDialog(true)}
-              disabled={selected.size === 0}
-            >
-              <LibraryBigIcon />
-              Přidat do série
+            {canEdit(user) ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setSeriesDialog(true)}
+                disabled={selected.size === 0}
+              >
+                <LibraryBigIcon />
+                Přidat do série
+              </Button>
+            ) : null}
+            <Button variant="outline" size="sm" onClick={() => setSelected(null)} aria-label="Ukončit výběr">
+              <XIcon />
+              Hotovo
             </Button>
-          ) : null}
-          <Button variant="outline" size="sm" onClick={() => setSelected(null)} aria-label="Ukončit výběr">
-            <XIcon />
-            Hotovo
-          </Button>
-        </div>
-      ) : null}
+          </div>
+        ) : null}
+      </PageHeader>
 
       <BookGrid
         books={filtered}

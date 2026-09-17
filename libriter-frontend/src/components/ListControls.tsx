@@ -25,7 +25,7 @@ export function ViewModeToggle({
   onChange: (view: ViewMode) => void
 }) {
   return (
-    <div role="group" aria-label="Zobrazení" className="inline-flex rounded-full bg-muted p-1">
+    <div role="group" aria-label="Zobrazení" className="inline-flex rounded-full bg-foreground/6 p-1 ring-1 ring-inset ring-foreground/5">
       {VIEW_MODES.map((mode) => {
         const Icon = VIEW_ICONS[mode]
         const active = mode === value
@@ -41,7 +41,7 @@ export function ViewModeToggle({
             onClick={() => onChange(mode)}
             className={cn(
               'rounded-full hover:bg-transparent',
-              active && 'bg-card text-primary shadow-sm hover:bg-card',
+              active && 'glass-strong inset-shadow-glass text-primary shadow-sm',
             )}
           >
             <Icon />

@@ -20,7 +20,7 @@ export function AdminLayout() {
 
       {/* Na úzkém displeji se lišta posouvá vodorovně, ať se vejdou všechny záložky. */}
       <nav className="-mx-4 mb-6 overflow-x-auto px-4 pb-1">
-        <div className="inline-flex min-w-max gap-1 rounded-full bg-muted p-1">
+        <div className="inline-flex min-w-max gap-1 rounded-full bg-foreground/6 p-1 ring-1 ring-inset ring-foreground/5">
           {tabs.map(({ to, label, end }) => (
             <NavLink
               key={to}
@@ -30,7 +30,7 @@ export function AdminLayout() {
                 cn(
                   'rounded-full px-4 py-1.5 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-card text-primary shadow-sm'
+                    ? 'glass-strong inset-shadow-glass text-primary shadow-sm'
                     : 'text-muted-foreground hover:text-foreground',
                 )
               }

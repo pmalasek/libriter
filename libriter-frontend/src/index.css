@@ -43,13 +43,26 @@
     --color-card: var(--card);
     --color-foreground: var(--foreground);
     --color-background: var(--background);
+    /* Sklo – plochy, hrany a stíny; hodnoty jsou v :root a .dark níže. */
+    --color-glass: var(--glass);
+    --color-glass-strong: var(--glass-strong);
+    --color-glass-popover: var(--glass-popover);
+    --color-glass-edge: var(--glass-edge);
+    --color-glass-highlight: var(--glass-highlight);
+    --shadow-glass: var(--shadow-glass);
+    --shadow-glass-lg: var(--shadow-glass-lg);
+    --shadow-glow: var(--shadow-glow);
+    /* Světlá linka po horní hraně skla – broušený okraj. */
+    --inset-shadow-glass: inset 0 1px 0 0 var(--glass-highlight);
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
     --radius-xl: calc(var(--radius) * 1.4);
-    --radius-2xl: calc(var(--radius) * 1.8);
-    --radius-3xl: calc(var(--radius) * 2.2);
-    --radius-4xl: calc(var(--radius) * 2.6);
+    /* Velká zaoblení jsou vzdušnější než dřív; --radius zůstává, jinak by
+       se z nízkých tlačítek staly pilulky. */
+    --radius-2xl: calc(var(--radius) * 2);
+    --radius-3xl: calc(var(--radius) * 2.6);
+    --radius-4xl: calc(var(--radius) * 3.2);
 }
 
 /*
@@ -98,6 +111,33 @@
     --sidebar-accent-foreground: oklch(0.38 0.09 200);
     --sidebar-border: oklch(0.9 0.015 225);
     --sidebar-ring: oklch(0.52 0.1 195);
+
+    /* Sklo. Alfa je přímo v tokenu (stejný důvod jako u --glow-*).
+       --scheme-hue je nastavené jen u ostatních schémat, tyrkysové má
+       odstín natvrdo – proto všude záložní hodnota. */
+    --glass: oklch(1 0 0 / 0.55);
+    --glass-strong: oklch(1 0 0 / 0.74);
+    --glass-popover: oklch(1 0 0 / 0.86);
+    --glass-edge: oklch(0.22 0.03 var(--scheme-hue, 235) / 0.08);
+    --glass-highlight: oklch(1 0 0 / 0.85);
+    --glass-blur: 16px;
+    --glass-blur-strong: 24px;
+    --glass-saturate: 1.35;
+    --shadow-glass:
+        0 1px 2px oklch(0.22 0.03 var(--scheme-hue, 235) / 0.04),
+        0 8px 24px -8px oklch(0.22 0.03 var(--scheme-hue, 235) / 0.12);
+    --shadow-glass-lg:
+        0 2px 4px oklch(0.22 0.03 var(--scheme-hue, 235) / 0.05),
+        0 24px 48px -16px oklch(0.22 0.03 var(--scheme-hue, 235) / 0.22);
+    --shadow-glow:
+        0 0 0 1px oklch(0.52 0.1 195 / 0.25),
+        0 8px 24px -6px oklch(0.52 0.1 195 / 0.45);
+    /* Závoj nad okolním pozadím (obálka, aurora) – drží podlahu světlosti,
+       aby text na skle zůstal čitelný nad libovolnou obálkou. */
+    --ambient-veil: oklch(0.985 0.006 var(--scheme-hue, 220) / 0.68);
+    --aurora-1: oklch(0.52 0.1 195 / 0.16);
+    --aurora-2: oklch(0.7 0.18 50 / 0.1);
+    --aurora-3: oklch(0.62 0.12 185 / 0.12);
 }
 
 .dark {
@@ -137,6 +177,22 @@
     --sidebar-accent-foreground: oklch(0.88 0.08 190);
     --sidebar-border: oklch(1 0 0 / 10%);
     --sidebar-ring: oklch(0.78 0.12 190);
+
+    /* Sklo v tmavém režimu: kouřové plochy, hrana ze světla, hlubší stín. */
+    --glass: oklch(0.21 0.02 var(--scheme-hue, 235) / 0.45);
+    --glass-strong: oklch(0.19 0.02 var(--scheme-hue, 235) / 0.62);
+    --glass-popover: oklch(0.21 0.02 var(--scheme-hue, 235) / 0.82);
+    --glass-edge: oklch(1 0 0 / 0.12);
+    --glass-highlight: oklch(1 0 0 / 0.14);
+    --shadow-glass: 0 1px 2px oklch(0 0 0 / 0.2), 0 8px 24px -8px oklch(0 0 0 / 0.45);
+    --shadow-glass-lg: 0 2px 4px oklch(0 0 0 / 0.25), 0 24px 48px -16px oklch(0 0 0 / 0.6);
+    --shadow-glow:
+        0 0 0 1px oklch(0.78 0.12 190 / 0.3),
+        0 8px 24px -6px oklch(0.78 0.12 190 / 0.4);
+    --ambient-veil: oklch(0.16 0.02 var(--scheme-hue, 235) / 0.66);
+    --aurora-1: oklch(0.78 0.12 190 / 0.14);
+    --aurora-2: oklch(0.78 0.16 60 / 0.08);
+    --aurora-3: oklch(0.68 0.12 185 / 0.1);
 }
 
 /* Barevné schéma je nezávislé na světlém/tmavém režimu. */
@@ -186,6 +242,14 @@
     --sidebar-border: var(--border);
     --sidebar-ring: var(--ring);
     --brand-gradient-end: oklch(0.56 0.12 var(--scheme-hue));
+    /* Neutrální tokeny skla si odstín doplní přes var(--scheme-hue); barevné
+       je potřeba přepsat, protože jejich odstín je odstín hlavní barvy. */
+    --shadow-glow:
+        0 0 0 1px oklch(0.52 0.14 var(--scheme-hue) / 0.25),
+        0 8px 24px -6px oklch(0.52 0.14 var(--scheme-hue) / 0.45);
+    --aurora-1: oklch(0.52 0.14 var(--scheme-hue) / 0.16);
+    --aurora-2: oklch(0.7 0.15 var(--scheme-highlight-hue) / 0.1);
+    --aurora-3: oklch(0.56 0.12 var(--scheme-hue) / 0.12);
 }
 
 :root.dark:is([data-color-scheme="blue"], [data-color-scheme="violet"], [data-color-scheme="green"]) {
@@ -209,6 +273,12 @@
     --input: oklch(1 0 0 / 15%);
     --sidebar: oklch(0.19 0.02 var(--scheme-hue));
     --brand-gradient-end: oklch(0.68 0.12 var(--scheme-hue));
+    --shadow-glow:
+        0 0 0 1px oklch(0.78 0.12 var(--scheme-hue) / 0.3),
+        0 8px 24px -6px oklch(0.78 0.12 var(--scheme-hue) / 0.4);
+    --aurora-1: oklch(0.78 0.12 var(--scheme-hue) / 0.14);
+    --aurora-2: oklch(0.78 0.13 var(--scheme-highlight-hue) / 0.08);
+    --aurora-3: oklch(0.68 0.12 var(--scheme-hue) / 0.1);
 }
 
 /* Firemní gradient – tlačítka, přihlašovací panel, velké nadpisy přes bg-clip-text. */
@@ -221,6 +291,101 @@
     background-image:
         radial-gradient(60% 80% at 15% 0%, var(--glow-1), transparent 70%),
         radial-gradient(50% 70% at 95% 20%, var(--glow-2), transparent 70%);
+}
+
+/*
+ * Matné sklo ve třech stupních krytí: glass (karty, hlavičky detailů),
+ * glass-strong (rail, přehrávač, lišty – čitelnost) a glass-popover
+ * (dialogy a nabídky, kde text leží nad textem).
+ *
+ * Utility nastavují jen plochu a rozostření; hranu a stín skládají atomické
+ * třídy `ring-1 ring-glass-edge inset-shadow-glass shadow-glass`, aby se
+ * snesly s group-hover:shadow-* a spol. (tailwind-merge vlastní utility nezná).
+ *
+ * POZOR: backdrop-filter uvnitř jiného backdrop-filter rozmazává jen obsah
+ * rodiče, ne stránku. Sklo proto patří jen panelům první úrovně; tlačítka,
+ * odznaky a inputy uvnitř nich dostávají pouhou průsvitnou barvu (bg-glass).
+ *
+ * Bez podpory backdrop-filter, při omezené průhlednosti i vyšším kontrastu
+ * se plocha vrátí k neprůhledné barvě.
+ */
+@utility glass {
+    background-color: var(--glass);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        background-color: var(--card);
+    }
+
+    @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+        background-color: var(--card);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+@utility glass-strong {
+    background-color: var(--glass-strong);
+    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        background-color: var(--sidebar);
+    }
+
+    @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+        background-color: var(--sidebar);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+@utility glass-popover {
+    background-color: var(--glass-popover);
+    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+
+    @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+        background-color: var(--popover);
+    }
+
+    @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+        background-color: var(--popover);
+        -webkit-backdrop-filter: none;
+        backdrop-filter: none;
+    }
+}
+
+/* Vlasová linka místo plného border-t – uprostřed sytější, ke krajům mizí. */
+@utility hairline-t {
+    background-image: linear-gradient(
+        90deg,
+        transparent,
+        var(--glass-edge) 20%,
+        var(--glass-edge) 80%,
+        transparent
+    );
+    background-repeat: no-repeat;
+    background-size: 100% 1px;
+    background-position: top;
+}
+
+/*
+ * Aurora v pozadí: tři velké měkké skvrny, které se pomalu posouvají.
+ * Hýbe se jen transform, aby práci odvedl kompozitor a nic se nepřekreslovalo.
+ */
+@keyframes aurora-drift {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(6%, -4%, 0) scale(1.08); }
+}
+
+@utility animate-aurora {
+    animation: aurora-drift 48s ease-in-out infinite;
+
+    @media (prefers-reduced-motion: reduce) {
+        animation: none;
+    }
 }
 
 /*
@@ -250,8 +415,16 @@
     background-color: var(--primary);
     color: var(--primary-foreground);
     }
-  /* Nadpisy se lámou vyváženě – u dlouhých názvů knih nezůstane osamocené slovo. */
+  /* Nadpisy se lámou vyváženě – u dlouhých názvů knih nezůstane osamocené slovo.
+     Mírně stažené prostrkání drží velké nadpisy pohromadě. */
   h1, h2, h3 {
     text-wrap: balance;
+    letter-spacing: -0.015em;
+    }
+  /* Toasty vykresluje sonner mimo naše komponenty, sklo jim jde dát jen třídou. */
+  .cn-toast {
+    -webkit-backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+    backdrop-filter: blur(var(--glass-blur-strong)) saturate(var(--glass-saturate));
+    box-shadow: var(--shadow-glass-lg);
     }
 }

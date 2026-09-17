@@ -32,10 +32,9 @@ import {
 } from '@/player/sessionLabels'
 
 /**
- * Přehled rozposlouchaných poslechů a zároveň první pohled po otevření
- * aplikace, když je co poslouchat (viz HomeRedirect). Lišta přehrávače umí
- * přepínat taky, ale vejde se do ní jen řádka na poslech – tady je vidět, co
- * je kde rozečtené, a dá se to uklidit.
+ * Úplný přehled rozposlouchaných poslechů. Úvodní stránka nabídne jen ten
+ * nejbližší a nabídka v přehrávači jen řádku na poslech – tady je vidět, co je
+ * kde rozečtené, a dá se to uklidit.
  */
 export function SessionsPage() {
   const sessions = useSessions()
@@ -186,7 +185,7 @@ function SessionCard({
             <BookCover book={currentBook} key={currentBook.id} lift={false} className="size-14" />
           </Link>
         ) : (
-          <div className="size-14 shrink-0 rounded-2xl bg-muted" />
+          <div className="size-14 shrink-0 rounded-2xl bg-foreground/8" />
         )}
 
         {/* Text má přednost před tlačítky: když by mu zbylo míň než 13 rem,

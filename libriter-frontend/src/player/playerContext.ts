@@ -92,6 +92,26 @@ export function sessionItem(session: PlaySession | null, bookId: string | undefi
   return session.items.find((item) => item.book_id === bookId)
 }
 
+/**
+ * Řádek pod názvem knihy: kapitola, kolikátá je a kolikátá kniha poslechu
+ * hraje. Počítá se na jednom místě, ať je popisek v kapsli i v panelu stejný.
+ */
+export function playerSubtitle(player: PlayerValue): string {
+  const { session, book, chapter, chapters, loading } = player
+  if (!session) return ''
+
+  const chapterIndex = chapter ? chapters.findIndex((item) => item.id === chapter.id) : -1
+  const itemIndex = session.items.findIndex((item) => item.book_id === book?.id)
+
+  return (
+    (chapter ? chapter.title : loading ? 'Načítání kapitoly…' : '—') +
+    (chapterIndex >= 0 && chapters.length > 1 ? ` · ${chapterIndex + 1}/${chapters.length}` : '') +
+    (session.items.length > 1 && itemIndex >= 0
+      ? ` · kniha ${itemIndex + 1}/${session.items.length}`
+      : '')
+  )
+}
+
 /** Kniha, kterou má poslech rozehranou – nebo jeho první, když žádnou nemá. */
 export function currentBookId(session: PlaySession): string | undefined {
   if (session.current_book_id && session.items.some((i) => i.book_id === session.current_book_id)) {

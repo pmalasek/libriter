@@ -91,6 +91,7 @@ export function AuthorsPage() {
   return (
     <>
       <PageHeader
+        sticky
         title="Autoři"
         description={`${withBooks.length} celkem`}
         actions={
@@ -154,11 +155,11 @@ function AuthorList({
   // Karta autora se při najetí nadzvedne a orámuje firemní barvou – stejně
   // jako dlaždice knih a série.
   const cardHover =
-    'h-full transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-primary/30'
+    'h-full transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-glass-lg group-hover:ring-primary/30 motion-reduce:transition-none'
 
   if (view === 'list') {
     return (
-      <div className="divide-y overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-foreground/6">
+      <div className="glass inset-shadow-glass divide-y divide-foreground/6 overflow-hidden rounded-2xl shadow-glass ring-1 ring-glass-edge">
         {authors.map((author) => (
           <Link
             key={author.id}
@@ -166,7 +167,7 @@ function AuthorList({
             className="group flex items-center gap-3 px-3 py-2 transition-colors hover:bg-primary/5"
           >
             <AuthorImage key={author.id} author={author} className="size-9 shrink-0" />
-            <p className="min-w-0 flex-1 truncate text-sm font-semibold transition-colors group-hover:text-primary">
+            <p className="font-heading min-w-0 flex-1 truncate text-sm font-semibold tracking-tight transition-colors group-hover:text-primary">
               {name(author)}
             </p>
             <p className="hidden shrink-0 text-xs text-muted-foreground sm:block">{details(author)}</p>

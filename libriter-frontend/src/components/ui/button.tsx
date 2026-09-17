@@ -9,13 +9,15 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          "bg-brand-gradient text-primary-foreground shadow-sm hover:brightness-110 hover:shadow-md",
+          "bg-brand-gradient text-primary-foreground shadow-sm inset-shadow-[0_1px_0_0_oklch(1_0_0/0.25)] hover:brightness-110 hover:shadow-glow",
+        // Průsvitné plochy bez vlastního rozostření: tlačítka bývají uvnitř
+        // skla a vnořený backdrop-filter by rozmazával obsah panelu, ne stránku.
         outline:
-          "border-border bg-card shadow-xs hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+          "border-glass-edge bg-glass inset-shadow-glass shadow-xs hover:bg-glass-strong hover:text-foreground aria-expanded:bg-glass-strong aria-expanded:text-foreground",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-[color-mix(in_oklch,var(--secondary),var(--foreground)_5%)] aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "bg-secondary/80 text-secondary-foreground inset-shadow-glass hover:bg-secondary aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
         ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+          "hover:bg-foreground/6 hover:text-foreground aria-expanded:bg-foreground/6 aria-expanded:text-foreground",
         destructive:
           "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",

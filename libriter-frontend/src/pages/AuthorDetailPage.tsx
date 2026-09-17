@@ -44,12 +44,13 @@ export function AuthorDetailPage() {
         </Link>
       </Button>
 
-      <section className="mb-8 rounded-3xl bg-brand-glow p-6 md:p-8">
-        <div className="flex flex-wrap items-start gap-6">
+      <section className="glass inset-shadow-glass mb-8 rounded-3xl bg-brand-glow p-6 shadow-glass ring-1 ring-glass-edge md:p-8">
+        {/* Stejně jako u série: na úzkém obsahu fotka nad textem, ne vedle. */}
+        <div className="flex flex-col items-start gap-6 @md:flex-row">
           <AuthorImage
             key={author.data.id}
             author={author.data}
-            className="size-28 shrink-0 shadow-xl ring-4 md:size-36"
+            className="size-28 shrink-0 shadow-glass-lg ring-4 ring-white/40 md:size-36 dark:ring-white/10"
           />
           <div className="min-w-0 flex-1">
             <PageHeader

@@ -47,7 +47,7 @@ export function SeriesCoverStack({
         <div
           className={cn(
             style.cover,
-            'flex items-center justify-center rounded-2xl bg-secondary text-primary/60',
+            'flex items-center justify-center rounded-2xl bg-secondary/80 text-primary/60',
           )}
         >
           <LayersIcon className={style.icon} />
@@ -58,7 +58,7 @@ export function SeriesCoverStack({
             key={book.id}
             className={cn('absolute top-0', style.cover, style.offsets[index], style.tilts[index])}
           >
-            <BookCover book={book} lift={false} className="rounded-xl shadow-md" />
+            <BookCover book={book} lift={false} className="rounded-xl shadow-glass" />
           </div>
         ))
       )}

@@ -10,7 +10,7 @@ export function EmptyState({
   icon?: LucideIcon
 }) {
   return (
-    <div className="rounded-3xl border border-dashed border-border bg-card/60 p-12 text-center">
+    <div className="rounded-3xl border border-dashed border-glass-edge bg-glass/60 p-12 text-center">
       {Icon ? (
         <span className="mx-auto mb-4 flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
           <Icon className="size-6" />

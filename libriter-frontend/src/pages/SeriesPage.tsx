@@ -97,6 +97,7 @@ export function SeriesPage() {
   return (
     <>
       <PageHeader
+        sticky
         title="Série"
         description={`${withBooks.length} celkem`}
         actions={
@@ -126,7 +127,7 @@ export function SeriesPage() {
             const info = infoBySeries.get(item.id) ?? EMPTY
             return (
               <Link key={item.id} to={`/series/${item.id}`} className="group rounded-2xl">
-                <Card className="@container h-full transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-primary/30">
+                <Card className="@container h-full transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-glass-lg group-hover:ring-primary/30 motion-reduce:transition-none">
                   <CardContent className="flex items-center gap-3">
                     <SeriesCoverStack books={info.covers} />
                     <div className="min-w-0 flex-1">

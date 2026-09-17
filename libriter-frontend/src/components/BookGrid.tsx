@@ -15,7 +15,7 @@ export interface GridSelection {
 const GRID_CLASSES: Record<ViewMode, string> = {
   tiles: 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
   small: 'grid grid-cols-3 gap-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8',
-  list: 'divide-y overflow-hidden rounded-2xl bg-card shadow-sm ring-1 ring-foreground/6',
+  list: 'glass inset-shadow-glass divide-y divide-foreground/6 overflow-hidden rounded-2xl shadow-glass ring-1 ring-glass-edge',
 }
 
 export function BookGrid({

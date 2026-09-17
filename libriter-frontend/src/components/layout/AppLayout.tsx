@@ -1,90 +1,64 @@
-import { MenuIcon } from 'lucide-react'
-import { Suspense, useState } from 'react'
+import { Suspense } from 'react'
 import { Link, Outlet } from 'react-router'
 import { useRefreshProfile } from '@/auth/useRefreshProfile'
-import { PlayerBar } from '@/components/player/PlayerBar'
-import { Button } from '@/components/ui/button'
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { PlayerCapsule } from '@/components/player/PlayerCapsule'
 import { cn } from '@/lib/utils'
 import { usePlayer } from '@/player/playerContext'
+import { AmbientBackdrop } from './AmbientBackdrop'
 import { Logo } from './Logo'
-import { NavLinks } from './NavLinks'
-import { ThemeToggle } from './ThemeToggle'
-import { UserMenu } from './UserMenu'
+import { NavRail } from './NavRail'
+import { NowPlayingColumn } from './NowPlayingColumn'
+import { TabBar } from './TabBar'
 
 export function AppLayout() {
-  const [navOpen, setNavOpen] = useState(false)
   const player = usePlayer()
 
   // Role v prohlížeči může být z minulého přihlášení – srovnáme ji se serverem.
   useRefreshProfile()
 
   return (
-    <div className="min-h-svh bg-background text-foreground">
-      {/* Sidebar na md+; na mobilu se otevírá jako Sheet z topbaru. */}
-      <aside className="fixed inset-y-0 left-0 hidden w-64 flex-col border-r bg-sidebar p-4 md:flex">
-        <Link to="/" className="mb-8 flex items-center px-1">
-          <Logo />
+    // Bez vlastního pozadí: kreslí ho AmbientBackdrop pod obsahem a body
+    // (viz index.css) drží barvu i tam, kde se pozadí nevykreslí.
+    <div className="min-h-svh text-foreground">
+      <AmbientBackdrop />
+
+      {/* Od md ikonový rail vlevo, pod ním na telefonu spodní lišta záložek. */}
+      <NavRail />
+      <TabBar />
+
+      {/* Hlavička je jen na telefonu – rail značku i účet unese sám. */}
+      <header className="glass inset-shadow-glass sticky top-0 z-30 flex h-14 items-center px-4 md:hidden">
+        <Link to="/" className="flex items-center" aria-label="Libriter – domů">
+          <Logo size="sm" />
         </Link>
-        <NavLinks />
-        {/* Účet a přepínač režimu patří na desktopu dolů do sidebaru,
-            topbar tak zůstane prázdný pro obsah stránky. */}
-        <div className="mt-auto flex items-center gap-1 border-t pt-3">
-          <UserMenu showName />
-          <ThemeToggle />
-        </div>
-      </aside>
+      </header>
 
-      <div className="md:pl-64">
-        {/* Výška 14 je pevná – sticky lišta výběru knih na ni navazuje (top-14). */}
-        <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur md:border-b-0 md:bg-background/60">
-          <Sheet open={navOpen} onOpenChange={setNavOpen}>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon" className="md:hidden" aria-label="Otevřít navigaci">
-                <MenuIcon />
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 bg-sidebar p-4">
-              <SheetHeader className="p-0">
-                <SheetTitle className="sr-only">Navigace</SheetTitle>
-                <Link to="/" className="mb-6 flex items-center" onClick={() => setNavOpen(false)}>
-                  <Logo />
-                </Link>
-              </SheetHeader>
-              <NavLinks onNavigate={() => setNavOpen(false)} />
-              <div className="mt-6 flex items-center gap-1 border-t pt-3">
-                <UserMenu showName />
-                <ThemeToggle />
-              </div>
-            </SheetContent>
-          </Sheet>
-
-          <Link to="/" className="flex items-center md:hidden">
-            <Logo size="sm" />
-          </Link>
-
-          <div className="flex-1" />
-          <ThemeToggle className="md:hidden" />
-          <UserMenu className="md:hidden" />
-        </header>
-
-        {/* Lišta přehrávače překrývá spodek stránky, proto se pod obsahem
-            uvolní místo právě tehdy, když je vidět. */}
+      {/* Rail a sloupec s přehrávaným ukrajují po stranách; obsah se uvnitř
+          zbylého místa vystředí. Sloupec je jen tehdy, když poslech běží. */}
+      <div className={cn('md:pl-[5.5rem]', player.session && 'xl:pr-[22.75rem]')}>
         <main
           className={cn(
             // @container: stránky se řídí šířkou obsahu, ne okna – na tabletu
-            // ukrojí sidebar 16 rem a mřížky podle okna pak vycházejí příliš úzké.
-            '@container mx-auto max-w-7xl px-4 pt-2 sm:px-6 lg:px-8',
-            player.session ? 'pb-28 lg:pb-36' : 'pb-16',
+            // ukrojí rail i sloupec své a mřížky podle okna pak nevycházejí.
+            '@container mx-auto max-w-[90rem] px-4 pt-4 sm:px-6 lg:px-8',
+            // Dole musí zůstat místo na spodní lištu a kapsli přehrávače.
+            player.session ? 'pb-40 md:pb-24 xl:pb-8' : 'pb-24 md:pb-8',
           )}
         >
-          <Suspense fallback={<p role="status" className="py-8 text-center text-muted-foreground">Načítání stránky…</p>}>
+          <Suspense
+            fallback={
+              <p role="status" className="py-8 text-center text-muted-foreground">
+                Načítání stránky…
+              </p>
+            }
+          >
             <Outlet />
           </Suspense>
         </main>
       </div>
 
-      <PlayerBar />
+      <PlayerCapsule />
+      <NowPlayingColumn />
     </div>
   )
 }

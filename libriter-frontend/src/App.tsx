@@ -3,7 +3,6 @@ import { Route, Routes } from 'react-router'
 import { RedirectIfAuthenticated, RequireAuth } from '@/auth/RequireAuth'
 import { RequireRole } from '@/auth/RequireRole'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { HomeRedirect } from '@/pages/HomeRedirect'
 import { LoginPage } from '@/pages/LoginPage'
 import { RegisterPage } from '@/pages/RegisterPage'
 
@@ -12,6 +11,7 @@ const AuthorDetailPage = lazy(() => import('@/pages/AuthorDetailPage').then((mod
 const AuthorsPage = lazy(() => import('@/pages/AuthorsPage').then((module) => ({ default: module.AuthorsPage })))
 const BookDetailPage = lazy(() => import('@/pages/BookDetailPage').then((module) => ({ default: module.BookDetailPage })))
 const BooksPage = lazy(() => import('@/pages/BooksPage').then((module) => ({ default: module.BooksPage })))
+const HomePage = lazy(() => import('@/pages/HomePage').then((module) => ({ default: module.HomePage })))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
 const ProfilePage = lazy(() => import('@/pages/ProfilePage').then((module) => ({ default: module.ProfilePage })))
 const SeriesDetailPage = lazy(() => import('@/pages/SeriesDetailPage').then((module) => ({ default: module.SeriesDetailPage })))
@@ -39,8 +39,8 @@ export function App() {
 
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
-          {/* Kořen jen rozhodne, kam vede první pohled po otevření. */}
-          <Route index element={<HomeRedirect />} />
+          {/* Domovská stránka: čím se dá pokračovat a co je v knihovně nového. */}
+          <Route index element={<HomePage />} />
           <Route path="books" element={<BooksPage />} />
           <Route path="books/:id" element={<BookDetailPage />} />
           <Route path="authors" element={<AuthorsPage />} />

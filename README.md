@@ -256,11 +256,30 @@ souboru `libriter.db` (při běžícím serveru i souborů `-wal` a `-shm`).
 React + TypeScript + Tailwind v4, komponenty shadcn/ui (Radix), routing
 `react-router`, serverový stav `@tanstack/react-query`. Vše v češtině.
 
-**Vzhled:** hlavní barvou je tyrkysová z loga, oranžová slouží jako doplněk
-pro zvýraznění (počty dílů, nedodělky v administraci). Nadpisy sází
-Bricolage Grotesque, běžný text Geist; obojí je součástí balíčku, nic se
-nenačítá z cizích serverů. Barvy, zaoblení a fonty jsou pohromadě
-v `libriter-frontend/src/index.css` – změna tokenů přebarví celou aplikaci.
+**Vzhled:** rozhraní staví na matném skle. Panely – sloupek navigace, přehrávač,
+karty, hlavičky detailů i dialogy – jsou mléčně průsvitné, se světlou linkou po
+horní hraně a měkkým stínem, a plavou nad pozadím celé aplikace. Tím pozadím je
+rozmazaná obálka právě přehrávané knihy; při přechodu na jinou se prolne a když
+nic nehraje, dýchá pod obsahem klidná záře v odstínu zvoleného schématu. Hlavní
+barvou zůstává tyrkysová z loga (nebo modrá, fialová a zelená podle profilu),
+oranžová slouží jako doplněk pro zvýraznění. Nadpisy sází Bricolage Grotesque,
+běžný text Geist; obojí je součástí balíčku, nic se nenačítá z cizích serverů.
+
+Barvy, průhlednosti skla, zaoblení, stíny i utility `glass`, `glass-strong`
+a `glass-popover` jsou pohromadě v `libriter-frontend/src/index.css` – změna
+tokenů přebarví celou aplikaci. Sklo nesou jen panely nejvyšší úrovně; tlačítka,
+odznaky a pole uvnitř nich mají jen průsvitnou barvu, protože rozostření uvnitř
+rozostření rozmazává obsah panelu, ne stránku. Bez podpory `backdrop-filter`,
+při systémovém nastavení omezené průhlednosti nebo vyššího kontrastu se plochy
+vrátí k neprůhledným; při omezeném pohybu se záře i prolínání zastaví.
+
+**Rozvržení:** na širokém displeji stojí vlevo úzký sloupek ikon, uprostřed obsah
+a vpravo panel *Právě hraje* s velkou obálkou, jezdcem, ovládáním a kapitolami –
+poslech tak nemusí nic otevírat. Na užší obrazovce panel nahradí plovoucí kapsle
+u spodní hrany, která se klepnutím rozvine na celou obrazovku; na telefonu vede
+navigace spodní lištou se záložkami (zbytek je pod *Více*). Úvodní stránka je
+přehled: hlavička *Pokračovat v poslechu* s rozposlouchanou knihou a pod ní
+police – rozposlouchané, nově přidané, série a doposlechnuté.
 
 **Co první verze umí:** přihlášení a registraci, seznam a detail knih, autory,
 série, profil (změna jména, e-mailu a hesla), hledání v knihách, obálky knih,
@@ -308,25 +327,28 @@ v seznamu; autor bez fotky má zástupnou ikonu. Čtenář (role reader) tlačí
 nevidí.
 
 **Poslech:** *Přehrát* v detailu knihy, *Přehrát sérii* u série a *Poslouchat
-výběr* v režimu výběru knih otevřou poslech v liště u spodního okraje. Lišta je
-vidět na všech stránkách, takže poslech nepřeruší procházení knihovny.
+výběr* v režimu výběru knih otevřou poslech v panelu u pravé hrany, na užší
+obrazovce v kapsli u spodní hrany. Obojí je vidět na všech stránkách, takže
+poslech nepřeruší procházení knihovny; obálka hrající knihy se navíc rozmazaná
+promítá do pozadí celé aplikace.
 
 Poslech (session) je kniha, celá série, nebo ručně poskládaný seznam. Aktuální
 kapitola i pozice v ní se drží na serveru, ne v prohlížeči – na jiném zařízení
 tedy poslech pokračuje tam, kde skončil. Zapisuje se každých 10 sekund a při
 každé změně (pauza, převíjení, změna kapitoly i zavření stránky).
 
-V liště je hlasitost (na širokých obrazovkách; telefon a tablet mají vlastní
-tlačítka a iOS hlasitost přes `<audio>` nastavit nedovolí) a panel *Obsah
-poslechu* se všemi knihami poslechu i jejich soubory. Kapitoly se v něm
-stahují až při otevření a rozbalená je ta kniha, která hraje – kliknutím na
-kterýkoliv soubor se přejde přímo na něj.
+V panelu je hlasitost (na širokých obrazovkách; telefon a tablet mají vlastní
+tlačítka a iOS hlasitost přes `<audio>` nastavit nedovolí) a pod ovládáním
+*Obsah poslechu* se všemi knihami poslechu i jejich soubory. Kapitoly se
+stahují až tehdy, když je seznam vidět; rozbalená je ta kniha, která hraje,
+seznam se sám odroluje na hrající kapitolu a kliknutím na kterýkoliv soubor se
+přejde přímo na něj.
 
 Rozposlouchaných poslechů může být víc naráz. Přepíná se mezi nimi ikonou
-sluchátek v liště a celý přehled je na stránce *Právě posloucháno* – ta se
-v navigaci objeví jako první položka, jakmile je co poslouchat, a je to
-i první pohled po otevření aplikace (kořenová adresa jinak vede do knihovny).
-Dá se z ní pokračovat i uklidit doposlechnuté.
+sluchátek v panelu přehrávače a celý přehled je na stránce *Právě posloucháno* –
+ta se v navigaci objeví, jakmile je co poslouchat. Nejbližší poslech nabídne
+i úvodní stránka; odtud se dá pokračovat a na stránce *Právě posloucháno* taky
+uklidit doposlechnuté.
 
 Každá kniha si navíc drží stav: *rozposlouchaná* se objeví po prvním poslechu,
 *doposlechnutá* po dohrání poslední kapitoly. Značka je vidět na dlaždici i

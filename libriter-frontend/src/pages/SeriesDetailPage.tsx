@@ -51,8 +51,10 @@ export function SeriesDetailPage() {
         </Link>
       </Button>
 
-      <section className="mb-8 rounded-3xl bg-brand-glow p-6 md:p-8">
-        <div className="flex flex-wrap items-center gap-6">
+      <section className="glass inset-shadow-glass mb-8 rounded-3xl bg-brand-glow p-6 shadow-glass ring-1 ring-glass-edge md:p-8">
+        {/* Na úzkém obsahu stojí obálky nad textem: vedle sebe by na název ani
+            na tlačítka nezbylo místo a obojí by se ořízlo. */}
+        <div className="flex flex-col items-start gap-6 @md:flex-row @md:items-center">
           <SeriesCoverStack books={seriesBooks} variant="lg" />
           <div className="min-w-0 flex-1">
             <PageHeader
