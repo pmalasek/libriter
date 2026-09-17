@@ -14,7 +14,7 @@ import * as SQLite from 'expo-sqlite'
 const DB_NAME = 'libriter.db'
 
 /** Verze schématu; zvýšit při každé změně a doplnit krok v `migrate`. */
-const SCHEMA_VERSION = 1
+const SCHEMA_VERSION = 2
 
 let handle: SQLite.SQLiteDatabase | null = null
 
@@ -114,6 +114,28 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
       CREATE TABLE IF NOT EXISTS settings (
         key   TEXT PRIMARY KEY,
         value TEXT NOT NULL
+      );
+    `)
+  }
+
+  if (current < 2) {
+    // Offline režim zrcadlí i autory, série a stav knih – bez nich by
+    // v letadle nešly otevřít stránky Autoři a Série ani poznat, co je
+    // doposlechnuté. Celý objekt leží v 'json', sloupce jen pro vyhledání.
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS authors (
+        id   TEXT PRIMARY KEY,
+        json TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS series (
+        id   TEXT PRIMARY KEY,
+        json TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS book_progress (
+        book_id TEXT PRIMARY KEY,
+        json    TEXT NOT NULL
       );
     `)
   }

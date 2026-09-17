@@ -5,28 +5,32 @@ import {
   apiFetch,
   asList,
   SYNC_BATCH_LIMIT,
+  type Author,
   type Book,
+  type BookProgress,
   type Chapter,
+  type CreateSessionRequest,
   type PlaySession,
+  type Series,
   type SyncResponse,
 } from 'libriter-shared'
 
-import {
-  deleteEvents,
-  markAttempt,
-  rewriteSessionId,
-  takePending,
-  countPending,
-} from '@/db/events'
+import { getMode } from '@/data/mode'
+import { countPending, deleteEvents, markAttempt, rewriteSessionId, takePending } from '@/db/events'
 import {
   bookUpdatedAt,
+  deleteMissingAuthors,
   deleteMissingBooks,
+  deleteMissingSeries,
   deleteSessionMirror,
   listLocalOnlySessions,
+  replaceBookProgress,
   replaceChapters,
   replaceSessions,
   saveSessionMirror,
+  upsertAuthors,
   upsertBooks,
+  upsertSeries,
 } from '@/db/library'
 import { deviceId, setSetting } from '@/db/settings'
 import { downloadManager } from '@/downloads/downloadManager'
@@ -37,6 +41,10 @@ import { downloadManager } from '@/downloads/downloadManager'
  * Jediné místo, které mluví se serverem o poslechu. Přehrávač jen píše do
  * fronty (pending_events) a řekne „zkus to“; jestli se to povede teď, za pět
  * minut, nebo až po přistání, je věc tohohle souboru.
+ *
+ * V obou režimech se odesílá fronta pozic. Zrcadlo knihovny (knihy, autoři,
+ * série, kapitoly, poslechy, stav knih) se stahuje jen v offline režimu –
+ * online režim čte živě ze serveru a zrcadlo by jen zabíralo místo.
  *
  * Pořadí kroků není libovolné:
  *  1. vyřešit session založené offline – bez serverového ID by celá dávka
@@ -50,7 +58,7 @@ import { downloadManager } from '@/downloads/downloadManager'
 
 export type SyncState =
   | { kind: 'idle'; pending: number; lastSyncAt: string | null }
-  | { kind: 'syncing'; pending: number }
+  | { kind: 'syncing'; pending: number; progress?: { done: number; total: number } }
   | { kind: 'offline'; pending: number }
   | { kind: 'backoff'; pending: number; attempt: number; retryAt: number }
 
@@ -82,7 +90,9 @@ class SyncEngine {
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener)
     listener(this.state)
-    return () => this.listeners.delete(listener)
+    return () => {
+      this.listeners.delete(listener)
+    }
   }
 
   current(): SyncState {
@@ -131,7 +141,7 @@ class SyncEngine {
     }, DEBOUNCE_MS)
   }
 
-  /** Vynutí kolečko teď (pull-to-refresh, start aplikace). */
+  /** Vynutí kolečko teď (pull-to-refresh, start aplikace, zapnutí offline režimu). */
   async syncNow(): Promise<void> {
     if (this.running) {
       this.again = true
@@ -159,8 +169,11 @@ class SyncEngine {
     try {
       await this.resolveLocalSessions()
       await this.flushPending()
-      await this.pullSessions()
-      await this.pullLibrary()
+
+      if (getMode() === 'offline') {
+        await this.pullSessions()
+        await this.pullLibrary()
+      }
 
       const now = new Date().toISOString()
       await setSetting('last_library_sync', now)
@@ -203,20 +216,18 @@ class SyncEngine {
 
   /**
    * Session, která vznikla offline, má jen klientské UUID. Server ho nezná,
-   * takže se založí skutečná a čekající události se na ni přepíšou.
+   * takže se založí skutečná – stejného druhu a se stejnými knihami – a
+   * čekající události se na ni přepíšou.
    */
   private async resolveLocalSessions(): Promise<void> {
     for (const local of await listLocalOnlySessions()) {
-      const bookId = local.current_book_id ?? local.items[0]?.book_id
-      if (!bookId) {
+      const request = sessionRequest(local)
+      if (!request) {
         await deleteSessionMirror(local.id)
         continue
       }
 
-      const created = await apiFetch<PlaySession>('/sessions', {
-        method: 'POST',
-        json: { kind: 'book', book_id: bookId },
-      })
+      const created = await apiFetch<PlaySession>('/sessions', { method: 'POST', json: request })
 
       await rewriteSessionId(local.id, created.id)
       await deleteSessionMirror(local.id)
@@ -267,7 +278,12 @@ class SyncEngine {
   }
 
   private async pullLibrary(): Promise<void> {
-    const books = asList(await apiFetch<Book[] | null>('/books'))
+    const [books, authors, series, progress] = await Promise.all([
+      apiFetch<Book[] | null>('/books').then(asList),
+      apiFetch<Author[] | null>('/authors').then(asList),
+      apiFetch<Series[] | null>('/series').then(asList),
+      apiFetch<BookProgress[] | null>('/books/progress').then(asList),
+    ])
 
     // Kapitoly stojí jeden požadavek na knihu, proto se tahají jen tam, kde
     // se kniha od minula změnila. Změnu pořadí kapitol server hlásí zvednutím
@@ -278,6 +294,11 @@ class SyncEngine {
     }
 
     await upsertBooks(books)
+    await upsertAuthors(authors)
+    await upsertSeries(series)
+    await replaceBookProgress(progress)
+    await deleteMissingAuthors(authors.map((author) => author.id))
+    await deleteMissingSeries(series.map((item) => item.id))
 
     // Kniha, která na serveru zmizela, se smaže i z telefonu. Soubory se
     // musí uklidit hned: bez knihy v knihovně se k nim uživatel nedostane
@@ -286,7 +307,13 @@ class SyncEngine {
       await downloadManager.remove(missing)
     }
 
-    for (const bookId of changed) {
+    // První zapnutí offline režimu stahuje kapitoly celé knihovny – to trvá
+    // a uživatel má vidět, že se něco děje.
+    const total = changed.length
+    for (const [index, bookId] of changed.entries()) {
+      if (total > 5) {
+        this.setState({ kind: 'syncing', pending: this.state.pending, progress: { done: index, total } })
+      }
       const chapters = asList(await apiFetch<Chapter[] | null>(`/books/${bookId}/chapters`))
       await replaceChapters(bookId, chapters)
     }
@@ -295,6 +322,21 @@ class SyncEngine {
   private setState(state: SyncState): void {
     this.state = state
     for (const listener of this.listeners) listener(state)
+  }
+}
+
+/** Z lokální session zpět požadavek, kterým se založí serverová. */
+function sessionRequest(local: PlaySession): CreateSessionRequest | null {
+  const bookIds = local.items.map((item) => item.book_id)
+  if (bookIds.length === 0) return null
+
+  switch (local.kind) {
+    case 'book':
+      return { kind: 'book', book_id: local.current_book_id ?? bookIds[0] }
+    case 'series':
+      return local.source_id ? { kind: 'series', series_id: local.source_id } : { kind: 'list', book_ids: bookIds }
+    case 'list':
+      return { kind: 'list', title: local.title, book_ids: bookIds }
   }
 }
 

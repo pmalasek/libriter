@@ -1,4 +1,4 @@
-import type { Book, Chapter, PlaySession } from 'libriter-shared'
+import type { Author, Book, BookProgress, Chapter, PlaySession, Series } from 'libriter-shared'
 
 import { openDb } from './schema'
 
@@ -177,4 +177,117 @@ export async function isSessionLocalOnly(id: string): Promise<boolean> {
     id,
   )
   return row?.local_only === 1
+}
+
+// --- autoři ---
+
+export async function upsertAuthors(authors: Author[]): Promise<void> {
+  const db = await openDb()
+  await db.withTransactionAsync(async () => {
+    for (const author of authors) {
+      await db.runAsync(
+        `INSERT INTO authors (id, json) VALUES (?, ?)
+         ON CONFLICT (id) DO UPDATE SET json = excluded.json`,
+        author.id,
+        JSON.stringify(author),
+      )
+    }
+  })
+}
+
+export async function deleteMissingAuthors(keepIds: string[]): Promise<void> {
+  await deleteMissing('authors', 'id', keepIds)
+}
+
+export async function listAuthors(): Promise<Author[]> {
+  const db = await openDb()
+  const rows = await db.getAllAsync<{ json: string }>('SELECT json FROM authors')
+  return rows.map((row) => JSON.parse(row.json) as Author)
+}
+
+export async function getAuthor(id: string): Promise<Author | null> {
+  const db = await openDb()
+  const row = await db.getFirstAsync<{ json: string }>('SELECT json FROM authors WHERE id = ?', id)
+  return row ? (JSON.parse(row.json) as Author) : null
+}
+
+// --- série ---
+
+export async function upsertSeries(list: Series[]): Promise<void> {
+  const db = await openDb()
+  await db.withTransactionAsync(async () => {
+    for (const series of list) {
+      await db.runAsync(
+        `INSERT INTO series (id, json) VALUES (?, ?)
+         ON CONFLICT (id) DO UPDATE SET json = excluded.json`,
+        series.id,
+        JSON.stringify(series),
+      )
+    }
+  })
+}
+
+export async function deleteMissingSeries(keepIds: string[]): Promise<void> {
+  await deleteMissing('series', 'id', keepIds)
+}
+
+export async function listSeries(): Promise<Series[]> {
+  const db = await openDb()
+  const rows = await db.getAllAsync<{ json: string }>('SELECT json FROM series')
+  return rows.map((row) => JSON.parse(row.json) as Series)
+}
+
+export async function getSeriesOne(id: string): Promise<Series | null> {
+  const db = await openDb()
+  const row = await db.getFirstAsync<{ json: string }>('SELECT json FROM series WHERE id = ?', id)
+  return row ? (JSON.parse(row.json) as Series) : null
+}
+
+// --- stav knih ---
+
+export async function replaceBookProgress(list: BookProgress[]): Promise<void> {
+  const db = await openDb()
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM book_progress')
+    for (const progress of list) {
+      await db.runAsync(
+        'INSERT INTO book_progress (book_id, json) VALUES (?, ?)',
+        progress.book_id,
+        JSON.stringify(progress),
+      )
+    }
+  })
+}
+
+export async function upsertBookProgress(progress: BookProgress): Promise<void> {
+  const db = await openDb()
+  await db.runAsync(
+    `INSERT INTO book_progress (book_id, json) VALUES (?, ?)
+     ON CONFLICT (book_id) DO UPDATE SET json = excluded.json`,
+    progress.book_id,
+    JSON.stringify(progress),
+  )
+}
+
+export async function listBookProgress(): Promise<BookProgress[]> {
+  const db = await openDb()
+  const rows = await db.getAllAsync<{ json: string }>('SELECT json FROM book_progress')
+  return rows.map((row) => JSON.parse(row.json) as BookProgress)
+}
+
+/** Smaže z tabulky řádky, které v seznamu ze serveru nejsou. */
+async function deleteMissing(table: 'authors' | 'series', column: string, keepIds: string[]): Promise<void> {
+  const db = await openDb()
+  if (keepIds.length === 0) {
+    await db.runAsync(`DELETE FROM ${table}`)
+    return
+  }
+  const placeholders = keepIds.map(() => '?').join(', ')
+  await db.runAsync(`DELETE FROM ${table} WHERE ${column} NOT IN (${placeholders})`, ...keepIds)
+}
+
+/** Kniha se vrací mezi neposlechnuté – server řádek maže, zrcadlo taky. */
+export async function deleteBookProgress(bookId: string): Promise<void> {
+  const db = await openDb()
+  await db.runAsync('DELETE FROM book_progress WHERE book_id = ?', bookId)
 }

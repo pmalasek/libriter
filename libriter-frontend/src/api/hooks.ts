@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
-import { queryKeys } from 'libriter-shared'
+import { bookStatus, progressMap, queryKeys } from 'libriter-shared'
 import { apiFetch, asList } from './client'
 import type {
   AuthConfig,
@@ -141,20 +141,8 @@ export function useBookProgress() {
     queryFn: async () => asList(await apiFetch<BookProgress[] | null>('/books/progress')),
   })
 
-  const map = useMemo(() => {
-    const m = new Map<string, BookProgress>()
-    for (const p of query.data ?? []) m.set(p.book_id, p)
-    return m
-  }, [query.data])
-
-  const status = useCallback(
-    (bookId: string): BookStatus => {
-      const progress = map.get(bookId)
-      if (!progress) return 'none'
-      return progress.finished_at ? 'finished' : 'started'
-    },
-    [map],
-  )
+  const map = useMemo(() => progressMap(query.data), [query.data])
+  const status = useCallback((bookId: string): BookStatus => bookStatus(map.get(bookId)), [map])
 
   return { ...query, map, status }
 }

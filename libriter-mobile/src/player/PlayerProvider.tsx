@@ -9,36 +9,35 @@ import {
   type ReactNode,
 } from 'react'
 import { AppState } from 'react-native'
-import TrackPlayer, {
-  Event,
-  State,
-  useTrackPlayerEvents,
-  type Track,
-} from 'react-native-track-player'
+import { useQueryClient } from '@tanstack/react-query'
+import TrackPlayer, { Event, State, useTrackPlayerEvents, type Track } from 'react-native-track-player'
 import {
-  apiFetch,
+  ApiError,
   apiUrl,
   currentBookId,
   MAX_TIMEUPDATE_GAP_SECONDS,
+  queryKeys,
   SAVE_INTERVAL_MS,
   sessionItem,
   type Book,
   type Chapter,
   type PlaySession,
 } from 'libriter-shared'
-import * as Crypto from 'expo-crypto'
 
-import { fetchStreamToken } from '@/api/queries'
+import { fetchStreamToken } from '@/api/stream'
+import { toast } from '@/components/Toast'
+import { withSource } from '@/data/sources'
 import { bookChapterFiles } from '@/db/downloads'
-import {
-  getBook,
-  getSessionMirror,
-  listChapters,
-  listSessions,
-  saveSessionMirror,
-} from '@/db/library'
-import { savePosition, resetFingerprint } from './positionSaver'
+import { getSessionMirror } from '@/db/library'
+import { resetFingerprint, savePosition } from './positionSaver'
+import { addSessionItems, deleteSession, startSession } from './sessions'
 import { ensurePlayer } from './setup'
+
+/** Výběr knih a sérií pro seznam nebo přidání do poslechu – jako na webu. */
+interface Selection {
+  bookIds?: string[]
+  seriesIds?: string[]
+}
 
 interface PlayerValue {
   session: PlaySession | null
@@ -53,16 +52,25 @@ interface PlayerValue {
   /** Hraje se ze staženého souboru, ne ze streamu? */
   offline: boolean
 
-  /** Otevře knihu: pokračuje v rozposlouchaném poslechu, nebo založí nový. */
+  /** Přehraje knihu; volitelně rovnou konkrétní kapitolu od začátku. */
   playBook: (bookId: string, chapterId?: string) => Promise<void>
-  /** Přepne na jiný rozposlouchaný poslech. */
-  openSession: (sessionId: string) => Promise<void>
+  playSeries: (seriesId: string) => Promise<void>
+  playList: (input: Selection & { title?: string }) => Promise<void>
+  /** Přidá knihy nebo série na konec otevřeného poslechu. */
+  addToSession: (input: Selection) => Promise<void>
+  /** Přepne na jiný rozposlouchaný poslech a načte jeho pozici. */
+  switchSession: (sessionId: string) => Promise<void>
+  removeSession: (sessionId: string) => Promise<void>
+  /** Přepne knihu uvnitř otevřeného poslechu. */
+  playItem: (bookId: string) => Promise<void>
+
   toggle: () => Promise<void>
   seek: (seconds: number) => Promise<void>
   skip: (delta: number) => Promise<void>
   nextChapter: () => Promise<void>
   prevChapter: () => Promise<void>
   setSpeed: (speed: number) => Promise<void>
+  /** Zavře přehrávač; poslech zůstane v seznamu i s pozicí. */
   close: () => Promise<void>
 }
 
@@ -75,6 +83,7 @@ export function usePlayer(): PlayerValue {
 }
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
+  const queryClient = useQueryClient()
   const [session, setSession] = useState<PlaySession | null>(null)
   const [book, setBook] = useState<Book | null>(null)
   const [chapters, setChapters] = useState<Chapter[]>([])
@@ -92,6 +101,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const chaptersRef = useRef<Chapter[]>([])
   const chapterRef = useRef<Chapter | null>(null)
   const speedRef = useRef(1)
+  const playingRef = useRef(false)
   /** Odposlouchané sekundy od posledního zápisu; jdou do deníku poslechu. */
   const listenedRef = useRef(0)
   const lastPositionRef = useRef(0)
@@ -103,17 +113,22 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   chaptersRef.current = chapters
   chapterRef.current = chapter
 
+  const invalidateSessions = useCallback(
+    () => void queryClient.invalidateQueries({ queryKey: queryKeys.sessions }),
+    [queryClient],
+  )
+
   const store = useCallback(
     async (options: { finished?: boolean; bookFinished?: boolean; force?: boolean } = {}) => {
-      const openSessionValue = sessionRef.current
+      const openSession = sessionRef.current
       const openBook = bookRef.current
-      if (!openSessionValue || !openBook || seekingRef.current) return
+      if (!openSession || !openBook || seekingRef.current) return
 
       const listened = listenedRef.current
       listenedRef.current = 0
 
       const saved = await savePosition({
-        sessionId: openSessionValue.id,
+        sessionId: openSession.id,
         bookId: openBook.id,
         chapterId: chapterRef.current?.id,
         positionSeconds: lastPositionRef.current,
@@ -125,7 +140,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       })
       if (!saved) return
 
-      const fresh = await getSessionMirror(openSessionValue.id)
+      const fresh = await getSessionMirror(openSession.id)
       if (fresh && sessionRef.current?.id === fresh.id) setSession(fresh)
     },
     [],
@@ -134,8 +149,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   /**
    * Naplní frontu přehrávače kapitolami knihy a doskočí na uloženou pozici.
    *
-   * Zdroj kapitoly volí podle toho, co je v telefonu: stažený soubor vyhrává
-   * nad streamem, takže rozehraná kniha přežije i vypnutou síť.
+   * Kniha a kapitoly jdou podle režimu ze serveru nebo z telefonu; zdroj
+   * zvuku se volí podle toho, co je stažené: lokální soubor vyhrává nad
+   * streamem, takže rozehraná kniha přežije i vypnutou síť.
    */
   const load = useCallback(
     async (input: {
@@ -151,11 +167,14 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         await ensurePlayer()
 
         const [nextBook, nextChapters, files] = await Promise.all([
-          getBook(input.bookId),
-          listChapters(input.bookId),
+          withSource((s) => s.book(input.bookId)),
+          withSource((s) => s.chapters(input.bookId)),
           bookChapterFiles(input.bookId),
         ])
-        if (!nextBook || nextChapters.length === 0) return
+        if (!nextBook || nextChapters.length === 0) {
+          toast.error('Kniha nemá žádné kapitoly k přehrání.')
+          return
+        }
 
         // Token se vyžádá jen tehdy, když aspoň jedna kapitola chybí na disku.
         const needsStream = nextChapters.some((item) => !files.has(item.id))
@@ -186,6 +205,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const limit = Math.max(0, nextChapters[index].duration_seconds - 1)
         const target = Math.min(Math.max(0, input.positionSeconds), limit || input.positionSeconds)
         if (target > 0) await TrackPlayer.seekTo(target)
+        speedRef.current = input.session.playback_speed || speedRef.current
+        setSpeedState(speedRef.current)
         await TrackPlayer.setRate(speedRef.current)
 
         setSession(input.session)
@@ -200,6 +221,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         resetFingerprint()
 
         if (input.autoplay) await TrackPlayer.play()
+      } catch (error: unknown) {
+        toast.error(error instanceof Error ? error.message : 'Přehrávání se nepodařilo spustit')
       } finally {
         seekingRef.current = false
         setLoading(false)
@@ -208,18 +231,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [],
   )
 
+  /** Otevře poslech na jeho rozehrané knize. */
   const openSession = useCallback(
-    async (sessionId: string) => {
-      const mirror = await getSessionMirror(sessionId)
-      if (!mirror) return
-      const bookId = currentBookId(mirror)
-      if (!bookId) return
-      const item = sessionItem(mirror, bookId)
+    async (target: PlaySession, bookId?: string, chapterId?: string, fromStart = false) => {
+      const id = bookId ?? currentBookId(target)
+      if (!id) return
+      const item = sessionItem(target, id)
       await load({
-        session: mirror,
-        bookId,
-        chapterId: item?.chapter_id,
-        positionSeconds: item?.position_seconds ?? 0,
+        session: target,
+        bookId: id,
+        chapterId: chapterId ?? item?.chapter_id,
+        positionSeconds: fromStart ? 0 : (item?.position_seconds ?? 0),
         autoplay: true,
       })
     },
@@ -228,19 +250,128 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   const playBook = useCallback(
     async (bookId: string, chapterId?: string) => {
-      const target = await resolveSession(bookId)
-      const item = sessionItem(target, bookId)
-      await load({
-        session: target,
-        bookId,
+      try {
+        // Otevřený poslech s touhle knihou se jen přepne – zakládat nový by
+        // zahodil pozici, kterou přehrávač drží.
+        const open = sessionRef.current
+        if (open && open.items.some((item) => item.book_id === bookId)) {
+          await store({ force: true })
+          await openSession(open, bookId, chapterId, Boolean(chapterId))
+          return
+        }
+        const target = await startSession({ kind: 'book', book_id: bookId })
+        invalidateSessions()
         // Kliknutí na konkrétní kapitolu ji spustí od začátku; „Přehrát“
         // u knihy pokračuje tam, kde poslech skončil.
-        chapterId: chapterId ?? item?.chapter_id,
-        positionSeconds: chapterId ? 0 : (item?.position_seconds ?? 0),
-        autoplay: true,
-      })
+        await openSession(target, bookId, chapterId, Boolean(chapterId))
+      } catch (error: unknown) {
+        toast.error(describe(error, 'Poslech se nepodařilo založit'))
+      }
     },
-    [load],
+    [invalidateSessions, openSession, store],
+  )
+
+  const playSeries = useCallback(
+    async (seriesId: string) => {
+      try {
+        const target = await startSession({ kind: 'series', series_id: seriesId })
+        invalidateSessions()
+        await openSession(target)
+      } catch (error: unknown) {
+        toast.error(describe(error, 'Poslech série se nepodařilo založit'))
+      }
+    },
+    [invalidateSessions, openSession],
+  )
+
+  const playList = useCallback(
+    async (input: Selection & { title?: string }) => {
+      try {
+        const target = await startSession({
+          kind: 'list',
+          title: input.title,
+          book_ids: input.bookIds,
+          series_ids: input.seriesIds,
+        })
+        invalidateSessions()
+        await openSession(target)
+      } catch (error: unknown) {
+        toast.error(describe(error, 'Seznam se nepodařilo založit'))
+      }
+    },
+    [invalidateSessions, openSession],
+  )
+
+  const addToSession = useCallback(
+    async (input: Selection) => {
+      const open = sessionRef.current
+      if (!open) return
+      try {
+        const updated = await addSessionItems(open.id, {
+          book_ids: input.bookIds,
+          series_ids: input.seriesIds,
+        })
+        setSession(updated)
+        invalidateSessions()
+        toast.success('Přidáno do poslechu.')
+      } catch (error: unknown) {
+        toast.error(describe(error, 'Do poslechu se nepodařilo přidat'))
+      }
+    },
+    [invalidateSessions],
+  )
+
+  const switchSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        await store({ force: true })
+        // Ze serveru, pokud je po ruce – pozice z jiného zařízení je novější
+        // než zrcadlo; bez sítě se vezme zrcadlo.
+        const target = (await withSource((s) => s.session(sessionId))) ?? (await getSessionMirror(sessionId))
+        if (!target) {
+          toast.error('Poslech už neexistuje.')
+          return
+        }
+        await openSession(target)
+      } catch (error: unknown) {
+        toast.error(describe(error, 'Poslech se nepodařilo otevřít'))
+      }
+    },
+    [openSession, store],
+  )
+
+  const close = useCallback(async () => {
+    await store({ force: true })
+    await TrackPlayer.pause()
+    await TrackPlayer.reset()
+    setSession(null)
+    setBook(null)
+    setChapter(null)
+    setChapters([])
+    setPlaying(false)
+  }, [store])
+
+  const removeSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        if (sessionRef.current?.id === sessionId) await close()
+        await deleteSession(sessionId)
+        invalidateSessions()
+      } catch (error: unknown) {
+        toast.error(describe(error, 'Poslech se nepodařilo smazat'))
+      }
+    },
+    [close, invalidateSessions],
+  )
+
+  const playItem = useCallback(
+    async (bookId: string) => {
+      const open = sessionRef.current
+      if (!open) return
+      await store({ force: true })
+      await openSession(open, bookId)
+    },
+    [openSession, store],
   )
 
   const toggle = useCallback(async () => {
@@ -250,9 +381,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const seek = useCallback(async (seconds: number) => {
-    await TrackPlayer.seekTo(Math.max(0, seconds))
-    lastPositionRef.current = Math.max(0, seconds)
-    setPosition(Math.max(0, seconds))
+    const target = Math.max(0, seconds)
+    await TrackPlayer.seekTo(target)
+    lastPositionRef.current = target
+    setPosition(target)
   }, [])
 
   const skip = useCallback(async (delta: number) => {
@@ -286,15 +418,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [store],
   )
 
-  const close = useCallback(async () => {
-    await store({ force: true })
-    await TrackPlayer.pause()
-    setSession(null)
-    setBook(null)
-    setChapter(null)
-    setChapters([])
-  }, [store])
-
   // --- události přehrávače ---
 
   useTrackPlayerEvents(
@@ -305,7 +428,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const diff = now - lastPositionRef.current
         // Do deníku jde jen plynulý posun. Převíjení i výměna kapitoly udělají
         // skok, a ten se nepočítá.
-        if (playing && diff > 0 && diff < MAX_TIMEUPDATE_GAP_SECONDS * speedRef.current) {
+        if (playingRef.current && diff > 0 && diff < MAX_TIMEUPDATE_GAP_SECONDS * speedRef.current) {
           listenedRef.current += diff
         }
         lastPositionRef.current = now
@@ -316,6 +439,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
       if (event.type === Event.PlaybackState) {
         const isPlaying = event.state === State.Playing
+        playingRef.current = isPlaying
         setPlaying(isPlaying)
         // Pauza je přirozený okamžik k zápisu: uživatel odložil telefon.
         if (!isPlaying) await store()
@@ -346,7 +470,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       }
 
       if (event.type === Event.PlaybackQueueEnded) {
-        // Poslední kapitola poslední knihy poslechu = doposlechnuto.
+        // Poslední kapitola knihy: u vícedílného poslechu se jde na další
+        // knihu, u jednodílného je poslech doposlechnutý.
+        const open = sessionRef.current
+        const current = bookRef.current
+        const index = open && current ? open.items.findIndex((item) => item.book_id === current.id) : -1
+        const nextItem = index >= 0 && open ? open.items[index + 1] : undefined
+        if (open && nextItem) {
+          await store({ bookFinished: true, force: true })
+          await openSession(open, nextItem.book_id, undefined, true)
+          return
+        }
         await store({ bookFinished: true, finished: true, force: true })
       }
     },
@@ -380,7 +514,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       speed,
       offline,
       playBook,
-      openSession,
+      playSeries,
+      playList,
+      addToSession,
+      switchSession,
+      removeSession,
+      playItem,
       toggle,
       seek,
       skip,
@@ -401,7 +540,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       speed,
       offline,
       playBook,
-      openSession,
+      playSeries,
+      playList,
+      addToSession,
+      switchSession,
+      removeSession,
+      playItem,
       toggle,
       seek,
       skip,
@@ -415,47 +559,6 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
 }
 
-/**
- * Najde poslech, do kterého kniha patří. Online se o něj řekne serveru (ten
- * pokračuje v rozposlouchaném místo zakládání duplicity); bez spojení vznikne
- * provizorní session s klientským UUID, kterou synchronizace vymění za
- * serverovou dřív, než odešle první pozici.
- */
-async function resolveSession(bookId: string): Promise<PlaySession> {
-  try {
-    const created = await apiFetch<PlaySession>('/sessions', {
-      method: 'POST',
-      json: { kind: 'book', book_id: bookId },
-    })
-    await saveSessionMirror(created)
-    return created
-  } catch {
-    // Offline. Rozposlouchaný poslech, který knihu obsahuje, se použije
-    // znovu – jinak by každé zapnutí v letadle založilo další session
-    // s nulovou pozicí.
-    const known = await listSessions()
-    const existing = known.find(
-      (candidate) =>
-        !candidate.finished_at && candidate.items.some((item) => item.book_id === bookId),
-    )
-    if (existing) return existing
-
-    const now = new Date().toISOString()
-    const local: PlaySession = {
-      id: Crypto.randomUUID(),
-      kind: 'book',
-      source_id: bookId,
-      current_book_id: bookId,
-      playback_speed: 1,
-      created_at: now,
-      updated_at: now,
-      items: [{ book_id: bookId, position: 1, position_seconds: 0 }],
-    }
-    await saveSessionMirror(local, true)
-    return local
-  }
-}
-
 /** Token do adresy audia; bez spojení se vrátí null a hraje se z disku. */
 async function streamTokenOrNull(): Promise<string | null> {
   try {
@@ -463,4 +566,9 @@ async function streamTokenOrNull(): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+function describe(error: unknown, fallback: string): string {
+  if (error instanceof ApiError && error.status === 0) return 'Bez připojení k serveru'
+  return error instanceof Error && error.message ? error.message : fallback
 }

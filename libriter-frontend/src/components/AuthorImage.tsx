@@ -49,10 +49,5 @@ export function AuthorImage({ author, className }: { author: Author; className?:
   )
 }
 
-/** Roky života pro popisek – "1890–1938", "* 1890" nebo prázdno. */
-export function lifeYears(author: Author): string {
-  if (author.birth_year && author.death_year) return `${author.birth_year}–${author.death_year}`
-  if (author.birth_year) return `* ${author.birth_year}`
-  if (author.death_year) return `† ${author.death_year}`
-  return ''
-}
+// Roky života se počítají i v mobilní aplikaci (libriter-shared/src/format.ts).
+export { lifeYears } from 'libriter-shared'

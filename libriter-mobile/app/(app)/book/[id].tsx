@@ -1,199 +1,266 @@
 import { useMemo } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
+import {
+  Calendar,
+  CheckCircle2,
+  Clock,
+  Download,
+  Headphones,
+  Languages,
+  ListPlus,
+  Mic,
+  Pause,
+  Play,
+  RotateCcw,
+  Star,
+  Trash2,
+} from 'lucide-react-native'
+import { chapterCount, formatBytes, formatClock, formatDate, formatDuration, sortBooks } from 'libriter-shared'
 
-import { BookCover } from '@/components/BookCover'
-import { useDownloads, useLocalBook, useLocalChapters } from '@/db/queries'
+import { BookCover, coverUrl } from '@/components/BookCover'
+import { BookGrid } from '@/components/BookGrid'
+import { ChapterList } from '@/components/ChapterList'
+import { ErrorState } from '@/components/EmptyState'
+import { ExpandableText } from '@/components/ExpandableText'
+import { ActionRow, BackButton, Screen } from '@/components/Screen'
+import { toast } from '@/components/Toast'
+import { Badge } from '@/components/ui/Badge'
+import { Button } from '@/components/ui/Button'
+import { GlassCard } from '@/components/ui/GlassCard'
+import { Body, Eyebrow, Heading, Muted, SectionTitle } from '@/components/ui/Text'
+import {
+  useBook,
+  useBookProgress,
+  useBooks,
+  useChapters,
+  useDownloads,
+  useSeriesOne,
+  useSeriesTitle,
+  useSessions,
+  useSetBookFinished,
+} from '@/data/hooks'
 import { downloadManager } from '@/downloads/downloadManager'
 import { usePlayer } from '@/player/PlayerProvider'
-import { colors, formatBytes, formatDuration, radius, spacing } from '@/theme'
+import { fonts, radius, spacing, useTheme } from '@/theme'
 
-/**
- * Detail knihy: co to je, kolik místa zabere, kapitoly a tlačítka.
- * Správa knihovny (úpravy, metadata) zůstává na webu – tady se jen poslouchá.
- */
+/** Detail knihy – BookDetailPage z webu bez úprav; navíc stahování do telefonu. */
 export default function BookScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>()
-  const book = useLocalBook(id)
-  const chapters = useLocalChapters(id)
-  const downloads = useDownloads()
-  const player = usePlayer()
+  const { id = '' } = useLocalSearchParams<{ id: string }>()
+  const { colors } = useTheme()
   const router = useRouter()
+  const book = useBook(id)
+  const series = useSeriesOne(book.data?.series_id ?? '')
+  const allBooks = useBooks()
+  const seriesTitle = useSeriesTitle()
+  const player = usePlayer()
+  const sessions = useSessions()
+  const progress = useBookProgress()
+  const setFinished = useSetBookFinished()
+  const downloads = useDownloads()
+  const chapters = useChapters(id)
 
-  const download = useMemo(
-    () => (downloads.data ?? []).find((row) => row.bookId === id),
-    [downloads.data, id],
+  const status = progress.status(id)
+  const finishedAt = progress.map.get(id)?.finished_at
+  const download = useMemo(() => (downloads.data ?? []).find((row) => row.bookId === id), [downloads.data, id])
+  const size = useMemo(() => (chapters.data ?? []).reduce((sum, chapter) => sum + chapter.size_bytes, 0), [chapters.data])
+
+  // Rozposlouchaná pozice knihy – z libovolného poslechu, který ji obsahuje.
+  const started = useMemo(
+    () => (sessions.data ?? []).flatMap((s) => s.items).find((item) => item.book_id === id),
+    [id, sessions.data],
   )
-  const size = useMemo(
-    () => (chapters.data ?? []).reduce((sum, chapter) => sum + chapter.size_bytes, 0),
-    [chapters.data],
-  )
+  const inSession = started !== undefined
+  const resumeAt = started && started.position_seconds > 0 ? started.position_seconds : null
 
-  const current = book.data
-  if (!current) {
-    return <Text style={styles.empty}>{book.isLoading ? 'Načítám…' : 'Kniha nenalezena.'}</Text>
-  }
+  const isOpenBook = player.book?.id === id
+  const isPlayingBook = isOpenBook && player.playing
 
-  const play = (chapterId?: string) => {
-    void player.playBook(current.id, chapterId)
-    router.push('/player')
-  }
+  const mainAuthor = book.data?.authors?.[0]
+  const moreByAuthor = useMemo(() => {
+    if (!book.data || !mainAuthor) return []
+    const byAuthor = (allBooks.data ?? []).filter(
+      (b) => b.id !== book.data?.id && b.authors?.some((a) => a.id === mainAuthor.id),
+    )
+    return sortBooks(byAuthor, 'title', 'asc', seriesTitle)
+  }, [allBooks.data, book.data, mainAuthor, seriesTitle])
+
+  const changeStatus = (finished: boolean) =>
+    setFinished.mutate(
+      { bookId: id, finished },
+      {
+        onSuccess: () => toast.success(finished ? 'Kniha je označená jako doposlechnutá.' : 'Označení zrušeno.'),
+        onError: (error) => toast.error(error.message),
+      },
+    )
+
+  const data = book.data
 
   return (
-    <ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.head}>
-        <BookCover
-          bookId={current.id}
-          title={current.title}
-          size={110}
-          downloaded={download?.state === 'complete'}
-        />
-        <View style={styles.headTexts}>
-          <Text style={styles.title}>{current.title}</Text>
-          <Text style={styles.author}>
-            {current.authors.map((author) => author.name).join(', ') || 'Neznámý autor'}
-          </Text>
-          <Text style={styles.meta}>
-            {formatDuration(current.duration_seconds)} · {current.chapter_count} kapitol
-            {size > 0 && ` · ${formatBytes(size)}`}
-          </Text>
-        </View>
-      </View>
+    <Screen>
+      <BackButton label="Zpět" />
 
-      <View style={styles.actions}>
-        <Pressable style={styles.primary} onPress={() => play()}>
-          <Text style={styles.primaryText}>Přehrát</Text>
-        </Pressable>
-        <DownloadButton bookId={current.id} state={download?.state} />
-      </View>
+      {book.isError ? (
+        <ErrorState error={book.error} onRetry={() => void book.refetch()} />
+      ) : !data ? (
+        <Muted>{book.isPending ? 'Načítám…' : 'Kniha nenalezena.'}</Muted>
+      ) : (
+        <>
+          <GlassCard glow backdrop={data.cover_path ? coverUrl(data) : undefined}>
+            <View style={{ alignItems: 'flex-start' }}>
+              <BookCover book={data} size={160} downloaded={download?.state === 'complete'} />
+            </View>
 
-      <DownloadProgress
-        state={download?.state}
-        done={download?.bytesDone ?? 0}
-        total={download?.bytesTotal ?? 0}
-        error={download?.error ?? ''}
-      />
+            {series.data ? (
+              <Pressable onPress={() => router.push(`/series/${series.data?.id}`)} style={{ marginTop: spacing.md }}>
+                <Eyebrow>
+                  {series.data.title}
+                  {data.series_position != null ? ` · ${data.series_position}. díl` : ''}
+                </Eyebrow>
+              </Pressable>
+            ) : (
+              <Eyebrow style={{ marginTop: spacing.md }}>Audiokniha</Eyebrow>
+            )}
 
-      {current.description && <Text style={styles.description}>{current.description}</Text>}
+            <Heading size={26} style={{ marginTop: 6 }}>
+              {data.title}
+            </Heading>
 
-      <Text style={styles.sectionTitle}>Kapitoly</Text>
-      {(chapters.data ?? []).map((chapter) => (
-        <Pressable
-          key={chapter.id}
-          style={({ pressed }) => [styles.chapter, pressed && styles.pressed]}
-          onPress={() => play(chapter.id)}
-        >
-          <Text style={styles.chapterPosition}>{chapter.position}</Text>
-          <Text style={styles.chapterTitle} numberOfLines={1}>
-            {chapter.title}
-          </Text>
-          <Text style={styles.chapterDuration}>{formatDuration(chapter.duration_seconds)}</Text>
-        </Pressable>
-      ))}
-      {(chapters.data ?? []).length === 0 && (
-        <Text style={styles.empty}>Kapitoly se načtou při první synchronizaci.</Text>
+            {data.authors?.length ? (
+              <View style={styles.authors}>
+                {data.authors.map((author, index) => (
+                  <Pressable key={author.id} onPress={() => router.push(`/author/${author.id}`)}>
+                    <Body size={17} style={{ color: colors.primary, fontFamily: fonts.sansMedium }}>
+                      {index > 0 ? ', ' : ''}
+                      {author.name}
+                    </Body>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+
+            <View style={styles.badges}>
+              <Badge variant="highlight" icon={Clock} label={formatDuration(data.duration_seconds)} />
+              {data.narrator ? <Badge icon={Mic} label={data.narrator} /> : null}
+              {data.published_year ? <Badge icon={Calendar} label={String(data.published_year)} /> : null}
+              <Badge variant="outline" icon={Languages} label={data.language.toUpperCase()} />
+              {status === 'finished' ? (
+                <Badge variant="highlight" icon={CheckCircle2} label={finishedAt ? `Doposlechnuto ${formatDate(finishedAt)}` : 'Doposlechnuto'} />
+              ) : status === 'started' ? (
+                <Badge icon={Headphones} label="Rozposlouchané" />
+              ) : null}
+              {data.internal_rating ? <Badge variant="outline" icon={Star} label={`${data.internal_rating}/5`} /> : null}
+            </View>
+
+            <ActionRow style={{ marginTop: spacing.lg }}>
+              <Button
+                size="lg"
+                icon={isPlayingBook ? Pause : Play}
+                label={
+                  isPlayingBook ? 'Pozastavit' : isOpenBook ? 'Přehrát' : resumeAt != null ? `Pokračovat (${formatClock(resumeAt)})` : 'Přehrát'
+                }
+                onPress={() => (isOpenBook ? void player.toggle() : void player.playBook(data.id))}
+                disabled={player.loading}
+              />
+              {player.session && !inSession ? (
+                <Button variant="outline" size="lg" icon={ListPlus} label="Přidat do poslechu" onPress={() => void player.addToSession({ bookIds: [data.id] })} />
+              ) : null}
+              {status === 'finished' ? (
+                <Button variant="outline" size="lg" icon={RotateCcw} label="Zrušit označení" onPress={() => changeStatus(false)} disabled={setFinished.isPending} />
+              ) : (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  icon={CheckCircle2}
+                  label="Označit jako doposlechnuté"
+                  onPress={() => changeStatus(true)}
+                  disabled={setFinished.isPending}
+                />
+              )}
+            </ActionRow>
+          </GlassCard>
+
+          {/* Stahování je jediné, co web nemá – obsah zůstává na serveru,
+              telefon si ho bere s sebou. */}
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+              <View style={{ flex: 1 }}>
+                <SectionTitle>V telefonu</SectionTitle>
+                <Muted size={13}>{describeDownload(download?.state, download?.bytesDone ?? 0, download?.bytesTotal ?? 0, size, download?.error ?? '')}</Muted>
+              </View>
+              <DownloadButton bookId={data.id} state={download?.state} />
+            </View>
+            {download && download.state !== 'complete' && download.state !== 'error' ? (
+              <View style={[styles.track, { backgroundColor: colors.border }]}>
+                <View
+                  style={[
+                    styles.fill,
+                    { backgroundColor: colors.primary, width: `${download.bytesTotal > 0 ? Math.min(100, (download.bytesDone / download.bytesTotal) * 100) : 0}%` },
+                  ]}
+                />
+              </View>
+            ) : null}
+          </View>
+
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <SectionTitle style={{ marginBottom: spacing.sm }}>O knize</SectionTitle>
+            {data.description ? <ExpandableText text={data.description} /> : <Muted size={14}>Popis není k dispozici.</Muted>}
+            <Muted size={12} style={{ marginTop: spacing.md }}>
+              {chapterCount(data.chapter_count)} · přidáno {formatDate(data.created_at)}
+            </Muted>
+          </View>
+
+          <ChapterList key={data.id} book={data} />
+
+          {moreByAuthor.length > 0 && mainAuthor ? (
+            <View style={{ marginTop: spacing.xl }}>
+              <SectionTitle style={{ marginBottom: spacing.md }}>Další knihy autora {mainAuthor.name}</SectionTitle>
+              <BookGrid books={moreByAuthor} />
+            </View>
+          ) : null}
+        </>
       )}
-    </ScrollView>
+    </Screen>
   )
 }
 
 function DownloadButton({ bookId, state }: { bookId: string; state?: string }) {
   if (state === 'complete') {
-    return (
-      <Pressable style={styles.secondary} onPress={() => void downloadManager.remove(bookId)}>
-        <Text style={styles.secondaryText}>Smazat z telefonu</Text>
-      </Pressable>
-    )
+    return <Button variant="outline" icon={Trash2} label="Smazat" onPress={() => void downloadManager.remove(bookId)} />
   }
   if (state === 'downloading' || state === 'queued') {
-    return (
-      <Pressable style={styles.secondary} onPress={() => void downloadManager.pause(bookId)}>
-        <Text style={styles.secondaryText}>Pozastavit</Text>
-      </Pressable>
-    )
+    return <Button variant="outline" label="Pozastavit" onPress={() => void downloadManager.pause(bookId)} />
   }
   return (
-    <Pressable style={styles.secondary} onPress={() => void downloadManager.enqueue(bookId)}>
-      <Text style={styles.secondaryText}>{state === 'paused' ? 'Pokračovat' : 'Stáhnout'}</Text>
-    </Pressable>
+    <Button
+      icon={Download}
+      label={state === 'paused' ? 'Pokračovat' : 'Stáhnout'}
+      onPress={() => void downloadManager.enqueue(bookId).catch((error: Error) => toast.error(error.message))}
+    />
   )
 }
 
-function DownloadProgress({
-  state,
-  done,
-  total,
-  error,
-}: {
-  state?: string
-  done: number
-  total: number
-  error: string
-}) {
-  if (!state || state === 'complete') return null
-  if (state === 'error') return <Text style={styles.error}>Stahování selhalo: {error}</Text>
-
-  const ratio = total > 0 ? Math.min(1, done / total) : 0
-  return (
-    <View style={styles.progress}>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${ratio * 100}%` }]} />
-      </View>
-      <Text style={styles.meta}>
-        {state === 'paused' ? 'Pozastaveno' : 'Stahuji'} · {formatBytes(done)} z {formatBytes(total)}
-        {error !== '' && ` · ${error}`}
-      </Text>
-    </View>
-  )
+function describeDownload(state: string | undefined, done: number, total: number, size: number, error: string): string {
+  switch (state) {
+    case 'complete':
+      return `Staženo · ${formatBytes(done)}`
+    case 'downloading':
+      return `Stahuji · ${formatBytes(done)} z ${formatBytes(total)}`
+    case 'queued':
+      return 'Ve frontě'
+    case 'paused':
+      return error ? `Pozastaveno · ${error}` : 'Pozastaveno'
+    case 'error':
+      return `Stahování selhalo: ${error}`
+    default:
+      return size > 0 ? `Ke stažení ${formatBytes(size)}` : 'Kniha se přehrává ze serveru'
+  }
 }
 
 const styles = StyleSheet.create({
-  content: { padding: spacing.md, paddingBottom: spacing.xl, gap: spacing.md },
-  head: { flexDirection: 'row', gap: spacing.md },
-  headTexts: { flex: 1, gap: spacing.xs },
-  title: { color: colors.text, fontSize: 22, fontWeight: '700' },
-  author: { color: colors.textMuted, fontSize: 15 },
-  meta: { color: colors.textMuted, fontSize: 13 },
-  actions: { flexDirection: 'row', gap: spacing.sm },
-  primary: {
-    flex: 1,
-    backgroundColor: colors.accent,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.sm + 4,
-    alignItems: 'center',
-  },
-  primaryText: { color: colors.accentText, fontSize: 16, fontWeight: '600' },
-  secondary: {
-    flex: 1,
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.sm + 4,
-    alignItems: 'center',
-  },
-  secondaryText: { color: colors.text, fontSize: 15 },
-  progress: { gap: spacing.xs },
-  progressTrack: { height: 4, backgroundColor: colors.border, borderRadius: 2 },
-  progressFill: { height: 4, backgroundColor: colors.accent, borderRadius: 2 },
-  description: { color: colors.textMuted, fontSize: 14, lineHeight: 21 },
-  sectionTitle: {
-    color: colors.textMuted,
-    fontSize: 13,
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginTop: spacing.sm,
-  },
-  chapter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  pressed: { opacity: 0.6 },
-  chapterPosition: { color: colors.textMuted, fontSize: 13, width: 24 },
-  chapterTitle: { color: colors.text, fontSize: 15, flex: 1 },
-  chapterDuration: { color: colors.textMuted, fontSize: 13 },
-  error: { color: colors.danger, fontSize: 14 },
-  empty: { color: colors.textMuted, textAlign: 'center', marginTop: spacing.xl },
+  authors: { flexDirection: 'row', flexWrap: 'wrap', marginTop: spacing.sm },
+  badges: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm, marginTop: spacing.md },
+  card: { borderWidth: 1, borderRadius: radius['2xl'], padding: spacing.md, marginTop: spacing.lg, gap: spacing.sm },
+  track: { height: 4, borderRadius: 2, overflow: 'hidden' },
+  fill: { height: 4 },
 })

@@ -3,7 +3,20 @@ import * as Crypto from 'expo-crypto'
 import { openDb } from './schema'
 
 /** Klíče v tabulce `settings`. */
-export type SettingKey = 'device_id' | 'server_url' | 'wifi_only' | 'last_library_sync'
+export type SettingKey =
+  | 'device_id'
+  | 'server_url'
+  | 'wifi_only'
+  | 'offline_mode'
+  | 'last_library_sync'
+  | 'color_scheme'
+  | 'theme_mode'
+  | 'books.view'
+  | 'books.sort'
+  | 'books.sortDir'
+  | 'authors.view'
+  | 'authors.sort'
+  | 'authors.sortDir'
 
 export async function getSetting(key: SettingKey): Promise<string | null> {
   const db = await openDb()
@@ -44,4 +57,16 @@ export async function wifiOnly(): Promise<boolean> {
 
 export async function setWifiOnly(value: boolean): Promise<void> {
   await setSetting('wifi_only', value ? 'true' : 'false')
+}
+
+/**
+ * Offline režim: zrcadlit celou knihovnu do telefonu. Výchozí vypnuto –
+ * aplikace pak čte živě ze serveru jako web.
+ */
+export async function offlineMode(): Promise<boolean> {
+  return (await getSetting('offline_mode')) === 'true'
+}
+
+export async function setOfflineMode(value: boolean): Promise<void> {
+  await setSetting('offline_mode', value ? 'true' : 'false')
 }

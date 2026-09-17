@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, View } from 'react-native'
 import TrackPlayer from 'react-native-track-player'
 
-import { colors, radius, spacing } from '@/theme'
+import { radius, spacing, useTheme } from '@/theme'
+import { Button } from './ui/Button'
+import { Body, SectionTitle } from './ui/Text'
 
-/** Nabídka časovače v minutách; 0 znamená „do konce kapitoly“. */
+/** Nabídka časovače v minutách. */
 const PRESETS = [5, 10, 15, 30, 45, 60] as const
 
 export interface SleepTimer {
@@ -51,45 +53,39 @@ export function useSleepTimer(): SleepTimer {
   return { remaining, start, cancel }
 }
 
-export function SleepTimerSheet({
-  open,
-  onClose,
-  timer,
-}: {
-  open: boolean
-  onClose: () => void
-  timer: SleepTimer
-}) {
+export function SleepTimerSheet({ open, onClose, timer }: { open: boolean; onClose: () => void; timer: SleepTimer }) {
+  const { colors } = useTheme()
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <View style={styles.sheet}>
-          <Text style={styles.title}>Časovač vypnutí</Text>
+        <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <SectionTitle>Časovač vypnutí</SectionTitle>
           <View style={styles.options}>
             {PRESETS.map((minutes) => (
               <Pressable
                 key={minutes}
-                style={styles.option}
+                style={[styles.option, { backgroundColor: colors.secondary }]}
                 onPress={() => {
                   timer.start(minutes)
                   onClose()
                 }}
               >
-                <Text style={styles.optionText}>{minutes} min</Text>
+                <Body size={15} medium style={{ color: colors.secondaryForeground }}>
+                  {minutes} min
+                </Body>
               </Pressable>
             ))}
           </View>
-          {timer.remaining !== null && (
-            <Pressable
-              style={styles.cancel}
+          {timer.remaining !== null ? (
+            <Button
+              variant="ghost"
+              label="Zrušit časovač"
               onPress={() => {
                 timer.cancel()
                 onClose()
               }}
-            >
-              <Text style={styles.cancelText}>Zrušit časovač</Text>
-            </Pressable>
-          )}
+            />
+          ) : null}
         </View>
       </Pressable>
     </Modal>
@@ -99,21 +95,13 @@ export function SleepTimerSheet({
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#000000AA', justifyContent: 'flex-end' },
   sheet: {
-    backgroundColor: colors.surface,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
+    borderTopLeftRadius: radius['4xl'],
+    borderTopRightRadius: radius['4xl'],
+    borderWidth: 1,
     padding: spacing.lg,
+    paddingBottom: spacing.xl + spacing.md,
     gap: spacing.md,
   },
-  title: { color: colors.text, fontSize: 18, fontWeight: '600' },
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },
-  option: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  optionText: { color: colors.text, fontSize: 15 },
-  cancel: { alignItems: 'center', paddingVertical: spacing.sm },
-  cancelText: { color: colors.danger, fontSize: 15 },
+  option: { borderRadius: radius.lg, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
 })

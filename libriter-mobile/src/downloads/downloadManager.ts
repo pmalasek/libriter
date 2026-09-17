@@ -2,9 +2,10 @@ import NetInfo from '@react-native-community/netinfo'
 import * as FileSystem from 'expo-file-system/legacy'
 import { apiUrl, type Chapter } from 'libriter-shared'
 
-import { listChapters } from '@/db/library'
+import { listChapters, replaceChapters, upsertAuthors, upsertBooks } from '@/db/library'
+import { isOffline, serverSource } from '@/data/sources'
 import { wifiOnly } from '@/db/settings'
-import { fetchStreamToken } from '@/api/queries'
+import { fetchStreamToken } from '@/api/stream'
 import {
   chapterFile,
   deleteBookFiles,
@@ -54,6 +55,9 @@ class DownloadManager {
   /** Zařadí knihu ke stažení. Opakované zavolání frontu neduplikuje. */
   async enqueue(bookId: string): Promise<void> {
     this.cancelled.delete(bookId)
+    // V online režimu lokální databáze knihu nezná – stažená kniha ale musí
+    // mít metadata i v letadle, kde se k serveru nedostane.
+    await ensureBookLocal(bookId)
     await setDownloadState(bookId, 'queued')
     if (!this.queue.includes(bookId)) this.queue.push(bookId)
     await this.emit()
@@ -245,6 +249,23 @@ class DownloadManager {
   private async emit(): Promise<void> {
     const rows = await listDownloads()
     for (const listener of this.listeners) listener(rows)
+  }
+}
+
+/**
+ * Uloží knihu, její kapitoly a autory do lokální databáze ze serveru. Když
+ * server není k dispozici, zůstane, co v telefonu je (offline režim už
+ * zrcadlo má).
+ */
+async function ensureBookLocal(bookId: string): Promise<void> {
+  try {
+    const [book, chapters] = await Promise.all([serverSource.book(bookId), serverSource.chapters(bookId)])
+    if (!book) return
+    await upsertBooks([book])
+    await upsertAuthors(book.authors ?? [])
+    await replaceChapters(bookId, chapters)
+  } catch (error: unknown) {
+    if (!isOffline(error)) throw error
   }
 }
 

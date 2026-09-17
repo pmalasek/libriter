@@ -313,12 +313,40 @@ Volitelně později CarPlay/Android Auto.
 
 ---
 
+## Rozšíření: zrcadlo webu + dva režimy (hotovo)
+
+Po dokončení fází 1–7 upřesnil zadavatel dvě věci, které původní plán
+(„mobil = jen přehrávač s jednou obrazovkou knihovny, vždy z lokální DB“)
+nepokrýval:
+
+1. **Rozsah a vzhled jako web** – bez editace a administrace, ale jinak
+   totéž: Domů (hero + police), Knihy (hledání, řazení, mřížka/seznam, výběr
+   k poslechu), Autoři, Série, Právě posloucháno, detaily knihy / autora /
+   série, přehrávač; stejné komponenty (`BookCard`, `BookGrid`, `Shelf`,
+   `SeriesCoverStack`, `ChapterList`, …), **stejná paleta** (z týchž OKLCH
+   hodnot jako `index.css`, schéma a světlý/tmavý režim z profilu) a fonty.
+   Navigace kopíruje spodní lištu webu: Domů · Knihy · Autoři · Série · Více.
+2. **Dva režimy volené přepínačem v Nastavení**, výchozí online:
+   - *online* – data živě ze serveru jako web; lokální DB jen pro stažené
+     knihy (fallback bez signálu);
+   - *offline* – zrcadlení celé knihovny do SQLite (+ autoři, série, stav
+     knih) a stahování audia.
+
+Do `libriter-shared` přibyly `format.ts`, `sorting.ts`, `appearance.ts`,
+`progress.ts` (přesun z webu, ve webu zůstaly re-export shimy). Backend se
+neměnil.
+
 ## Zbývá ověřit na zařízení
 
 Ověřeno na iOS simulátoru: `expo run:ios` projde bez chyby (včetně kompilace
 a linkování react-native-track-player), aplikace naběhne a vykreslí přihlášení.
 
 Tohle ještě čeká:
+
+- Přepnutí vzhledu ve Více → Vzhled se projeví na webu (stejný účet) a po
+  restartu aplikace zůstane.
+- Zapnutí offline režimu → knihovna, autoři, série a detaily fungují bez sítě;
+  vypnutí → bez sítě zůstanou dostupné jen stažené knihy.
 
 - Android: nativní build a spuštění (`just mobile-android`).
 - Přehrávání se zamčeným displejem a ovládání z notifikace / ovládacího centra.

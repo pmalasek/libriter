@@ -1,61 +1,87 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
+import { Pause, Play, RotateCcw, RotateCw } from 'lucide-react-native'
+import { SKIP_BACK, SKIP_FORWARD } from 'libriter-shared'
 
 import { usePlayer } from '@/player/PlayerProvider'
+import { radius, spacing, useTheme } from '@/theme'
 import { BookCover } from './BookCover'
-import { colors, spacing } from '@/theme'
+import { Muted, Title } from './ui/Text'
 
 /**
- * Lišta nad taby. Ukazuje, co hraje, a je zároveň cestou k celému
- * přehrávači – bez ní by se uživatel k rozehrané knize proklikával knihovnou.
+ * Plovoucí kapsle nad lištou tabů – jako `PlayerCapsule` na webu: obálka,
+ * název a kapitola, skok vzad/vpřed, play/pause a proužek postupu.
+ * Klepnutím se otevře celý přehrávač.
  */
 export function MiniPlayer() {
+  const { colors } = useTheme()
   const player = usePlayer()
   const router = useRouter()
 
   if (!player.book) return null
 
-  const progress = player.duration > 0 ? player.position / player.duration : 0
+  const ratio = player.duration > 0 ? Math.min(1, player.position / player.duration) : 0
 
   return (
-    <View style={styles.wrap}>
-      <View style={styles.track}>
-        <View style={[styles.fill, { width: `${Math.min(100, progress * 100)}%` }]} />
-      </View>
-
-      <Pressable style={styles.row} onPress={() => router.push('/player')}>
-        <BookCover bookId={player.book.id} title={player.book.title} size={38} downloaded={player.offline} />
-
-        <View style={styles.texts}>
-          <Text style={styles.title} numberOfLines={1}>
+    <Pressable
+      onPress={() => router.push('/player')}
+      style={[styles.capsule, { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge }]}
+      accessibilityRole="button"
+      accessibilityLabel="Otevřít přehrávač"
+    >
+      <View style={styles.row}>
+        <BookCover book={player.book} size={40} rounded={radius.md} downloaded={player.offline} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Title numberOfLines={1} size={13}>
             {player.book.title}
-          </Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
+          </Title>
+          <Muted numberOfLines={1} size={11}>
             {player.chapter?.title ?? 'Načítání…'}
-          </Text>
+          </Muted>
         </View>
-
+        <Pressable hitSlop={8} onPress={() => void player.skip(-SKIP_BACK)} accessibilityLabel={`Zpět o ${SKIP_BACK} s`}>
+          <RotateCcw color={colors.foreground} size={20} />
+        </Pressable>
         <Pressable
-          hitSlop={12}
+          hitSlop={8}
           onPress={() => void player.toggle()}
-          style={styles.button}
+          style={[styles.play, { backgroundColor: colors.primary }]}
           accessibilityLabel={player.playing ? 'Pauza' : 'Přehrát'}
         >
-          <Text style={styles.glyph}>{player.playing ? '⏸' : '▶'}</Text>
+          {player.playing ? (
+            <Pause color={colors.primaryForeground} size={18} fill={colors.primaryForeground} />
+          ) : (
+            <Play color={colors.primaryForeground} size={18} fill={colors.primaryForeground} />
+          )}
         </Pressable>
-      </Pressable>
-    </View>
+        <Pressable hitSlop={8} onPress={() => void player.skip(SKIP_FORWARD)} accessibilityLabel={`Vpřed o ${SKIP_FORWARD} s`}>
+          <RotateCw color={colors.foreground} size={20} />
+        </Pressable>
+      </View>
+      <View style={[styles.track, { backgroundColor: colors.border }]}>
+        <View style={[styles.fill, { width: `${ratio * 100}%`, backgroundColor: colors.primary }]} />
+      </View>
+    </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
-  wrap: { backgroundColor: colors.surfaceAlt, borderTopColor: colors.border, borderTopWidth: 1 },
-  track: { height: 2, backgroundColor: colors.border },
-  fill: { height: 2, backgroundColor: colors.accent },
-  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.sm },
-  texts: { flex: 1 },
-  title: { color: colors.text, fontSize: 14, fontWeight: '600' },
-  subtitle: { color: colors.textMuted, fontSize: 12 },
-  button: { paddingHorizontal: spacing.sm },
-  glyph: { color: colors.text, fontSize: 22 },
+  capsule: {
+    marginHorizontal: spacing.sm + 4,
+    marginBottom: spacing.sm,
+    borderRadius: radius['3xl'],
+    borderWidth: 1,
+    padding: spacing.sm + 2,
+    gap: spacing.sm,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 5,
+  },
+  row: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm + 4 },
+  play: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+  track: { height: 3, borderRadius: 2, overflow: 'hidden' },
+  fill: { height: 3 },
 })

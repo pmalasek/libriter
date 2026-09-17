@@ -427,8 +427,9 @@ zůstávají ve webovém rozhraní.
 
 | Vlastnost | Jak to funguje |
 |-----------|----------------|
+| Rozsah | Totéž co čtecí část webu: Domů, Knihy, Autoři, Série, Právě posloucháno, detaily – stejné komponenty, řazení, hledání i vzhled (schéma a světlý/tmavý režim z profilu). |
 | Přihlášení | Adresa serveru + e-mail a heslo. Přihlašovací token se hned vymění za mobilní (rok platnosti) a zahodí; mobilní leží v Keychain / Keystore. |
-| Offline | Kniha se celá stáhne do telefonu. Rozhraní čte z lokální SQLite, takže v letadle vypadá stejně jako doma. |
+| Režimy | **Online** (výchozí) čte živě ze serveru jako web. **Offline** (přepínač v Nastavení) zrcadlí celou knihovnu do SQLite. Stažené knihy hrají v obou režimech i bez signálu. |
 | Pozice | Každé uložení jde do fronty a odesílá se dávkově přes `POST /sessions/sync`. O tom, čí pozice vyhraje, rozhoduje čas vzniku na klientovi. |
 | Přehrávání | react-native-track-player: běh na pozadí, ovládání ze zamčené obrazovky, rychlosti, skoky a časovač vypnutí. |
 | Stahování | Po kapitolách, dvě naráz, s pauzou a pokračováním; volitelně jen na Wi-Fi. |

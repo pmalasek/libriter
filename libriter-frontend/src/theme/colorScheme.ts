@@ -1,18 +1,11 @@
 import { createContext, useContext } from 'react'
-import type { ColorScheme } from '@/api/types'
+import { parseScheme, type ColorScheme } from 'libriter-shared'
 
-export const COLOR_SCHEMES = [
-  { value: 'teal', label: 'Tyrkysová', color: 'oklch(0.52 0.1 195)' },
-  { value: 'blue', label: 'Modrá', color: 'oklch(0.52 0.14 255)' },
-  { value: 'violet', label: 'Fialová', color: 'oklch(0.52 0.14 300)' },
-  { value: 'green', label: 'Zelená', color: 'oklch(0.52 0.14 150)' },
-] as const
+// Seznam schémat a jejich rozpoznání se sdílí s mobilní aplikací
+// (libriter-shared/src/appearance.ts).
+export { COLOR_SCHEMES, parseScheme } from 'libriter-shared'
 
 export const STORAGE_KEY = 'libriter.color-scheme'
-
-export function parseScheme(value: string | null): ColorScheme {
-  return COLOR_SCHEMES.find((scheme) => scheme.value === value)?.value ?? 'teal'
-}
 
 export function readScheme(): ColorScheme {
   try {

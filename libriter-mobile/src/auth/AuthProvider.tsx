@@ -23,6 +23,8 @@ interface AuthValue {
   loading: boolean
   signIn: (input: { serverUrl: string; email: string; password: string }) => Promise<void>
   signOut: () => Promise<void>
+  /** Promítne změnu profilu (vzhled) do uložené session. */
+  updateUser: (patch: Partial<User>) => void
 }
 
 const AuthContext = createContext<AuthValue | null>(null)
@@ -121,9 +123,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setSession(next)
   }, [])
 
+  const updateUser = useCallback((patch: Partial<User>) => {
+    setSession((current) => {
+      if (!current) return current
+      const next: Session = { ...current, user: { ...current.user, ...patch } }
+      void saveSession(next)
+      return next
+    })
+  }, [])
+
   const value = useMemo<AuthValue>(
-    () => ({ session, user: session?.user ?? null, serverUrl, loading, signIn, signOut }),
-    [session, serverUrl, loading, signIn, signOut],
+    () => ({ session, user: session?.user ?? null, serverUrl, loading, signIn, signOut, updateUser }),
+    [session, serverUrl, loading, signIn, signOut, updateUser],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
