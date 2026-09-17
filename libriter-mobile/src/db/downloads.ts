@@ -40,17 +40,21 @@ export async function setDownloadState(
 }
 
 /**
- * Posune ukazatel průběhu. `bytesTotal` se nastavuje napevno (součet
- * velikostí kapitol), `bytesDelta*` se přičítají – kapitoly se stahují
- * paralelně a přepis celkové hodnoty by o jeden z výsledků přišel.
+ * Posune ukazatel průběhu. `bytesTotal` a `bytesDone` se nastavují napevno
+ * (přepočet z kapitol a souborů na disku při startu stahování),
+ * `bytesDelta*` se přičítají – kapitoly se stahují paralelně a přepis celkové
+ * hodnoty by o jeden z výsledků přišel.
  */
 export async function updateDownloadProgress(
   bookId: string,
-  input: { bytesTotal?: number; bytesDeltaDone?: number; bytesDeltaTotal?: number },
+  input: { bytesTotal?: number; bytesDone?: number; bytesDeltaDone?: number; bytesDeltaTotal?: number },
 ): Promise<void> {
   const db = await openDb()
   if (input.bytesTotal !== undefined) {
     await db.runAsync('UPDATE downloads SET bytes_total = ? WHERE book_id = ?', input.bytesTotal, bookId)
+  }
+  if (input.bytesDone !== undefined) {
+    await db.runAsync('UPDATE downloads SET bytes_done = ? WHERE book_id = ?', input.bytesDone, bookId)
   }
   if (input.bytesDeltaTotal) {
     await db.runAsync(

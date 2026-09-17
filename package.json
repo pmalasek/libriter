@@ -7,7 +7,7 @@
     "libriter-mobile"
   ],
   "scripts": {
-    "postinstall": "node _scripts/restore-expo-sqlite-sources.mjs",
+    "postinstall": "node _scripts/restore-expo-sqlite-sources.mjs && node _scripts/patch-track-player-android.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }

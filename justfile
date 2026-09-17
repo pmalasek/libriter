@@ -52,9 +52,18 @@ vet:
 typecheck:
     npm run typecheck
 
+# Závislosti mobilní aplikace. Instalují se v kořeni: mobil, web
+# i libriter-shared jsou npm workspaces s jedním package-lock.json, takže
+# `lucide-react-native` a spol. leží v kořenovém node_modules. Bez tohohle
+# kroku padá bundling po každém `git pull`, který přidal závislost, na
+# „Unable to resolve module …“.
+[private]
+mobile-deps:
+    npm ci
+
 # Metro bundler mobilní aplikace (dev build, ne Expo Go)
 [working-directory('libriter-mobile')]
-mobile-start:
+mobile-start: mobile-deps
     npx expo start --dev-client
 
 # `pod install` musí předcházet buildu: podspec expo-sqlite si při instalaci
@@ -64,7 +73,7 @@ mobile-start:
 #
 # Sestaví a spustí aplikaci na připojeném iPhonu (jen macOS + Xcode)
 [working-directory('libriter-mobile')]
-mobile-ios: mobile-pods
+mobile-ios: mobile-deps mobile-pods
     npx expo run:ios --device
 
 # Doinstaluje CocoaPods, pokud už existuje vygenerovaný projekt ios/
@@ -78,12 +87,12 @@ mobile-pods:
 
 # Sestaví a spustí aplikaci na připojeném Androidu
 [working-directory('libriter-mobile')]
-mobile-android:
+mobile-android: mobile-deps
     npx expo run:android --device
 
 # Podepsané APK k ruční instalaci (android/app/build/outputs/apk/release/)
 [working-directory('libriter-mobile')]
-mobile-apk:
+mobile-apk: mobile-deps
     npx expo prebuild --platform android
     cd android && ./gradlew assembleRelease
 

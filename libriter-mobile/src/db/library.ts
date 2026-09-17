@@ -95,6 +95,20 @@ export async function replaceChapters(bookId: string, chapters: Chapter[]): Prom
   })
 }
 
+/**
+ * Doplní velikost kapitoly, kterou server neznal. Zapisuje se jen nulová
+ * hodnota, aby změřená velikost nepřepsala tu, kterou server mezitím doplnil
+ * vlastním skenem.
+ */
+export async function setChapterSize(chapterId: string, sizeBytes: number): Promise<void> {
+  const db = await openDb()
+  await db.runAsync(
+    'UPDATE chapters SET size_bytes = ? WHERE id = ? AND size_bytes = 0',
+    sizeBytes,
+    chapterId,
+  )
+}
+
 export async function listChapters(bookId: string): Promise<Chapter[]> {
   const db = await openDb()
   return db.getAllAsync<Chapter>(
