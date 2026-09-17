@@ -182,11 +182,19 @@ type PlaySessionPosition struct {
 	PositionSeconds int
 	PlaybackSpeed   float64
 	Finished        bool
+	// ListenedSeconds jsou sekundy obsahu odposlouchané od minulého zápisu;
+	// 0 = jen změna pozice, do deníku se nic nepřipisuje.
+	ListenedSeconds int
+	// BookFinished znamená doposlechnutou poslední kapitolu téhle knihy –
+	// posílá se před přechodem na další knihu poslechu.
+	BookFinished bool
 }
 
 // UpdatePlaySessionPosition uloží rozposlouchané místo. Píše se každých ~10
 // sekund poslechu a při každé změně, takže návrat z jiného zařízení navazuje
-// tam, kde poslech skončil.
+// tam, kde poslech skončil. V téže transakci připíše odposlouchané sekundy do
+// deníku poslechu a stav knihy (rozposlouchaná / doposlechnutá), aby se
+// tři pohledy na tentýž poslech nemohly rozejít.
 func (s *Store) UpdatePlaySessionPosition(ctx context.Context, userID, id uuid.UUID, in PlaySessionPosition) (*model.PlaySession, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -218,6 +226,16 @@ func (s *Store) UpdatePlaySessionPosition(ctx context.Context, userID, id uuid.U
 	}
 	if rowsAffected(res) == 0 {
 		return nil, ErrBookNotInSession
+	}
+
+	if in.ListenedSeconds > 0 {
+		if err := addListeningLog(ctx, tx, userID, in.BookID, in.ListenedSeconds); err != nil {
+			return nil, err
+		}
+	}
+	// Konec celého poslechu je i koncem knihy, která právě hrála.
+	if err := touchBookProgress(ctx, tx, userID, in.BookID, in.BookFinished || in.Finished); err != nil {
+		return nil, err
 	}
 
 	// Pokračování v poslechu ruší příznak doposlechnuto.

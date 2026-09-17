@@ -26,6 +26,8 @@ const AdminMetadataPage = lazy(() => import('@/pages/admin/AdminMetadataPage').t
 const AdminLibraryPage = lazy(() => import('@/pages/admin/AdminLibraryPage').then((module) => ({ default: module.AdminLibraryPage })))
 const AdminSettingsPage = lazy(() => import('@/pages/admin/AdminSettingsPage').then((module) => ({ default: module.AdminSettingsPage })))
 const AdminAuditPage = lazy(() => import('@/pages/admin/AdminAuditPage').then((module) => ({ default: module.AdminAuditPage })))
+const AdminListeningPage = lazy(() => import('@/pages/admin/AdminListeningPage').then((module) => ({ default: module.AdminListeningPage })))
+const AdminListeningUserPage = lazy(() => import('@/pages/admin/AdminListeningUserPage').then((module) => ({ default: module.AdminListeningUserPage })))
 
 export function App() {
   return (
@@ -52,6 +54,8 @@ export function App() {
             <Route path="admin" element={<AdminLayout />}>
               <Route index element={<AdminOverviewPage />} />
               <Route path="users" element={<AdminUsersPage />} />
+              <Route path="listening" element={<AdminListeningPage />} />
+              <Route path="listening/:userId" element={<AdminListeningUserPage />} />
               <Route path="metadata" element={<AdminMetadataPage />} />
               <Route path="library" element={<AdminLibraryPage />} />
               <Route path="settings" element={<AdminSettingsPage />} />

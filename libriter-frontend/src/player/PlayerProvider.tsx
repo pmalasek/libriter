@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { API_PREFIX, ApiError, apiFetch } from '@/api/client'
 import { chaptersQuery, queryKeys, useBooks } from '@/api/hooks'
 import type {
+  BookProgress,
   Chapter,
   CreateSessionRequest,
   PlaySession,
@@ -16,6 +17,7 @@ import { coverUrl } from '@/components/BookCover'
 import { authorsLabel } from '@/lib/format'
 import {
   currentBookId,
+  MAX_TIMEUPDATE_GAP_SECONDS,
   PlayerContext,
   SAVE_INTERVAL_MS,
   sessionItem,
@@ -103,6 +105,10 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
   const pendingSeekRef = useRef<number | null>(null)
   const lastSavedRef = useRef<string>('')
   const tokenRetryRef = useRef(false)
+  // Odposlouchané sekundy od posledního odeslání a čas, proti kterému se
+  // měří přírůstek. Drží se v refu, aby je nepřekreslovaly events.
+  const listenedRef = useRef(0)
+  const lastTimeRef = useRef(0)
 
   function audioElement() {
     if (!audioRef.current) {
@@ -147,7 +153,14 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
    * takže i odchod ze stránky odešle to, co v tu chvíli hrálo.
    */
   const savePosition = useCallback(
-    (options: { finished?: boolean; keepalive?: boolean; force?: boolean } = {}) => {
+    (
+      options: {
+        finished?: boolean
+        bookFinished?: boolean
+        keepalive?: boolean
+        force?: boolean
+      } = {},
+    ) => {
       const openSession = sessionRef.current
       const openTrack = trackRef.current
       const audio = audioRef.current
@@ -157,19 +170,26 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
       // nulu. Zápis v tu chvíli by rozposlouchané místo přepsal začátkem.
       if (pendingSeekRef.current != null) return
 
+      const listened = Math.round(listenedRef.current)
       const body: SessionPositionRequest = {
         book_id: openTrack.bookId,
         chapter_id: openTrack.chapterId,
         position_seconds: Math.max(0, Math.round(audio.currentTime)),
         playback_speed: speedRef.current,
         finished: options.finished,
+        listened_seconds: listened,
+        book_finished: options.bookFinished,
       }
 
       // Pauza a přepínání stránek umí zavolat uložení několikrát za sebou;
-      // beze změny není co posílat.
-      const fingerprint = JSON.stringify(body)
-      if (!options.force && fingerprint === lastSavedRef.current) return
+      // beze změny není co posílat. Otisk se počítá bez odposlouchaných
+      // sekund – nenulový přírůstek do deníku se zahodit nesmí.
+      const fingerprint = JSON.stringify({ ...body, listened_seconds: undefined })
+      if (!options.force && listened === 0 && fingerprint === lastSavedRef.current) return
       lastSavedRef.current = fingerprint
+      // Neúspěšný zápis přijde o nejvýš jeden interval poslechu; držet
+      // sekundy do potvrzení by je při rychlém přepínání knih počítalo dvakrát.
+      listenedRef.current = 0
 
       const sessionId = openSession.id
       apiFetch<PlaySession>(`/sessions/${sessionId}/position`, {
@@ -177,14 +197,22 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
         json: body,
         keepalive: options.keepalive,
       })
-        .then((updated) => cacheSession(updated))
+        .then((updated) => {
+          cacheSession(updated)
+          // Stav knihy se mění jen na začátku a na konci, ne každých 10 s.
+          const known = queryClient.getQueryData<BookProgress[]>(queryKeys.bookProgress)
+          const tracked = known?.some((p) => p.book_id === body.book_id)
+          if (options.bookFinished || options.finished || !tracked) {
+            void queryClient.invalidateQueries({ queryKey: queryKeys.bookProgress })
+          }
+        })
         .catch((error: unknown) => {
           // Výpadek sítě nemá přerušit poslech; příští zápis to dožene.
           if (error instanceof ApiError && error.status >= 500) return
           if (error instanceof ApiError && error.status === 404) return
         })
     },
-    [cacheSession],
+    [cacheSession, queryClient],
   )
 
   // --- načtení kapitoly do přehrávače ---
@@ -505,16 +533,40 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
         const target = known > 0 ? Math.min(pending, Math.max(0, known - 1)) : pending
         if (target > 0) audio.currentTime = target
       }
+      // Nový soubor začíná jinde než skončil předchozí; ten skok není poslech.
+      lastTimeRef.current = audio.currentTime
       tokenRetryRef.current = false
     }
-    const onTime = () => setCurrentTime(audio.currentTime)
+    const onTime = () => {
+      const now = audio.currentTime
+      const diff = now - lastTimeRef.current
+      // Do deníku jde jen plynulý posun. Převíjení i výměna souboru udělají
+      // skok, a ten se nepočítá.
+      if (!audio.paused && diff > 0 && diff < MAX_TIMEUPDATE_GAP_SECONDS * audio.playbackRate) {
+        listenedRef.current += diff
+      }
+      lastTimeRef.current = now
+      setCurrentTime(now)
+    }
     const onPlay = () => setPlaying(true)
     const onPause = () => {
       setPlaying(false)
       savePosition()
     }
-    const onSeeked = () => savePosition()
+    const onSeeked = () => {
+      lastTimeRef.current = audio.currentTime
+      savePosition()
+    }
     const onEnded = () => {
+      // Konec poslední kapitoly je koncem knihy – zapsat se musí dřív, než
+      // step přepne na další knihu a příznak by se svezl k nesprávné.
+      const openTrack = trackRef.current
+      const index = openTrack
+        ? chaptersRef.current.findIndex((c) => c.id === openTrack.chapterId)
+        : -1
+      const lastChapter = index >= 0 && index === chaptersRef.current.length - 1
+      if (lastChapter) savePosition({ bookFinished: true, force: true })
+
       // Na konci poslední kapitoly poslední knihy je poslech doposlechnutý.
       if (!step(1)) savePosition({ finished: true, force: true })
     }

@@ -1,7 +1,9 @@
 import {
   ArrowLeftIcon,
   CalendarIcon,
+  CheckCircle2Icon,
   ClockIcon,
+  HeadphonesIcon,
   InfoIcon,
   LanguagesIcon,
   ListPlusIcon,
@@ -9,11 +11,21 @@ import {
   PauseIcon,
   PencilIcon,
   PlayIcon,
+  RotateCcwIcon,
   StarIcon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { useBook, useBooks, useSeriesOne, useSeriesTitle, useSessions } from '@/api/hooks'
+import { toast } from 'sonner'
+import {
+  useBook,
+  useBookProgress,
+  useBooks,
+  useSeriesOne,
+  useSeriesTitle,
+  useSessions,
+  useSetBookFinished,
+} from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
 import { canEdit } from '@/auth/permissions'
 import { BookEditDialog } from '@/components/BookEditDialog'
@@ -43,6 +55,23 @@ export function BookDetailPage() {
   const seriesTitle = useSeriesTitle()
   const player = usePlayer()
   const sessions = useSessions()
+  const progress = useBookProgress()
+  const setFinished = useSetBookFinished()
+
+  // Stav knihy: doposlechnutá, rozposlouchaná, nebo zatím nic.
+  const bookStatus = progress.status(id)
+  const finishedAt = progress.map.get(id)?.finished_at
+
+  function changeStatus(finished: boolean) {
+    setFinished.mutate(
+      { bookId: id, finished },
+      {
+        onSuccess: () =>
+          toast.success(finished ? 'Kniha je označená jako doposlechnutá.' : 'Označení zrušeno.'),
+        onError: (error) => toast.error(error.message),
+      },
+    )
+  }
 
   // Rozposlouchaná pozice knihy – z libovolného poslechu, který ji obsahuje.
   const started = useMemo(
@@ -177,6 +206,17 @@ export function BookDetailPage() {
                 <LanguagesIcon />
                 {data.language.toUpperCase()}
               </Badge>
+              {bookStatus === 'finished' ? (
+                <Badge variant="highlight">
+                  <CheckCircle2Icon />
+                  {finishedAt ? `Doposlechnuto ${formatDate(finishedAt)}` : 'Doposlechnuto'}
+                </Badge>
+              ) : bookStatus === 'started' ? (
+                <Badge variant="secondary">
+                  <HeadphonesIcon />
+                  Rozposlouchané
+                </Badge>
+              ) : null}
               {data.internal_rating ? (
                 <Badge variant="outline">
                   <StarIcon />
@@ -245,6 +285,29 @@ export function BookDetailPage() {
                   Přidat do poslechu
                 </Button>
               ) : null}
+              {/* Ruční oprava stavu: kniha slyšená jinde, nebo omylem
+                  dohraná do konce. Poslech ani pozici to nemění. */}
+              {bookStatus === 'finished' ? (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => changeStatus(false)}
+                  disabled={setFinished.isPending}
+                >
+                  <RotateCcwIcon />
+                  Zrušit označení
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => changeStatus(true)}
+                  disabled={setFinished.isPending}
+                >
+                  <CheckCircle2Icon />
+                  Označit jako doposlechnuté
+                </Button>
+              )}
               {canEdit(user) ? (
                 <Button variant="outline" size="lg" onClick={() => setEditing(true)}>
                   <PencilIcon />

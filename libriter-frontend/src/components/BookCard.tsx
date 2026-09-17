@@ -1,6 +1,6 @@
-import { CheckIcon } from 'lucide-react'
+import { CheckCircle2Icon, CheckIcon, HeadphonesIcon } from 'lucide-react'
 import { Link } from 'react-router'
-import type { Book } from '@/api/types'
+import { BOOK_STATUS_LABELS, type Book, type BookStatus } from '@/api/types'
 import { BookCover } from '@/components/BookCover'
 import { authorNames, formatDate, formatDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -25,6 +25,33 @@ function SelectionMark({ selected, className }: { selected: boolean; className?:
       )}
     >
       <CheckIcon className="size-4" />
+    </span>
+  )
+}
+
+/**
+ * Značka poslechu: doposlechnutá kniha má fajfku, rozposlouchaná sluchátka.
+ * U neposlechnuté se nevykresluje nic – nepoznaná kniha je většina knihovny
+ * a značka u každé dlaždice by ztratila smysl.
+ */
+function BookStatusMark({ status, className }: { status: BookStatus; className?: string }) {
+  if (status === 'none') return null
+
+  const Icon = status === 'finished' ? CheckCircle2Icon : HeadphonesIcon
+  return (
+    <span
+      title={BOOK_STATUS_LABELS[status]}
+      aria-label={BOOK_STATUS_LABELS[status]}
+      role="img"
+      className={cn(
+        'flex size-6 items-center justify-center rounded-full shadow-sm backdrop-blur-sm',
+        status === 'finished'
+          ? 'bg-primary text-primary-foreground'
+          : 'bg-background/80 text-primary',
+        className,
+      )}
+    >
+      <Icon className="size-4" />
     </span>
   )
 }
@@ -76,12 +103,15 @@ export function BookCard({
   size = 'tiles',
   series,
   selection,
+  status = 'none',
 }: {
   book: Book
   size?: 'tiles' | 'small'
   /** Popisek série („Atomové šelmy · 2. díl“); prázdný u knihy mimo sérii. */
   series?: string
   selection?: CardSelection
+  /** Stav poslechu přihlášeného uživatele; značka v rohu obálky. */
+  status?: BookStatus
 }) {
   const small = size === 'small'
   const meta = (
@@ -103,6 +133,8 @@ export function BookCard({
         {selection ? (
           <SelectionMark selected={selection.selected} className="absolute top-2 left-2 z-10" />
         ) : null}
+        {/* Výběr sedí vlevo, stav poslechu tedy vpravo – nepřekrývají se. */}
+        <BookStatusMark status={status} className="absolute top-2 right-2 z-10" />
       </div>
       <div className={cn('space-y-0.5', small ? 'mt-2' : 'mt-3')}>
         <p
@@ -153,11 +185,14 @@ export function BookRow({
   book,
   series,
   selection,
+  status = 'none',
 }: {
   book: Book
   /** Popisek série; v řádku stojí za autory, aby řádek nezvýšil. */
   series?: string
   selection?: CardSelection
+  /** Stav poslechu přihlášeného uživatele; značka na obálce. */
+  status?: BookStatus
 }) {
   return (
     <CardShell
@@ -169,7 +204,10 @@ export function BookRow({
       )}
     >
       {selection ? <SelectionMark selected={selection.selected} className="shrink-0" /> : null}
-      <BookCover key={book.id} book={book} lift={false} className="size-12 shrink-0 rounded-lg" />
+      <div className="relative shrink-0">
+        <BookCover key={book.id} book={book} lift={false} className="size-12 rounded-lg" />
+        <BookStatusMark status={status} className="absolute -top-1 -right-1 size-5" />
+      </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">{book.title}</p>
         <p className="truncate text-xs text-muted-foreground">

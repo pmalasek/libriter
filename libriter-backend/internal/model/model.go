@@ -167,6 +167,18 @@ type PlaySession struct {
 	Items         []PlaySessionItem `json:"items"`
 }
 
+// BookProgress je stav knihy u uživatele. Existence řádku znamená
+// rozposlouchanou knihu, FinishedAt doposlechnutou; kniha bez řádku je
+// neposlechnutá. Na rozdíl od PlaySession.FinishedAt přežije smazání poslechu
+// a další poslech ho neruší.
+type BookProgress struct {
+	UserID     uuid.UUID  `json:"-"`
+	BookID     uuid.UUID  `json:"book_id"`
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+}
+
 // PlaySessionItem je jedna kniha session i s vlastní rozposlouchanou pozicí.
 type PlaySessionItem struct {
 	BookID   uuid.UUID `json:"book_id"`

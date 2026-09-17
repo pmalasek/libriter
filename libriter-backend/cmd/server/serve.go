@@ -84,6 +84,7 @@ func runServe() error {
 	auditSvc := service.NewAudit(store)
 	systemSvc := service.NewSystem(store, cfg, startedAt)
 	playSessionSvc := service.NewPlaySession(store)
+	listeningSvc := service.NewListening(store)
 
 	authH := handler.NewAuth(authSvc, settingsSvc)
 	userH := handler.NewUser(userSvc, auditSvc)
@@ -91,7 +92,7 @@ func runServe() error {
 	authorH := handler.NewAuthor(authorSvc, cfg.Storage.AuthorImageRoot, authorImageSvc, auditSvc)
 	seriesH := handler.NewSeries(seriesSvc, auditSvc)
 	metadataH := handler.NewMetadata(registry)
-	adminH := handler.NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc)
+	adminH := handler.NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc, listeningSvc)
 	sessionH := handler.NewPlaySession(playSessionSvc)
 	audioH := handler.NewAudio(bookSvc, authSvc, cfg.Storage.AudioRoot)
 
@@ -152,7 +153,12 @@ func runServe() error {
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.RequireRole("reader"))
 				r.Get("/books", bookH.List)
+				// Stav knih musí být nad /books/{id}, ať se "progress"
+				// nečte jako UUID knihy.
+				r.Get("/books/progress", bookH.ListProgress)
 				r.Get("/books/{id}", bookH.Get)
+				r.Put("/books/{id}/progress", bookH.SetProgress)
+				r.Delete("/books/{id}/progress", bookH.ResetProgress)
 				r.Get("/books/{id}/chapters", bookH.ListChapters)
 				r.Get("/authors", authorH.List)
 				r.Get("/authors/{id}", authorH.Get)
@@ -212,6 +218,9 @@ func runServe() error {
 				r.Get("/stats", adminH.Stats)
 				r.Get("/system", adminH.System)
 				r.Get("/audit", adminH.Audit)
+
+				r.Get("/listening", adminH.Listening)
+				r.Get("/listening/{id}", adminH.ListeningUser)
 			})
 
 			// Metadata knih - zdroje a jejich pořadí řídí administrace (editor+)

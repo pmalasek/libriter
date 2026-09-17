@@ -11,6 +11,8 @@ import type {
   Book,
   BookMetadata,
   BookPatchRequest,
+  BookProgress,
+  BookStatus,
   ChangePasswordRequest,
   Chapter,
   LoginRequest,
@@ -36,6 +38,9 @@ export const queryKeys = {
   authConfig: ['auth', 'config'] as const,
   sessions: ['sessions'] as const,
   session: (id: string) => ['sessions', id] as const,
+  // Záměrně mimo prefix ['books'] – zneplatnění knihovny po úpravě knihy
+  // nemá důvod znovu tahat stav poslechu.
+  bookProgress: ['book-progress'] as const,
 }
 
 // --- čtení ---
@@ -136,6 +141,36 @@ export function useSessions(enabled = true): UseQueryResult<PlaySession[], Error
   })
 }
 
+/**
+ * Stav knih přihlášeného uživatele: co má rozposlouchané a co doposlechnuté.
+ * Načítá se jedním seznamem pro celou knihovnu, aby dlaždice nemusely sahat
+ * na server po jedné. Zapisuje ho přehrávač při poslechu, ručně se mění jen
+ * v detailu knihy.
+ */
+export function useBookProgress() {
+  const query = useQuery({
+    queryKey: queryKeys.bookProgress,
+    queryFn: async () => asList(await apiFetch<BookProgress[] | null>('/books/progress')),
+  })
+
+  const map = useMemo(() => {
+    const m = new Map<string, BookProgress>()
+    for (const p of query.data ?? []) m.set(p.book_id, p)
+    return m
+  }, [query.data])
+
+  const status = useCallback(
+    (bookId: string): BookStatus => {
+      const progress = map.get(bookId)
+      if (!progress) return 'none'
+      return progress.finished_at ? 'finished' : 'started'
+    },
+    [map],
+  )
+
+  return { ...query, map, status }
+}
+
 // --- pomocné mapy pro spojení na klientovi ---
 // Knihy nesou jen series_id, název série si doplňujeme sami.
 
@@ -201,6 +236,25 @@ export function useChangePassword(userId: string) {
   return useMutation({
     mutationFn: (body: ChangePasswordRequest) =>
       apiFetch<{ status: string }>(`/users/${userId}/password`, { method: 'PUT', json: body }),
+  })
+}
+
+/**
+ * Ruční změna stavu knihy – označení za doposlechnutou a zrušení označení.
+ * Poslech si stav udržuje sám, tohle je oprava: kniha slyšená jinde, nebo
+ * omylem dohraná do konce.
+ */
+export function useSetBookFinished() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ bookId, finished }: { bookId: string; finished: boolean }) =>
+      apiFetch<{ finished: boolean }>(`/books/${bookId}/progress`, {
+        method: 'PUT',
+        json: { finished },
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.bookProgress })
+    },
   })
 }
 

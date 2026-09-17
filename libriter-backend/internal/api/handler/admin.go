@@ -30,12 +30,13 @@ type libraryScanner interface {
 // AdminHandler obsluhuje endpointy pod /api/v1/admin. Skupinu chrání
 // RequireRole("admin"), handlery tedy roli znovu neověřují.
 type AdminHandler struct {
-	users    *service.UserService
-	settings *service.SettingsService
-	registry *metadata.Registry
-	scanner  libraryScanner
-	system   *service.SystemService
-	audit    *service.AuditService
+	users     *service.UserService
+	settings  *service.SettingsService
+	registry  *metadata.Registry
+	scanner   libraryScanner
+	system    *service.SystemService
+	audit     *service.AuditService
+	listening *service.ListeningService
 }
 
 func NewAdmin(
@@ -45,14 +46,16 @@ func NewAdmin(
 	scn libraryScanner,
 	system *service.SystemService,
 	audit *service.AuditService,
+	listening *service.ListeningService,
 ) *AdminHandler {
 	return &AdminHandler{
-		users:    users,
-		settings: settings,
-		registry: registry,
-		scanner:  scn,
-		system:   system,
-		audit:    audit,
+		users:     users,
+		settings:  settings,
+		registry:  registry,
+		scanner:   scn,
+		system:    system,
+		audit:     audit,
+		listening: listening,
 	}
 }
 
@@ -173,6 +176,39 @@ func (h *AdminHandler) Audit(w http.ResponseWriter, r *http.Request) {
 		"items":       entries,
 		"next_before": nextBefore,
 	})
+}
+
+// GET /api/v1/admin/listening  (admin)
+//
+// Přehled poslechu všech uživatelů. Čtení se neaudituje – zapisují se jen
+// zásahy, které něco mění.
+func (h *AdminHandler) Listening(w http.ResponseWriter, r *http.Request) {
+	summaries, err := h.listening.Overview(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "chyba při načítání poslechů")
+		return
+	}
+	writeJSON(w, http.StatusOK, summaries)
+}
+
+// GET /api/v1/admin/listening/{id}  (admin)
+//
+// Poslechy, stav knih a deník jednoho uživatele.
+func (h *AdminHandler) ListeningUser(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+
+	detail, err := h.listening.UserDetail(r.Context(), id)
+	switch {
+	case errors.Is(err, service.ErrNotFound):
+		writeError(w, http.StatusNotFound, "uživatel nenalezen")
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "chyba při načítání poslechů")
+	default:
+		writeJSON(w, http.StatusOK, detail)
+	}
 }
 
 func intParam(r *http.Request, name string, def int64) (int64, error) {

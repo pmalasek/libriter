@@ -1,5 +1,5 @@
 import { LibraryIcon } from 'lucide-react'
-import { useSeriesById } from '@/api/hooks'
+import { useBookProgress, useSeriesById } from '@/api/hooks'
 import type { Book } from '@/api/types'
 import { BookCard, BookRow, BookRowHeader } from '@/components/BookCard'
 import { EmptyState } from '@/components/EmptyState'
@@ -40,6 +40,9 @@ export function BookGrid({
   // Knihy nesou jen series_id, název série si doplňujeme z jednoho
   // společného seznamu – ne v každé kartě zvlášť.
   const seriesById = useSeriesById()
+  // Stav poslechu se načítá jedním seznamem pro celou knihovnu; dokud
+  // nedorazí, mají dlaždice stav „neposlechnuto“ a značka se jen doplní.
+  const { status } = useBookProgress()
 
   const selectionFor = (book: Book) =>
     selection
@@ -67,6 +70,7 @@ export function BookGrid({
             book={book}
             series={labelFor(book)}
             selection={selectionFor(book)}
+            status={status(book.id)}
           />
         ))}
       </div>
@@ -82,6 +86,7 @@ export function BookGrid({
           size={view}
           series={labelFor(book)}
           selection={selectionFor(book)}
+          status={status(book.id)}
         />
       ))}
     </div>

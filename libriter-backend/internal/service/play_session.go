@@ -26,6 +26,12 @@ const (
 	maxPlaybackSpeed = 3.0
 )
 
+// Strop přírůstku deníku poslechu na jeden zápis. Běžně jde o 10 sekund
+// poslechu, při trojnásobné rychlosti o 30. Prohlížeč na pozadí škrtí
+// časovače na zhruba jeden tik za minutu, což dává 180; víc už je chyba
+// klienta a do statistik nemá co dělat.
+const maxListenedSecondsPerSave = 600
+
 type PlaySessionService struct {
 	store *storage.Store
 }
@@ -168,10 +174,18 @@ func (p *PlaySessionService) AddItems(ctx context.Context, userID, id uuid.UUID,
 }
 
 // SavePosition uloží rozposlouchané místo session. Volá se každých pár sekund
-// poslechu i při každé změně, takže musí být levná a nesmí nic jiného měnit.
+// poslechu i při každé změně, takže musí být levná; kromě pozice připisuje
+// jen odposlouchané sekundy do deníku a stav knihy.
 func (p *PlaySessionService) SavePosition(ctx context.Context, userID, id uuid.UUID, in storage.PlaySessionPosition) (*model.PlaySession, error) {
 	if in.PositionSeconds < 0 {
 		return nil, fmt.Errorf("%w: záporná pozice", ErrInvalidSetting)
+	}
+	// Nesmyslný přírůstek se ořízne, ne odmítne – pozice se uložit musí.
+	if in.ListenedSeconds < 0 {
+		in.ListenedSeconds = 0
+	}
+	if in.ListenedSeconds > maxListenedSecondsPerSave {
+		in.ListenedSeconds = maxListenedSecondsPerSave
 	}
 	if in.PlaybackSpeed < minPlaybackSpeed || in.PlaybackSpeed > maxPlaybackSpeed {
 		return nil, fmt.Errorf("%w: rychlost mimo rozsah", ErrInvalidSetting)
@@ -211,6 +225,8 @@ func (p *PlaySessionService) Delete(ctx context.Context, userID, id uuid.UUID) e
 }
 
 // switchToBook přepne aktuální knihu session, aniž by zahodil její pozici.
+// ListenedSeconds ani BookFinished se nenastavují – přepnutí knihy není
+// poslech, jen se knize připíše, že je rozposlouchaná.
 func (p *PlaySessionService) switchToBook(ctx context.Context, userID uuid.UUID, session *model.PlaySession, bookID uuid.UUID) (*model.PlaySession, error) {
 	in := storage.PlaySessionPosition{BookID: bookID, PlaybackSpeed: session.PlaybackSpeed}
 	for _, item := range session.Items {

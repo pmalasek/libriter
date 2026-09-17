@@ -116,7 +116,7 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 	bookSvc := service.NewBook(store)
 	audioRoot := t.TempDir()
 
-	adminH := NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc)
+	adminH := NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc, service.NewListening(store))
 	authH := NewAuth(authSvc, settingsSvc)
 	userH := NewUser(userSvc, auditSvc)
 	bookH := NewBook(bookSvc, t.TempDir(), auditSvc)
@@ -138,7 +138,10 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 		r.Put("/users/{id}/appearance", userH.UpdateAppearance)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireRole(model.RoleReader))
+			r.Get("/books/progress", bookH.ListProgress)
 			r.Get("/books/{id}/chapters", bookH.ListChapters)
+			r.Put("/books/{id}/progress", bookH.SetProgress)
+			r.Delete("/books/{id}/progress", bookH.ResetProgress)
 			r.Get("/sessions", sessionH.List)
 			r.Post("/sessions", sessionH.Create)
 			r.Get("/sessions/{id}", sessionH.Get)
@@ -168,6 +171,8 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 			r.Post("/library/repair", adminH.Repair)
 			r.Get("/library/merge", adminH.MergePlan)
 			r.Post("/library/merge", adminH.Merge)
+			r.Get("/listening", adminH.Listening)
+			r.Get("/listening/{id}", adminH.ListeningUser)
 		})
 	})
 

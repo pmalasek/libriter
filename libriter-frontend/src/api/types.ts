@@ -129,6 +129,32 @@ export interface SessionPositionRequest {
   playback_speed: number
   /** Doposlechnuto do konce; další změna pozice příznak zase zruší. */
   finished?: boolean
+  /** Sekundy obsahu od minulého zápisu; jdou do deníku poslechu (server ořízne na 0–600). */
+  listened_seconds?: number
+  /** Doposlechnutá poslední kapitola této knihy – posílá se před přechodem na další knihu. */
+  book_finished?: boolean
+}
+
+/**
+ * Stav knihy u přihlášeného uživatele (GET /books/progress). Řádek existuje
+ * u rozposlouchané knihy, `finished_at` má doposlechnutá. Přežije smazání
+ * poslechu i opakovaný poslech.
+ */
+export interface BookProgress {
+  book_id: string
+  started_at: string
+  finished_at?: string
+  updated_at: string
+}
+
+/** Stav knihy pro zobrazení – odvozený z BookProgress. */
+export type BookStatus = 'finished' | 'started' | 'none'
+
+/** Čitelné názvy stavů knihy. */
+export const BOOK_STATUS_LABELS: Record<BookStatus, string> = {
+  finished: 'Doposlechnuto',
+  started: 'Rozposlouchané',
+  none: 'Neposlechnuto',
 }
 
 /** POST /sessions/{id}/items – přidání knih a sérií na konec poslechu. */
@@ -500,4 +526,43 @@ export const AUDIT_ACTION_LABELS: Record<string, string> = {
   'scanner.rescan': 'Spuštění kontroly knihovny',
   'library.repair_apply': 'Oprava kapitol',
   'library.merge_books': 'Sloučení rozdělených knih',
+}
+
+/** Řádek přehledu poslechů v administraci (GET /admin/listening). */
+export interface ListeningSummary {
+  user_id: string
+  display_name: string
+  email: string
+  open_sessions: number
+  finished_sessions: number
+  finished_books: number
+  /** Sekundy obsahu celkem; při zrychleném poslechu je to víc než čas u sluchátek. */
+  seconds_listened: number
+  /** Chybí u účtu, který zatím nic nepustil. */
+  last_listened_at?: string
+}
+
+/** Součet deníku za jednu knihu uživatele. */
+export interface ListeningBookTotal {
+  book_id: string
+  seconds_listened: number
+  first_at: string
+  last_at: string
+}
+
+/** Jeden řádek deníku: kniha a den. */
+export interface ListeningDay {
+  day: string
+  book_id: string
+  seconds_listened: number
+}
+
+/** Detail poslechů jednoho uživatele (GET /admin/listening/{id}). */
+export interface ListeningDetail {
+  user: User
+  sessions: PlaySession[]
+  progress: BookProgress[]
+  books: ListeningBookTotal[]
+  /** Posledních 90 dní. */
+  days: ListeningDay[]
 }

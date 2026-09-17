@@ -308,7 +308,13 @@ Rozposlouchaných poslechů může být víc naráz. Přepíná se mezi nimi iko
 sluchátek v liště a celý přehled je na stránce *Právě posloucháno* – ta se
 v navigaci objeví jako první položka, jakmile je co poslouchat, a je to
 i první pohled po otevření aplikace (kořenová adresa jinak vede do knihovny).
-Dá se z ní pokračovat i uklidit doposlechnuté. *Přehrát* u knihy, která už
+Dá se z ní pokračovat i uklidit doposlechnuté.
+
+Každá kniha si navíc drží stav: *rozposlouchaná* se objeví po prvním poslechu,
+*doposlechnutá* po dohrání poslední kapitoly. Značka je vidět na dlaždici i
+v seznamu knih a v detailu knihy jde stav ručně přepnout – pro knihu slyšenou
+jinde nebo omylem dohranou do konce. Stav i odposlouchaný čas zůstávají,
+i když se poslech smaže; administrátor je vidí u každého účtu. *Přehrát* u knihy, která už
 v nějakém poslechu je, pokračuje v něm místo zakládání nového. Tlačítko se
 u právě hrané knihy mění na *Pozastavit*. Po doposlechnutí kapitoly navazuje
 další, po poslední kapitole další kniha poslechu.
@@ -331,12 +337,13 @@ Nepřihlášeným uživatelům se volba ukládá pouze v prohlížeči.
 ### Administrace (role admin)
 
 Položka **Administrace** v navigaci vede na `/admin` a vidí ji jen
-administrátor. Má šest záložek:
+administrátor. Má sedm záložek:
 
 | Záložka | Co umí |
 |---------|--------|
 | **Přehled** | Počty knih, autorů, sérií, uživatelů a kapitol, celková délka, kolik knih nemá obálku či popis a kolik kapitol má placeholder délku 1 s. Vedle toho verze serveru, prostředí, doba běhu, cesty k datům, dostupnost `ffprobe` a volné místo na disku s audiem. |
 | **Uživatelé** | Seznam účtů, změna role přímo v řádku, reset hesla, smazání a založení nového účtu s libovolnou rolí. |
+| **Poslechy** | U každého účtu rozposlouchané a doposlechnuté poslechy, které knihy už slyšel a deník poslechu – kolik času u které knihy za den odposlouchal. Deník i stav knih přežijí smazání poslechu. |
 | **Zdroje metadat** | Zapnutí a vypnutí jednotlivých zdrojů, změna pořadí šipkami a klíč pro Google Books. Uložení platí okamžitě, server se nerestartuje. |
 | **Knihovna** | Stav scanneru (běží / poslední průchod / počet souborů / chyby), ruční spuštění kontroly knihovny a oprava kapitol s náhledem před provedením. |
 | **Registrace** | Přepínač veřejné registrace a role, kterou nový účet dostane. |
@@ -510,6 +517,8 @@ i pro snížení jeho role).
 | `GET` | `/admin/stats` | Statistiky knihovny | admin |
 | `GET` | `/admin/system` | Verze, cesty, ffprobe, místo na disku | admin |
 | `GET` | `/admin/audit?limit=&before=` | Výpis administrativních akcí | admin |
+| `GET` | `/admin/listening` | Přehled poslechu všech uživatelů | admin |
+| `GET` | `/admin/listening/{id}` | Poslechy, stav knih a deník posledních 90 dní jednoho uživatele | admin |
 
 Zápis zdrojů metadat nahrazuje celý seznam a jeho pořadí je pořadí, ve kterém
 se zdroje zkoušejí:
@@ -534,6 +543,9 @@ pošle jako `before` v dalším požadavku.
 | `GET` | `/books/{id}` | Detail knihy | reader+ |
 | `GET` | `/books/{id}/cover` | Obrázek obálky (soubor z `COVER_ROOT`) | veřejné |
 | `GET` | `/books/{id}/chapters` | Kapitoly (audio soubory) v pořadí přehrávání | reader+ |
+| `GET` | `/books/progress` | Stav knih přihlášeného uživatele (rozposlouchané, doposlechnuté) | reader+ |
+| `PUT` | `/books/{id}/progress` | Ruční označení knihy za doposlechnutou (`{"finished": true}`) i jeho zrušení | reader+ |
+| `DELETE` | `/books/{id}/progress` | Návrat knihy mezi neposlechnuté | reader+ |
 | `POST` | `/books` | Přidání knihy | editor+ |
 | `PUT` | `/books/{id}` | Aktualizace knihy (úplná náhrada) | editor+ |
 | `PATCH` | `/books/{id}` | Aktualizace jen poslaných polí | editor+ |
@@ -674,9 +686,18 @@ poslechu a při každé změně:
   "chapter_id": "<uuid>",      // pozice se měří v kapitole, ne v celé knize
   "position_seconds": 124,
   "playback_speed": 1.25,      // 0.5 až 3.0
-  "finished": false            // true = doposlechnuto; další zápis příznak zruší
+  "finished": false,           // true = doposlechnuto; další zápis příznak zruší
+  "listened_seconds": 10,      // sekundy obsahu od minulého zápisu; server ořízne na 0–600
+  "book_finished": false       // doposlechnutá poslední kapitola této knihy
 }
 ```
+
+`listened_seconds` jde do deníku poslechu: přehrávač sčítá jen plynulý posun
+přehrávání, takže převíjení ani výměna kapitoly se nepočítají. Nesmyslná
+hodnota se ořízne, pozice se uloží tak jako tak. `book_finished` označí knihu
+za doposlechnutou – posílá se na konci její poslední kapitoly, dřív než poslech
+přejde na další knihu. Doposlechnutí knihy pak už další poslech neruší, na
+rozdíl od `finished` celého poslechu.
 
 Každá kniha poslechu si nese vlastní kapitolu a pozici, takže skok na jiný díl
 série nic neztratí. Kniha mimo poslech vrací `400`, stejně jako kapitola cizí

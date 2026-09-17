@@ -103,6 +103,36 @@ func mergeOneBook(ctx context.Context, tx *sql.Tx, targetID, sourceID uuid.UUID)
 		return 0, fmt.Errorf("merge books: přesun autorů: %w", err)
 	}
 
+	// Deník poslechu a stav knihy se při kolizi nezahazují, ale slučují:
+	// sekundy téhož dne se sečtou, doposlechnutí zůstane, když ho měla
+	// kterákoliv z knih. Řádky zdroje pak odejdou kaskádou, mazání níž je
+	// jen pro čitelnost. WHERE v SELECTu je nutné – bez něj SQLite nepozná,
+	// kde končí SELECT a začíná ON CONFLICT.
+	const qLog = `
+		INSERT INTO listening_log (user_id, book_id, day, seconds_listened, first_at, last_at)
+		SELECT user_id, ?1, day, seconds_listened, first_at, last_at
+		FROM listening_log WHERE book_id = ?2
+		ON CONFLICT (user_id, book_id, day) DO UPDATE SET
+		  seconds_listened = seconds_listened + excluded.seconds_listened,
+		  first_at         = MIN(first_at, excluded.first_at),
+		  last_at          = MAX(last_at,  excluded.last_at)`
+	const qProgress = `
+		INSERT INTO book_progress (user_id, book_id, started_at, finished_at, updated_at)
+		SELECT user_id, ?1, started_at, finished_at, updated_at
+		FROM book_progress WHERE book_id = ?2
+		ON CONFLICT (user_id, book_id) DO UPDATE SET
+		  started_at  = MIN(started_at, excluded.started_at),
+		  finished_at = COALESCE(finished_at, excluded.finished_at),
+		  updated_at  = MAX(updated_at, excluded.updated_at)`
+	for _, q := range []string{
+		qLog, `DELETE FROM listening_log WHERE book_id = ?2`,
+		qProgress, `DELETE FROM book_progress WHERE book_id = ?2`,
+	} {
+		if _, err := tx.ExecContext(ctx, q, targetID, sourceID); err != nil {
+			return 0, fmt.Errorf("merge books: přesun deníku poslechu: %w", err)
+		}
+	}
+
 	// Uživatelská data: co se ke knize váže jen jednou na uživatele, se při
 	// kolizi zahodí (u cíle už záznam je) – proto UPDATE OR IGNORE. Zbytek
 	// smaže kaskáda při mazání zdroje.

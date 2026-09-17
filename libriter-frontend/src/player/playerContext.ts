@@ -20,6 +20,14 @@ export const SKIP_FORWARD = 30
 /** Jak často se během přehrávání posílá pozice na server. */
 export const SAVE_INTERVAL_MS = 10_000
 
+/**
+ * Největší posun mezi dvěma událostmi timeupdate, který se ještě počítá jako
+ * poslech (do deníku poslechu). Větší skok znamená převíjení nebo výměnu
+ * souboru. Násobí se rychlostí přehrávání a počítá se s tím, že prohlížeč na
+ * pozadí posílá timeupdate řidčeji.
+ */
+export const MAX_TIMEUPDATE_GAP_SECONDS = 2
+
 export interface PlayerValue {
   /** Otevřený poslech; null = přehrávač je schovaný. */
   session: PlaySession | null

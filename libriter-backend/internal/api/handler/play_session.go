@@ -154,6 +154,11 @@ func (h *PlaySessionHandler) SavePosition(w http.ResponseWriter, r *http.Request
 		PositionSeconds int     `json:"position_seconds"`
 		PlaybackSpeed   float64 `json:"playback_speed"`
 		Finished        bool    `json:"finished"`
+		// Sekundy obsahu od minulého zápisu; jdou do deníku poslechu.
+		ListenedSeconds int `json:"listened_seconds"`
+		// Doposlechnutá poslední kapitola téhle knihy – posílá se před
+		// přechodem na další knihu poslechu.
+		BookFinished bool `json:"book_finished"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
@@ -171,6 +176,8 @@ func (h *PlaySessionHandler) SavePosition(w http.ResponseWriter, r *http.Request
 		PositionSeconds: req.PositionSeconds,
 		PlaybackSpeed:   req.PlaybackSpeed,
 		Finished:        req.Finished,
+		ListenedSeconds: req.ListenedSeconds,
+		BookFinished:    req.BookFinished,
 	}
 	if req.ChapterID != "" {
 		chapterID, err := parseUUIDStr(req.ChapterID, "chapter_id")

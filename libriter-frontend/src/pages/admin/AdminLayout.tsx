@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 const tabs = [
   { to: '/admin', label: 'Přehled', end: true },
   { to: '/admin/users', label: 'Uživatelé' },
+  { to: '/admin/listening', label: 'Poslechy' },
   { to: '/admin/metadata', label: 'Zdroje metadat' },
   { to: '/admin/library', label: 'Knihovna' },
   { to: '/admin/settings', label: 'Registrace' },

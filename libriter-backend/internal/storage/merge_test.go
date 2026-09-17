@@ -330,3 +330,101 @@ func TestMergeBooksKeepsPlaySessions(t *testing.T) {
 		t.Errorf("zbytek seznamu: %+v", list.Items[1])
 	}
 }
+
+// Deník poslechu ani stav knih nemají veřejné API pro vkládání – testy si
+// řádky vkládají přímo, stejně jako u playback_positions.
+func insertListening(t *testing.T, store *Store, userID, bookID uuid.UUID, day string, seconds int) {
+	t.Helper()
+
+	const q = `
+		INSERT INTO listening_log (user_id, book_id, day, seconds_listened)
+		VALUES (?1, ?2, ?3, ?4)`
+	if _, err := store.db.ExecContext(context.Background(), q, userID, bookID, day, seconds); err != nil {
+		t.Fatalf("vložení deníku: %v", err)
+	}
+}
+
+// listeningSeconds vrátí sekundy daného dne; chybějící řádek je nula.
+func listeningSeconds(t *testing.T, store *Store, userID, bookID uuid.UUID, day string) int {
+	t.Helper()
+
+	const q = `
+		SELECT COALESCE(SUM(seconds_listened), 0) FROM listening_log
+		WHERE user_id = ?1 AND book_id = ?2 AND day = ?3`
+	var seconds int
+	if err := store.db.QueryRowContext(context.Background(), q, userID, bookID, day).Scan(&seconds); err != nil {
+		t.Fatalf("čtení deníku: %v", err)
+	}
+	return seconds
+}
+
+func insertProgress(t *testing.T, store *Store, userID, bookID uuid.UUID, finished bool) {
+	t.Helper()
+
+	if err := touchBookProgress(context.Background(), store.db, userID, bookID, finished); err != nil {
+		t.Fatalf("vložení stavu knihy: %v", err)
+	}
+}
+
+// Sloučením rozdělené knihy se odposlouchaný čas sčítá, ne zahazuje –
+// statistika uživatele nesmí opravou knihovny klesnout.
+func TestMergeBooksSumsListeningLog(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	target := mergeTestBook(t, store, "Krakatit", "capek/krakatit", "Krakatit")
+	source := mergeTestBook(t, store, "Krakatit", "capek/krakatit", "KRAKATIT")
+	user := mergeTestUser(t, store, "denik@example.com")
+
+	insertListening(t, store, user.ID, target.ID, "2026-09-10", 100)
+	insertListening(t, store, user.ID, source.ID, "2026-09-10", 50)
+	insertListening(t, store, user.ID, source.ID, "2026-09-11", 30)
+
+	if _, err := store.MergeBooks(ctx, target.ID, []uuid.UUID{source.ID}); err != nil {
+		t.Fatalf("MergeBooks: %v", err)
+	}
+
+	if got := listeningSeconds(t, store, user.ID, target.ID, "2026-09-10"); got != 150 {
+		t.Errorf("společný den = %d s, chtěno 150", got)
+	}
+	if got := listeningSeconds(t, store, user.ID, target.ID, "2026-09-11"); got != 30 {
+		t.Errorf("den jen ze zdroje = %d s, chtěno 30", got)
+	}
+
+	const q = `SELECT COUNT(*) FROM listening_log WHERE book_id = ?1`
+	var left int
+	if err := store.db.QueryRowContext(ctx, q, source.ID).Scan(&left); err != nil {
+		t.Fatalf("zbytky zdroje: %v", err)
+	}
+	if left != 0 {
+		t.Errorf("po zdrojové knize zbylo %d řádků deníku", left)
+	}
+}
+
+// Doposlechnutí se při sloučení zachová, i když ho měla jen jedna z knih.
+func TestMergeBooksKeepsFinishedProgress(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+
+	target := mergeTestBook(t, store, "Krakatit", "capek/krakatit", "Krakatit")
+	source := mergeTestBook(t, store, "Krakatit", "capek/krakatit", "KRAKATIT")
+	user := mergeTestUser(t, store, "stav@example.com")
+
+	insertProgress(t, store, user.ID, target.ID, false) // jen rozposlouchaná
+	insertProgress(t, store, user.ID, source.ID, true)  // doposlechnutá
+
+	if _, err := store.MergeBooks(ctx, target.ID, []uuid.UUID{source.ID}); err != nil {
+		t.Fatalf("MergeBooks: %v", err)
+	}
+
+	progress, err := store.ListBookProgress(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("ListBookProgress: %v", err)
+	}
+	if len(progress) != 1 {
+		t.Fatalf("stav knih po sloučení: %+v", progress)
+	}
+	if progress[0].BookID != target.ID || progress[0].FinishedAt == nil {
+		t.Errorf("doposlechnutí se sloučením ztratilo: %+v", progress[0])
+	}
+}

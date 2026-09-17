@@ -1,4 +1,5 @@
-import { KeyRoundIcon, Trash2Icon } from 'lucide-react'
+import { HeadphonesIcon, KeyRoundIcon, Trash2Icon } from 'lucide-react'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { useSetUserRole } from '@/api/adminHooks'
 import { ROLE_LABELS, type Role, type User } from '@/api/types'
@@ -50,7 +51,7 @@ export function UserTable({
             <TableHead>E-mail</TableHead>
             <TableHead className="w-44">Role</TableHead>
             <TableHead className="w-36">Vytvořen</TableHead>
-            <TableHead className="w-24 text-right">Akce</TableHead>
+            <TableHead className="w-32 text-right">Akce</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -89,6 +90,14 @@ export function UserTable({
                 </TableCell>
                 <TableCell className="text-right">
                   <div className="flex justify-end gap-1">
+                    <Button asChild variant="ghost" size="icon">
+                      <Link
+                        to={`/admin/listening/${user.id}`}
+                        aria-label={`Poslechy uživatele ${user.email}`}
+                      >
+                        <HeadphonesIcon />
+                      </Link>
+                    </Button>
                     <Button
                       variant="ghost"
                       size="icon"
