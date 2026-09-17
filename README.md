@@ -10,7 +10,7 @@ libriter/
 ├── libriter-backend/   # REST API + server webového rozhraní (Go)
 │   └── internal/web/dist/   # sem se sestaví frontend, vkompiluje se do binárky
 ├── libriter-frontend/  # Webové rozhraní (React + Vite + Tailwind)
-├── libriter-mobile/    # Mobilní aplikace
+├── libriter-mobile/    # Mobilní aplikace (plán: docs/mobile-app-plan.md)
 ├── _scripts/           # Pomocné skripty
 ├── bin/                # Sestavená binárka (just build)
 └── data/
