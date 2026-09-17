@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils'
  * Kapitoly se stahují až při otevření panelu – u dlouhých audioknih jde
  * o stovky řádků na knihu a do lišty by je stejně nebylo kam dát.
  */
-export function PlayerQueue() {
+export function PlayerQueue({ triggerClassName }: { triggerClassName?: string }) {
   const player = usePlayer()
   const [open, setOpen] = useState(false)
   const books = useBooks()
@@ -42,7 +42,13 @@ export function PlayerQueue() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Obsah poslechu" title="Obsah poslechu">
+        <Button
+          variant="ghost"
+          size="icon"
+          className={triggerClassName}
+          aria-label="Obsah poslechu"
+          title="Obsah poslechu"
+        >
           <ListMusicIcon />
         </Button>
       </SheetTrigger>

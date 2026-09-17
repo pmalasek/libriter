@@ -1,6 +1,5 @@
 import {
-  ChevronsLeftIcon,
-  ChevronsRightIcon,
+  ChevronUpIcon,
   PauseIcon,
   PlayIcon,
   RotateCcwIcon,
@@ -11,23 +10,27 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { BookCover } from '@/components/BookCover'
 import { Button } from '@/components/ui/button'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Slider } from '@/components/ui/slider'
-import { formatClock } from '@/lib/format'
-import { SKIP_BACK, SKIP_FORWARD, SPEEDS, usePlayer } from '@/player/playerContext'
+import { SKIP_BACK, SKIP_FORWARD, usePlayer } from '@/player/playerContext'
 import { PlayerQueue } from './PlayerQueue'
+import { PlayerSheet } from './PlayerSheet'
+import { SeekBar } from './SeekBar'
 import { SessionMenu } from './SessionMenu'
+import { SpeedSelect } from './SpeedSelect'
+import { TransportControls } from './TransportControls'
 import { VolumeControl } from './VolumeControl'
 
 /**
  * Lišta přehrávače. Drží se u spodní hrany na všech stránkách, aby poslech
  * nepřerušila navigace v knihovně; vedle sidebaru začíná až za ním.
+ *
+ * Do lg je lišta jen kompaktní ovladač – jezdec a zbytek ovládání se vejdou
+ * až do panelu, který se vytáhne klepnutím (PlayerSheet). Od lg se vejde
+ * všechno do dvou řádků vedle sebe.
  */
 export function PlayerBar() {
   const player = usePlayer()
-  // Pozice ukazovaná během tažení posuvníku, než ji uživatel pustí.
-  const [scrub, setScrub] = useState<number | null>(null)
-  const { session, book, chapter, chapters, currentTime, duration, playing, loading, speed } = player
+  const [expanded, setExpanded] = useState(false)
+  const { session, book, chapter, chapters, currentTime, duration, playing, loading } = player
 
   if (!session) return null
 
@@ -35,13 +38,104 @@ export function PlayerBar() {
   const itemIndex = session.items.findIndex((item) => item.book_id === book?.id)
   const length = duration || chapter?.duration_seconds || 0
 
+  const subtitle =
+    (chapter ? chapter.title : loading ? 'Načítání kapitoly…' : '—') +
+    (chapterIndex >= 0 && chapters.length > 1 ? ` · ${chapterIndex + 1}/${chapters.length}` : '') +
+    (session.items.length > 1 && itemIndex >= 0
+      ? ` · kniha ${itemIndex + 1}/${session.items.length}`
+      : '')
+
   return (
     <div
       className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 backdrop-blur md:left-64"
       role="region"
       aria-label="Přehrávač"
     >
-      <div className="mx-auto flex max-w-7xl flex-col gap-1.5 px-4 py-2 sm:px-6 lg:px-8">
+      {/* Mobil a tablet: jeden řádek s velkými tlačítky, zbytek v panelu. */}
+      <div className="lg:hidden">
+        {/* Kde poslech je; v liště se netáhne, na to je jezdec v panelu. */}
+        <div className="h-0.5 w-full bg-muted" aria-hidden>
+          <div
+            className="h-full bg-primary transition-[width] duration-300"
+            style={{ width: `${length > 0 ? Math.min(currentTime / length, 1) * 100 : 0}%` }}
+          />
+        </div>
+
+        {/* Šipka přes celou šířku říká, že se lišta dá rozbalit; vodorovné
+            místo vedle názvu si nebere, to patří tlačítkům. */}
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="flex w-full items-center justify-center py-1 text-muted-foreground hover:text-foreground"
+          aria-label="Rozbalit přehrávač"
+          aria-expanded={expanded}
+        >
+          <ChevronUpIcon className="size-4" />
+        </button>
+
+        <div className="flex items-center gap-1 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6">
+          <button
+            type="button"
+            onClick={() => setExpanded(true)}
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-xl py-1 text-left"
+            aria-label="Rozbalit přehrávač"
+            aria-expanded={expanded}
+          >
+            {book ? (
+              <BookCover
+                book={book}
+                key={book.id}
+                lift={false}
+                className="size-12 shrink-0 rounded-lg"
+              />
+            ) : (
+              <div className="size-12 shrink-0 rounded-lg bg-muted" />
+            )}
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-medium">
+                {book ? book.title : 'Načítání…'}
+              </span>
+              <span className="block truncate text-xs text-muted-foreground">{subtitle}</span>
+            </span>
+          </button>
+
+          <div className="flex shrink-0 items-center gap-0.5">
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              className="size-11"
+              onClick={() => player.skip(-SKIP_BACK)}
+              aria-label={`Zpět o ${SKIP_BACK} sekund`}
+              title={`Zpět o ${SKIP_BACK} s`}
+            >
+              <RotateCcwIcon className="size-6" />
+            </Button>
+            <Button
+              size="icon-lg"
+              className="size-14 rounded-full"
+              onClick={player.toggle}
+              disabled={!chapter}
+              aria-label={playing ? 'Pozastavit' : 'Přehrát'}
+              title={playing ? 'Pozastavit' : 'Přehrát'}
+            >
+              {playing ? <PauseIcon className="size-7" /> : <PlayIcon className="size-7" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-lg"
+              className="size-11"
+              onClick={() => player.skip(SKIP_FORWARD)}
+              aria-label={`Vpřed o ${SKIP_FORWARD} sekund`}
+              title={`Vpřed o ${SKIP_FORWARD} s`}
+            >
+              <RotateCwIcon className="size-6" />
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop: informace, ovládání a jezdec ve dvou řádcích. */}
+      <div className="mx-auto hidden max-w-7xl flex-col gap-1.5 px-4 py-2 sm:px-6 lg:flex lg:px-8">
         <div className="flex items-center gap-3">
           {/* Co hraje */}
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -62,90 +156,17 @@ export function PlayerBar() {
                   'Načítání…'
                 )}
               </p>
-              <p className="truncate text-xs text-muted-foreground">
-                {chapter ? chapter.title : loading ? 'Načítání kapitoly…' : '—'}
-                {chapterIndex >= 0 && chapters.length > 1
-                  ? ` · ${chapterIndex + 1}/${chapters.length}`
-                  : ''}
-                {session.items.length > 1 && itemIndex >= 0
-                  ? ` · kniha ${itemIndex + 1}/${session.items.length}`
-                  : ''}
-              </p>
+              <p className="truncate text-xs text-muted-foreground">{subtitle}</p>
             </div>
           </div>
 
           {/* Ovládání */}
-          <div className="flex shrink-0 items-center gap-0.5">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hidden sm:inline-flex"
-              onClick={player.prevChapter}
-              aria-label="Předchozí kapitola"
-              title="Předchozí kapitola"
-            >
-              <ChevronsLeftIcon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => player.skip(-SKIP_BACK)}
-              aria-label={`Zpět o ${SKIP_BACK} sekund`}
-              title={`Zpět o ${SKIP_BACK} s`}
-            >
-              <RotateCcwIcon />
-            </Button>
-            <Button
-              size="icon-lg"
-              className="rounded-full"
-              onClick={player.toggle}
-              disabled={!chapter}
-              aria-label={playing ? 'Pozastavit' : 'Přehrát'}
-              title={playing ? 'Pozastavit' : 'Přehrát'}
-            >
-              {playing ? <PauseIcon /> : <PlayIcon />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => player.skip(SKIP_FORWARD)}
-              aria-label={`Vpřed o ${SKIP_FORWARD} sekund`}
-              title={`Vpřed o ${SKIP_FORWARD} s`}
-            >
-              <RotateCwIcon />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="hidden sm:inline-flex"
-              onClick={player.nextChapter}
-              aria-label="Další kapitola"
-              title="Další kapitola"
-            >
-              <ChevronsRightIcon />
-            </Button>
-          </div>
+          <TransportControls />
 
           {/* Hlasitost, rychlost, obsah poslechu a zavření lišty */}
           <div className="flex flex-1 items-center justify-end gap-0.5">
             <VolumeControl />
-            <Select value={String(speed)} onValueChange={(value) => player.setSpeed(Number(value))}>
-              <SelectTrigger
-                size="sm"
-                className="hidden w-[4.5rem] sm:flex"
-                aria-label="Rychlost přehrávání"
-                title="Rychlost přehrávání"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SPEEDS.map((value) => (
-                  <SelectItem key={value} value={String(value)}>
-                    {value.toLocaleString('cs-CZ')}×
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <SpeedSelect className="w-[4.5rem]" />
             <PlayerQueue />
             <SessionMenu />
             <Button
@@ -161,29 +182,10 @@ export function PlayerBar() {
         </div>
 
         {/* Posun v kapitole */}
-        <div className="flex items-center gap-3">
-          <span className="w-12 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
-            {formatClock(scrub ?? currentTime)}
-          </span>
-          {/* Během tažení se mění jen zobrazení; přetočí se až po puštění,
-              aby se na server neposílala pozice z každého mezikroku. */}
-          <Slider
-            value={[Math.min(scrub ?? currentTime, length)]}
-            max={Math.max(length, 1)}
-            step={1}
-            disabled={!chapter}
-            onValueChange={([value]) => setScrub(value)}
-            onValueCommit={([value]) => {
-              player.seek(value)
-              setScrub(null)
-            }}
-            aria-label="Pozice v kapitole"
-          />
-          <span className="w-12 shrink-0 text-xs text-muted-foreground tabular-nums">
-            {formatClock(length)}
-          </span>
-        </div>
+        <SeekBar />
       </div>
+
+      <PlayerSheet open={expanded} onOpenChange={setExpanded} subtitle={subtitle} />
     </div>
   )
 }

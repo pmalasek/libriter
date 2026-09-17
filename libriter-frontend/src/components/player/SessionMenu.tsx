@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils'
  * Rychlé přepínání mezi rozposlouchanými poslechy přímo z lišty. Celý přehled
  * i s úklidem je na stránce Právě posloucháno, sem se vejde řádka na poslech.
  */
-export function SessionMenu() {
+export function SessionMenu({ triggerClassName }: { triggerClassName?: string }) {
   const { session, switchSession, removeSession } = usePlayer()
   const [open, setOpen] = useState(false)
   const [toRemove, setToRemove] = useState<PlaySession | null>(null)
@@ -50,7 +50,13 @@ export function SessionMenu() {
     <>
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label="Právě posloucháno" title="Právě posloucháno">
+          <Button
+            variant="ghost"
+            size="icon"
+            className={triggerClassName}
+            aria-label="Právě posloucháno"
+            title="Právě posloucháno"
+          >
             <HeadphonesIcon />
           </Button>
         </PopoverTrigger>

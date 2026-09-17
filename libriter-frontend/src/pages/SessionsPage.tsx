@@ -177,8 +177,8 @@ function SessionCard({
   const isPlaying = isOpen && player.playing
 
   return (
-    <Card>
-      <CardContent className="flex flex-wrap items-center gap-4">
+    <Card className="@container">
+      <CardContent className="flex flex-wrap items-center gap-x-4 gap-y-3">
         {books.length > 1 ? (
           <SeriesCoverStack books={books} />
         ) : currentBook ? (
@@ -189,7 +189,10 @@ function SessionCard({
           <div className="size-14 shrink-0 rounded-2xl bg-muted" />
         )}
 
-        <div className="min-w-0 flex-1">
+        {/* Text má přednost před tlačítky: když by mu zbylo míň než 13 rem,
+            zalomí se tlačítka na vlastní řádek vpravo dole. Míň už být nesmí,
+            jinak by se na úzkou kartu nevešel vedle obálky ani on. */}
+        <div className="min-w-52 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="truncate font-medium">{title}</p>
             <Badge variant="secondary">{sessionKindLabel(session)}</Badge>
@@ -218,13 +221,17 @@ function SessionCard({
           </p>
         </div>
 
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="ml-auto flex shrink-0 items-center gap-2">
           <Button
             onClick={() => (isOpen ? player.toggle() : player.switchSession(session.id))}
             disabled={player.loading}
+            aria-label={isPlaying ? 'Pozastavit' : isOpen ? 'Přehrát' : 'Pokračovat'}
           >
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
-            {isPlaying ? 'Pozastavit' : isOpen ? 'Přehrát' : 'Pokračovat'}
+            {/* Na úzké kartě mluví ikona sama za sebe. */}
+            <span className="hidden @sm:inline">
+              {isPlaying ? 'Pozastavit' : isOpen ? 'Přehrát' : 'Pokračovat'}
+            </span>
           </Button>
           <Button variant="ghost" size="icon" onClick={onRemove} aria-label={`Odebrat poslech ${title}`}>
             <Trash2Icon />

@@ -26,7 +26,11 @@ export function PageHeader({
         <h1 className="font-heading truncate text-3xl font-bold tracking-tight">{title}</h1>
         {description ? <p className="mt-1.5 text-muted-foreground">{description}</p> : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
+      {/* Na mobilu akce zabírají celou šířku (hledání se roztáhne pod titulek),
+          od sm se zase vejdou vedle titulku. */}
+      {actions ? (
+        <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">{actions}</div>
+      ) : null}
     </div>
   )
 }

@@ -98,7 +98,7 @@ export function AuthorsPage() {
             <Input
               type="search"
               placeholder="Hledat podle jména…"
-              className="w-56"
+              className="w-full sm:w-56"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -199,11 +199,11 @@ function AuthorList({
   }
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3">
       {authors.map((author) => (
         <Link key={author.id} to={`/authors/${author.id}`} className="group rounded-2xl">
-          <Card className={cardHover}>
-            <CardContent className="flex items-center gap-4">
+          <Card className={cn('@container', cardHover)}>
+            <CardContent className="flex items-center gap-3">
               <AuthorImage key={author.id} author={author} className="size-14 shrink-0" />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-semibold transition-colors group-hover:text-primary">
@@ -214,8 +214,12 @@ function AuthorList({
                     {lifeYears(author)}
                   </p>
                 ) : null}
+                {/* Stejně jako u sérií: na úzké kartě patří počet pod jméno. */}
+                <p className="mt-0.5 text-xs text-muted-foreground @min-[20rem]:hidden">
+                  {bookCount(count(author))}
+                </p>
               </div>
-              <Badge variant="brand" className="shrink-0">
+              <Badge variant="brand" className="hidden shrink-0 @min-[20rem]:inline-flex">
                 {bookCount(count(author))}
               </Badge>
             </CardContent>

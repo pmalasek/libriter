@@ -103,7 +103,7 @@ export function SeriesPage() {
           <Input
             type="search"
             placeholder="Hledat podle názvu nebo autora…"
-            className="w-56"
+            className="w-full sm:w-56"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -121,13 +121,13 @@ export function SeriesPage() {
           }
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3">
           {filtered.map((item) => {
             const info = infoBySeries.get(item.id) ?? EMPTY
             return (
               <Link key={item.id} to={`/series/${item.id}`} className="group rounded-2xl">
-                <Card className="h-full transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-primary/30">
-                  <CardContent className="flex items-center gap-4">
+                <Card className="@container h-full transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-hover:ring-primary/30">
+                  <CardContent className="flex items-center gap-3">
                     <SeriesCoverStack books={info.covers} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold transition-colors group-hover:text-primary">
@@ -136,8 +136,16 @@ export function SeriesPage() {
                       <p className="mt-0.5 truncate text-sm text-muted-foreground">
                         {authorsLabel(info.authors)}
                       </p>
+                      {/* Na úzké kartě by štítek vedle textu ukrojil název,
+                          počet dílů se proto přesune pod něj. */}
+                      <p className="mt-0.5 text-xs text-muted-foreground @min-[24rem]:hidden">
+                        {bookCount(info.count)}
+                      </p>
                     </div>
-                    <Badge variant="highlight" className="shrink-0">
+                    <Badge
+                      variant="highlight"
+                      className="hidden shrink-0 @min-[24rem]:inline-flex"
+                    >
                       {bookCount(info.count)}
                     </Badge>
                   </CardContent>

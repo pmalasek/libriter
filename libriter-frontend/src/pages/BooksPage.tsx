@@ -96,7 +96,7 @@ export function BooksPage() {
             <Input
               type="search"
               placeholder="Hledat podle názvu nebo autora…"
-              className="w-56"
+              className="w-full sm:w-56"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />

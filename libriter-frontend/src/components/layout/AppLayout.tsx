@@ -72,8 +72,10 @@ export function AppLayout() {
             uvolní místo právě tehdy, když je vidět. */}
         <main
           className={cn(
-            'mx-auto max-w-7xl px-4 pt-2 sm:px-6 lg:px-8',
-            player.session ? 'pb-36' : 'pb-16',
+            // @container: stránky se řídí šířkou obsahu, ne okna – na tabletu
+            // ukrojí sidebar 16 rem a mřížky podle okna pak vycházejí příliš úzké.
+            '@container mx-auto max-w-7xl px-4 pt-2 sm:px-6 lg:px-8',
+            player.session ? 'pb-28 lg:pb-36' : 'pb-16',
           )}
         >
           <Suspense fallback={<p role="status" className="py-8 text-center text-muted-foreground">Načítání stránky…</p>}>
