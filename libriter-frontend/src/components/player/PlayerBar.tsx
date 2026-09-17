@@ -10,6 +10,7 @@ import { useState } from 'react'
 import { Link } from 'react-router'
 import { BookCover } from '@/components/BookCover'
 import { Button } from '@/components/ui/button'
+import { formatClock } from '@/lib/format'
 import { SKIP_BACK, SKIP_FORWARD, usePlayer } from '@/player/playerContext'
 import { PlayerQueue } from './PlayerQueue'
 import { PlayerSheet } from './PlayerSheet'
@@ -61,16 +62,21 @@ export function PlayerBar() {
           />
         </div>
 
-        {/* Šipka přes celou šířku říká, že se lišta dá rozbalit; vodorovné
-            místo vedle názvu si nebere, to patří tlačítkům. */}
+        {/* Šipka přes celou šířku říká, že se lišta dá rozbalit; po stranách
+            je pozice v kapitole a její délka. Vodorovné místo vedle názvu
+            si tenhle řádek nebere, to patří tlačítkům. */}
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="flex w-full items-center justify-center py-1 text-muted-foreground hover:text-foreground"
+          className="flex w-full items-center px-3 py-0.5 text-muted-foreground hover:text-foreground sm:px-6"
           aria-label="Rozbalit přehrávač"
           aria-expanded={expanded}
         >
-          <ChevronUpIcon className="size-4" />
+          <span className="w-12 text-left text-[0.7rem] tabular-nums">
+            {formatClock(currentTime)}
+          </span>
+          <ChevronUpIcon className="mx-auto size-4" />
+          <span className="w-12 text-right text-[0.7rem] tabular-nums">{formatClock(length)}</span>
         </button>
 
         <div className="flex items-center gap-1 px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:px-6">

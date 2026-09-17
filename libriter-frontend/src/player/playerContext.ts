@@ -21,6 +21,13 @@ export const SKIP_FORWARD = 30
 export const SAVE_INTERVAL_MS = 10_000
 
 /**
+ * Jak často se otevřená, ale mlčící karta ptá serveru, kde poslech je.
+ * Poslech na jiném zařízení ukládá pozici po SAVE_INTERVAL_MS, takže delší
+ * interval jen znamená, že čas na druhé obrazovce trochu pokulhává.
+ */
+export const REMOTE_SYNC_INTERVAL_MS = 15_000
+
+/**
  * Největší posun mezi dvěma událostmi timeupdate, který se ještě počítá jako
  * poslech (do deníku poslechu). Větší skok znamená převíjení nebo výměnu
  * souboru. Násobí se rychlostí přehrávání a počítá se s tím, že prohlížeč na

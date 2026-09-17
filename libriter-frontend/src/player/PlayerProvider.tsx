@@ -19,6 +19,7 @@ import {
   currentBookId,
   MAX_TIMEUPDATE_GAP_SECONDS,
   PlayerContext,
+  REMOTE_SYNC_INTERVAL_MS,
   SAVE_INTERVAL_MS,
   sessionItem,
   STORAGE_KEY,
@@ -612,6 +613,49 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
     return () => clearInterval(timer)
   }, [playing, savePosition])
 
+  /**
+   * Doptá se serveru, kde poslech je, a srovná podle něj lištu. Volá se jen
+   * tehdy, když tady nic nehraje – jinak by cizí zápis přebil vlastní pozici.
+   */
+  const syncFromServer = useCallback(() => {
+    // Bez zvukového prvku se tady nehraje – to je důvod ptát se, ne mlčet.
+    if (audioRef.current && !audioRef.current.paused) return
+    const open = sessionRef.current
+    if (!open) return
+    apiFetch<PlaySession>(`/sessions/${open.id}`)
+      .then((fresh) => {
+        if (sessionRef.current?.id !== fresh.id) return
+        if (fresh.updated_at <= open.updated_at) return
+        // Mezitím se tady mohlo spustit přehrávání; pak má přednost.
+        if (audioRef.current && !audioRef.current.paused) return
+        cacheSession(fresh)
+
+        const bookId = currentBookId(fresh)
+        const item = sessionItem(fresh, bookId)
+        const openTrack = trackRef.current
+        if (!bookId || !item || !openTrack) return
+
+        const movedElsewhere = bookId !== openTrack.bookId || item.chapter_id !== openTrack.chapterId
+        if (movedElsewhere) {
+          void load({
+            bookId,
+            chapterId: item.chapter_id,
+            position: item.position_seconds,
+            autoplay: false,
+          })
+          return
+        }
+        const audio = audioRef.current
+        if (audio && Math.abs(audio.currentTime - item.position_seconds) > REMOTE_DRIFT_SECONDS) {
+          audio.currentTime = item.position_seconds
+          setCurrentTime(item.position_seconds)
+        }
+      })
+      .catch(() => {
+        // Nedostupný server nemá důvod rušit rozehraný poslech.
+      })
+  }, [cacheSession, load])
+
   // Odchod ze stránky: uložit poslední pozici tak, aby požadavek doběhl.
   useEffect(() => {
     const onHide = () => savePosition({ keepalive: true })
@@ -621,39 +665,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
         return
       }
       // Návrat k záložce: mezitím se mohlo poslouchat jinde.
-      if (!audioRef.current?.paused) return
-      const open = sessionRef.current
-      if (!open) return
-      apiFetch<PlaySession>(`/sessions/${open.id}`)
-        .then((fresh) => {
-          if (sessionRef.current?.id !== fresh.id) return
-          if (fresh.updated_at <= open.updated_at) return
-          cacheSession(fresh)
-
-          const bookId = currentBookId(fresh)
-          const item = sessionItem(fresh, bookId)
-          const openTrack = trackRef.current
-          if (!bookId || !item || !openTrack) return
-
-          const movedElsewhere = bookId !== openTrack.bookId || item.chapter_id !== openTrack.chapterId
-          if (movedElsewhere) {
-            void load({
-              bookId,
-              chapterId: item.chapter_id,
-              position: item.position_seconds,
-              autoplay: false,
-            })
-            return
-          }
-          const audio = audioRef.current
-          if (audio && Math.abs(audio.currentTime - item.position_seconds) > REMOTE_DRIFT_SECONDS) {
-            audio.currentTime = item.position_seconds
-            setCurrentTime(item.position_seconds)
-          }
-        })
-        .catch(() => {
-          // Nedostupný server nemá důvod rušit rozehraný poslech.
-        })
+      syncFromServer()
     }
 
     window.addEventListener('pagehide', onHide)
@@ -662,7 +674,18 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
       window.removeEventListener('pagehide', onHide)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [cacheSession, load, savePosition])
+  }, [savePosition, syncFromServer])
+
+  // Poslech běžící na jiném zařízení: dokud je tahle karta vidět a mlčí,
+  // ptá se občas serveru, ať čas a kapitola na druhé obrazovce nezamrznou.
+  useEffect(() => {
+    if (!session || playing) return
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'visible') return
+      syncFromServer()
+    }, REMOTE_SYNC_INTERVAL_MS)
+    return () => clearInterval(timer)
+  }, [session, playing, syncFromServer])
 
   // Obnovení po načtení stránky: poslech se otevře v pauze tam, kde skončil.
   useEffect(() => {
