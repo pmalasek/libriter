@@ -6,7 +6,6 @@ import type { ComponentType } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
-import { SyncBadge } from '@/components/SyncBadge'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Body, Muted } from '@/components/ui/Text'
 import { countPending } from '@/db/events'
@@ -41,7 +40,6 @@ export default function MoreScreen() {
   return (
     <Screen>
       <PageHeader title={user?.display_name ?? 'Účet'} description={user?.email} />
-      <SyncBadge />
 
       <View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.border }]}>
         {hasSessions ? <Row icon={Headphones} label="Právě posloucháno" onPress={() => router.push('/sessions')} /> : null}

@@ -21,7 +21,6 @@ import { EmptyState } from '@/components/EmptyState'
 import { Screen, ActionRow } from '@/components/Screen'
 import { SeriesCoverStack } from '@/components/SeriesCoverStack'
 import { Shelf, ShelfItem } from '@/components/Shelf'
-import { SyncBadge } from '@/components/SyncBadge'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
@@ -115,8 +114,6 @@ export default function HomeScreen() {
 
   return (
     <Screen refreshing={pull.refreshing} onRefresh={pull.onRefresh}>
-      <SyncBadge />
-
       {open.length > 0 ? (
         <ContinueHero
           session={open[0]}

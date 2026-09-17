@@ -5,7 +5,6 @@ import { formatBytes } from 'libriter-shared'
 import { useAuth } from '@/auth/AuthProvider'
 import { PageHeader } from '@/components/PageHeader'
 import { BackButton, Screen } from '@/components/Screen'
-import { SyncBadge } from '@/components/SyncBadge'
 import { Button } from '@/components/ui/Button'
 import { Body, Muted, SectionTitle } from '@/components/ui/Text'
 import { useMode } from '@/data/ModeProvider'
@@ -39,7 +38,6 @@ export default function SettingsScreen() {
     <Screen>
       <BackButton label="Zpět" />
       <PageHeader title="Nastavení" />
-      <SyncBadge />
 
       <Section title="Režim">
         <SwitchRow

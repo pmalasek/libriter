@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
+import { SyncBadge } from '@/components/SyncBadge'
 import { Toaster } from '@/components/Toast'
 import { useSyncInvalidation } from '@/data/hooks'
 import { PrefsProvider } from '@/data/listPrefs'
@@ -62,6 +63,7 @@ export default function RootLayout() {
               <PrefsProvider>
                 <PlayerProvider>
                   <AuthGate />
+                  <SyncBadge />
                   <Toaster />
                 </PlayerProvider>
               </PrefsProvider>
