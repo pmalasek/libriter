@@ -13,6 +13,7 @@ import { SearchInput } from '@/components/ui/SearchInput'
 import { Body } from '@/components/ui/Text'
 import { useBookProgress, useBooks, useDownloads, useSeriesById, useSeriesTitle } from '@/data/hooks'
 import { useBookListPrefs } from '@/data/listPrefs'
+import { usePullRefresh } from '@/data/usePullRefresh'
 import { usePlayer } from '@/player/PlayerProvider'
 import { radius, spacing, useTheme } from '@/theme'
 
@@ -23,6 +24,7 @@ export default function BooksScreen() {
   const { colors } = useTheme()
   const [query, setQuery] = useState('')
   const books = useBooks()
+  const pull = usePullRefresh(books.refetch)
   const prefs = useBookListPrefs()
   const seriesTitle = useSeriesTitle()
   const seriesById = useSeriesById()
@@ -174,8 +176,8 @@ export default function BooksScreen() {
       keyExtractor={(book) => book.id}
       renderItem={renderItem}
       header={header}
-      refreshing={books.isFetching && !books.isPending}
-      onRefresh={() => void books.refetch()}
+      refreshing={pull.refreshing}
+      onRefresh={pull.onRefresh}
       empty={
         books.isError ? (
           <ErrorState error={books.error} onRetry={() => void books.refetch()} />

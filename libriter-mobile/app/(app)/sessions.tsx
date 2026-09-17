@@ -9,6 +9,7 @@ import { BackButton, Screen } from '@/components/Screen'
 import { SessionCard } from '@/components/SessionCard'
 import { SectionTitle } from '@/components/ui/Text'
 import { useBooks, useSeriesById, useSessions } from '@/data/hooks'
+import { usePullRefresh } from '@/data/usePullRefresh'
 import { usePlayer } from '@/player/PlayerProvider'
 import { spacing } from '@/theme'
 
@@ -21,6 +22,7 @@ export default function SessionsScreen() {
   const books = useBooks()
   const { map: seriesById } = useSeriesById()
   const player = usePlayer()
+  const pull = usePullRefresh(sessions.refetch)
 
   const bookById = useMemo(() => new Map((books.data ?? []).map((book) => [book.id, book])), [books.data])
 
@@ -38,7 +40,7 @@ export default function SessionsScreen() {
     ])
 
   return (
-    <Screen refreshing={sessions.isFetching && !sessions.isPending} onRefresh={() => void sessions.refetch()}>
+    <Screen refreshing={pull.refreshing} onRefresh={pull.onRefresh}>
       <BackButton label="Zpět" />
       <PageHeader
         title="Právě posloucháno"

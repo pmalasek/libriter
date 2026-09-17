@@ -31,25 +31,27 @@ export function Screen({
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
 
+  // Bezpečnou zónu drží rám, ne obsah – iOS rolovacím pohledům dopočítává
+  // vlastní odsazení a obojí by se sečetlo (viz ListScreen).
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      // iOS jinak dopočítává odsazení podle navigační lišty nad obrazovkou;
-      // hlavičky si tu kreslíme sami, takže by jen odsunulo obsah dolů.
-      contentInsetAdjustmentBehavior="never"
-      automaticallyAdjustContentInsets={false}
-      contentContainerStyle={[
-        styles.content,
-        { paddingTop: (top ? insets.top : 0) + spacing.md, paddingBottom: BOTTOM_SPACE + insets.bottom },
-        contentStyle,
-      ]}
-      keyboardShouldPersistTaps="handled"
-      refreshControl={
-        onRefresh ? <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined
-      }
-    >
-      {children}
-    </ScrollView>
+    <View style={{ flex: 1, paddingTop: top ? insets.top : 0, backgroundColor: colors.background }}>
+      <ScrollView
+        style={styles.scroll}
+        contentInsetAdjustmentBehavior="never"
+        automaticallyAdjustContentInsets={false}
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: spacing.md, paddingBottom: BOTTOM_SPACE + insets.bottom },
+          contentStyle,
+        ]}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          onRefresh ? <RefreshControl refreshing={Boolean(refreshing)} onRefresh={onRefresh} tintColor={colors.primary} /> : undefined
+        }
+      >
+        {children}
+      </ScrollView>
+    </View>
   )
 }
 
@@ -73,6 +75,7 @@ export function ActionRow({ children, style }: { children: ReactNode; style?: St
 }
 
 const styles = StyleSheet.create({
+  scroll: { flex: 1 },
   content: { paddingHorizontal: spacing.md },
   back: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.md, alignSelf: 'flex-start' },
   actions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.sm },

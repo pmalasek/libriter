@@ -7,6 +7,7 @@
     "libriter-mobile"
   ],
   "scripts": {
+    "postinstall": "node _scripts/restore-expo-sqlite-sources.mjs",
     "typecheck": "npm run typecheck --workspaces --if-present"
   }
 }

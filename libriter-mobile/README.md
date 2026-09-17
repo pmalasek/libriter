@@ -68,7 +68,19 @@ U mřížky s procentní šířkou dlaždic se **nepoužívá `gap` na kontejner
 sečetlo by se se 100 % šířky a do řádku by se vešla jediná dlaždice. Mezery
 dělá vnitřní odsazení položek.
 
+Bezpečnou zónu nahoře drží **rám** obrazovky, ne odsazení uvnitř rolovacího
+pohledu: iOS rolovacím pohledům dopočítává vlastní odsazení a obojí se
+sčítalo – výpis pak po prvním otevření začínal až pod třetinou obrazovky
+a srovnal se, až se s ním pohnulo.
+
 ## Vzhled
+
+Plovoucí plochy (kapsle přehrávače, lišta tabů, hlavičky výpisů) mají
+rozostřené pozadí přes `expo-blur` – protějšek utility `glass`
+(`backdrop-blur`) na webu. Samotné rozostření nestačí: nad světlou obálkou by
+text zesvětlal, proto se přes ně klade ještě závoj z palety (`colors.glass`),
+stejně jako to dělá `--glass` v CSS. Společná komponenta je
+`src/components/ui/Blur.tsx`.
 
 Barvy se počítají ze **stejných OKLCH hodnot, jaké má web v `index.css`**
 (`src/theme/palette.ts` + převod v `src/theme/oklch.ts`): tyrkysová má čísla
@@ -145,9 +157,12 @@ smaže. `Podfile.lock` se přitom nemění, takže si toho `expo run:ios` nevši
 a build spadne na `cannot find 'exsqlite3_open' in scope` nebo `… file not
 found` u codegen hlaviček.
 
-`just mobile-ios` proto spouští `pod install` před buildem, což pokryje běžný
-případ. Když už build jednou spadl na chybějící codegen hlavičky, je potřeba
-vygenerovat projekt načisto:
+Vendorované zdroje SQLite vrací zpátky `postinstall` v kořeni
+([`_scripts/restore-expo-sqlite-sources.mjs`](../_scripts/restore-expo-sqlite-sources.mjs)),
+takže `npm ci` i `npm install` nechají strom v použitelném stavu. `just
+mobile-ios` navíc spouští `pod install` před buildem. Když už build jednou
+spadl na chybějící **codegen** hlavičky, je potřeba vygenerovat projekt
+načisto:
 
 ```bash
 rm -rf libriter-mobile/ios && just mobile-ios

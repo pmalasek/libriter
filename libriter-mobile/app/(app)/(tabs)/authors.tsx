@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/Badge'
 import { Body, Muted, Title } from '@/components/ui/Text'
 import { useAuthors, useBooks } from '@/data/hooks'
 import { useAuthorListPrefs } from '@/data/listPrefs'
+import { usePullRefresh } from '@/data/usePullRefresh'
 import { radius, spacing, useTheme } from '@/theme'
 
 const COLUMNS: Record<ViewMode, number> = { tiles: 1, small: 2, list: 1 }
@@ -33,6 +34,7 @@ export default function AuthorsScreen() {
   const books = useBooks()
   const prefs = useAuthorListPrefs()
   const [query, setQuery] = useState('')
+  const pull = usePullRefresh(authors.refetch)
 
   const countByAuthor = useMemo(() => {
     const counts = new Map<string, number>()
@@ -107,8 +109,8 @@ export default function AuthorsScreen() {
       keyExtractor={(author) => author.id}
       renderItem={renderItem}
       header={header}
-      refreshing={authors.isFetching && !authors.isPending}
-      onRefresh={() => void authors.refetch()}
+      refreshing={pull.refreshing}
+      onRefresh={pull.onRefresh}
       empty={
         authors.isError ? (
           <ErrorState error={authors.error} onRetry={() => void authors.refetch()} />

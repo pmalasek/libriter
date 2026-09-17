@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/Badge'
 import { SearchInput } from '@/components/ui/SearchInput'
 import { Body, Muted } from '@/components/ui/Text'
 import { useBooks, useSeriesList } from '@/data/hooks'
+import { usePullRefresh } from '@/data/usePullRefresh'
 import { radius, spacing, useTheme } from '@/theme'
 
 /** Co o sérii víme z knih – počet dílů, autoři a obálky prvních dílů. */
@@ -28,6 +29,7 @@ export default function SeriesScreen() {
   const series = useSeriesList()
   const books = useBooks()
   const [query, setQuery] = useState('')
+  const pull = usePullRefresh(series.refetch)
 
   // Série nesou jen název; počet dílů i autory dopočítáváme z knih.
   const infoBySeries = useMemo(() => {
@@ -84,8 +86,8 @@ export default function SeriesScreen() {
       keyExtractor={(item) => item.id}
       renderItem={renderItem}
       header={header}
-      refreshing={series.isFetching && !series.isPending}
-      onRefresh={() => void series.refetch()}
+      refreshing={pull.refreshing}
+      onRefresh={pull.onRefresh}
       empty={
         series.isError ? (
           <ErrorState error={series.error} onRetry={() => void series.refetch()} />

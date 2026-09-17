@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Headphones, Library, Pause, Play } from 'lucide-react-native'
@@ -27,6 +27,7 @@ import { Button } from '@/components/ui/Button'
 import { GlassCard } from '@/components/ui/GlassCard'
 import { Body, Eyebrow, Heading, Muted, Title } from '@/components/ui/Text'
 import { useBookProgress, useBooks, useSeriesById, useSeriesList, useSessions } from '@/data/hooks'
+import { usePullRefresh } from '@/data/usePullRefresh'
 import { usePlayer } from '@/player/PlayerProvider'
 import { syncEngine } from '@/sync/syncEngine'
 import { spacing, useTheme } from '@/theme'
@@ -45,7 +46,6 @@ export default function HomeScreen() {
   const seriesList = useSeriesList()
   const { map: seriesById } = useSeriesById()
   const progress = useBookProgress()
-  const [refreshing, setRefreshing] = useState(false)
 
   const bookById = useMemo(() => new Map((books.data ?? []).map((book) => [book.id, book])), [books.data])
 
@@ -107,16 +107,14 @@ export default function HomeScreen() {
     [seriesList.data, seriesBooksById],
   )
 
-  const refresh = async () => {
-    setRefreshing(true)
-    await Promise.all([syncEngine.syncNow(), books.refetch(), sessions.refetch(), progress.refetch()])
-    setRefreshing(false)
-  }
+  const pull = usePullRefresh(() =>
+    Promise.all([syncEngine.syncNow(), books.refetch(), sessions.refetch(), progress.refetch()]),
+  )
 
   const greeting = user?.display_name ? `Vítejte zpět, ${user.display_name}` : 'Vítejte zpět'
 
   return (
-    <Screen refreshing={refreshing} onRefresh={() => void refresh()}>
+    <Screen refreshing={pull.refreshing} onRefresh={pull.onRefresh}>
       <SyncBadge />
 
       {open.length > 0 ? (

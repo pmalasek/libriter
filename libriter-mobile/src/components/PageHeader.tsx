@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import { radius, spacing, useTheme } from '@/theme'
+import { GlassBackground } from './ui/Blur'
 import { Eyebrow, Heading, Muted } from './ui/Text'
 
 /**
@@ -29,9 +30,16 @@ export function PageHeader({
     <View
       style={[
         styles.wrap,
-        panel && { backgroundColor: colors.glassStrong, borderColor: colors.glassEdge, borderWidth: 1, borderRadius: radius['3xl'], padding: spacing.md },
+        panel && {
+          borderColor: colors.glassEdge,
+          borderWidth: 1,
+          borderRadius: radius['3xl'],
+          padding: spacing.md,
+          overflow: 'hidden',
+        },
       ]}
     >
+      {panel ? <GlassBackground intensity={40} /> : null}
       {eyebrow ? <Eyebrow style={{ marginBottom: 6 }}>{eyebrow}</Eyebrow> : null}
       <Heading>{title}</Heading>
       {description ? <Muted size={14} style={{ marginTop: 6 }}>{description}</Muted> : null}

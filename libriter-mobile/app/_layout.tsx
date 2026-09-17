@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, View } from 'react-native'
+import { ActivityIndicator, LogBox, View } from 'react-native'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useFonts } from 'expo-font'
@@ -17,6 +17,11 @@ import { openDb } from '@/db/schema'
 import { PlayerProvider } from '@/player/PlayerProvider'
 import { syncEngine } from '@/sync/syncEngine'
 import { ThemeProvider, useTheme } from '@/theme'
+
+// react-native-track-player hlásí při startu čtyři varování o metodách
+// časovače spánku, které v nativním modulu na iOSu nejsou. Aplikace je
+// nepoužívá (časovač je vlastní, v JS) a banner jen překrývá obsah.
+LogBox.ignoreLogs([/method signature for the JS method/])
 
 const queryClient = new QueryClient({
   defaultOptions: {

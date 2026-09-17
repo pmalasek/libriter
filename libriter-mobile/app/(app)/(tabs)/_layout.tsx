@@ -5,6 +5,7 @@ import { Ellipsis, Home, Layers, Library, Users, type LucideProps } from 'lucide
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { MiniPlayer } from '@/components/MiniPlayer'
+import { GlassBackground } from '@/components/ui/Blur'
 import { fonts, useTheme } from '@/theme'
 
 /** Výška vlastní lišty tabů bez spodního bezpečného okraje. */
@@ -43,8 +44,12 @@ export default function TabsLayout() {
         screenOptions={{
           headerShown: false,
           sceneStyle: { backgroundColor: colors.background },
+          // Lišta leží nad obsahem a prosvítá skrz ni rozostřený seznam –
+          // stejně jako plovoucí rail a kapsle přehrávače na webu.
+          tabBarBackground: () => <GlassBackground intensity={80} />,
           tabBarStyle: {
-            backgroundColor: colors.glassStrong,
+            position: 'absolute',
+            backgroundColor: 'transparent',
             borderTopColor: colors.glassEdge,
             height: barHeight,
             paddingBottom: insets.bottom,
