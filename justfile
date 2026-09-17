@@ -73,8 +73,21 @@ mobile-start: mobile-deps
 #
 # Sestaví a spustí aplikaci na připojeném iPhonu (jen macOS + Xcode)
 [working-directory('libriter-mobile')]
-mobile-ios: mobile-deps mobile-pods
+mobile-ios: mobile-deps mobile-node-env mobile-pods
     npx expo run:ios --device
+
+# Řekne Xcode, kde je node. Build fáze Hermesu ho spouští, ale Xcode nemá
+# v PATH nvm ani Homebrew, takže cestu bere z ios/.xcode.env.local. Ten
+# soubor vygeneroval `expo prebuild` s absolutní cestou a po upgradu nvm
+# ukazuje do prázdna – build pak padá na „node: No such file or directory“.
+# Přepíše se proto tím node, který právě běží.
+[working-directory('libriter-mobile')]
+[private]
+mobile-node-env:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [ -d ios ] || exit 0
+    echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
 
 # Doinstaluje CocoaPods, pokud už existuje vygenerovaný projekt ios/
 [working-directory('libriter-mobile')]
