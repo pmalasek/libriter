@@ -216,6 +216,8 @@ ve shared i frontendu.
 
 ## Fáze 4: Mobil, kostra jen online
 
+Nástroje připraví `just setup`, stav ukáže `just doctor` (Android všude, iOS jen na macOS).
+
 **Nový projekt `libriter-mobile/`** (`create-expo-app`, aktuální Expo SDK, dev build,
 ne Expo Go). Závislosti: expo-router, expo-sqlite, expo-file-system, expo-secure-store,
 expo-image, react-native-track-player, @react-native-community/netinfo,

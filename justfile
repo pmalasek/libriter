@@ -45,6 +45,14 @@ dev-frontend:
 vet:
     go vet ./...
 
+# Nainstaluje vývojové nástroje: Go, Node, Android SDK; na macOS i iOS (Xcode CLT, CocoaPods)
+setup:
+    bash _scripts/setup.sh
+
+# Zkontroluje, že jsou dostupné nástroje pro backend, web, Android a iOS
+doctor:
+    bash _scripts/doctor.sh
+
 # Smaže bin/ a obsah dist/
 clean:
     rm -rf bin

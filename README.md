@@ -30,6 +30,22 @@ automaticky při startu backendu.
 
 ## Požadavky
 
+Nejrychlejší cesta na čerstvém stroji:
+
+```bash
+just doctor   # ukáže, co chybí
+just setup    # doinstaluje (macOS přes Homebrew, Ubuntu/Debian přes apt, Fedora přes dnf)
+```
+
+`just setup` nainstaluje Go, ffprobe, Node (přes nvm), JDK 17 a Android SDK
+(command-line tools, platform-tools, build-tools) do `~/Android/Sdk`
+(na macOS `~/Library/Android/sdk`). Proměnné `ANDROID_HOME` a `JAVA_HOME`
+zapíše do `~/.config/libriter/android-env.sh` a načtení přidá do shell rc
+souboru. Na macOS navíc zkontroluje Xcode, přijme jeho licenci, stáhne iOS
+runtime a nainstaluje CocoaPods. Xcode samotný je třeba nainstalovat z App
+Store. Vývoj pro iOS je možný jen na macOS; na Linuxu setup připraví jen Android.
+Skript je idempotentní, lze ho spouštět opakovaně.
+
 ### Systémové závislosti
 
 | Nástroj | Verze | Účel | Instalace |
@@ -211,6 +227,8 @@ cd libriter-frontend && npm install
 | `just dev-backend` | `go run ./cmd/server` |
 | `just dev-frontend` | `npm run dev` |
 | `just vet` | `go vet ./...` |
+| `just setup` | Nainstaluje vývojové nástroje (viz Požadavky) |
+| `just doctor` | Zkontroluje, co z nástrojů je a co chybí |
 | `just clean` | Smaže `bin/` a sestavený frontend |
 
 Backend jde sestavit i bez frontendu (`just backend` na čerstvém klonu) – server
