@@ -5,7 +5,7 @@
 #  Spuštění: just setup        (nebo bash _scripts/setup.sh)
 #
 #  Nainstaluje nástroje pro backend (Go, ffprobe), web (Node) a mobilní vývoj:
-#    - Android všude: JDK 17, Android command-line tools, platform-tools,
+#    - Android všude: JDK 17–24, Android command-line tools, platform-tools,
 #      build-tools, watchman, udev pravidla pro telefon (Linux)
 #    - iOS jen na macOS: Xcode CLT, CocoaPods, kontrola Xcode
 #
@@ -123,19 +123,38 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-#  4. Android: JDK 17
+#  4. Android: JDK 17–24
 # -----------------------------------------------------------------------------
-info "Android: JDK $JAVA_WANT"
-if JAVA17_HOME="$(find_java17_home)"; then
-  ok "JDK 17 v $JAVA17_HOME"
+info "Android: JDK $JAVA_WANT–$JAVA_MAX"
+if JDK_HOME="$(find_java_home)"; then
+  ok "JDK $(jdk_major_at "$JDK_HOME") v $JDK_HOME"
 else
   pkg_update_once
+  # Pořadí: preferovaná verze, pak minimální. Distribuce nemusí mít ani jednu
+  # (Fedora 44 nabízí už jen JDK 25+), pak se stáhne Temurin do ~/.local.
   case "$PKG" in
-    apt)  pkg_install openjdk-17-jdk-headless ;;
-    dnf)  pkg_install java-17-openjdk-devel ;;
-    brew) brew install --cask zulu@17 ;;
+    apt)
+      for jdk_pkg in "openjdk-${JAVA_PREFERRED}-jdk-headless" "openjdk-${JAVA_WANT}-jdk-headless"; do
+        if pkg_install "$jdk_pkg"; then break; fi
+      done
+      ;;
+    dnf)
+      for jdk_pkg in "java-${JAVA_PREFERRED}-openjdk-devel" "java-${JAVA_WANT}-openjdk-devel"; do
+        if pkg_install "$jdk_pkg"; then break; fi
+      done
+      ;;
+    brew)
+      for jdk_pkg in "temurin@${JAVA_PREFERRED}" "temurin@${JAVA_WANT}"; do
+        if brew install --cask "$jdk_pkg"; then break; fi
+      done
+      ;;
   esac
-  JAVA17_HOME="$(find_java17_home)" || die "JDK 17 se nepodařilo najít po instalaci."
+  if ! JDK_HOME="$(find_java_home)"; then
+    warn "Repozitáře distribuce nemají JDK $JAVA_WANT–$JAVA_MAX (novější Gradle neumí); stahuji Temurin $JAVA_PREFERRED."
+    install_temurin_jdk "$JAVA_PREFERRED" || die "Stažení Temurin JDK $JAVA_PREFERRED selhalo; nainstaluj JDK $JAVA_WANT–$JAVA_MAX ručně a spusť setup znovu."
+    JDK_HOME="$(find_java_home)" || die "JDK $JAVA_WANT–$JAVA_MAX se nepodařilo najít po instalaci."
+  fi
+  ok "JDK $(jdk_major_at "$JDK_HOME") v $JDK_HOME"
 fi
 
 # -----------------------------------------------------------------------------
@@ -162,7 +181,7 @@ else
   ok "cmdline-tools nainstalovány"
 fi
 
-export JAVA_HOME="$JAVA17_HOME"
+export JAVA_HOME="$JDK_HOME"
 export PATH="$CMDLINE_DIR/bin:$ANDROID_HOME/platform-tools:$JAVA_HOME/bin:$PATH"
 
 info "Přijímám licence SDK a instaluji balíčky (může trvat několik minut)"
@@ -207,7 +226,7 @@ cat > "$ENV_FILE" <<EOF
 # Generováno _scripts/setup.sh (Libriter). Načítá se z shell rc souboru.
 export ANDROID_HOME="$ANDROID_HOME"
 export ANDROID_SDK_ROOT="\$ANDROID_HOME"
-export JAVA_HOME="$JAVA17_HOME"
+export JAVA_HOME="$JDK_HOME"
 export PATH="\$ANDROID_HOME/cmdline-tools/latest/bin:\$ANDROID_HOME/platform-tools:\$ANDROID_HOME/emulator:\$JAVA_HOME/bin:\$PATH"
 EOF
 

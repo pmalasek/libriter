@@ -39,11 +39,14 @@ just doctor   # ukáže, co chybí
 just setup    # doinstaluje (macOS přes Homebrew, Ubuntu/Debian přes apt, Fedora přes dnf)
 ```
 
-`just setup` nainstaluje Go, ffprobe, Node (přes nvm), JDK 17 a Android SDK
+`just setup` nainstaluje Go, ffprobe, Node (přes nvm), JDK 17–24 a Android SDK
 (command-line tools, platform-tools, build-tools) do `~/Android/Sdk`
 (na macOS `~/Library/Android/sdk`). Proměnné `ANDROID_HOME` a `JAVA_HOME`
 zapíše do `~/.config/libriter/android-env.sh` a načtení přidá do shell rc
-souboru. Na macOS navíc zkontroluje Xcode, přijme jeho licenci, stáhne iOS
+souboru. Gradle v Expo projektu neumí JDK 25+, proto má JDK i horní mez; když
+distribuce vhodnou verzi nemá (Fedora 44 nabízí už jen JDK 25+), setup stáhne
+Temurin 21 do `~/.local/share/libriter/jdk` bez zásahu do systému.
+Na macOS navíc zkontroluje Xcode, přijme jeho licenci, stáhne iOS
 runtime a nainstaluje CocoaPods. Xcode samotný je třeba nainstalovat z App
 Store. Vývoj pro iOS je možný jen na macOS; na Linuxu setup připraví jen Android.
 Skript je idempotentní, lze ho spouštět opakovaně.

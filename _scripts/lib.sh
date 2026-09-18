@@ -65,7 +65,14 @@ CMDLINE_TOOLS_BUILD="${CMDLINE_TOOLS_BUILD:-15859902}"
 # Minimální verze
 NODE_MIN=22
 GO_MIN="1.22"
+# JDK: Gradle/AGP v Expo projektu běží spolehlivě na 17–24. Novější JDK (Fedora 44
+# už v repozitářích nabízí jen 25+) Gradle odmítne s "Unsupported class file major
+# version", proto má horní mez. JAVA_PREFERRED se instaluje, když nic vhodného není.
 JAVA_WANT=17
+JAVA_MAX=24
+JAVA_PREFERRED=21
+# JDK stažené setupem (bez sudo, mimo balíčkovač distribuce)
+LIBRITER_JDK_DIR="${LIBRITER_JDK_DIR:-$HOME/.local/share/libriter/jdk}"
 
 # --- pomocné ----------------------------------------------------------------
 have() { command -v "$1" >/dev/null 2>&1; }
@@ -77,16 +84,61 @@ node_major() { node -v 2>/dev/null | sed -E 's/^v([0-9]+).*/\1/'; }
 go_version()  { go version 2>/dev/null | sed -E 's/.*go([0-9]+\.[0-9]+).*/\1/'; }
 java_major()  { java -version 2>&1 | head -n1 | sed -E 's/.*"([0-9]+)(\.[0-9]+)*.*/\1/'; }
 
-# JAVA_HOME pro JDK 17 podle systému
-find_java17_home() {
-  if [[ "$OS" == "macos" ]]; then
-    /usr/libexec/java_home -v 17 2>/dev/null && return 0
+# Major verze JDK v adresáři ($1); selže, když tam JDK není
+jdk_major_at() {
+  local d="$1" v=""
+  [[ -x "$d/bin/javac" ]] || return 1
+  [[ -r "$d/release" ]] && v="$(sed -nE 's/^JAVA_VERSION="?([0-9._]+).*/\1/p' "$d/release" | head -n1)"
+  [[ -z "$v" ]] && v="$("$d/bin/javac" -version 2>&1 | sed -nE 's/^javac ([0-9._]+).*/\1/p' | head -n1)"
+  [[ -z "$v" ]] && return 1
+  [[ "$v" == 1.* ]] && v="${v#1.}"   # 1.8.0 -> 8
+  printf '%s\n' "${v%%.*}"
+}
+
+# JAVA_HOME s JDK v rozsahu JAVA_WANT–JAVA_MAX. Preferuje JAVA_PREFERRED,
+# jinak nejnovější podporované. Prohledá i JDK stažené setupem.
+find_java_home() {
+  local d major best="" best_major=0 candidates=()
+  [[ -n "${JAVA_HOME:-}" ]] && candidates+=("$JAVA_HOME")
+  candidates+=("$LIBRITER_JDK_DIR"/*)
+  if [[ "${OS:-}" == "macos" ]]; then
+    candidates+=(/Library/Java/JavaVirtualMachines/*/Contents/Home "$HOME/Library/Java/JavaVirtualMachines"/*/Contents/Home)
+  else
+    candidates+=(/usr/lib/jvm/* /usr/java/*)
   fi
-  local d
-  for d in /usr/lib/jvm/java-17-openjdk-* /usr/lib/jvm/java-17-openjdk /usr/lib/jvm/java-17 /usr/lib/jvm/temurin-17*; do
-    [[ -x "$d/bin/javac" ]] && { echo "$d"; return 0; }
+  for d in "${candidates[@]}"; do
+    [[ -d "$d" ]] || continue
+    major="$(jdk_major_at "$d")" || continue
+    (( major >= JAVA_WANT && major <= JAVA_MAX )) || continue
+    (( major == JAVA_PREFERRED )) && { echo "$d"; return 0; }
+    (( major > best_major )) && { best_major=$major; best="$d"; }
   done
+  [[ -n "$best" ]] && { echo "$best"; return 0; }
   return 1
+}
+
+# Stáhne Eclipse Temurin JDK do $LIBRITER_JDK_DIR (bez sudo). $1 = major verze.
+# Fallback pro distribuce, které vhodné JDK v repozitářích nemají (Fedora 44).
+install_temurin_jdk() {
+  local ver="${1:-$JAVA_PREFERRED}" os_tag arch_tag url tmp dir target
+  case "${OS:-}" in macos) os_tag="mac" ;; *) os_tag="linux" ;; esac
+  case "${ARCH:-}" in arm64) arch_tag="aarch64" ;; *) arch_tag="x64" ;; esac
+  url="https://api.adoptium.net/v3/binary/latest/${ver}/ga/${os_tag}/${arch_tag}/jdk/hotspot/normal/eclipse"
+  tmp="$(mktemp -d)"
+  info "Stahuji Temurin JDK $ver ($os_tag/$arch_tag) do $LIBRITER_JDK_DIR"
+  if ! curl -fL --progress-bar -o "$tmp/jdk.tar.gz" "$url" || ! tar -xzf "$tmp/jdk.tar.gz" -C "$tmp"; then
+    rm -rf "$tmp"; return 1
+  fi
+  dir="$(find "$tmp" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+  [[ -n "$dir" ]] || { rm -rf "$tmp"; return 1; }
+  [[ -d "$dir/Contents/Home" ]] && dir="$dir/Contents/Home"
+  target="$LIBRITER_JDK_DIR/temurin-$ver"
+  mkdir -p "$LIBRITER_JDK_DIR"
+  rm -rf "$target"
+  mv "$dir" "$target"
+  rm -rf "$tmp"
+  [[ -x "$target/bin/javac" ]] || return 1
+  ok "Temurin JDK $ver v $target"
 }
 
 # Načte prostředí pro Android, pokud ho setup zapsal
