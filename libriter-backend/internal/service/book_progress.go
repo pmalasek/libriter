@@ -30,11 +30,13 @@ func (b *BookService) MarkFinished(ctx context.Context, userID, bookID uuid.UUID
 	} else if err != nil {
 		return err
 	}
-	return nil
+	// Doposlechnutá kniha může být poslední nedoposlechnutou položkou poslechu;
+	// pak je doposlechnutý i on a patří k ostatním dokončeným.
+	return b.store.FinishPlaySessionsWithBook(ctx, userID, bookID)
 }
 
 // ResetProgress vrátí knihu mezi neposlechnuté – oprava chybného označení.
-// Uloženou pozici v poslechu to nemění.
+// Uloženou pozici v poslechu to nemění, jen jeho příznak doposlechnuto.
 func (b *BookService) ResetProgress(ctx context.Context, userID, bookID uuid.UUID) error {
 	if _, err := b.store.GetBook(ctx, bookID); err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
@@ -42,5 +44,10 @@ func (b *BookService) ResetProgress(ctx context.Context, userID, bookID uuid.UUI
 		}
 		return err
 	}
-	return b.store.DeleteBookProgress(ctx, userID, bookID)
+	if err := b.store.DeleteBookProgress(ctx, userID, bookID); err != nil {
+		return err
+	}
+	// Poslech s neposlechnutou knihou doposlechnutý není – ať se v seznamu
+	// vrátí mezi rozposlouchané, odkud si ho jde otevřít.
+	return b.store.ReopenPlaySessionsWithBook(ctx, userID, bookID)
 }

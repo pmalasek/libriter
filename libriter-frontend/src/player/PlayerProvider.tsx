@@ -444,37 +444,43 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
     [seek],
   )
 
+  /**
+   * Kam vede sousední krok: na další kapitolu knihy, za její hranicí na další
+   * knihu poslechu, a null znamená konec. Konec poslechu se musí poznat i bez
+   * přepnutí – podle toho se zapisuje příznak doposlechnuto.
+   */
+  const stepTarget = useCallback((delta: number) => {
+    const openTrack = trackRef.current
+    const open = sessionRef.current
+    if (!openTrack || !open) return null
+
+    const index = chaptersRef.current.findIndex((c) => c.id === openTrack.chapterId)
+    const next = index >= 0 ? chaptersRef.current[index + delta] : undefined
+    if (next) return { bookId: openTrack.bookId, chapterId: next.id, position: 0 }
+
+    const items = open.items
+    const itemIndex = items.findIndex((i) => i.book_id === openTrack.bookId)
+    const nextItem = items[itemIndex + delta]
+    if (!nextItem) return null
+
+    return {
+      bookId: nextItem.book_id,
+      chapterId: nextItem.chapter_id,
+      position: nextItem.position_seconds,
+    }
+  }, [])
+
   /** Přepne na sousední kapitolu; za poslední pokračuje další knihou poslechu. */
   const step = useCallback(
     (delta: number, autoplay = true) => {
-      const openTrack = trackRef.current
-      const open = sessionRef.current
-      if (!openTrack || !open) return false
-
-      const index = chaptersRef.current.findIndex((c) => c.id === openTrack.chapterId)
-      const next = index >= 0 ? chaptersRef.current[index + delta] : undefined
-      if (next) {
-        savePosition()
-        void load({ bookId: openTrack.bookId, chapterId: next.id, position: 0, autoplay })
-        return true
-      }
-
-      // Za hranicí knihy pokračuje poslech další knihou v pořadí.
-      const items = open.items
-      const itemIndex = items.findIndex((i) => i.book_id === openTrack.bookId)
-      const nextItem = items[itemIndex + delta]
-      if (!nextItem) return false
+      const target = stepTarget(delta)
+      if (!target) return false
 
       savePosition()
-      void load({
-        bookId: nextItem.book_id,
-        chapterId: nextItem.chapter_id,
-        position: nextItem.position_seconds,
-        autoplay,
-      })
+      void load({ ...target, autoplay })
       return true
     },
-    [load, savePosition],
+    [load, savePosition, stepTarget],
   )
 
   const nextChapter = useCallback(() => void step(1), [step])
@@ -559,17 +565,22 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
       savePosition()
     }
     const onEnded = () => {
-      // Konec poslední kapitoly je koncem knihy – zapsat se musí dřív, než
-      // step přepne na další knihu a příznak by se svezl k nesprávné.
+      // Konec poslední kapitoly je koncem knihy a bez další knihy i koncem
+      // celého poslechu. Oba příznaky odejdou jedním zápisem: dva souběžné
+      // požadavky doběhnou v libovolném pořadí a „doposlechnuto“ si přepíšou.
+      // Zapsat se musí dřív, než step přepne na další knihu – jinak by se
+      // příznak svezl k nesprávné.
       const openTrack = trackRef.current
       const index = openTrack
         ? chaptersRef.current.findIndex((c) => c.id === openTrack.chapterId)
         : -1
       const lastChapter = index >= 0 && index === chaptersRef.current.length - 1
-      if (lastChapter) savePosition({ bookFinished: true, force: true })
+      const hasNext = stepTarget(1) !== null
+      if (lastChapter || !hasNext) {
+        savePosition({ bookFinished: lastChapter, finished: !hasNext, force: true })
+      }
 
-      // Na konci poslední kapitoly poslední knihy je poslech doposlechnutý.
-      if (!step(1)) savePosition({ finished: true, force: true })
+      step(1)
     }
     const onError = async () => {
       if (tokenRetryRef.current || !trackRef.current) return
@@ -604,7 +615,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
       audio.removeEventListener('ended', onEnded)
       audio.removeEventListener('error', onError)
     }
-  }, [load, queryClient, savePosition, step])
+  }, [load, queryClient, savePosition, step, stepTarget])
 
   // Pravidelný zápis během poslechu; v pauze není co ukládat.
   useEffect(() => {

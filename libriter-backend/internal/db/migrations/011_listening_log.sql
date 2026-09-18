@@ -20,7 +20,7 @@
 -- book_progress: stav knihy u uživatele. Řádek vzniká prvním zápisem pozice
 -- (rozposlouchaná), finished_at se vyplní po doposlechnutí poslední kapitoly
 -- nebo ručním označením. Jednou doposlechnutá kniha jí zůstane i při dalším
--- poslechu – na rozdíl od play_sessions.finished_at, které další zápis ruší.
+-- poslechu – na rozdíl od play_sessions.finished_at, které ruší další poslech.
 -- Kniha bez řádku je neposlechnutá.
 --
 -- Tabulky playback_positions a listening_sessions z první migrace zůstávají

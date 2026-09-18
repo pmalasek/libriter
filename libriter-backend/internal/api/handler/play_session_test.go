@@ -327,9 +327,21 @@ func TestPlaySessionRejectsInvalidPosition(t *testing.T) {
 	if rec.Code != http.StatusOK || decodeSession(t, rec.Body.Bytes()).FinishedAt == nil {
 		t.Fatalf("dokončení: %d %s", rec.Code, rec.Body.String())
 	}
+
+	// Zápis bez jediné odposlouchané sekundy je jen uložení stavu (obnovení
+	// stránky, skrytá záložka, otevření poslechu) a doposlechnuto neruší.
+	idle := map[string]any{
+		"book_id": bookID.String(), "chapter_id": chapterIDs[1].String(),
+		"position_seconds": 60, "playback_speed": 1.0,
+	}
+	rec = env.do(t, http.MethodPut, path, token, idle)
+	if rec.Code != http.StatusOK || decodeSession(t, rec.Body.Bytes()).FinishedAt == nil {
+		t.Fatalf("zápis bez poslechu zrušil doposlechnuto: %d %s", rec.Code, rec.Body.String())
+	}
+
 	resume := map[string]any{
 		"book_id": bookID.String(), "chapter_id": chapterIDs[0].String(),
-		"position_seconds": 3, "playback_speed": 1.0,
+		"position_seconds": 3, "playback_speed": 1.0, "listened_seconds": 12,
 	}
 	rec = env.do(t, http.MethodPut, path, token, resume)
 	if rec.Code != http.StatusOK || decodeSession(t, rec.Body.Bytes()).FinishedAt != nil {

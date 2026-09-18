@@ -102,6 +102,86 @@ func TestBookProgressFollowsPlayback(t *testing.T) {
 	}
 }
 
+// Ruční označení knihy zavírá i poslech, ve kterém byla poslední
+// nedoposlechnutou knihou – jinak by zůstal viset mezi rozposlouchanými.
+// Zrušené označení ho zase otevře.
+func TestBookProgressClosesAndReopensSession(t *testing.T) {
+	env := newAdminTestEnv(t)
+	token, _ := env.login(t, "ctenar@example.com", model.RoleReader)
+	bookID, chapterIDs := seedBook(t, env, "Solaris", nil, nil, 2)
+
+	rec := env.do(t, http.MethodPost, "/sessions", token,
+		map[string]string{"kind": "book", "book_id": bookID.String()})
+	session := decodeSession(t, rec.Body.Bytes())
+
+	savePosition(t, env, token, session.ID.String(), map[string]any{
+		"book_id": bookID.String(), "chapter_id": chapterIDs[0].String(),
+		"position_seconds": 15, "playback_speed": 1.0,
+	})
+
+	path := "/books/" + bookID.String() + "/progress"
+	if rec := env.do(t, http.MethodPut, path, token, map[string]bool{"finished": true}); rec.Code != http.StatusOK {
+		t.Fatalf("označení knihy: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := oneSession(t, env, token); got.FinishedAt == nil {
+		t.Errorf("poslech zůstal rozposlouchaný: %+v", got)
+	}
+
+	if rec := env.do(t, http.MethodDelete, path, token, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("zrušení označení: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := oneSession(t, env, token); got.FinishedAt != nil {
+		t.Errorf("poslech zůstal doposlechnutý: %+v", got)
+	}
+}
+
+// Poslech s víc knihami zavře až doposlechnutí té poslední z nich.
+func TestBookProgressClosesSessionOnlyWhenWholeListFinished(t *testing.T) {
+	env := newAdminTestEnv(t)
+	token, _ := env.login(t, "ctenar@example.com", model.RoleReader)
+	firstID, _ := seedBook(t, env, "Solaris", nil, nil, 1)
+	secondID, _ := seedBook(t, env, "Eden", nil, nil, 1)
+
+	rec := env.do(t, http.MethodPost, "/sessions", token, map[string]any{
+		"kind": "list", "title": "Lem", "book_ids": []string{firstID.String(), secondID.String()},
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("založení poslechu: %d %s", rec.Code, rec.Body.String())
+	}
+
+	if rec := env.do(t, http.MethodPut, "/books/"+firstID.String()+"/progress", token,
+		map[string]bool{"finished": true}); rec.Code != http.StatusOK {
+		t.Fatalf("označení první knihy: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := oneSession(t, env, token); got.FinishedAt != nil {
+		t.Fatalf("poslech se zavřel s nedoposlechnutou knihou: %+v", got)
+	}
+
+	if rec := env.do(t, http.MethodPut, "/books/"+secondID.String()+"/progress", token,
+		map[string]bool{"finished": true}); rec.Code != http.StatusOK {
+		t.Fatalf("označení druhé knihy: %d %s", rec.Code, rec.Body.String())
+	}
+	if got := oneSession(t, env, token); got.FinishedAt == nil {
+		t.Errorf("poslech s doposlechnutými knihami zůstal otevřený: %+v", got)
+	}
+}
+
+// oneSession vrátí jediný poslech uživatele; víc jich testy nezakládají.
+func oneSession(t *testing.T, env *adminTestEnv, token string) model.PlaySession {
+	t.Helper()
+
+	rec := env.do(t, http.MethodGet, "/sessions", token, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("seznam poslechů: %d %s", rec.Code, rec.Body.String())
+	}
+	var sessions []model.PlaySession
+	decodeJSON(t, rec.Body.Bytes(), &sessions)
+	if len(sessions) != 1 {
+		t.Fatalf("čekal se jeden poslech, je jich %d", len(sessions))
+	}
+	return sessions[0]
+}
+
 // Neznámá kniha nesmí založit stav.
 func TestBookProgressUnknownBook(t *testing.T) {
 	env := newAdminTestEnv(t)

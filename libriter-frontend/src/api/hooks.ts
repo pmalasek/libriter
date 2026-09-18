@@ -230,6 +230,8 @@ export function useSetBookFinished() {
       }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.bookProgress })
+      // Stav knihy zavírá i poslech, ve kterém byla poslední nedoposlechnutou.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
     },
   })
 }

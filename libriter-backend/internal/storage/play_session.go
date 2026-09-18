@@ -341,19 +341,27 @@ func updateSessionHead(
 		return session, nil
 	}
 
-	// Pokračování v poslechu ruší příznak doposlechnuto.
+	// Příznak doposlechnuto ruší až skutečný poslech, ne každý zápis pozice.
+	// Session se ukládá i bez jediné odposlouchané sekundy – po obnovení
+	// stránky, při skrytí záložky, po převinutí nebo při otevření poslechu –
+	// a doposlechnutá session by z toho spadla zpátky mezi rozposlouchané.
 	const q = `
 		UPDATE play_sessions
 		SET current_book_id      = ?2,
 		    playback_speed       = ?3,
-		    finished_at          = CASE WHEN ?4 THEN COALESCE(finished_at, CURRENT_TIMESTAMP) ELSE NULL END,
+		    finished_at          = CASE
+		                             WHEN ?4 THEN COALESCE(finished_at, CURRENT_TIMESTAMP)
+		                             WHEN ?6 > 0 THEN NULL
+		                             ELSE finished_at
+		                           END,
 		    position_recorded_at = COALESCE(?5, position_recorded_at),
 		    updated_at           = CURRENT_TIMESTAMP
 		WHERE id = ?1
 		RETURNING ` + playSessionColumns
 
 	session, err := scanPlaySession(tx.QueryRowContext(ctx, q,
-		id, in.BookID, in.PlaybackSpeed, in.Finished, stampArg(recordedAt, in.PreserveRecordedAt)))
+		id, in.BookID, in.PlaybackSpeed, in.Finished,
+		stampArg(recordedAt, in.PreserveRecordedAt), in.ListenedSeconds))
 	if err != nil {
 		return nil, fmt.Errorf("update play session: %w", err)
 	}

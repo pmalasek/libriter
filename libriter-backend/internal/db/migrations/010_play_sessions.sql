@@ -30,7 +30,8 @@ CREATE TABLE play_sessions (
   current_book_id TEXT REFERENCES books (id) ON DELETE SET NULL,
   playback_speed  REAL NOT NULL DEFAULT 1.0
                        CHECK (playback_speed BETWEEN 0.5 AND 3.0),
-  -- Doposlechnuto do konce. Další změna pozice ho zase vynuluje.
+  -- Doposlechnuto do konce. Vynuluje ho až další skutečný poslech
+  -- (zápis s odposlouchanými sekundami), ne samotná změna pozice.
   finished_at     DATETIME,
   created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
