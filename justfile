@@ -101,11 +101,21 @@ mobile-pods:
 # Sestaví a spustí aplikaci na připojeném Androidu
 [working-directory('libriter-mobile')]
 mobile-android: mobile-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -r "$HOME/.config/libriter/android-env.sh" ]; then
+        . "$HOME/.config/libriter/android-env.sh"
+    fi
     npx expo run:android --device
 
 # Podepsané APK k ruční instalaci (android/app/build/outputs/apk/release/)
 [working-directory('libriter-mobile')]
 mobile-apk: mobile-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -r "$HOME/.config/libriter/android-env.sh" ]; then
+        . "$HOME/.config/libriter/android-env.sh"
+    fi
     npx expo prebuild --platform android
     cd android && ./gradlew assembleRelease
 
