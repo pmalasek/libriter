@@ -13,6 +13,7 @@ import {
   PlayIcon,
   RotateCcwIcon,
   StarIcon,
+  Trash2Icon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -23,12 +24,14 @@ import {
   useBooks,
   useSeriesOne,
   useSeriesTitle,
+  useDeleteBook,
   useSessions,
   useSetBookFinished,
 } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
-import { canEdit } from '@/auth/permissions'
+import { canEdit, isAdmin } from '@/auth/permissions'
 import { BookEditDialog } from '@/components/BookEditDialog'
+import { DeleteBookDialog } from '@/components/DeleteBookDialog'
 import { BookGrid } from '@/components/BookGrid'
 import { BookCover, coverUrl } from '@/components/BookCover'
 import { ChapterList } from '@/components/ChapterList'
@@ -51,12 +54,14 @@ export function BookDetailPage() {
   const allBooks = useBooks()
   const { user } = useAuth()
   const [editing, setEditing] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const { sortKey, sortDir } = useBookListPrefs()
   const seriesTitle = useSeriesTitle()
   const player = usePlayer()
   const sessions = useSessions()
   const progress = useBookProgress()
   const setFinished = useSetBookFinished()
+  const deleteBook = useDeleteBook(id)
 
   // Stav knihy: doposlechnutá, rozposlouchaná, nebo zatím nic.
   const bookStatus = progress.status(id)
@@ -71,6 +76,25 @@ export function BookDetailPage() {
         onError: (error) => toast.error(error.message),
       },
     )
+  }
+
+  function handleDelete(deleteFiles: boolean) {
+    deleteBook.mutate(deleteFiles, {
+      onSuccess: (result) => {
+        setDeleting(false)
+        toast.success(
+          deleteFiles
+            ? `Kniha ${result.title} smazána včetně ${result.deleted_files} souborů z disku.`
+            : `Kniha ${result.title} smazána. Soubory na disku zůstaly, ` +
+                'takže ji scanner může načíst znovu.',
+        )
+        navigate('/books')
+      },
+      onError: (error) => {
+        setDeleting(false)
+        toast.error(error.message)
+      },
+    })
   }
 
   // Rozposlouchaná pozice knihy – z libovolného poslechu, který ji obsahuje.
@@ -312,6 +336,17 @@ export function BookDetailPage() {
                   Upravit
                 </Button>
               ) : null}
+              {isAdmin(user) ? (
+                <Button
+                  variant="outline"
+                  size="lg"
+                  onClick={() => setDeleting(true)}
+                  disabled={deleteBook.isPending}
+                >
+                  <Trash2Icon />
+                  Smazat
+                </Button>
+              ) : null}
             </div>
           </div>
         </div>
@@ -351,6 +386,14 @@ export function BookDetailPage() {
         open={editing}
         onOpenChange={setEditing}
         onSaveAndNext={nextBook ? () => navigate(`/books/${nextBook.id}`) : undefined}
+      />
+
+      <DeleteBookDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        title={data.title}
+        pending={deleteBook.isPending}
+        onConfirm={handleDelete}
       />
     </>
   )

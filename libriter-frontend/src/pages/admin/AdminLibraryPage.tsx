@@ -1,3 +1,4 @@
+import { DuplicatesCard } from '@/components/admin/DuplicatesCard'
 import { MergeCard } from '@/components/admin/MergeCard'
 import { RepairCard } from '@/components/admin/RepairCard'
 import { ScannerCard } from '@/components/admin/ScannerCard'
@@ -7,6 +8,7 @@ export function AdminLibraryPage() {
     <div className="space-y-6">
       <ScannerCard />
       <RepairCard />
+      <DuplicatesCard />
       <MergeCard />
     </div>
   )

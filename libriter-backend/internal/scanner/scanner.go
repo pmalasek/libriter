@@ -25,6 +25,7 @@ import (
 	"libriter/internal/storage"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/google/uuid"
 )
 
 const (
@@ -48,6 +49,20 @@ func IsAudioFile(path string) bool {
 // ErrScanRunning znamená, že průchod knihovnou už běží.
 var ErrScanRunning = errors.New("kontrola knihovny už běží")
 
+// maxSuspects omezuje seznam podezření na duplicitu ve stavu scanneru.
+const maxSuspects = 20
+
+// Suspect je kniha, kterou scanner právě založil, přestože v knihovně už
+// nejspíš je. Drží obě umístění, aby bylo poznat, která kopie je ta nová.
+type Suspect struct {
+	BookID       uuid.UUID `json:"book_id"`
+	Title        string    `json:"title"`
+	FilePath     string    `json:"file_path"`
+	ExistingID   uuid.UUID `json:"existing_id"`
+	ExistingPath string    `json:"existing_path"`
+	DetectedAt   time.Time `json:"detected_at"`
+}
+
 // Status je snímek práce scanneru pro administraci.
 type Status struct {
 	Running       bool       `json:"running"`
@@ -59,6 +74,11 @@ type Status struct {
 	Errors        int        `json:"errors"`
 	LastError     string     `json:"last_error"`
 	WatcherActive bool       `json:"watcher_active"`
+
+	// Suspects přežívá průchody knihovnou: duplicita se pozná jen v okamžiku
+	// založení knihy, takže další průchod (který už nic nezakládá) by seznam
+	// jen vymazal a nikdy nedoplnil.
+	Suspects []Suspect `json:"suspects"`
 }
 
 // Scanner sleduje AUDIO_ROOT a při detekci nového audio souboru ho ingestuje do DB.
@@ -136,8 +156,21 @@ func (s *Scanner) beginScan(trigger string) bool {
 		Trigger:       trigger,
 		StartedAt:     &now,
 		WatcherActive: s.status.WatcherActive,
+		Suspects:      s.status.Suspects,
 	}
 	return true
+}
+
+// addSuspect zaznamená podezření na duplicitu. Seznam je krátký a drží ta
+// nejnovější podezření – slouží k upozornění, ne k evidenci.
+func (s *Scanner) addSuspect(suspect Suspect) {
+	s.statusMu.Lock()
+	defer s.statusMu.Unlock()
+
+	s.status.Suspects = append(s.status.Suspects, suspect)
+	if len(s.status.Suspects) > maxSuspects {
+		s.status.Suspects = s.status.Suspects[len(s.status.Suspects)-maxSuspects:]
+	}
 }
 
 func (s *Scanner) endScan() {

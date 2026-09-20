@@ -10,6 +10,7 @@ import type {
   AuthorSearchResult,
   AuthResponse,
   Book,
+  BookDeleteResult,
   BookMetadata,
   BookPatchRequest,
   BookProgress,
@@ -283,6 +284,28 @@ export function usePatchBook(bookId: string) {
     onSuccess: (book) => {
       queryClient.setQueryData(queryKeys.book(bookId), book)
       void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+    },
+  })
+}
+
+/**
+ * Smazání knihy (admin). `deleteFiles` rozhoduje, jestli se smažou i audio
+ * soubory na disku – bez nich scanner knihu při dalším průchodu založí znovu.
+ */
+export function useDeleteBook(bookId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (deleteFiles: boolean) =>
+      apiFetch<BookDeleteResult>(`/books/${bookId}?delete_files=${deleteFiles}`, {
+        method: 'DELETE',
+      }),
+    onSuccess: () => {
+      queryClient.removeQueries({ queryKey: queryKeys.book(bookId) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.series })
+      // Přehled i hlášení duplicit počítají z knihovny. Klíč se píše přímo:
+      // adminKeys leží v adminHooks.ts, který importuje odsud.
+      void queryClient.invalidateQueries({ queryKey: ['admin'] })
     },
   })
 }

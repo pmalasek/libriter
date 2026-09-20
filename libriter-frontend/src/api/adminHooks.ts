@@ -13,6 +13,8 @@ import { queryKeys } from './hooks'
 import type {
   AuditPage,
   CreateUserRequest,
+  DuplicateGroup,
+  DuplicateReport,
   LibraryStats,
   ListeningDetail,
   ListeningSummary,
@@ -34,6 +36,7 @@ export const adminKeys = {
   metadata: ['admin', 'settings', 'metadata'] as const,
   registration: ['admin', 'settings', 'registration'] as const,
   scanner: ['admin', 'scanner'] as const,
+  duplicates: ['admin', 'library', 'duplicates'] as const,
   stats: ['admin', 'stats'] as const,
   system: ['admin', 'system'] as const,
   audit: ['admin', 'audit'] as const,
@@ -208,10 +211,57 @@ export function usePlanRepair() {
   })
 }
 
+/**
+ * Provedení opravy. `forceMissing` přebíjí pojistku proti nepřipojenému disku –
+ * bez něj se při sepnuté pojistce chybějící soubory přeskočí. Plán si server
+ * sestaví znovu sám, klient mu seznam knih ke smazání neposílá.
+ */
 export function useApplyRepair() {
   return useAdminMutation(
-    () => apiFetch<RepairResult>('/admin/library/repair', { method: 'POST' }),
+    (forceMissing: boolean = false) =>
+      apiFetch<RepairResult>('/admin/library/repair', {
+        method: 'POST',
+        json: { force_missing: forceMissing },
+      }),
     [adminKeys.scanner, adminKeys.stats, queryKeys.books],
+  )
+}
+
+/**
+ * Hlášení duplicitních knih. Na rozdíl od ostatních kontrol je to dotaz, ne
+ * mutace: čte se jen databáze (žádný průchod diskem), takže může běžet hned
+ * po otevření záložky a rovnou ukázat, co je špatně.
+ */
+export function useDuplicateReport(): UseQueryResult<DuplicateReport, Error> {
+  return useQuery({
+    queryKey: adminKeys.duplicates,
+    queryFn: () => apiFetch<DuplicateReport>('/admin/library/duplicates'),
+  })
+}
+
+/**
+ * „Není to duplicita.“ Skupina zmizí z nálezů, ale zůstane mezi odmítnutými,
+ * takže rozhodnutí jde vzít zpět.
+ */
+export function useDismissDuplicate() {
+  return useAdminMutation(
+    (key: string) =>
+      apiFetch<DuplicateGroup>('/admin/library/duplicates/dismiss', {
+        method: 'POST',
+        json: { key },
+      }),
+    [adminKeys.duplicates, adminKeys.stats],
+  )
+}
+
+/** Vrátí odmítnutou skupinu zpátky mezi nálezy. */
+export function useRestoreDuplicate() {
+  return useAdminMutation(
+    (key: string) =>
+      apiFetch<void>(`/admin/library/duplicates/dismiss?key=${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+      }),
+    [adminKeys.duplicates, adminKeys.stats],
   )
 }
 

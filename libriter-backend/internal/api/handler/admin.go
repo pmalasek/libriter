@@ -22,7 +22,10 @@ type libraryScanner interface {
 	Status() scanner.Status
 	Rescan() error
 	PlanRepair(ctx context.Context) (scanner.RepairPlan, error)
-	Repair(ctx context.Context) (scanner.RepairResult, error)
+	Repair(ctx context.Context, force bool) (scanner.RepairResult, error)
+	PlanDuplicates(ctx context.Context) (scanner.DuplicateReport, error)
+	DismissDuplicate(ctx context.Context, groupKey string, actorID *uuid.UUID) (scanner.DuplicateGroup, error)
+	RestoreDuplicate(ctx context.Context, groupKey string) error
 	PlanMerge(ctx context.Context) (scanner.MergePlan, error)
 	Merge(ctx context.Context, targets []uuid.UUID) (scanner.MergeResult, error)
 }

@@ -304,6 +304,21 @@ export interface BookPatchRequest {
   published_year?: number | null
 }
 
+/**
+ * DELETE /books/{id}?delete_files=true
+ *
+ * Bez `delete_files` zůstanou audio soubory na disku a scanner knihu při
+ * dalším průchodu založí znovu; `deleted_files` je pak 0.
+ */
+export interface BookDeleteResult {
+  title: string
+  file_path: string
+  /** Kolik kapitol kniha měla. */
+  chapters: number
+  deleted_files: number
+  freed_bytes: number
+}
+
 /** POST /series */
 export interface SeriesRequest {
   title: string
@@ -475,6 +490,21 @@ export interface ScannerStatus {
   errors: number
   last_error: string
   watcher_active: boolean
+  /**
+   * Knihy, které scanner založil, přestože v knihovně nejspíš už jsou.
+   * Pozná se to jen v okamžiku založení, proto seznam přežívá další průchody.
+   */
+  suspects: ScannerSuspect[]
+}
+
+/** Jedno podezření na duplicitu; drží obě umístění, aby bylo poznat tu novou. */
+export interface ScannerSuspect {
+  book_id: string
+  title: string
+  file_path: string
+  existing_id: string
+  existing_path: string
+  detected_at: string
 }
 
 export interface RepairBook {
@@ -484,10 +514,52 @@ export interface RepairBook {
   file_path: string
 }
 
+/** Kapitola, jejíž soubor na disku není. */
+export interface RepairChapter {
+  id: string
+  title: string
+  /** Cesta k audio souboru – jinde v API se nevrací, tady je potřeba. */
+  file_path: string
+}
+
+/** Kniha, které na disku chybí soubory. `chapters` drží jen ty chybějící. */
+export interface RepairMissing {
+  id: string
+  title: string
+  file_path: string
+  /** Počet všech kapitol knihy – z poměru je vidět, co přesně zmizelo. */
+  total: number
+  chapters: RepairChapter[]
+}
+
+/**
+ * Pojistka proti odpojenému disku. `tripped` znamená, že se chybějící soubory
+ * do opravy nepromítnou, dokud je admin nevynutí.
+ */
+export interface RepairGuard {
+  tripped: boolean
+  /** Česky, rovnou k zobrazení. */
+  reason: string
+  missing: number
+  total: number
+  share: number
+  limit: number
+  unreadable: number
+  books: number
+  book_limit: number
+}
+
 /** GET /admin/library/repair – náhled, nic nemění. */
 export interface RepairPlan {
   rescan: RepairBook[]
   duplicates: RepairBook[]
+  /** Knihy bez jediného souboru na disku – smažou se celé. */
+  orphans: RepairMissing[]
+  /** Knihy, kterým chybí jen část souborů – zmizí jen ty kapitoly. */
+  missing: RepairMissing[]
+  /** Kapitoly s cestou, kterou nejde přeložit na soubor; jen se hlásí. */
+  unresolvable: RepairChapter[]
+  guard: RepairGuard
 }
 
 /** POST /admin/library/repair */
@@ -495,6 +567,44 @@ export interface RepairResult {
   plan: RepairPlan
   deleted_chapters: number
   deleted_books: number
+  deleted_orphans: number
+  deleted_missing_chapters: number
+  /** Pojistka sepnula a chybějící soubory se proto přeskočily. */
+  skipped: boolean
+}
+
+/** Jedna kopie knihy v hlášení duplicit. */
+export interface DuplicateBook {
+  id: string
+  title: string
+  file_path: string
+  /** Album tag ze souborů; prázdný u knih bez tagu. */
+  album_tag: string
+  chapter_count: number
+  duration_seconds: number
+  created_at: string
+}
+
+/** Jedna kniha zavedená vícekrát. `match` říká, podle čeho se kopie poznaly. */
+export interface DuplicateGroup {
+  /**
+   * Identifikuje skupinu napříč voláními; podle něj se odmítá („není to
+   * duplicita“) i vrací zpátky mezi nálezy. Změní se, jakmile do skupiny
+   * přibude další kniha – ta je nový nález.
+   */
+  key: string
+  match: 'album' | 'title'
+  books: DuplicateBook[]
+}
+
+/**
+ * GET /admin/library/duplicates – jen hlášení, nic nemění a nemá „apply“.
+ * Smazat kopii znamená sáhnout na soubory, což zůstává na uživateli.
+ */
+export interface DuplicateReport {
+  groups: DuplicateGroup[]
+  /** Skupiny odmítnuté jako planý poplach; drží se, aby šly vrátit zpět. */
+  dismissed: DuplicateGroup[]
 }
 
 /** Kniha v plánu sloučení; cesta a album tag jinde v API nejsou. */
@@ -539,6 +649,11 @@ export interface LibraryStats {
   /** Kapitoly s délkou 1 s – vzniknou, když na serveru chybí ffprobe. */
   placeholder_chapters: number
   books_with_placeholder_chapters: number
+  /**
+   * Hrubý odhad, kolik knih je v knihovně dvakrát (stejný album tag ve dvou
+   * nesouvisejících adresářích). Přesnější rozbor dělá kontrola duplicit.
+   */
+  duplicate_album_books: number
 }
 
 export interface DiskUsage {

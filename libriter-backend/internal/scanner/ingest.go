@@ -22,6 +22,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"libriter/internal/model"
 	"libriter/internal/storage"
@@ -179,6 +180,14 @@ func (s *Scanner) createBook(
 		albumTagPtr = &meta.BookTitle
 	}
 
+	// Podobná kniha jinde v knihovně znamená, že se tentýž titul nejspíš
+	// nakopíroval dvakrát. Hledá se ještě před zápisem, aby se nenašla sama.
+	// Ingest se tím nezastavuje – scanner se nemá koho zeptat.
+	similar, simErr := s.findSimilar(ctx, title, meta.BookTitle, relDir)
+	if simErr != nil {
+		s.log.Debug("kontrolu duplicity se nepodařilo provést", "err", simErr)
+	}
+
 	in := storage.BookInput{
 		AuthorIDs:       authorIDs(authors),
 		Title:           title,
@@ -196,6 +205,19 @@ func (s *Scanner) createBook(
 
 	s.log.Info("kniha vytvořena", "title", book.Title,
 		"autoři", authorLabel(authors), "dir", relDir)
+
+	if similar != nil {
+		s.log.Warn("zakládám knihu, která v knihovně nejspíš už je",
+			"title", book.Title, "dir", relDir, "existuje_v", similar.FilePath)
+		s.addSuspect(Suspect{
+			BookID:       book.ID,
+			Title:        book.Title,
+			FilePath:     book.FilePath,
+			ExistingID:   similar.ID,
+			ExistingPath: similar.FilePath,
+			DetectedAt:   time.Now().UTC(),
+		})
+	}
 	return book, nil
 }
 

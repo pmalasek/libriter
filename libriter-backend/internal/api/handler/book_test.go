@@ -14,6 +14,7 @@ import (
 	"libriter/internal/config"
 	"libriter/internal/db"
 	"libriter/internal/model"
+	"libriter/internal/scanner"
 	"libriter/internal/service"
 	"libriter/internal/storage"
 
@@ -35,7 +36,8 @@ func newCoverTestEnv(t *testing.T) (*storage.Store, http.Handler, string) {
 
 	store := storage.New(conn)
 	coverRoot := t.TempDir()
-	h := NewBook(service.NewBook(store), coverRoot, nil)
+	scn := scanner.New(t.TempDir(), coverRoot, store)
+	h := NewBook(service.NewBook(store, scn), coverRoot, nil)
 
 	r := chi.NewRouter()
 	r.Get("/books/{id}/cover", h.Cover)

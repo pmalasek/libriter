@@ -2,6 +2,8 @@ package scanner
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -156,7 +158,7 @@ func TestPlanAndApplyRepairRemovesDuplicate(t *testing.T) {
 		t.Fatalf("k načtení znovu = %+v, chtěna starší kniha %s", plan.Rescan, older.ID)
 	}
 
-	result, err := ApplyRepair(ctx, store, plan)
+	result, err := ApplyRepair(ctx, store, "", plan, false)
 	if err != nil {
 		t.Fatalf("ApplyRepair: %v", err)
 	}
@@ -304,7 +306,7 @@ func TestRepairKeepsManualOrder(t *testing.T) {
 	writeAudio(t, audioRoot, "capek/hmyz/04.mp3")
 
 	s := New(audioRoot, "", store)
-	result, err := s.Repair(ctx)
+	result, err := s.Repair(ctx, false)
 	if err != nil {
 		t.Fatalf("Repair: %v", err)
 	}
@@ -314,4 +316,284 @@ func TestRepairKeepsManualOrder(t *testing.T) {
 	waitForIdle(t, s)
 
 	assertOrder(t, chapterFiles(t, store, book.ID), []string{"03.mp3", "01.mp3", "02.mp3", "04.mp3"})
+}
+
+// --- kontrola chybějících souborů (DB → disk) ---
+
+// Kniha, které na disku nezbyl ani jeden soubor, se smaže celá. Tohle je ten
+// případ, kdy uživatel knihu smazal z disku a v knihovně zůstal prázdný záznam.
+func TestPlanRepairFindsOrphanBook(t *testing.T) {
+	ctx := context.Background()
+	store, audioRoot := newRepairEnv(t)
+
+	// Druhá kniha drží knihovnu „živou“, aby nesepnula pojistka.
+	keep := createRepairBook(t, store, "Bílá nemoc", "capek/nemoc", "Bílá nemoc")
+	for i, name := range []string{"01.mp3", "02.mp3", "03.mp3", "04.mp3"} {
+		writeAudio(t, audioRoot, "capek/nemoc/"+name)
+		addChapter(t, store, keep.ID, i+1, "capek/nemoc/"+name)
+	}
+
+	gone := createRepairBook(t, store, "Osamělý mrtvý muž", "smolik/osamely", "Osamělý mrtvý muž")
+	addChapter(t, store, gone.ID, 1, "smolik/osamely/01.mp3")
+	// Soubory se na disk vůbec nezapisují – kniha je od začátku bez nich.
+
+	plan, err := PlanRepair(ctx, store, audioRoot)
+	if err != nil {
+		t.Fatalf("PlanRepair: %v", err)
+	}
+	if len(plan.Orphans) != 1 || plan.Orphans[0].ID != gone.ID {
+		t.Fatalf("osiřelé = %+v, chtěna kniha %s", plan.Orphans, gone.ID)
+	}
+	if plan.Orphans[0].Total != 1 || len(plan.Orphans[0].Chapters) != 1 {
+		t.Errorf("osiřelá kniha = %+v, chtěna 1 kapitola z 1", plan.Orphans[0])
+	}
+	if len(plan.Missing) != 0 || len(plan.Rescan) != 0 {
+		t.Errorf("chybějící = %+v, k načtení = %+v; chtěno prázdno", plan.Missing, plan.Rescan)
+	}
+	if plan.Guard.Tripped {
+		t.Errorf("pojistka sepnula: %s", plan.Guard.Reason)
+	}
+
+	result, err := ApplyRepair(ctx, store, "", plan, false)
+	if err != nil {
+		t.Fatalf("ApplyRepair: %v", err)
+	}
+	if result.DeletedOrphans != 1 || result.DeletedBooks != 1 {
+		t.Errorf("smazáno osiřelých = %d, knih = %d; chtěno 1 a 1",
+			result.DeletedOrphans, result.DeletedBooks)
+	}
+	if _, err := store.GetBook(ctx, gone.ID); !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("kniha po opravě = %v, chtěno ErrNotFound", err)
+	}
+	if _, err := store.GetBook(ctx, keep.ID); err != nil {
+		t.Errorf("zdravá kniha zmizela: %v", err)
+	}
+}
+
+// Knize, které chybí jen část souborů, se smažou jen ty kapitoly a délka se
+// srovná se zbytkem. Kniha samotná zůstane.
+func TestPlanRepairFindsPartiallyMissingChapters(t *testing.T) {
+	ctx := context.Background()
+	store, audioRoot := newRepairEnv(t)
+
+	book := createRepairBook(t, store, "Ze života hmyzu", "capek/hmyz", "Ze života hmyzu")
+	for i, name := range []string{"01.mp3", "02.mp3", "03.mp3", "04.mp3"} {
+		addChapter(t, store, book.ID, i+1, "capek/hmyz/"+name)
+	}
+	// Na disk jen tři ze čtyř.
+	for _, name := range []string{"01.mp3", "02.mp3", "03.mp3"} {
+		writeAudio(t, audioRoot, "capek/hmyz/"+name)
+	}
+
+	plan, err := PlanRepair(ctx, store, audioRoot)
+	if err != nil {
+		t.Fatalf("PlanRepair: %v", err)
+	}
+	if len(plan.Missing) != 1 || plan.Missing[0].ID != book.ID {
+		t.Fatalf("chybějící = %+v, chtěna kniha %s", plan.Missing, book.ID)
+	}
+	if got := plan.Missing[0]; got.Total != 4 || len(got.Chapters) != 1 ||
+		got.Chapters[0].FilePath != "capek/hmyz/04.mp3" {
+		t.Fatalf("chybějící kniha = %+v, chtěna 1 kapitola (04.mp3) ze 4", got)
+	}
+	if len(plan.Orphans) != 0 {
+		t.Errorf("osiřelé = %+v, chtěno prázdno", plan.Orphans)
+	}
+
+	if _, err := ApplyRepair(ctx, store, "", plan, false); err != nil {
+		t.Fatalf("ApplyRepair: %v", err)
+	}
+
+	count, duration, err := store.GetBookChapterStats(ctx, book.ID)
+	if err != nil {
+		t.Fatalf("GetBookChapterStats: %v", err)
+	}
+	if count != 3 {
+		t.Errorf("kapitol po opravě = %d, chtěny 3", count)
+	}
+	after, err := store.GetBook(ctx, book.ID)
+	if err != nil {
+		t.Fatalf("GetBook: %v", err)
+	}
+	if after.DurationSeconds != duration {
+		t.Errorf("délka knihy = %d, chtěno %d", after.DurationSeconds, duration)
+	}
+}
+
+// Kniha bez jediné kapitoly (pád mezi založením knihy a vložením první
+// kapitoly) osiřelá není – jinak by ji oprava mlčky smazala.
+func TestPlanRepairKeepsBookWithoutChapters(t *testing.T) {
+	ctx := context.Background()
+	store, audioRoot := newRepairEnv(t)
+
+	empty := createRepairBook(t, store, "Krakatit", "capek/krakatit", "Krakatit")
+
+	plan, err := PlanRepair(ctx, store, audioRoot)
+	if err != nil {
+		t.Fatalf("PlanRepair: %v", err)
+	}
+	if len(plan.Orphans) != 0 || len(plan.Missing) != 0 {
+		t.Fatalf("osiřelé = %+v, chybějící = %+v; chtěno prázdno", plan.Orphans, plan.Missing)
+	}
+	if _, err := store.GetBook(ctx, empty.ID); err != nil {
+		t.Errorf("prázdná kniha zmizela: %v", err)
+	}
+}
+
+// Kniha, která má na disku soubor navíc, se celá načte znovu – přenačtení
+// spraví i chybějící kapitoly, takže je zbytečné mazat je zvlášť.
+func TestPlanRepairPrefersRescanOverMissing(t *testing.T) {
+	ctx := context.Background()
+	store, audioRoot := newRepairEnv(t)
+
+	book := createRepairBook(t, store, "Ze života hmyzu", "capek/hmyz", "Ze života hmyzu")
+	addChapter(t, store, book.ID, 1, "capek/hmyz/01.mp3")
+	addChapter(t, store, book.ID, 2, "capek/hmyz/02.mp3")
+	writeAudio(t, audioRoot, "capek/hmyz/01.mp3")
+	writeAudio(t, audioRoot, "capek/hmyz/03.mp3") // na disku navíc
+
+	plan, err := PlanRepair(ctx, store, audioRoot)
+	if err != nil {
+		t.Fatalf("PlanRepair: %v", err)
+	}
+	if len(plan.Rescan) != 1 || plan.Rescan[0].ID != book.ID {
+		t.Fatalf("k načtení znovu = %+v, chtěna kniha %s", plan.Rescan, book.ID)
+	}
+	if len(plan.Missing) != 0 || len(plan.Orphans) != 0 {
+		t.Errorf("chybějící = %+v, osiřelé = %+v; chtěno prázdno", plan.Missing, plan.Orphans)
+	}
+}
+
+// Kniha, jejíž soubory na disku jsou, v plánu nefiguruje (regrese).
+func TestPlanRepairIgnoresHealthyBook(t *testing.T) {
+	ctx := context.Background()
+	store, audioRoot := newRepairEnv(t)
+
+	book := createRepairBook(t, store, "Ze života hmyzu", "capek/hmyz", "Ze života hmyzu")
+	for i, name := range []string{"01.mp3", "02.mp3"} {
+		writeAudio(t, audioRoot, "capek/hmyz/"+name)
+		addChapter(t, store, book.ID, i+1, "capek/hmyz/"+name)
+	}
+
+	plan, err := PlanRepair(ctx, store, audioRoot)
+	if err != nil {
+		t.Fatalf("PlanRepair: %v", err)
+	}
+	if !plan.IsEmpty() {
+		t.Errorf("plán = %+v, chtěno prázdno", plan)
+	}
+}
+
+// Nedostupný AUDIO_ROOT nesmí vypadat jako prázdná knihovna – plán se vůbec
+// nesestaví. Tohle je nejdůležitější pojistka celé kontroly.
+func TestPlanRepairFailsOnMissingAudioRoot(t *testing.T) {
+	ctx := context.Background()
+	store, audioRoot := newRepairEnv(t)
+
+	book := createRepairBook(t, store, "Ze života hmyzu", "capek/hmyz", "Ze života hmyzu")
+	addChapter(t, store, book.ID, 1, "capek/hmyz/01.mp3")
+
+	if _, err := PlanRepair(ctx, store, filepath.Join(audioRoot, "neexistuje")); !errors.Is(err, ErrAudioRootUnavailable) {
+		t.Fatalf("PlanRepair nad neexistujícím rootem = %v, chtěno ErrAudioRootUnavailable", err)
+	}
+
+	// Existující, ale prázdný adresář je typicky nepřipojený disk.
+	if _, err := PlanRepair(ctx, store, audioRoot); !errors.Is(err, ErrAudioRootUnavailable) {
+		t.Fatalf("PlanRepair nad prázdným rootem = %v, chtěno ErrAudioRootUnavailable", err)
+	}
+	if _, err := store.GetBook(ctx, book.ID); err != nil {
+		t.Errorf("kniha zmizela, ačkoli se nic neopravovalo: %v", err)
+	}
+}
+
+// Když chybí velká část knihovny, pojistka sepne: plán se vrátí i s výpisem,
+// ale ApplyRepair chybějící soubory přeskočí. Teprve force je smaže.
+func TestApplyRepairGuardSkipsMissingUntilForced(t *testing.T) {
+	ctx := context.Background()
+	store, audioRoot := newRepairEnv(t)
+
+	// Osm kapitol, z toho šest chybí → 75 %, tedy nad prahem.
+	book := createRepairBook(t, store, "Ze života hmyzu", "capek/hmyz", "Ze života hmyzu")
+	for i := 1; i <= 8; i++ {
+		name := fmt.Sprintf("capek/hmyz/%02d.mp3", i)
+		addChapter(t, store, book.ID, i, name)
+		if i <= 2 {
+			writeAudio(t, audioRoot, name)
+		}
+	}
+
+	plan, err := PlanRepair(ctx, store, audioRoot)
+	if err != nil {
+		t.Fatalf("PlanRepair: %v", err)
+	}
+	if !plan.Guard.Tripped {
+		t.Fatalf("pojistka nesepnula: %+v", plan.Guard)
+	}
+	if plan.Guard.Reason == "" {
+		t.Error("pojistka nemá důvod")
+	}
+	if len(plan.Missing) != 1 || len(plan.Missing[0].Chapters) != 6 {
+		t.Fatalf("chybějící = %+v, chtěno 6 kapitol jedné knihy", plan.Missing)
+	}
+
+	result, err := ApplyRepair(ctx, store, "", plan, false)
+	if err != nil {
+		t.Fatalf("ApplyRepair: %v", err)
+	}
+	if !result.Skipped || result.DeletedMissingChapters != 0 {
+		t.Errorf("výsledek = %+v, chtěno přeskočeno bez mazání", result)
+	}
+	if count, _, _ := store.GetBookChapterStats(ctx, book.ID); count != 8 {
+		t.Errorf("kapitol po přeskočené opravě = %d, chtěno 8", count)
+	}
+
+	forced, err := ApplyRepair(ctx, store, "", plan, true)
+	if err != nil {
+		t.Fatalf("ApplyRepair(force): %v", err)
+	}
+	if forced.DeletedMissingChapters != 6 {
+		t.Errorf("smazáno kapitol = %d, chtěno 6", forced.DeletedMissingChapters)
+	}
+	if count, _, _ := store.GetBookChapterStats(ctx, book.ID); count != 2 {
+		t.Errorf("kapitol po vynucené opravě = %d, chtěny 2", count)
+	}
+}
+
+// Ruční pořadí kapitol je klíčované cestou k souboru a mazání chybějících
+// kapitol ho nesmí zahodit – když se soubory vrátí, pořadí se obnoví.
+func TestApplyRepairKeepsOrderOverrides(t *testing.T) {
+	ctx := context.Background()
+	store, audioRoot := newRepairEnv(t)
+
+	book := createRepairBook(t, store, "Ze života hmyzu", "capek/hmyz", "Ze života hmyzu")
+	for i, name := range []string{"01.mp3", "02.mp3", "03.mp3", "04.mp3"} {
+		addChapter(t, store, book.ID, i+1, "capek/hmyz/"+name)
+	}
+	for _, name := range []string{"01.mp3", "02.mp3", "03.mp3"} {
+		writeAudio(t, audioRoot, "capek/hmyz/"+name)
+	}
+
+	chapters, err := store.GetChaptersByBookID(ctx, book.ID)
+	if err != nil {
+		t.Fatalf("GetChaptersByBookID: %v", err)
+	}
+	ids := []uuid.UUID{chapters[3].ID, chapters[0].ID, chapters[1].ID, chapters[2].ID}
+	if _, err := store.ReorderChapters(ctx, book.ID, ids); err != nil {
+		t.Fatalf("ReorderChapters: %v", err)
+	}
+
+	plan, err := PlanRepair(ctx, store, audioRoot)
+	if err != nil {
+		t.Fatalf("PlanRepair: %v", err)
+	}
+	if _, err := ApplyRepair(ctx, store, "", plan, false); err != nil {
+		t.Fatalf("ApplyRepair: %v", err)
+	}
+
+	// Ruční pozice chybějícího souboru zůstává v chapter_order_overrides.
+	if _, ok, err := store.ChapterOrderOverride(ctx, book.ID, "capek/hmyz/04.mp3"); err != nil {
+		t.Fatalf("ChapterOrderOverride: %v", err)
+	} else if !ok {
+		t.Error("ruční pořadí smazané kapitoly zmizelo")
+	}
 }

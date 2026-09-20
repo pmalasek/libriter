@@ -512,3 +512,48 @@ func TestReorderChaptersTouchesBook(t *testing.T) {
 		t.Errorf("updated_at = %v, chtěno novější než %v", after.UpdatedAt, before.UpdatedAt)
 	}
 }
+
+// Mazání kapitol podle ID: dotkne se jen vyjmenovaných a ostatní nechá být.
+// Oprava knihovny maže právě takhle – cesta k souboru se mezi sestavením plánu
+// a jeho provedením mohla přeobsadit jinou kapitolou.
+func TestDeleteChaptersByIDs(t *testing.T) {
+	ctx := context.Background()
+	store := newTestStore(t)
+	bookID := bookForChapters(t, store)
+
+	var ids []uuid.UUID
+	for i, name := range []string{"01.mp3", "02.mp3", "03.mp3"} {
+		ch, err := store.UpsertChapter(ctx, ChapterInput{
+			BookID:          bookID,
+			Position:        i + 1,
+			Title:           name,
+			FilePath:        "cole/loutkar/" + name,
+			DurationSeconds: 60,
+		})
+		if err != nil {
+			t.Fatalf("UpsertChapter: %v", err)
+		}
+		ids = append(ids, ch.ID)
+	}
+
+	n, err := store.DeleteChaptersByIDs(ctx, ids[:2])
+	if err != nil {
+		t.Fatalf("DeleteChaptersByIDs: %v", err)
+	}
+	if n != 2 {
+		t.Errorf("smazáno = %d, chtěny 2", n)
+	}
+
+	rest, err := store.GetChaptersByBookID(ctx, bookID)
+	if err != nil {
+		t.Fatalf("GetChaptersByBookID: %v", err)
+	}
+	if len(rest) != 1 || rest[0].ID != ids[2] {
+		t.Errorf("zbylé kapitoly = %+v, chtěna jen %s", rest, ids[2])
+	}
+
+	// Prázdný seznam je bezpečná operace bez dotazu do databáze.
+	if n, err := store.DeleteChaptersByIDs(ctx, nil); err != nil || n != 0 {
+		t.Errorf("DeleteChaptersByIDs(nil) = %d, %v; chtěno 0, nil", n, err)
+	}
+}

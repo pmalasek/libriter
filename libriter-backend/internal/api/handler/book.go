@@ -186,12 +186,17 @@ func (h *BookHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, book)
 }
 
-// DELETE /api/v1/books/{id}  (admin)
+// DELETE /api/v1/books/{id}?delete_files=true  (admin)
+//
+// Bez delete_files zmizí jen záznam v databázi a scanner knihu ze zbylých
+// souborů při dalším průchodu založí znovu. S ním se smažou i audio soubory,
+// obálka a adresáře, které po nich zůstaly prázdné.
 func (h *BookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
+	deleteFiles := r.URL.Query().Get("delete_files") == "true"
 
 	// Název načteme dřív, než záznam zmizí – audit má být čitelný.
 	var title string
@@ -199,11 +204,12 @@ func (h *BookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		title = b.Title
 	}
 
-	if err := h.svc.Delete(r.Context(), id); errors.Is(err, service.ErrNotFound) {
+	result, err := h.svc.Delete(r.Context(), id, deleteFiles)
+	if errors.Is(err, service.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "kniha nenalezena")
 		return
 	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při mazání knihy")
+		writeError(w, http.StatusInternalServerError, "chyba při mazání knihy – "+err.Error())
 		return
 	}
 
@@ -212,9 +218,16 @@ func (h *BookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		TargetType:  service.AuditTargetBook,
 		TargetID:    id.String(),
 		TargetLabel: title,
+		Details: map[string]any{
+			"delete_files":  deleteFiles,
+			"file_path":     result.FilePath,
+			"chapters":      result.Chapters,
+			"deleted_files": result.DeletedFiles,
+			"freed_bytes":   result.FreedBytes,
+		},
 	})
 
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, result)
 }
 
 // --- request / helper ---

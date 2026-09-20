@@ -1,7 +1,8 @@
-import { RefreshCwIcon } from 'lucide-react'
+import { CopyIcon, RefreshCwIcon } from 'lucide-react'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { useScannerStatus, useTriggerRescan } from '@/api/adminHooks'
-import type { ScannerStatus } from '@/api/types'
+import type { ScannerStatus, ScannerSuspect } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -93,6 +94,38 @@ function ScannerDetails({ status }: { status: ScannerStatus }) {
           {status.last_error ? ` – ${status.last_error}` : ''}
         </p>
       ) : null}
+
+      {status.suspects?.length ? <SuspectList suspects={status.suspects} /> : null}
+    </div>
+  )
+}
+
+/**
+ * Knihy, které scanner založil, přestože v knihovně nejspíš už jsou. Zabránit
+ * tomu nemůže – běží bez obsluhy a nemá se koho zeptat –, tak aspoň upozorní.
+ */
+function SuspectList({ suspects }: { suspects: ScannerSuspect[] }) {
+  return (
+    <div className="rounded-lg border border-highlight/50 bg-highlight/10 p-3">
+      <p className="flex items-start gap-2 text-sm font-medium">
+        <CopyIcon className="mt-0.5 size-4 shrink-0" />
+        <span>Scanner založil knihy, které v knihovně nejspíš už jsou</span>
+      </p>
+      <ul className="mt-2 space-y-2 pl-6">
+        {suspects.map((suspect) => (
+          <li key={suspect.book_id} className="text-sm">
+            <Link to={`/books/${suspect.book_id}`} className="underline underline-offset-2">
+              {suspect.title}
+            </Link>
+            <p className="font-mono text-xs text-muted-foreground">
+              nová: {suspect.file_path}
+            </p>
+            <p className="font-mono text-xs text-muted-foreground">
+              už byla: {suspect.existing_path}
+            </p>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

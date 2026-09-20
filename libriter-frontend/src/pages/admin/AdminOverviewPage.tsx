@@ -1,5 +1,6 @@
 import {
   ClockIcon,
+  CopyIcon,
   FileTextIcon,
   ImageOffIcon,
   LayersIcon,
@@ -60,6 +61,12 @@ function StatsGrid({ stats }: { stats: LibraryStats }) {
       icon: TimerOffIcon,
       hint: `v ${stats.books_with_placeholder_chapters} knihách`,
     },
+    {
+      label: 'Možné duplikáty',
+      value: stats.duplicate_album_books,
+      icon: CopyIcon,
+      hint: 'stejný album tag ve dvou adresářích',
+    },
   ]
 
   return (
@@ -69,7 +76,7 @@ function StatsGrid({ stats }: { stats: LibraryStats }) {
           <StatCard key={tile.label} label={tile.label} value={tile.value} icon={tile.icon} />
         ))}
       </div>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {todo.map((tile) => (
           <StatCard
             key={tile.label}

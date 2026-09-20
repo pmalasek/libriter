@@ -5,17 +5,26 @@ import (
 	"errors"
 
 	"libriter/internal/model"
+	"libriter/internal/scanner"
 	"libriter/internal/storage"
 
 	"github.com/google/uuid"
 )
 
-type BookService struct {
-	store *storage.Store
+// bookRemover je to, co služba potřebuje od scanneru: smazat knihu tak, aby
+// jí watcher nestihl soubory ingestovat zpátky. Rozhraní místo konkrétního
+// typu drží službu testovatelnou bez souborového systému.
+type bookRemover interface {
+	DeleteBook(ctx context.Context, id uuid.UUID, deleteFiles bool) (scanner.DeleteResult, error)
 }
 
-func NewBook(store *storage.Store) *BookService {
-	return &BookService{store: store}
+type BookService struct {
+	store   *storage.Store
+	scanner bookRemover
+}
+
+func NewBook(store *storage.Store, scanner bookRemover) *BookService {
+	return &BookService{store: store, scanner: scanner}
 }
 
 func (b *BookService) List(ctx context.Context) ([]model.Book, error) {
@@ -51,11 +60,16 @@ func (b *BookService) Patch(ctx context.Context, id uuid.UUID, apply func(*stora
 	return book, err
 }
 
-func (b *BookService) Delete(ctx context.Context, id uuid.UUID) error {
-	if err := b.store.DeleteBook(ctx, id); errors.Is(err, storage.ErrNotFound) {
-		return ErrNotFound
+// Delete smaže knihu. Při deleteFiles zmizí i její audio soubory a obálka –
+// bez toho scanner knihu ze zbylých souborů při dalším průchodu založí znovu.
+func (b *BookService) Delete(
+	ctx context.Context, id uuid.UUID, deleteFiles bool,
+) (scanner.DeleteResult, error) {
+	result, err := b.scanner.DeleteBook(ctx, id, deleteFiles)
+	if errors.Is(err, storage.ErrNotFound) {
+		return result, ErrNotFound
 	}
-	return nil
+	return result, err
 }
 
 // ErrChapterSetMismatch znamená, že seznam kapitol k seřazení neodpovídá

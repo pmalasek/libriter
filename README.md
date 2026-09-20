@@ -378,10 +378,14 @@ v nějakém poslechu je, pokračuje v něm místo zakládání nového. Tlačít
 u právě hrané knihy mění na *Pozastavit*. Po doposlechnutí kapitoly navazuje
 další, po poslední kapitole další kniha poslechu.
 
-**Co ještě ne:** zakládání či
-mazání knih, autorů a sérií z rozhraní – ty zakládá scanner nebo přímé volání
-API. Obálku a cestu k audio souborům nelze z rozhraní měnit, spravuje je
-scanner.
+Knihu může administrátor smazat přímo v jejím detailu. Dialog nabízí i
+**smazání audio souborů z disku** – bez něj zmizí jen záznam a scanner knihu
+při dalším průchodu založí znovu ze souborů, které zůstaly. Se záznamem mizí
+i historie poslechu a stav „doposlechnuto“ u všech uživatelů.
+
+**Co ještě ne:** zakládání knih, autorů a sérií ani mazání autorů a sérií
+z rozhraní – ty zakládá scanner nebo přímé volání API. Obálku a cestu k audio
+souborům nelze z rozhraní měnit, spravuje je scanner.
 
 Přihlášený uživatel se drží v `localStorage` (JWT + profil). Profil i role se
 při otevření rozhraní srovnají se serverem, takže změna role se projeví bez
@@ -400,11 +404,11 @@ administrátor. Má sedm záložek:
 
 | Záložka | Co umí |
 |---------|--------|
-| **Přehled** | Počty knih, autorů, sérií, uživatelů a kapitol, celková délka, kolik knih nemá obálku či popis a kolik kapitol má placeholder délku 1 s. Vedle toho verze serveru, prostředí, doba běhu, cesty k datům, dostupnost `ffprobe` a volné místo na disku s audiem. |
+| **Přehled** | Počty knih, autorů, sérií, uživatelů a kapitol, celková délka, kolik knih nemá obálku či popis, kolik kapitol má placeholder délku 1 s a kolik knih vypadá na duplicitu. Vedle toho verze serveru, prostředí, doba běhu, cesty k datům, dostupnost `ffprobe` a volné místo na disku s audiem. |
 | **Uživatelé** | Seznam účtů, změna role přímo v řádku, reset hesla, smazání a založení nového účtu s libovolnou rolí. |
 | **Poslechy** | U každého účtu rozposlouchané a doposlechnuté poslechy, které knihy už slyšel a deník poslechu – kolik času u které knihy za den odposlouchal. Deník i stav knih přežijí smazání poslechu. |
 | **Zdroje metadat** | Zapnutí a vypnutí jednotlivých zdrojů, změna pořadí šipkami a klíč pro Google Books. Uložení platí okamžitě, server se nerestartuje. |
-| **Knihovna** | Stav scanneru (běží / poslední průchod / počet souborů / chyby), ruční spuštění kontroly knihovny a oprava kapitol s náhledem před provedením. |
+| **Knihovna** | Stav scanneru (běží / poslední průchod / počet souborů / chyby) včetně upozornění na právě založené duplicity, ruční spuštění průchodu, kontrola kapitol a chybějících souborů, hlášení možných duplikátů a sloučení rozdělených knih. Všechno s náhledem před provedením. |
 | **Registrace** | Přepínač veřejné registrace a role, kterou nový účet dostane. |
 | **Audit** | Výpis administrativních zásahů – kdo, kdy, co a s jakými detaily. |
 
@@ -443,7 +447,7 @@ just mobile-ios      # nebo just mobile-android
 
 ---
 
-## Správa uživatelů z příkazové řádky
+## Příkazová řádka
 
 Registrace přes API dává roli podle nastavení (výchozí **reader**), takže
 prvního administrátora vytvořte přes CLI stejné binárky. Další účty už jde
@@ -467,6 +471,11 @@ Ve vývoji bez buildu: `go run ./cmd/server user add --email … --name …`.
 | `user add` | `--email` a `--name` (povinné), `--role` (`admin`\|`editor`\|`reader`, výchozí `reader`), `--password` (min. 8 znaků) |
 | `user set-role` | `--email`, `--role` |
 | `user list` | – |
+| `repair-chapters` | bez přepínačů vypíše plán; `--apply` ho provede, `--force-missing` přebije pojistku proti nepřipojenému disku |
+
+`repair-chapters` je totéž co kontrola kapitol a souborů v administraci (viz
+Kontrola dat), jen ho spouštějte **při zastaveném serveru** – běžící scanner by
+mu do databáze zapisoval pod rukama.
 
 CLI čte stejný `.env` jako server a samo aplikuje chybějící migrace, takže
 funguje i na prázdné databázi. Server ani scanner přitom nespouští a **nevyžaduje
@@ -538,6 +547,69 @@ hlavní autor (podle něj scanner páruje soubory ke knize).
 Nalezená obálka se zkopíruje do `COVER_ROOT` jako `<book_id>.<přípona>` a relativní
 cesta se uloží do `books.cover_path`. Kniha, která už obálku má (a soubor v
 `COVER_ROOT` existuje), se znovu nepřepisuje. Obrázky nad 20 MB se ignorují.
+
+**Duplicity scanner nehlídá.** Identita kapitoly je cesta k souboru, takže
+tatáž kniha nakopírovaná do druhého adresáře je pro něj nový obsah a založí
+ji podruhé. Zabránit tomu nemůže – běží bez obsluhy a nemá se koho zeptat –,
+ale když zakládá knihu, která v knihovně podle názvu nebo album tagu už je,
+napíše to do logu, vystaví ve stavu scanneru a započítá na Přehled.
+
+---
+
+## Kontrola dat
+
+V administraci (**Knihovna**) jsou tři nezávislé kontroly. Každá má napřed
+náhled, který nic nemění, a teprve potom se provádí. Server se kvůli nim
+zastavovat nemusí; souběžný požadavek skončí `409`.
+
+**Kontrola kapitol a souborů** (`/admin/library/repair`, CLI
+`libriter repair-chapters`) porovnává databázi s diskem v obou směrech:
+
+| Nález | Co se s ním stane |
+|-------|-------------------|
+| Soubor na disku, který v DB chybí | kapitoly knihy se smažou a scanner je načte znovu |
+| Kapitola z adresáře, který s knihou nesouvisí | totéž – dvě vydání slepená do jedné knihy |
+| Dvě knihy se stejným album tagem v jednom adresáři | novější se smaže, starší (s metadaty) zůstane |
+| **Kniha bez jediného souboru na disku** | smaže se celá i s metadaty |
+| **Kniha, které chybí jen část souborů** | smažou se ty kapitoly, délka knihy se přepočítá |
+
+Poslední dva řádky jsou to, co dřív neuměla žádná kontrola: záznam po knize
+smazané z disku zůstával v knihovně a projevil se až chybou `404` při přehrání.
+
+**Pojistka proti nepřipojenému disku.** Prázdný `AUDIO_ROOT` u neprázdné
+databáze vypadá stejně jako vyprázdněná knihovna, jen by oprava smazala
+všechno. Proto:
+
+- nečitelný nebo neexistující `AUDIO_ROOT`, nebo ani jeden audio soubor
+  v něm, zatímco DB nějaké zná → kontrola se **vůbec nespustí** (`503`);
+- chybí-li přes 25 % kapitol (a aspoň 5), nešlo na něco sáhnout, nebo by
+  zmizelo přes 20 knih naráz → plán se vypíše, ale **chybějící soubory se
+  nesmažou**. Vynutí je až zaškrtnutí v rozhraní, resp. `--force-missing`
+  v CLI.
+
+Audio soubory oprava nemaže nikdy, jen záznamy v databázi. Ruční pořadí
+kapitol (`chapter_order_overrides`) zůstává, takže když soubory vrátíte,
+pořadí se obnoví.
+
+> **Pozor:** se smazanou knihou mizí kaskádou i hodnocení, záložky, deník
+> poslechu a stav „doposlechnuto“ všech uživatelů u té knihy. Mazání
+> *poslechu* je něco jiného – tam stav i odposlouchaný čas zůstávají.
+
+**Možné duplikáty** (`/admin/library/duplicates`) hlásí tentýž titul zavedený
+víckrát na nesouvisejících místech knihovny – shoda album tagu, jinak shoda
+názvu zbaveného diakritiky a velikosti písmen, vždy při různém umístění. Je to
+**jen hlášení**: dvě vydání téhož titulu s jiným vypravěčem jsou legitimní, a
+smazat kopii znamená sáhnout na soubory. To uděláte v detailu knihy.
+
+Falešný nález jde odmítnout tlačítkem **Není to duplicita** – skupina se
+přestane hlásit, ale zůstane pod „Zobrazit odmítnuté“, odkud ji lze vrátit.
+Odmítnutí platí pro **konkrétní složení skupiny**: jakmile přibude třetí kopie,
+klíč přestane sedět a nález se objeví znovu. To je záměr – o nové knize nikdo
+nerozhodoval. Smazáním knihy odmítnutí zaniká kaskádou.
+
+**Sloučení rozdělených knih** (`/admin/library/merge`) řeší opačnou vadu: jednu
+knihu, kterou scanner rozsekal na víc záznamů, protože část souborů nese jiný
+album tag. Kapitoly se přesunou do nejstarší knihy, soubory zůstanou.
 
 ---
 
@@ -615,8 +687,11 @@ i pro snížení jeho role).
 | `PUT` | `/admin/settings/registration` | Uložení nastavení registrace | admin |
 | `GET` | `/admin/scanner` | Stav scanneru | admin |
 | `POST` | `/admin/scanner/rescan` | Spuštění průchodu knihovnou | admin |
-| `GET` | `/admin/library/repair` | Náhled opravy kapitol (nic nemění) | admin |
-| `POST` | `/admin/library/repair` | Provedení opravy kapitol | admin |
+| `GET` | `/admin/library/repair` | Náhled kontroly kapitol a souborů (nic nemění) | admin |
+| `POST` | `/admin/library/repair` | Provedení opravy | admin |
+| `GET` | `/admin/library/duplicates` | Hlášení možných duplikátů (jen čtení) | admin |
+| `POST` | `/admin/library/duplicates/dismiss` | „Není to duplicita“ – `{"key": "…"}` | admin |
+| `DELETE` | `/admin/library/duplicates/dismiss?key=` | Vrácení odmítnuté skupiny mezi nálezy | admin |
 | `GET` | `/admin/library/merge` | Náhled sloučení rozdělených knih (nic nemění) | admin |
 | `POST` | `/admin/library/merge` | Sloučení rozdělených knih | admin |
 | `GET` | `/admin/stats` | Statistiky knihovny | admin |
@@ -640,6 +715,14 @@ skončí `409`. Plán opravy si server vždy sestaví sám, klient mu seznam kni
 smazání neposílá. Audit se stránkuje kurzorem: `next_before` z odpovědi se
 pošle jako `before` v dalším požadavku.
 
+Kontrola kapitol vrací `503`, když `AUDIO_ROOT` není dostupný (viz Kontrola
+dat). Sepnutou pojistku přebije nepovinné tělo `POST`u:
+
+```jsonc
+// POST /admin/library/repair
+{ "force_missing": true }   // smazat chybějící soubory i přes pojistku
+```
+
 ### Knihy
 
 | Metoda | Endpoint | Popis | Přístup |
@@ -655,7 +738,7 @@ pošle jako `before` v dalším požadavku.
 | `PUT` | `/books/{id}` | Aktualizace knihy (úplná náhrada) | editor+ |
 | `PATCH` | `/books/{id}` | Aktualizace jen poslaných polí | editor+ |
 | `PUT` | `/books/{id}/chapters/order` | Ruční pořadí kapitol | editor+ |
-| `DELETE` | `/books/{id}` | Smazání knihy | admin |
+| `DELETE` | `/books/{id}?delete_files=true` | Smazání knihy, volitelně i souborů | admin |
 
 Kniha má autory ve vazbě M:N. Při zápisu se posílá `author_ids` (alespoň jedno
 ID, pořadí určuje hlavního autora), ve čtení se vrací pole `authors` s celými

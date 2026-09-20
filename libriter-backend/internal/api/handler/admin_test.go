@@ -53,12 +53,29 @@ func (f *fakeScanner) PlanRepair(context.Context) (scanner.RepairPlan, error) {
 	return f.plan, nil
 }
 
-func (f *fakeScanner) Repair(context.Context) (scanner.RepairResult, error) {
+func (f *fakeScanner) Repair(context.Context, bool) (scanner.RepairResult, error) {
 	if f.repairErr != nil {
 		return scanner.RepairResult{}, f.repairErr
 	}
 	f.repairCall++
 	return scanner.RepairResult{Plan: f.plan, DeletedChapters: 3, DeletedBooks: 1}, nil
+}
+
+func (f *fakeScanner) PlanDuplicates(context.Context) (scanner.DuplicateReport, error) {
+	return scanner.DuplicateReport{
+		Groups:    []scanner.DuplicateGroup{},
+		Dismissed: []scanner.DuplicateGroup{},
+	}, nil
+}
+
+func (f *fakeScanner) DismissDuplicate(
+	context.Context, string, *uuid.UUID,
+) (scanner.DuplicateGroup, error) {
+	return scanner.DuplicateGroup{}, scanner.ErrDuplicateGroupUnknown
+}
+
+func (f *fakeScanner) RestoreDuplicate(context.Context, string) error {
+	return storage.ErrNotFound
 }
 
 func (f *fakeScanner) PlanMerge(context.Context) (scanner.MergePlan, error) {
@@ -113,8 +130,8 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 		plan:      scanner.RepairPlan{Rescan: []scanner.RepairBook{}, Duplicates: []scanner.RepairBook{}},
 		mergePlan: scanner.MergePlan{Groups: []scanner.MergeGroup{}},
 	}
-	bookSvc := service.NewBook(store)
 	audioRoot := t.TempDir()
+	bookSvc := service.NewBook(store, scanner.New(audioRoot, t.TempDir(), store))
 
 	adminH := NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc, service.NewListening(store))
 	authH := NewAuth(authSvc, settingsSvc)

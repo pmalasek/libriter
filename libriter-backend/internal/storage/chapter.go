@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"libriter/internal/model"
 
@@ -293,17 +294,48 @@ func (s *Store) DeleteChaptersByBookID(ctx context.Context, bookID uuid.UUID) (i
 	return int(rowsAffected(res)), nil
 }
 
+// DeleteChaptersByIDs smaže vyjmenované kapitoly a vrátí jejich počet.
+// Maže se podle ID, ne podle cesty – ta se mezi sestavením plánu a jeho
+// provedením mohla přeobsadit jinou kapitolou.
+func (s *Store) DeleteChaptersByIDs(ctx context.Context, ids []uuid.UUID) (int, error) {
+	// SQLite má strop na počet parametrů dotazu, proto po dávkách.
+	const batch = 500
+
+	deleted := 0
+	for start := 0; start < len(ids); start += batch {
+		end := min(start+batch, len(ids))
+
+		chunk := ids[start:end]
+		placeholders := make([]string, len(chunk))
+		args := make([]any, len(chunk))
+		for i, id := range chunk {
+			placeholders[i] = fmt.Sprintf("?%d", i+1)
+			args[i] = id
+		}
+
+		q := `DELETE FROM chapters WHERE id IN (` + strings.Join(placeholders, ",") + `)`
+		res, err := s.db.ExecContext(ctx, q, args...)
+		if err != nil {
+			return deleted, fmt.Errorf("delete chapters by ids: %w", err)
+		}
+		deleted += int(rowsAffected(res))
+	}
+	return deleted, nil
+}
+
 // ChapterFile spojuje kapitolu s knihou, ke které patří.
 type ChapterFile struct {
+	ID           uuid.UUID
 	BookID       uuid.UUID
 	BookFilePath string // adresář knihy
+	Title        string
 	FilePath     string // cesta k audio souboru
 }
 
 // ListChapterFiles vrátí cesty všech kapitol i s adresářem jejich knihy.
 // Slouží ke kontrole, že kapitoly v DB odpovídají souborům na disku.
 func (s *Store) ListChapterFiles(ctx context.Context) ([]ChapterFile, error) {
-	const q = `SELECT c.book_id, b.file_path, c.file_path
+	const q = `SELECT c.id, c.book_id, b.file_path, c.title, c.file_path
 		FROM chapters c JOIN books b ON b.id = c.book_id`
 
 	rows, err := s.db.QueryContext(ctx, q)
@@ -315,7 +347,7 @@ func (s *Store) ListChapterFiles(ctx context.Context) ([]ChapterFile, error) {
 	var files []ChapterFile
 	for rows.Next() {
 		var f ChapterFile
-		if err := rows.Scan(&f.BookID, &f.BookFilePath, &f.FilePath); err != nil {
+		if err := rows.Scan(&f.ID, &f.BookID, &f.BookFilePath, &f.Title, &f.FilePath); err != nil {
 			return nil, err
 		}
 		files = append(files, f)

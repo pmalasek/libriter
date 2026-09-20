@@ -82,7 +82,7 @@ func TestRepairRefusedWhileScanning(t *testing.T) {
 	}
 	defer s.endScan()
 
-	if _, err := s.Repair(t.Context()); !errors.Is(err, ErrScanRunning) {
+	if _, err := s.Repair(t.Context(), false); !errors.Is(err, ErrScanRunning) {
 		t.Errorf("Repair během scanu = %v, chtěno ErrScanRunning", err)
 	}
 }
