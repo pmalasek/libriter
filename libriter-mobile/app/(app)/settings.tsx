@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { StyleSheet, Switch, View } from 'react-native'
-import { formatBytes } from 'libriter-shared'
+import { useTranslation } from 'react-i18next'
+import { currentLanguage, formatBytes } from 'libriter-shared'
 
 import { useAuth } from '@/auth/AuthProvider'
 import { PageHeader } from '@/components/PageHeader'
@@ -15,6 +16,7 @@ import { syncEngine } from '@/sync/syncEngine'
 import { radius, spacing, useTheme } from '@/theme'
 
 export default function SettingsScreen() {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const { user, serverUrl } = useAuth()
   const { mode, setMode } = useMode()
@@ -36,55 +38,55 @@ export default function SettingsScreen() {
 
   return (
     <Screen>
-      <BackButton label="Zpět" />
-      <PageHeader title="Nastavení" />
+      <BackButton label={t('common.back')} />
+      <PageHeader title={t('mobile.settings.title')} />
 
-      <Section title="Režim">
+      <Section title={t('mobile.settings.mode')}>
         <SwitchRow
-          label="Offline režim"
+          label={t('mobile.settings.offlineMode')}
           hint={
             mode === 'offline'
-              ? 'Knihovna, autoři, série a poslechy se zrcadlí do telefonu. Stažené knihy hrají i bez signálu.'
-              : 'Data se čtou živě ze serveru jako na webu. Zapněte před cestou – aplikace si stáhne celou knihovnu.'
+              ? t('mobile.settings.offlineHint')
+              : t('mobile.settings.onlineHint')
           }
           value={mode === 'offline'}
           onChange={(value) => void setMode(value ? 'offline' : 'online')}
         />
       </Section>
 
-      <Section title="Účet">
-        <Row label="Přihlášen jako" value={user?.display_name ?? '—'} />
-        <Row label="E-mail" value={user?.email ?? '—'} />
-        {user?.login ? <Row label="Login" value={user.login} /> : null}
-        <Row label="Server" value={serverUrl || '—'} />
+      <Section title={t('mobile.settings.account')}>
+        <Row label={t('mobile.settings.signedInAs')} value={user?.display_name ?? '—'} />
+        <Row label={t('mobile.settings.email')} value={user?.email ?? '—'} />
+        {user?.login ? <Row label={t('mobile.settings.login')} value={user.login} /> : null}
+        <Row label={t('mobile.settings.server')} value={serverUrl || '—'} />
       </Section>
 
-      <Section title="Stahování">
+      <Section title={t('mobile.settings.downloads')}>
         <SwitchRow
-          label="Stahovat jen na Wi-Fi"
-          hint="Kniha zabere stovky megabajtů; na datech se to pozná."
+          label={t('mobile.settings.wifiOnly')}
+          hint={t('mobile.settings.wifiOnlyHint')}
           value={onlyWifi}
           onChange={(value) => {
             setOnlyWifi(value)
             void setWifiOnly(value)
           }}
         />
-        <Row label="Zabráno v telefonu" value={formatBytes(used)} />
+        <Row label={t('mobile.settings.storageUsed')} value={formatBytes(used)} />
       </Section>
 
-      <Section title="Synchronizace">
-        <Row label="Čeká na odeslání" value={pending === 0 ? 'nic' : `${pending} záznamů`} />
-        <Row label="Naposledy" value={lastSync ? new Date(lastSync).toLocaleString('cs-CZ') : 'zatím nikdy'} />
+      <Section title={t('mobile.settings.sync')}>
+        <Row label={t('mobile.settings.pending')} value={pending === 0 ? t('mobile.settings.pendingNone') : t('mobile.settings.pendingCount', { count: pending })} />
+        <Row label={t('mobile.settings.lastSync')} value={lastSync ? new Date(lastSync).toLocaleString(currentLanguage()) : t('mobile.settings.never')} />
         <Button
           variant="secondary"
-          label="Synchronizovat teď"
+          label={t('mobile.settings.syncNow')}
           onPress={() => void syncEngine.syncNow().then(reload)}
           style={{ marginTop: spacing.xs }}
         />
       </Section>
 
       <Muted size={12} style={{ textAlign: 'center', marginTop: spacing.md }}>
-        Libriter v telefonu je jen přehrávač. Knihovnu, metadata i pořadí kapitol spravujte ve webovém rozhraní.
+        {t('mobile.settings.footer')}
       </Muted>
     </Screen>
   )

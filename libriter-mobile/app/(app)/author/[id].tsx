@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
+import { useTranslation } from 'react-i18next'
 import { bookCount, lifeYears, sortBooks } from 'libriter-shared'
 
 import { AuthorImage } from '@/components/AuthorImage'
@@ -15,6 +16,7 @@ import { spacing } from '@/theme'
 
 /** Detail autora – AuthorDetailPage z webu bez úprav. */
 export default function AuthorScreen() {
+  const { t } = useTranslation()
   const { id = '' } = useLocalSearchParams<{ id: string }>()
   const author = useAuthor(id)
   const books = useBooks()
@@ -30,19 +32,19 @@ export default function AuthorScreen() {
 
   return (
     <Screen>
-      <BackButton label="Zpět na autory" />
+      <BackButton label={t('mobile.author.back')} />
 
       {author.isError ? (
         <ErrorState error={author.error} onRetry={() => void author.refetch()} />
       ) : !data ? (
-        <Muted>{author.isPending ? 'Načítám…' : 'Autor nenalezen.'}</Muted>
+        <Muted>{author.isPending ? t('common.loading') : t('mobile.author.notFound')}</Muted>
       ) : (
         <>
           <GlassCard glow style={{ marginBottom: spacing.lg }}>
             <View style={{ alignItems: 'flex-start' }}>
               <AuthorImage author={data} size={112} />
             </View>
-            <Eyebrow style={{ marginTop: spacing.md, marginBottom: 6 }}>Autor</Eyebrow>
+            <Eyebrow style={{ marginTop: spacing.md, marginBottom: 6 }}>{t('mobile.author.eyebrow')}</Eyebrow>
             <Heading size={26}>{data.name}</Heading>
             <Muted size={14} style={{ marginTop: 6 }}>
               {[lifeYears(data), bookCount(authorBooks.length)].filter(Boolean).join(' · ')}
@@ -54,7 +56,7 @@ export default function AuthorScreen() {
             ) : null}
           </GlassCard>
 
-          <BookGrid books={authorBooks} emptyTitle="U tohoto autora nejsou žádné knihy" />
+          <BookGrid books={authorBooks} emptyTitle={t('mobile.author.noBooks')} />
         </>
       )}
     </Screen>

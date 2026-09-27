@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { Alert, View } from 'react-native'
 import { Headphones } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import { sessionBooks, sessionTitle, type PlaySession } from 'libriter-shared'
 
 import { EmptyState, ErrorState } from '@/components/EmptyState'
@@ -18,6 +19,7 @@ import { spacing } from '@/theme'
  * nejbližší, tady je vidět, co je kde rozposlouchané, a dá se to uklidit.
  */
 export default function SessionsScreen() {
+  const { t } = useTranslation()
   const sessions = useSessions()
   const books = useBooks()
   const { map: seriesById } = useSeriesById()
@@ -34,22 +36,22 @@ export default function SessionsScreen() {
   const title = (session: PlaySession) => sessionTitle(session, bookById, seriesById)
 
   const confirmRemove = (session: PlaySession) =>
-    Alert.alert('Odebrat poslech?', `„${title(session)}“ zmizí ze seznamu včetně uložené pozice. Knihy v knihovně zůstanou.`, [
-      { text: 'Zrušit', style: 'cancel' },
-      { text: 'Odebrat', style: 'destructive', onPress: () => void player.removeSession(session.id) },
+    Alert.alert(t('mobile.sessions.removeTitle'), t('mobile.sessions.removeMessage', { title: title(session) }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('mobile.sessions.remove'), style: 'destructive', onPress: () => void player.removeSession(session.id) },
     ])
 
   return (
     <Screen refreshing={pull.refreshing} onRefresh={pull.onRefresh}>
-      <BackButton label="Zpět" />
+      <BackButton label={t('common.back')} />
       <PageHeader
-        title="Právě posloucháno"
+        title={t('mobile.sessions.title')}
         description={
           sessions.isPending
             ? undefined
             : open.length > 0
-              ? `${open.length} rozposlouchaných · pokračujte tam, kde jste skončili`
-              : 'Zatím nic rozposlouchaného'
+              ? t('mobile.sessions.openCount', { count: open.length })
+              : t('mobile.sessions.noneOpen')
         }
       />
 
@@ -58,8 +60,8 @@ export default function SessionsScreen() {
       {!sessions.isPending && open.length === 0 && finished.length === 0 ? (
         <EmptyState
           icon={Headphones}
-          title="Zatím nic neposloucháte"
-          description="Spusťte knihu tlačítkem Přehrát v jejím detailu, celou sérii u série, nebo si vyberte víc knih naráz v seznamu knih."
+          title={t('mobile.sessions.emptyTitle')}
+          description={t('mobile.sessions.emptyDescription')}
         />
       ) : null}
 
@@ -78,7 +80,7 @@ export default function SessionsScreen() {
 
       {finished.length > 0 ? (
         <>
-          <SectionTitle style={{ marginTop: spacing.xl, marginBottom: spacing.sm + 4 }}>Doposlechnuté</SectionTitle>
+          <SectionTitle style={{ marginTop: spacing.xl, marginBottom: spacing.sm + 4 }}>{t('mobile.sessions.finished')}</SectionTitle>
           <View style={{ gap: spacing.sm + 4 }}>
             {finished.map((session) => (
               <SessionCard

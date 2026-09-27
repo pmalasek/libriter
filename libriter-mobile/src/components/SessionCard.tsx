@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { CheckCircle2, Pause, Play, Trash2 } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import {
   formatClock,
   formatDateTime,
@@ -32,6 +33,7 @@ export function SessionCard({
   bookById: Map<string, Book>
   onRemove: () => void
 }) {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const router = useRouter()
   const player = usePlayer()
@@ -62,27 +64,27 @@ export function SessionCard({
           </Body>
           <View style={styles.badges}>
             <Badge label={sessionKindLabel(session)} />
-            {session.finished_at ? <Badge variant="outline" icon={CheckCircle2} label="Doposlechnuto" /> : null}
+            {session.finished_at ? <Badge variant="outline" icon={CheckCircle2} label={t('mobile.book.finished')} /> : null}
           </View>
         </View>
       </View>
 
       <Muted size={13} numberOfLines={2}>
-        {progress.bookCount > 1 ? `Kniha ${progress.bookNumber} z ${progress.bookCount} · ` : ''}
-        {currentBook ? currentBook.title : 'Kniha už není v knihovně'}
+        {progress.bookCount > 1 ? `${t('mobile.home.bookOf', { index: progress.bookNumber, total: progress.bookCount })} · ` : ''}
+        {currentBook ? currentBook.title : t('mobile.sessionCard.bookMissing')}
         {progress.positionSeconds > 0 ? ` · ${formatClock(progress.positionSeconds)}` : ''}
       </Muted>
-      <Muted size={12}>Naposledy {formatDateTime(session.updated_at)}</Muted>
+      <Muted size={12}>{t('mobile.sessionCard.lastPlayed', { date: formatDateTime(session.updated_at) })}</Muted>
 
       <View style={styles.actions}>
         <Button
           icon={isPlaying ? Pause : Play}
-          label={isPlaying ? 'Pozastavit' : isOpen ? 'Přehrát' : 'Pokračovat'}
+          label={isPlaying ? t('mobile.actions.pause') : isOpen ? t('mobile.actions.play') : t('mobile.actions.resume')}
           onPress={() => (isOpen ? void player.toggle() : void player.switchSession(session.id))}
           disabled={player.loading}
           style={{ flex: 1 }}
         />
-        <Button variant="ghost" size="icon" icon={Trash2} onPress={onRemove} accessibilityLabel={`Odebrat poslech ${title}`} />
+        <Button variant="ghost" size="icon" icon={Trash2} onPress={onRemove} accessibilityLabel={t('mobile.sessionCard.remove', { title })} />
       </View>
     </View>
   )

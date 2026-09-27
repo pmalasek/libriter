@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Headphones, Library, Pause, Play } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import {
   authorsLabel,
   bookCount,
@@ -38,6 +39,7 @@ const SHELF_SIZE = 12
  * pokračovat a co v knihovně stojí za pozornost.
  */
 export default function HomeScreen() {
+  const { t } = useTranslation()
   const { user } = useAuth()
   const sessions = useSessions()
   const books = useBooks()
@@ -107,7 +109,7 @@ export default function HomeScreen() {
 
   const pull = usePullRefresh(() => Promise.all([books.refetch(), sessions.refetch(), progress.refetch()]))
 
-  const greeting = user?.display_name ? `Vítejte zpět, ${user.display_name}` : 'Vítejte zpět'
+  const greeting = user?.display_name ? t('mobile.home.greetingName', { name: user.display_name }) : t('mobile.home.greeting')
 
   return (
     <Screen refreshing={pull.refreshing} onRefresh={pull.onRefresh}>
@@ -123,7 +125,7 @@ export default function HomeScreen() {
       )}
 
       {continues.length > 0 ? (
-        <Shelf title="Rozposlouchané" to="/sessions">
+        <Shelf title={t('mobile.home.inProgress')} to="/sessions">
           {continues.map((book) => (
             <ShelfItem key={book.id}>
               <BookCard book={book} size="small" status={progress.status(book.id)} />
@@ -133,7 +135,7 @@ export default function HomeScreen() {
       ) : null}
 
       {newest.length > 0 ? (
-        <Shelf title="Nově přidané" to="/books">
+        <Shelf title={t('mobile.home.newest')} to="/books">
           {newest.map((book) => (
             <ShelfItem key={book.id}>
               <BookCard book={book} size="small" status={progress.status(book.id)} />
@@ -143,7 +145,7 @@ export default function HomeScreen() {
       ) : null}
 
       {series.length > 0 ? (
-        <Shelf title="Série" to="/series">
+        <Shelf title={t('mobile.home.series')} to="/series">
           {series.map((item) => (
             <ShelfItem key={item.id} width={176}>
               <SeriesShelfItem
@@ -157,7 +159,7 @@ export default function HomeScreen() {
       ) : null}
 
       {finished.length > 0 ? (
-        <Shelf title="Doposlechnuté">
+        <Shelf title={t('mobile.home.finished')}>
           {finished.map((book) => (
             <ShelfItem key={book.id}>
               <BookCard book={book} size="small" status="finished" />
@@ -169,8 +171,8 @@ export default function HomeScreen() {
       {!books.isPending && (books.data ?? []).length === 0 ? (
         <EmptyState
           icon={Library}
-          title="Knihovna je zatím prázdná"
-          description="Jakmile server načte audio soubory, objeví se knihy tady i v seznamu knih."
+          title={t('mobile.home.emptyTitle')}
+          description={t('mobile.home.emptyDescription')}
         />
       ) : null}
     </Screen>
@@ -202,6 +204,7 @@ function ContinueHero({
   books: Book[]
   bookById: Map<string, Book>
 }) {
+  const { t } = useTranslation()
   const router = useRouter()
   const player = usePlayer()
   const state = sessionProgress(session)
@@ -224,12 +227,12 @@ function ContinueHero({
         ) : null}
       </View>
 
-      <Eyebrow style={{ marginTop: spacing.md, marginBottom: 6 }}>Pokračovat v poslechu</Eyebrow>
+      <Eyebrow style={{ marginTop: spacing.md, marginBottom: 6 }}>{t('mobile.home.continueListening')}</Eyebrow>
       <Heading size={26}>{title}</Heading>
 
       <View style={styles.badges}>
         <Badge label={sessionKindLabel(session)} />
-        {state.bookCount > 1 ? <Badge variant="outline" label={`Kniha ${state.bookNumber} z ${state.bookCount}`} /> : null}
+        {state.bookCount > 1 ? <Badge variant="outline" label={t('mobile.home.bookOf', { index: state.bookNumber, total: state.bookCount })} /> : null}
         {state.positionSeconds > 0 ? <Badge variant="highlight" label={formatClock(state.positionSeconds)} /> : null}
       </View>
 
@@ -244,11 +247,11 @@ function ContinueHero({
         <Button
           size="lg"
           icon={isPlaying ? Pause : Play}
-          label={isPlaying ? 'Pozastavit' : isOpen ? 'Přehrát' : 'Pokračovat'}
+          label={isPlaying ? t('mobile.actions.pause') : isOpen ? t('mobile.actions.play') : t('mobile.actions.resume')}
           onPress={() => (isOpen ? void player.toggle() : void player.switchSession(session.id))}
           disabled={player.loading}
         />
-        <Button variant="outline" size="lg" icon={Headphones} label="Všechny poslechy" onPress={() => router.push('/sessions')} />
+        <Button variant="outline" size="lg" icon={Headphones} label={t('mobile.home.allSessions')} onPress={() => router.push('/sessions')} />
       </ActionRow>
     </GlassCard>
   )
@@ -256,6 +259,7 @@ function ContinueHero({
 
 /** Hlavička pro účet, který zatím nic neposlouchá. */
 function StartHero({ greeting, book, count, loading }: { greeting: string; book: Book | undefined; count: number; loading: boolean }) {
+  const { t } = useTranslation()
   const router = useRouter()
   const player = usePlayer()
   const { colors } = useTheme()
@@ -268,19 +272,19 @@ function StartHero({ greeting, book, count, loading }: { greeting: string; book:
         </Pressable>
       ) : null}
       <Eyebrow style={{ marginTop: book ? spacing.md : 0, marginBottom: 6 }}>{greeting}</Eyebrow>
-      <Heading size={26}>Začněte poslouchat</Heading>
+      <Heading size={26}>{t('mobile.home.startTitle')}</Heading>
       <Body size={14} style={{ color: colors.mutedForeground, marginTop: spacing.sm + 4 }}>
         {loading
-          ? 'Načítám knihovnu…'
+          ? t('mobile.home.loadingLibrary')
           : count > 0
-            ? `V knihovně čeká ${bookCount(count)}. Vyberte si, nebo rovnou pusťte poslední přírůstek.`
-            : 'Jakmile server načte audio soubory, objeví se knihy tady i v seznamu knih.'}
+            ? t('mobile.home.libraryWaiting', { books: bookCount(count) })
+            : t('mobile.home.emptyDescription')}
       </Body>
       <ActionRow style={{ marginTop: spacing.md + 4 }}>
         {book ? (
-          <Button size="lg" icon={Play} label={`Přehrát ${book.title}`} onPress={() => void player.playBook(book.id)} disabled={player.loading} />
+          <Button size="lg" icon={Play} label={t('mobile.home.playBook', { title: book.title })} onPress={() => void player.playBook(book.id)} disabled={player.loading} />
         ) : null}
-        <Button variant="outline" size="lg" icon={Library} label="Do knihovny" onPress={() => router.push('/books')} />
+        <Button variant="outline" size="lg" icon={Library} label={t('mobile.home.toLibrary')} onPress={() => router.push('/books')} />
       </ActionRow>
     </GlassCard>
   )

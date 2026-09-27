@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { useRouter, type Href } from 'expo-router'
 import { ChevronRight } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 
 import { fonts, spacing, useTheme } from '@/theme'
 import { Body, SectionTitle } from './ui/Text'
@@ -14,6 +15,7 @@ export const SHELF_ITEM_WIDTH = 128
  * zaskakují na začátek, aby police nikdy nekončila rozpůlenou obálkou.
  */
 export function Shelf({ title, to, children }: { title: string; to?: Href; children: ReactNode }) {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const router = useRouter()
 
@@ -24,7 +26,7 @@ export function Shelf({ title, to, children }: { title: string; to?: Href; child
         {to ? (
           <Pressable onPress={() => router.push(to)} style={styles.link} hitSlop={8}>
             <Body size={13} style={{ color: colors.primary, fontFamily: fonts.sansMedium }}>
-              Zobrazit vše
+              {t('mobile.shelf.showAll')}
             </Body>
             <ChevronRight color={colors.primary} size={16} />
           </Pressable>

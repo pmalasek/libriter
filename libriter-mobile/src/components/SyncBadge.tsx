@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { ActivityIndicator, Animated, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useTranslation } from 'react-i18next'
+import { t } from 'libriter-shared'
 
 import { syncEngine, type SyncState } from '@/sync/syncEngine'
 import { radius, spacing, useTheme } from '@/theme'
@@ -17,6 +19,8 @@ import { Muted } from './ui/Text'
  * stejně jako `Toaster`.
  */
 export function SyncBadge() {
+  // Jen kvůli překreslení při změně jazyka; popisek skládá describe().
+  useTranslation()
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
   const [state, setState] = useState<SyncState>(syncEngine.current())
@@ -65,20 +69,16 @@ function describe(state: SyncState): string | null {
     case 'idle':
       return null
     case 'syncing':
-      return state.progress ? `Stahuji knihovnu ${state.progress.done}/${state.progress.total}…` : 'Synchronizuji…'
+      return state.progress
+        ? t('mobile.sync.downloadingLibrary', { done: state.progress.done, total: state.progress.total })
+        : t('mobile.sync.syncing')
     case 'offline':
-      return state.pending > 0 ? `Offline – ${state.pending} ${plural(state.pending)} čeká na odeslání` : null
+      return state.pending > 0 ? t('mobile.sync.offlinePending', { count: state.pending }) : null
     case 'backoff':
       return state.pending > 0
-        ? `Server neodpovídá – ${state.pending} ${plural(state.pending)} čeká`
-        : 'Server neodpovídá, zkusím to znovu'
+        ? t('mobile.sync.backoffPending', { count: state.pending })
+        : t('mobile.sync.backoff')
   }
-}
-
-function plural(count: number): string {
-  if (count === 1) return 'záznam'
-  if (count < 5) return 'záznamy'
-  return 'záznamů'
 }
 
 const styles = StyleSheet.create({

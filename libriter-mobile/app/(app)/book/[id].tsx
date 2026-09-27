@@ -16,7 +16,18 @@ import {
   Star,
   Trash2,
 } from 'lucide-react-native'
-import { chapterCount, formatBytes, formatClock, formatDate, formatDuration, languageLabel, sortBooks } from 'libriter-shared'
+import { useTranslation } from 'react-i18next'
+import {
+  chapterCount,
+  formatBytes,
+  formatClock,
+  formatDate,
+  formatDuration,
+  languageLabel,
+  seriesLabel,
+  sortBooks,
+  t,
+} from 'libriter-shared'
 
 import { BookCover, coverUrl } from '@/components/BookCover'
 import { BookGrid } from '@/components/BookGrid'
@@ -47,6 +58,7 @@ import { fonts, radius, spacing, useTheme } from '@/theme'
 
 /** Detail knihy – BookDetailPage z webu bez úprav; navíc stahování do telefonu. */
 export default function BookScreen() {
+  const { t } = useTranslation()
   const { id = '' } = useLocalSearchParams<{ id: string }>()
   const { colors } = useTheme()
   const router = useRouter()
@@ -91,7 +103,7 @@ export default function BookScreen() {
     setFinished.mutate(
       { bookId: id, finished },
       {
-        onSuccess: () => toast.success(finished ? 'Kniha je označená jako doposlechnutá.' : 'Označení zrušeno.'),
+        onSuccess: () => toast.success(finished ? t('mobile.book.markedFinished') : t('mobile.book.unmarked')),
         onError: (error) => toast.error(error.message),
       },
     )
@@ -100,12 +112,12 @@ export default function BookScreen() {
 
   return (
     <Screen>
-      <BackButton label="Zpět" />
+      <BackButton label={t('common.back')} />
 
       {book.isError ? (
         <ErrorState error={book.error} onRetry={() => void book.refetch()} />
       ) : !data ? (
-        <Muted>{book.isPending ? 'Načítám…' : 'Kniha nenalezena.'}</Muted>
+        <Muted>{book.isPending ? t('common.loading') : t('mobile.book.notFound')}</Muted>
       ) : (
         <>
           <GlassCard glow backdrop={data.cover_path ? coverUrl(data) : undefined}>
@@ -115,13 +127,10 @@ export default function BookScreen() {
 
             {series.data ? (
               <Pressable onPress={() => router.push(`/series/${series.data?.id}`)} style={{ marginTop: spacing.md }}>
-                <Eyebrow>
-                  {series.data.title}
-                  {data.series_position != null ? ` · ${data.series_position}. díl` : ''}
-                </Eyebrow>
+                <Eyebrow>{seriesLabel(series.data.title, data.series_position)}</Eyebrow>
               </Pressable>
             ) : (
-              <Eyebrow style={{ marginTop: spacing.md }}>Audiokniha</Eyebrow>
+              <Eyebrow style={{ marginTop: spacing.md }}>{t('mobile.book.eyebrow')}</Eyebrow>
             )}
 
             <Heading size={26} style={{ marginTop: 6 }}>
@@ -147,9 +156,9 @@ export default function BookScreen() {
               {data.published_year ? <Badge icon={Calendar} label={String(data.published_year)} /> : null}
               <Badge variant="outline" icon={Languages} label={languageLabel(data.language, languages.data)} />
               {status === 'finished' ? (
-                <Badge variant="highlight" icon={CheckCircle2} label={finishedAt ? `Doposlechnuto ${formatDate(finishedAt)}` : 'Doposlechnuto'} />
+                <Badge variant="highlight" icon={CheckCircle2} label={finishedAt ? t('mobile.book.finishedOn', { date: formatDate(finishedAt) }) : t('mobile.book.finished')} />
               ) : status === 'started' ? (
-                <Badge icon={Headphones} label="Rozposlouchané" />
+                <Badge icon={Headphones} label={t('mobile.book.inProgress')} />
               ) : null}
               {data.internal_rating ? <Badge variant="outline" icon={Star} label={`${data.internal_rating}/5`} /> : null}
             </View>
@@ -159,22 +168,28 @@ export default function BookScreen() {
                 size="lg"
                 icon={isPlayingBook ? Pause : Play}
                 label={
-                  isPlayingBook ? 'Pozastavit' : isOpenBook ? 'Přehrát' : resumeAt != null ? `Pokračovat (${formatClock(resumeAt)})` : 'Přehrát'
+                  isPlayingBook
+                    ? t('mobile.actions.pause')
+                    : isOpenBook
+                      ? t('mobile.actions.play')
+                      : resumeAt != null
+                        ? t('mobile.book.resumeAt', { time: formatClock(resumeAt) })
+                        : t('mobile.actions.play')
                 }
                 onPress={() => (isOpenBook ? void player.toggle() : void player.playBook(data.id))}
                 disabled={player.loading}
               />
               {player.session && !inSession ? (
-                <Button variant="outline" size="lg" icon={ListPlus} label="Přidat do poslechu" onPress={() => void player.addToSession({ bookIds: [data.id] })} />
+                <Button variant="outline" size="lg" icon={ListPlus} label={t('mobile.actions.addToSession')} onPress={() => void player.addToSession({ bookIds: [data.id] })} />
               ) : null}
               {status === 'finished' ? (
-                <Button variant="outline" size="lg" icon={RotateCcw} label="Zrušit označení" onPress={() => changeStatus(false)} disabled={setFinished.isPending} />
+                <Button variant="outline" size="lg" icon={RotateCcw} label={t('mobile.book.unmark')} onPress={() => changeStatus(false)} disabled={setFinished.isPending} />
               ) : (
                 <Button
                   variant="outline"
                   size="lg"
                   icon={CheckCircle2}
-                  label="Označit jako doposlechnuté"
+                  label={t('mobile.book.markFinished')}
                   onPress={() => changeStatus(true)}
                   disabled={setFinished.isPending}
                 />
@@ -187,7 +202,7 @@ export default function BookScreen() {
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
               <View style={{ flex: 1 }}>
-                <SectionTitle>V telefonu</SectionTitle>
+                <SectionTitle>{t('mobile.book.onPhone')}</SectionTitle>
                 <Muted size={13}>{describeDownload(download?.state, download?.bytesDone ?? 0, download?.bytesTotal ?? 0, size, download?.error ?? '')}</Muted>
               </View>
               <DownloadButton bookId={data.id} state={download?.state} />
@@ -205,10 +220,10 @@ export default function BookScreen() {
           </View>
 
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <SectionTitle style={{ marginBottom: spacing.sm }}>O knize</SectionTitle>
-            {data.description ? <ExpandableText text={data.description} /> : <Muted size={14}>Popis není k dispozici.</Muted>}
+            <SectionTitle style={{ marginBottom: spacing.sm }}>{t('mobile.book.about')}</SectionTitle>
+            {data.description ? <ExpandableText text={data.description} /> : <Muted size={14}>{t('mobile.book.noDescription')}</Muted>}
             <Muted size={12} style={{ marginTop: spacing.md }}>
-              {chapterCount(data.chapter_count)} · přidáno {formatDate(data.created_at)}
+              {chapterCount(data.chapter_count)} · {t('mobile.book.added', { date: formatDate(data.created_at) })}
             </Muted>
           </View>
 
@@ -216,7 +231,7 @@ export default function BookScreen() {
 
           {moreByAuthor.length > 0 && mainAuthor ? (
             <View style={{ marginTop: spacing.xl }}>
-              <SectionTitle style={{ marginBottom: spacing.md }}>Další knihy autora {mainAuthor.name}</SectionTitle>
+              <SectionTitle style={{ marginBottom: spacing.md }}>{t('mobile.book.moreByAuthor', { name: mainAuthor.name })}</SectionTitle>
               <BookGrid books={moreByAuthor} />
             </View>
           ) : null}
@@ -227,16 +242,17 @@ export default function BookScreen() {
 }
 
 function DownloadButton({ bookId, state }: { bookId: string; state?: string }) {
+  const { t } = useTranslation()
   if (state === 'complete') {
-    return <Button variant="outline" icon={Trash2} label="Smazat" onPress={() => void downloadManager.remove(bookId)} />
+    return <Button variant="outline" icon={Trash2} label={t('common.delete')} onPress={() => void downloadManager.remove(bookId)} />
   }
   if (state === 'downloading' || state === 'queued') {
-    return <Button variant="outline" label="Pozastavit" onPress={() => void downloadManager.pause(bookId)} />
+    return <Button variant="outline" label={t('mobile.actions.pause')} onPress={() => void downloadManager.pause(bookId)} />
   }
   return (
     <Button
       icon={Download}
-      label={state === 'paused' ? 'Pokračovat' : 'Stáhnout'}
+      label={state === 'paused' ? t('mobile.actions.resume') : t('mobile.book.download')}
       onPress={() => void downloadManager.enqueue(bookId).catch((error: Error) => toast.error(error.message))}
     />
   )
@@ -245,17 +261,17 @@ function DownloadButton({ bookId, state }: { bookId: string; state?: string }) {
 function describeDownload(state: string | undefined, done: number, total: number, size: number, error: string): string {
   switch (state) {
     case 'complete':
-      return `Staženo · ${formatBytes(done)}`
+      return t('mobile.book.downloadState.complete', { size: formatBytes(done) })
     case 'downloading':
-      return `Stahuji · ${formatBytes(done)} z ${formatBytes(total)}`
+      return t('mobile.downloads.state.downloading', { done: formatBytes(done), total: formatBytes(total) })
     case 'queued':
-      return 'Ve frontě'
+      return t('mobile.downloads.state.queued')
     case 'paused':
-      return error ? `Pozastaveno · ${error}` : 'Pozastaveno'
+      return error ? t('mobile.downloads.state.pausedWithReason', { reason: error }) : t('mobile.downloads.state.paused')
     case 'error':
-      return `Stahování selhalo: ${error}`
+      return t('mobile.book.downloadState.error', { error })
     default:
-      return size > 0 ? `Ke stažení ${formatBytes(size)}` : 'Kniha se přehrává ze serveru'
+      return size > 0 ? t('mobile.book.downloadState.available', { size: formatBytes(size) }) : t('mobile.book.downloadState.streaming')
   }
 }
 

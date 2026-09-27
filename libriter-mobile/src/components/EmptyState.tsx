@@ -2,6 +2,7 @@ import type { ComponentType } from 'react'
 import { StyleSheet, View } from 'react-native'
 import type { LucideProps } from 'lucide-react-native'
 import { TriangleAlert } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 
 import { radius, spacing, useTheme } from '@/theme'
 import { Button } from './ui/Button'
@@ -37,17 +38,18 @@ export function EmptyState({
 
 /** Chyba načtení s možností zkusit znovu – jako `ErrorState` na webu. */
 export function ErrorState({ error, onRetry }: { error: Error | null; onRetry?: () => void }) {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   return (
     <View style={[styles.frame, { borderColor: colors.destructive, borderStyle: 'solid' }]}>
       <TriangleAlert color={colors.destructive} size={24} />
-      <Title size={16}>Data se nepodařilo načíst</Title>
+      <Title size={16}>{t('mobile.errorState.title')}</Title>
       {error?.message ? (
         <Body size={13} style={{ color: colors.mutedForeground, textAlign: 'center' }}>
           {error.message}
         </Body>
       ) : null}
-      {onRetry ? <Button variant="outline" size="sm" label="Zkusit znovu" onPress={onRetry} /> : null}
+      {onRetry ? <Button variant="outline" size="sm" label={t('common.retry')} onPress={onRetry} /> : null}
     </View>
   )
 }

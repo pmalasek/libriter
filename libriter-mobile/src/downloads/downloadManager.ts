@@ -1,6 +1,6 @@
 import NetInfo from '@react-native-community/netinfo'
 import * as FileSystem from 'expo-file-system/legacy'
-import { apiUrl, type Chapter } from 'libriter-shared'
+import { apiUrl, t, type Chapter } from 'libriter-shared'
 
 import { listChapters, replaceChapters, setChapterSize, upsertAuthors, upsertBooks } from '@/db/library'
 import { isOffline, serverSource } from '@/data/sources'
@@ -119,14 +119,14 @@ class DownloadManager {
 
   private async downloadBook(bookId: string): Promise<void> {
     if (!(await this.networkAllowed())) {
-      await setDownloadState(bookId, 'paused', 'čeká se na Wi-Fi')
+      await setDownloadState(bookId, 'paused', t('mobile.downloads.errors.waitingForWifi'))
       await this.emit()
       return
     }
 
     const chapters = await listChapters(bookId)
     if (chapters.length === 0) {
-      await setDownloadState(bookId, 'error', 'kniha nemá žádné kapitoly')
+      await setDownloadState(bookId, 'error', t('mobile.downloads.errors.noChapters'))
       await this.emit()
       return
     }
@@ -174,7 +174,7 @@ class DownloadManager {
 
     if (this.cancelled.has(bookId) || this.paused.has(bookId)) return
     const done = await this.allChaptersDone(chapters)
-    await setDownloadState(bookId, done ? 'complete' : 'error', done ? '' : 'část kapitol chybí')
+    await setDownloadState(bookId, done ? 'complete' : 'error', done ? '' : t('mobile.downloads.errors.missingChapters'))
     await this.emit()
   }
 
@@ -240,7 +240,7 @@ class DownloadManager {
 
       if (!result || result.status >= 400) {
         rewind()
-        throw new Error(`kapitola ${chapter.position}: HTTP ${result?.status ?? 0}`)
+        throw new Error(t('mobile.downloads.errors.httpError', { position: chapter.position, status: result?.status ?? 0 }))
       }
 
       const info = await FileSystem.getInfoAsync(target)
@@ -249,7 +249,7 @@ class DownloadManager {
       if (chapter.size_bytes > 0 && size !== chapter.size_bytes) {
         await FileSystem.deleteAsync(target, { idempotent: true })
         rewind()
-        throw new Error(`kapitola ${chapter.position}: neúplný soubor`)
+        throw new Error(t('mobile.downloads.errors.incompleteFile', { position: chapter.position }))
       }
 
       await markChapterFile(chapter.id, { bookId, path: target, state: 'done', sizeBytes: size, resumeData: null })
@@ -387,7 +387,7 @@ async function headSize(url: string): Promise<number> {
 }
 
 function message(error: unknown): string {
-  return error instanceof Error ? error.message : 'stahování selhalo'
+  return error instanceof Error ? error.message : t('mobile.downloads.errors.failed')
 }
 
 export const downloadManager = new DownloadManager()

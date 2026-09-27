@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Modal, Pressable, StyleSheet, View } from 'react-native'
 import TrackPlayer from 'react-native-track-player'
+import { useTranslation } from 'react-i18next'
 
 import { radius, spacing, useTheme } from '@/theme'
 import { Button } from './ui/Button'
@@ -54,12 +55,13 @@ export function useSleepTimer(): SleepTimer {
 }
 
 export function SleepTimerSheet({ open, onClose, timer }: { open: boolean; onClose: () => void; timer: SleepTimer }) {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   return (
     <Modal visible={open} transparent animationType="fade" onRequestClose={onClose}>
       <Pressable style={styles.backdrop} onPress={onClose}>
         <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <SectionTitle>Časovač vypnutí</SectionTitle>
+          <SectionTitle>{t('mobile.sleepTimer.title')}</SectionTitle>
           <View style={styles.options}>
             {PRESETS.map((minutes) => (
               <Pressable
@@ -71,7 +73,7 @@ export function SleepTimerSheet({ open, onClose, timer }: { open: boolean; onClo
                 }}
               >
                 <Body size={15} medium style={{ color: colors.secondaryForeground }}>
-                  {minutes} min
+                  {t('mobile.sleepTimer.minutes', { minutes })}
                 </Body>
               </Pressable>
             ))}
@@ -79,7 +81,7 @@ export function SleepTimerSheet({ open, onClose, timer }: { open: boolean; onClo
           {timer.remaining !== null ? (
             <Button
               variant="ghost"
-              label="Zrušit časovač"
+              label={t('mobile.sleepTimer.cancel')}
               onPress={() => {
                 timer.cancel()
                 onClose()

@@ -29,31 +29,31 @@ export default function MoreScreen() {
   const confirmSignOut = async () => {
     const pending = await countPending()
     Alert.alert(
-      'Odhlásit se?',
+      t('mobile.more.signOutTitle'),
       pending > 0
-        ? `${pending} záznamů poslechu ještě čeká na odeslání. Odhlášením o ně přijdete.`
-        : 'Stažené knihy zůstanou v telefonu.',
+        ? t('mobile.more.signOutPending', { count: pending })
+        : t('mobile.more.signOutMessage'),
       [
-        { text: 'Zpět', style: 'cancel' },
-        { text: 'Odhlásit', style: 'destructive', onPress: () => void signOut() },
+        { text: t('common.back'), style: 'cancel' },
+        { text: t('mobile.more.signOutConfirm'), style: 'destructive', onPress: () => void signOut() },
       ],
     )
   }
 
   return (
     <Screen>
-      <PageHeader title={user?.display_name ?? 'Účet'} description={user?.email} />
+      <PageHeader title={user?.display_name ?? t('mobile.more.account')} description={user?.email} />
 
       <View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        {hasSessions ? <Row icon={Headphones} label="Právě posloucháno" onPress={() => router.push('/sessions')} /> : null}
-        <Row icon={Download} label="Stažené" onPress={() => router.push('/downloads')} />
-        <Row icon={Settings} label="Nastavení" onPress={() => router.push('/settings')} />
-        <Row icon={LogOut} label="Odhlásit se" onPress={() => void confirmSignOut()} last />
+        {hasSessions ? <Row icon={Headphones} label={t('mobile.sessions.title')} onPress={() => router.push('/sessions')} /> : null}
+        <Row icon={Download} label={t('mobile.downloads.title')} onPress={() => router.push('/downloads')} />
+        <Row icon={Settings} label={t('mobile.settings.title')} onPress={() => router.push('/settings')} />
+        <Row icon={LogOut} label={t('mobile.more.signOut')} onPress={() => void confirmSignOut()} last />
       </View>
 
       <View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.border, padding: spacing.md, marginTop: spacing.md }]}>
         <Muted size={13} style={{ marginBottom: spacing.sm + 4 }}>
-          Vzhled
+          {t('mobile.more.appearance')}
         </Muted>
         <ThemeToggle />
       </View>

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Modal, Pressable, StyleSheet, View } from 'react-native'
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronDown, Grid3x3, LayoutGrid, List } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import { viewModeLabel, VIEW_MODES, type SortDir, type ViewMode } from 'libriter-shared'
 
 import { fonts, radius, spacing, useTheme } from '@/theme'
@@ -10,6 +11,7 @@ const VIEW_ICONS = { tiles: LayoutGrid, small: Grid3x3, list: List } as const
 
 /** Pilulka se třemi ikonami zobrazení – jako `ViewModeToggle` na webu. */
 export function ViewModeToggle({ value, onChange }: { value: ViewMode; onChange: (view: ViewMode) => void }) {
+  useTranslation()
   const { colors } = useTheme()
   return (
     <View style={[styles.pill, { backgroundColor: colors.muted }]}>
@@ -47,6 +49,7 @@ export function SortControl<K extends string>({
   dir: SortDir
   onDirChange: (dir: SortDir) => void
 }) {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const [open, setOpen] = useState(false)
   const current = options.find((option) => option.value === value)
@@ -58,10 +61,10 @@ export function SortControl<K extends string>({
         onPress={() => setOpen(true)}
         style={[styles.select, { backgroundColor: colors.card, borderColor: colors.border }]}
         accessibilityRole="button"
-        accessibilityLabel="Řazení"
+        accessibilityLabel={t('mobile.sort.label')}
       >
         <Body size={14} numberOfLines={1} style={{ flex: 1 }}>
-          {current?.label ?? 'Řazení'}
+          {current?.label ?? t('mobile.sort.label')}
         </Body>
         <ChevronDown color={colors.mutedForeground} size={16} />
       </Pressable>
@@ -69,7 +72,7 @@ export function SortControl<K extends string>({
         onPress={() => onDirChange(dir === 'asc' ? 'desc' : 'asc')}
         style={[styles.dir, { backgroundColor: colors.card, borderColor: colors.border }]}
         accessibilityRole="button"
-        accessibilityLabel={dir === 'asc' ? 'Vzestupně' : 'Sestupně'}
+        accessibilityLabel={dir === 'asc' ? t('mobile.sort.asc') : t('mobile.sort.desc')}
       >
         <DirIcon color={colors.foreground} size={17} />
       </Pressable>
@@ -78,7 +81,7 @@ export function SortControl<K extends string>({
         <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
           <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Muted size={12} style={{ paddingHorizontal: spacing.md, paddingBottom: spacing.xs }}>
-              Řadit podle
+              {t('mobile.sort.sortBy')}
             </Muted>
             {options.map((option) => {
               const active = option.value === value

@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Monitor, Moon, Sun } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import {
   COLOR_SCHEMES,
   colorSchemeLabel,
@@ -19,12 +20,13 @@ const MODE_ICONS = { light: Sun, dark: Moon, system: Monitor } as const
  * jen rozložené do řádků místo rozbalovací nabídky.
  */
 export function ThemeToggle() {
+  const { t } = useTranslation()
   const { colors, scheme, mode, setScheme, setMode, saving } = useTheme()
 
   return (
     <View style={{ gap: spacing.md, opacity: saving ? 0.7 : 1 }}>
       <View style={{ gap: spacing.sm }}>
-        <Muted size={12}>Režim zobrazení</Muted>
+        <Muted size={12}>{t('mobile.theme.mode')}</Muted>
         <View style={[styles.pill, { backgroundColor: colors.muted }]}>
           {THEME_MODES.map((option) => {
             const Icon = MODE_ICONS[option.value]
@@ -48,7 +50,7 @@ export function ThemeToggle() {
       </View>
 
       <View style={{ gap: spacing.sm }}>
-        <Muted size={12}>Barevné schéma</Muted>
+        <Muted size={12}>{t('mobile.theme.scheme')}</Muted>
         <View style={styles.schemes}>
           {COLOR_SCHEMES.map((option) => {
             const active = option.value === scheme

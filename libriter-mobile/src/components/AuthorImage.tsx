@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Image } from 'expo-image'
 import { UserRound } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import { apiUrl, type Author } from 'libriter-shared'
 
 import { useTheme } from '@/theme'
@@ -13,6 +14,7 @@ function imageUrl(author: Author): string {
 
 /** Kulatý portrét autora; bez fotky nebo při chybě zástupná ikona. */
 export function AuthorImage({ author, size = 36 }: { author: Author; size?: number }) {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const [failed, setFailed] = useState(false)
 
@@ -32,7 +34,7 @@ export function AuthorImage({ author, size = 36 }: { author: Author; size?: numb
           contentFit="cover"
           cachePolicy="disk"
           onError={() => setFailed(true)}
-          accessibilityLabel={`Fotografie autora ${author.name}`}
+          accessibilityLabel={t('mobile.authorImage.label', { name: author.name })}
         />
       )}
     </View>

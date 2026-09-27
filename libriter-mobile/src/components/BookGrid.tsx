@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Library } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import { seriesLabel, type Book, type ViewMode } from 'libriter-shared'
 
 import { useBookProgress, useDownloads, useSeriesById } from '@/data/hooks'
@@ -25,7 +26,7 @@ export function BookGrid({
   view = 'tiles',
   seriesContext,
   selection,
-  emptyTitle = 'Žádné knihy',
+  emptyTitle,
   emptyDescription,
 }: {
   books: Book[]
@@ -36,6 +37,7 @@ export function BookGrid({
   emptyTitle?: string
   emptyDescription?: string
 }) {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const seriesById = useSeriesById()
   const { status } = useBookProgress()
@@ -55,7 +57,7 @@ export function BookGrid({
   }
 
   if (books.length === 0) {
-    return <EmptyState title={emptyTitle} description={emptyDescription} icon={Library} />
+    return <EmptyState title={emptyTitle ?? t('mobile.bookGrid.empty')} description={emptyDescription} icon={Library} />
   }
 
   if (view === 'list') {

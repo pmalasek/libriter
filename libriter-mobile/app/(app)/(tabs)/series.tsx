@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Layers } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import { authorsLabel, bookCount, foldName, seriesAuthors, type Author, type Book, type Series } from 'libriter-shared'
 
 import { EmptyState, ErrorState } from '@/components/EmptyState'
@@ -26,6 +27,7 @@ const EMPTY: SeriesInfo = { count: 0, authors: [], covers: [] }
 
 /** Seznam sérií – SeriesPage z webu. */
 export default function SeriesScreen() {
+  const { t } = useTranslation()
   const series = useSeriesList()
   const books = useBooks()
   const [query, setQuery] = useState('')
@@ -74,9 +76,9 @@ export default function SeriesScreen() {
   const header = (
     <PageHeader
       panel
-      title="Série"
-      description={series.data ? `${withBooks.length} celkem` : undefined}
-      actions={<SearchInput value={query} onChangeText={setQuery} placeholder="Hledat podle názvu nebo autora…" />}
+      title={t('mobile.seriesList.title')}
+      description={series.data ? t('mobile.list.total', { count: withBooks.length }) : undefined}
+      actions={<SearchInput value={query} onChangeText={setQuery} placeholder={t('mobile.list.searchTitleOrAuthor')} />}
     />
   )
 
@@ -94,8 +96,8 @@ export default function SeriesScreen() {
         ) : (
           <EmptyState
             icon={Layers}
-            title={series.isPending ? 'Načítám…' : query ? 'Nic nenalezeno' : 'Zatím žádné série'}
-            description={series.isPending ? undefined : query ? 'Zkuste jiný hledaný výraz.' : 'Série se zakládají ve webovém rozhraní.'}
+            title={series.isPending ? t('common.loading') : query ? t('mobile.list.noResults') : t('mobile.seriesList.emptyTitle')}
+            description={series.isPending ? undefined : query ? t('mobile.list.tryAnotherQuery') : t('mobile.seriesList.emptyDescription')}
           />
         )
       }
@@ -104,6 +106,8 @@ export default function SeriesScreen() {
 }
 
 const SeriesItem = memo(function SeriesItem({ series, info }: { series: Series; info: SeriesInfo }) {
+  // Překreslení při změně jazyka (autoři, počet knih).
+  useTranslation()
   const { colors } = useTheme()
   const router = useRouter()
   return (

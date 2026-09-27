@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto'
 import {
   apiFetch,
+  t,
   type Book,
   type CreateSessionRequest,
   type PlaySession,
@@ -63,7 +64,7 @@ async function startLocalSession(request: CreateSessionRequest): Promise<PlaySes
   }
 
   const bookIds = await expandBooks(request)
-  if (bookIds.length === 0) throw new Error('Poslech nemá žádné knihy k přehrání')
+  if (bookIds.length === 0) throw new Error(t('mobile.player.errors.emptySession'))
 
   const now = new Date().toISOString()
   const local: PlaySession = {

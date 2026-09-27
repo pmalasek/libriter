@@ -2,6 +2,7 @@ import { memo } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Check, CheckCircle2, Headphones } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import { authorNames, bookStatusLabel, formatDuration, type Book, type BookStatus } from 'libriter-shared'
 
 import { radius, spacing, useTheme } from '@/theme'
@@ -72,6 +73,8 @@ export const BookCard = memo(function BookCard({
   status?: BookStatus
   downloaded?: boolean
 }) {
+  // Překreslení při změně jazyka (délka, popisky stavu).
+  useTranslation()
   const { colors } = useTheme()
   const router = useRouter()
   const small = size === 'small'
@@ -123,19 +126,20 @@ export const BookCard = memo(function BookCard({
 
 /** Hlavička seznamu knih – sloupce kopírují BookRow. */
 export function BookRowHeader({ selecting = false }: { selecting?: boolean }) {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   return (
     <View style={[styles.row, { backgroundColor: colors.muted, paddingVertical: spacing.sm }]}>
       {selecting ? <View style={{ width: 24 }} /> : null}
       <View style={{ width: 48 }} />
       <Muted size={11} style={[styles.header, { flex: 1 }]}>
-        Název, autor a série
+        {t('mobile.bookRow.title')}
       </Muted>
       <Muted size={11} style={[styles.header, styles.colYear]}>
-        Vydáno
+        {t('mobile.bookRow.published')}
       </Muted>
       <Muted size={11} style={[styles.header, styles.colDuration]}>
-        Délka
+        {t('mobile.bookRow.duration')}
       </Muted>
     </View>
   )
@@ -155,6 +159,8 @@ export const BookRow = memo(function BookRow({
   status?: BookStatus
   downloaded?: boolean
 }) {
+  // Překreslení při změně jazyka (délka, popisky stavu).
+  useTranslation()
   const { colors } = useTheme()
   const router = useRouter()
 

@@ -19,6 +19,7 @@ import {
   queryKeys,
   SAVE_INTERVAL_MS,
   sessionItem,
+  t,
   type Book,
   type Chapter,
   type PlaySession,
@@ -172,7 +173,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           bookChapterFiles(input.bookId),
         ])
         if (!nextBook || nextChapters.length === 0) {
-          toast.error('Kniha nemá žádné kapitoly k přehrání.')
+          toast.error(t('mobile.player.errors.noChapters'))
           return
         }
 
@@ -222,7 +223,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
         if (input.autoplay) await TrackPlayer.play()
       } catch (error: unknown) {
-        toast.error(error instanceof Error ? error.message : 'Přehrávání se nepodařilo spustit')
+        toast.error(error instanceof Error ? error.message : t('mobile.player.errors.playFailed'))
       } finally {
         seekingRef.current = false
         setLoading(false)
@@ -265,7 +266,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // u knihy pokračuje tam, kde poslech skončil.
         await openSession(target, bookId, chapterId, Boolean(chapterId))
       } catch (error: unknown) {
-        toast.error(describe(error, 'Poslech se nepodařilo založit'))
+        toast.error(describe(error, t('mobile.player.errors.createFailed')))
       }
     },
     [invalidateSessions, openSession, store],
@@ -278,7 +279,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         invalidateSessions()
         await openSession(target)
       } catch (error: unknown) {
-        toast.error(describe(error, 'Poslech série se nepodařilo založit'))
+        toast.error(describe(error, t('mobile.player.errors.createSeriesFailed')))
       }
     },
     [invalidateSessions, openSession],
@@ -296,7 +297,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         invalidateSessions()
         await openSession(target)
       } catch (error: unknown) {
-        toast.error(describe(error, 'Seznam se nepodařilo založit'))
+        toast.error(describe(error, t('mobile.player.errors.createListFailed')))
       }
     },
     [invalidateSessions, openSession],
@@ -313,9 +314,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         })
         setSession(updated)
         invalidateSessions()
-        toast.success('Přidáno do poslechu.')
+        toast.success(t('mobile.player.added'))
       } catch (error: unknown) {
-        toast.error(describe(error, 'Do poslechu se nepodařilo přidat'))
+        toast.error(describe(error, t('mobile.player.errors.addFailed')))
       }
     },
     [invalidateSessions],
@@ -329,12 +330,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // než zrcadlo; bez sítě se vezme zrcadlo.
         const target = (await withSource((s) => s.session(sessionId))) ?? (await getSessionMirror(sessionId))
         if (!target) {
-          toast.error('Poslech už neexistuje.')
+          toast.error(t('mobile.player.errors.sessionGone'))
           return
         }
         await openSession(target)
       } catch (error: unknown) {
-        toast.error(describe(error, 'Poslech se nepodařilo otevřít'))
+        toast.error(describe(error, t('mobile.player.errors.openFailed')))
       }
     },
     [openSession, store],
@@ -358,7 +359,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         await deleteSession(sessionId)
         invalidateSessions()
       } catch (error: unknown) {
-        toast.error(describe(error, 'Poslech se nepodařilo smazat'))
+        toast.error(describe(error, t('mobile.player.errors.deleteFailed')))
       }
     },
     [close, invalidateSessions],
@@ -569,6 +570,6 @@ async function streamTokenOrNull(): Promise<string | null> {
 }
 
 function describe(error: unknown, fallback: string): string {
-  if (error instanceof ApiError && error.status === 0) return 'Bez připojení k serveru'
+  if (error instanceof ApiError && error.status === 0) return t('mobile.player.errors.noConnection')
   return error instanceof Error && error.message ? error.message : fallback
 }

@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Pause, Play, RotateCcw, RotateCw } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import { SKIP_BACK, SKIP_FORWARD, formatClock } from 'libriter-shared'
 
 import { usePlayer } from '@/player/PlayerProvider'
@@ -17,6 +18,7 @@ import { Muted, Title } from './ui/Text'
  * Od obsahu ji navíc drží barevný okraj a výrazný stín.
  */
 export function MiniPlayer() {
+  const { t } = useTranslation()
   const { colors, resolved } = useTheme()
   const player = usePlayer()
   const router = useRouter()
@@ -40,7 +42,7 @@ export function MiniPlayer() {
         },
       ]}
       accessibilityRole="button"
-      accessibilityLabel={`Otevřít přehrávač: ${player.book.title}`}
+      accessibilityLabel={t('mobile.player.open', { title: player.book.title })}
     >
       <GlassBackground intensity={80} strong />
 
@@ -52,19 +54,19 @@ export function MiniPlayer() {
             {player.book.title}
           </Title>
           <Muted numberOfLines={1} size={12}>
-            {player.chapter?.title ?? 'Načítání…'}
+            {player.chapter?.title ?? t('mobile.player.loading')}
             {player.duration > 0 ? ` · −${formatClock(remaining)}` : ''}
           </Muted>
         </View>
 
-        <Pressable hitSlop={8} onPress={() => void player.skip(-SKIP_BACK)} accessibilityLabel={`Zpět o ${SKIP_BACK} s`}>
+        <Pressable hitSlop={8} onPress={() => void player.skip(-SKIP_BACK)} accessibilityLabel={t('mobile.player.skipBack', { seconds: SKIP_BACK })}>
           <RotateCcw color={colors.foreground} size={21} />
         </Pressable>
         <Pressable
           hitSlop={8}
           onPress={() => void player.toggle()}
           style={[styles.play, { backgroundColor: colors.primary }]}
-          accessibilityLabel={player.playing ? 'Pauza' : 'Přehrát'}
+          accessibilityLabel={player.playing ? t('mobile.player.pause') : t('mobile.actions.play')}
         >
           {player.playing ? (
             <Pause color={colors.primaryForeground} size={19} fill={colors.primaryForeground} />
@@ -72,7 +74,7 @@ export function MiniPlayer() {
             <Play color={colors.primaryForeground} size={19} fill={colors.primaryForeground} style={{ marginLeft: 2 }} />
           )}
         </Pressable>
-        <Pressable hitSlop={8} onPress={() => void player.skip(SKIP_FORWARD)} accessibilityLabel={`Vpřed o ${SKIP_FORWARD} s`}>
+        <Pressable hitSlop={8} onPress={() => void player.skip(SKIP_FORWARD)} accessibilityLabel={t('mobile.player.skipForward', { seconds: SKIP_FORWARD })}>
           <RotateCw color={colors.foreground} size={21} />
         </Pressable>
       </View>

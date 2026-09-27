@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react'
 import { View, type ColorValue } from 'react-native'
+import { useTranslation } from 'react-i18next'
 import { Tabs } from 'expo-router'
 import { Ellipsis, Home, Layers, Library, Users, type LucideProps } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -16,6 +17,7 @@ const TAB_BAR_HEIGHT = 58
  * Autoři, Série) a „Více“ se zbytkem. Nad lištou sedí kapsle přehrávače.
  */
 export default function TabsLayout() {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const insets = useSafeAreaInsets()
   const barHeight = TAB_BAR_HEIGHT + insets.bottom
@@ -60,11 +62,11 @@ export default function TabsLayout() {
           tabBarInactiveTintColor: colors.mutedForeground,
         }}
       >
-        <Tabs.Screen name="index" options={{ title: 'Domů', tabBarIcon: icon(Home) }} />
-        <Tabs.Screen name="books" options={{ title: 'Knihy', tabBarIcon: icon(Library) }} />
-        <Tabs.Screen name="authors" options={{ title: 'Autoři', tabBarIcon: icon(Users) }} />
-        <Tabs.Screen name="series" options={{ title: 'Série', tabBarIcon: icon(Layers) }} />
-        <Tabs.Screen name="more" options={{ title: 'Více', tabBarIcon: icon(Ellipsis) }} />
+        <Tabs.Screen name="index" options={{ title: t('mobile.tabs.home'), tabBarIcon: icon(Home) }} />
+        <Tabs.Screen name="books" options={{ title: t('mobile.tabs.books'), tabBarIcon: icon(Library) }} />
+        <Tabs.Screen name="authors" options={{ title: t('mobile.tabs.authors'), tabBarIcon: icon(Users) }} />
+        <Tabs.Screen name="series" options={{ title: t('mobile.tabs.series'), tabBarIcon: icon(Layers) }} />
+        <Tabs.Screen name="more" options={{ title: t('mobile.tabs.more'), tabBarIcon: icon(Ellipsis) }} />
       </Tabs>
 
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: barHeight }} pointerEvents="box-none">

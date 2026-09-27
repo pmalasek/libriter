@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
+import { useTranslation } from 'react-i18next'
 import { ListPlus, Pause, Play } from 'lucide-react-native'
 import { authorsLabel, bookCount, seriesAuthors } from 'libriter-shared'
 
@@ -18,6 +19,7 @@ import { spacing } from '@/theme'
 
 /** Detail série – SeriesDetailPage z webu. */
 export default function SeriesScreen() {
+  const { t } = useTranslation()
   const { id = '' } = useLocalSearchParams<{ id: string }>()
   const series = useSeriesOne(id)
   const books = useBooks()
@@ -46,19 +48,19 @@ export default function SeriesScreen() {
 
   return (
     <Screen>
-      <BackButton label="Zpět na série" />
+      <BackButton label={t('mobile.series.back')} />
 
       {series.isError ? (
         <ErrorState error={series.error} onRetry={() => void series.refetch()} />
       ) : !data ? (
-        <Muted>{series.isPending ? 'Načítám…' : 'Série nenalezena.'}</Muted>
+        <Muted>{series.isPending ? t('common.loading') : t('mobile.series.notFound')}</Muted>
       ) : (
         <>
           <GlassCard glow style={{ marginBottom: spacing.lg }}>
             <View style={{ alignItems: 'flex-start' }}>
               <SeriesCoverStack books={seriesBooks} variant="lg" />
             </View>
-            <Eyebrow style={{ marginTop: spacing.md, marginBottom: 6 }}>Série</Eyebrow>
+            <Eyebrow style={{ marginTop: spacing.md, marginBottom: 6 }}>{t('mobile.series.eyebrow')}</Eyebrow>
             <Heading size={26}>{data.title}</Heading>
             <Muted size={14} style={{ marginTop: 6 }}>
               {[authorsLabel(seriesAuthors(seriesBooks)), bookCount(seriesBooks.length)].filter(Boolean).join(' · ')}
@@ -76,24 +78,24 @@ export default function SeriesScreen() {
                   icon={isPlayingSeries ? Pause : Play}
                   label={
                     isPlayingSeries
-                      ? 'Pozastavit'
+                      ? t('mobile.actions.pause')
                       : playingFromSeries
-                        ? 'Přehrát'
+                        ? t('mobile.actions.play')
                         : openSeries
-                          ? 'Pokračovat v sérii'
-                          : 'Přehrát sérii'
+                          ? t('mobile.series.resume')
+                          : t('mobile.series.play')
                   }
                   onPress={() => (playingFromSeries ? void player.toggle() : void player.playSeries(id))}
                   disabled={player.loading}
                 />
                 {player.session && !openSeries ? (
-                  <Button variant="outline" size="lg" icon={ListPlus} label="Přidat do poslechu" onPress={() => void player.addToSession({ seriesIds: [id] })} />
+                  <Button variant="outline" size="lg" icon={ListPlus} label={t('mobile.actions.addToSession')} onPress={() => void player.addToSession({ seriesIds: [id] })} />
                 ) : null}
               </ActionRow>
             ) : null}
           </GlassCard>
 
-          <BookGrid books={seriesBooks} seriesContext={id} emptyTitle="V této sérii nejsou žádné knihy" />
+          <BookGrid books={seriesBooks} seriesContext={id} emptyTitle={t('mobile.series.noBooks')} />
         </>
       )}
     </Screen>

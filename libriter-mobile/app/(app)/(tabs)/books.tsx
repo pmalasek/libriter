@@ -1,7 +1,8 @@
 import { useCallback, useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Headphones, Library, ListPlus, SquareCheckBig, X } from 'lucide-react-native'
-import { authorNames, bookCount, bookSortOptions, seriesLabel, sortBooks, type Book } from 'libriter-shared'
+import { useTranslation } from 'react-i18next'
+import { authorNames, bookCount, bookSortOptions, currentLanguage, seriesLabel, sortBooks, type Book } from 'libriter-shared'
 
 import { BookCard, BookRow, BookRowHeader } from '@/components/BookCard'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
@@ -21,6 +22,7 @@ const COLUMNS = { tiles: 2, small: 3, list: 1 } as const
 
 /** Seznam knih – BooksPage z webu bez editorského „Přidat do série“. */
 export default function BooksScreen() {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const [query, setQuery] = useState('')
   const books = useBooks()
@@ -41,12 +43,13 @@ export default function BooksScreen() {
   )
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase('cs')
+    const locale = currentLanguage()
+    const needle = query.trim().toLocaleLowerCase(locale)
     if (!needle) return sorted
     return sorted.filter(
       (book) =>
-        book.title.toLocaleLowerCase('cs').includes(needle) ||
-        authorNames(book.authors).toLocaleLowerCase('cs').includes(needle),
+        book.title.toLocaleLowerCase(locale).includes(needle) ||
+        authorNames(book.authors).toLocaleLowerCase(locale).includes(needle),
     )
   }, [sorted, query])
 
@@ -95,11 +98,11 @@ export default function BooksScreen() {
   const header = (
     <PageHeader
       panel
-      title="Knihy"
+      title={t('mobile.books.title')}
       description={books.data ? bookCount(books.data.length) : undefined}
       actions={
         <>
-          <SearchInput value={query} onChangeText={setQuery} placeholder="Hledat podle názvu nebo autora…" />
+          <SearchInput value={query} onChangeText={setQuery} placeholder={t('mobile.list.searchTitleOrAuthor')} />
           <View style={styles.controls}>
             <SortControl
               options={bookSortOptions()}
@@ -112,7 +115,7 @@ export default function BooksScreen() {
           </View>
           {/* Výběr slouží k poskládání poslechu, takže ho má i čtenář. */}
           {!selecting ? (
-            <Button variant="outline" icon={SquareCheckBig} label="Vybrat" onPress={() => setSelected(new Set())} style={{ alignSelf: 'flex-start' }} />
+            <Button variant="outline" icon={SquareCheckBig} label={t('mobile.books.select')} onPress={() => setSelected(new Set())} style={{ alignSelf: 'flex-start' }} />
           ) : null}
         </>
       }
@@ -120,17 +123,17 @@ export default function BooksScreen() {
       {selecting ? (
         <View style={[styles.selectionBar, { backgroundColor: colors.muted }]}>
           <Body size={14} medium>
-            {selected.size === 0 ? 'Klepněte na knihy, které chcete vybrat.' : `Vybráno: ${bookCount(selected.size)}`}
+            {selected.size === 0 ? t('mobile.books.selectHint') : t('mobile.books.selected', { books: bookCount(selected.size) })}
           </Body>
           <View style={styles.selectionActions}>
             <Button
               variant="ghost"
               size="sm"
-              label={query ? 'Vybrat vše nalezené' : 'Vybrat vše'}
+              label={query ? t('mobile.books.selectAllFound') : t('mobile.books.selectAll')}
               onPress={() => setSelected(new Set(filtered.map((book) => book.id)))}
               disabled={filtered.length === 0}
             />
-            <Button variant="ghost" size="sm" label="Zrušit výběr" onPress={() => setSelected(new Set())} disabled={selected.size === 0} />
+            <Button variant="ghost" size="sm" label={t('mobile.books.clearSelection')} onPress={() => setSelected(new Set())} disabled={selected.size === 0} />
           </View>
           <View style={styles.selectionActions}>
             {player.session ? (
@@ -138,7 +141,7 @@ export default function BooksScreen() {
                 variant="outline"
                 size="sm"
                 icon={ListPlus}
-                label="Přidat do poslechu"
+                label={t('mobile.actions.addToSession')}
                 onPress={() => {
                   void player.addToSession({ bookIds: selectedIds })
                   setSelected(null)
@@ -149,14 +152,14 @@ export default function BooksScreen() {
             <Button
               size="sm"
               icon={Headphones}
-              label="Poslouchat výběr"
+              label={t('mobile.books.playSelection')}
               onPress={() => {
                 void player.playList({ bookIds: selectedIds })
                 setSelected(null)
               }}
               disabled={selected.size === 0}
             />
-            <Button variant="outline" size="sm" icon={X} label="Hotovo" onPress={() => setSelected(null)} />
+            <Button variant="outline" size="sm" icon={X} label={t('mobile.books.done')} onPress={() => setSelected(null)} />
           </View>
         </View>
       ) : null}
@@ -184,13 +187,13 @@ export default function BooksScreen() {
         ) : (
           <EmptyState
             icon={Library}
-            title={books.isPending ? 'Načítám…' : query ? 'Nic nenalezeno' : 'Zatím žádné knihy'}
+            title={books.isPending ? t('common.loading') : query ? t('mobile.list.noResults') : t('mobile.books.emptyTitle')}
             description={
               books.isPending
                 ? undefined
                 : query
-                  ? 'Zkuste jiný hledaný výraz.'
-                  : 'Přidejte audio soubory do adresáře AUDIO_ROOT – scanner je načte automaticky.'
+                  ? t('mobile.list.tryAnotherQuery')
+                  : t('mobile.books.emptyDescription')
             }
           />
         )

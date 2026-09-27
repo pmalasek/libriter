@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { ChevronDown, Pause, Play, RotateCcw, RotateCw, SkipBack, SkipForward, Timer, X } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useTranslation } from 'react-i18next'
 import { formatClock, SKIP_BACK, SKIP_FORWARD, SPEEDS } from 'libriter-shared'
 
 import { BookCover } from '@/components/BookCover'
@@ -17,6 +18,7 @@ import { fonts, radius, spacing, useTheme } from '@/theme'
  * rukou a často za jízdy.
  */
 export default function PlayerScreen() {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const player = usePlayer()
   const router = useRouter()
@@ -27,7 +29,7 @@ export default function PlayerScreen() {
   if (!player.book) {
     return (
       <View style={[styles.empty, { backgroundColor: colors.background }]}>
-        <Muted>Nic se nepřehrává.</Muted>
+        <Muted>{t('mobile.player.nothingPlaying')}</Muted>
       </View>
     )
   }
@@ -45,14 +47,14 @@ export default function PlayerScreen() {
       ]}
     >
       <View style={styles.topBar}>
-        <Pressable hitSlop={12} onPress={() => router.back()} accessibilityLabel="Zavřít přehrávač">
+        <Pressable hitSlop={12} onPress={() => router.back()} accessibilityLabel={t('mobile.player.close')}>
           <ChevronDown color={colors.mutedForeground} size={28} />
         </Pressable>
         <Muted size={11} style={{ textTransform: 'uppercase', letterSpacing: 1 }}>
-          {player.offline ? 'Z telefonu' : 'Ze serveru'}
+          {player.offline ? t('mobile.player.fromPhone') : t('mobile.player.fromServer')}
         </Muted>
         <View style={{ flexDirection: 'row', gap: spacing.md }}>
-          <Pressable hitSlop={12} onPress={() => setTimerOpen(true)} accessibilityLabel="Časovač vypnutí">
+          <Pressable hitSlop={12} onPress={() => setTimerOpen(true)} accessibilityLabel={t('mobile.sleepTimer.title')}>
             {timer.remaining != null ? (
               <Body size={13} medium style={{ color: colors.primary }}>
                 {formatClock(timer.remaining)}
@@ -67,7 +69,7 @@ export default function PlayerScreen() {
               void player.close()
               router.back()
             }}
-            accessibilityLabel="Ukončit poslech"
+            accessibilityLabel={t('mobile.player.stop')}
           >
             <X color={colors.mutedForeground} size={22} />
           </Pressable>
@@ -83,9 +85,9 @@ export default function PlayerScreen() {
           {player.book.title}
         </Heading>
         <Muted size={14} numberOfLines={1}>
-          {player.chapter?.title ?? 'Načítání…'}
+          {player.chapter?.title ?? t('mobile.player.loading')}
           {chapterIndex >= 0 && player.chapters.length > 1 ? ` · ${chapterIndex + 1}/${player.chapters.length}` : ''}
-          {player.session && player.session.items.length > 1 && itemIndex >= 0 ? ` · kniha ${itemIndex + 1}/${player.session.items.length}` : ''}
+          {player.session && player.session.items.length > 1 && itemIndex >= 0 ? ` · ${t('mobile.player.bookOf', { index: itemIndex + 1, total: player.session.items.length })}` : ''}
         </Muted>
       </View>
 
@@ -100,10 +102,10 @@ export default function PlayerScreen() {
       </View>
 
       <View style={styles.controls}>
-        <Pressable hitSlop={10} onPress={() => void player.prevChapter()} accessibilityLabel="Předchozí kapitola">
+        <Pressable hitSlop={10} onPress={() => void player.prevChapter()} accessibilityLabel={t('mobile.player.prevChapter')}>
           <SkipBack color={colors.foreground} size={28} />
         </Pressable>
-        <Pressable hitSlop={10} onPress={() => void player.skip(-SKIP_BACK)} accessibilityLabel={`Zpět o ${SKIP_BACK} s`} style={styles.skip}>
+        <Pressable hitSlop={10} onPress={() => void player.skip(-SKIP_BACK)} accessibilityLabel={t('mobile.player.skipBack', { seconds: SKIP_BACK })} style={styles.skip}>
           <RotateCcw color={colors.foreground} size={30} />
           <Body size={10} medium style={styles.skipLabel}>
             {SKIP_BACK}
@@ -112,7 +114,7 @@ export default function PlayerScreen() {
         <Pressable
           style={[styles.playButton, { backgroundColor: colors.primary }]}
           onPress={() => void player.toggle()}
-          accessibilityLabel={player.playing ? 'Pauza' : 'Přehrát'}
+          accessibilityLabel={player.playing ? t('mobile.player.pause') : t('mobile.actions.play')}
         >
           {player.playing ? (
             <Pause color={colors.primaryForeground} size={32} fill={colors.primaryForeground} />
@@ -120,13 +122,13 @@ export default function PlayerScreen() {
             <Play color={colors.primaryForeground} size={32} fill={colors.primaryForeground} style={{ marginLeft: 4 }} />
           )}
         </Pressable>
-        <Pressable hitSlop={10} onPress={() => void player.skip(SKIP_FORWARD)} accessibilityLabel={`Vpřed o ${SKIP_FORWARD} s`} style={styles.skip}>
+        <Pressable hitSlop={10} onPress={() => void player.skip(SKIP_FORWARD)} accessibilityLabel={t('mobile.player.skipForward', { seconds: SKIP_FORWARD })} style={styles.skip}>
           <RotateCw color={colors.foreground} size={30} />
           <Body size={10} medium style={styles.skipLabel}>
             {SKIP_FORWARD}
           </Body>
         </Pressable>
-        <Pressable hitSlop={10} onPress={() => void player.nextChapter()} accessibilityLabel="Další kapitola">
+        <Pressable hitSlop={10} onPress={() => void player.nextChapter()} accessibilityLabel={t('mobile.player.nextChapter')}>
           <SkipForward color={colors.foreground} size={28} />
         </Pressable>
       </View>

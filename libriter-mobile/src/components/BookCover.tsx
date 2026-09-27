@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import { Image } from 'expo-image'
 import { BookHeadphones } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import { apiUrl, type Book } from 'libriter-shared'
 
 import { bookDirectory } from '@/downloads/downloadManager'
@@ -35,6 +36,7 @@ export function BookCover({
   rounded?: number
   style?: StyleProp<ViewStyle>
 }) {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const [failed, setFailed] = useState(false)
 
@@ -67,7 +69,7 @@ export function BookCover({
             transition={150}
             cachePolicy="disk"
             onError={() => setFailed(true)}
-            accessibilityLabel={`Obálka knihy ${book.title}`}
+            accessibilityLabel={t('mobile.bookCover.label', { title: book.title })}
           />
         </>
       ) : (

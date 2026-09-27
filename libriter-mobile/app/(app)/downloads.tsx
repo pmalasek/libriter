@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Download, Trash2 } from 'lucide-react-native'
-import { formatBytes } from 'libriter-shared'
+import { useTranslation } from 'react-i18next'
+import { formatBytes, t } from 'libriter-shared'
 
 import { BookCover } from '@/components/BookCover'
 import { EmptyState } from '@/components/EmptyState'
@@ -16,6 +17,7 @@ import { radius, spacing, useTheme } from '@/theme'
 
 /** Co je v telefonu: hotové knihy i rozpracované stahování. */
 export default function DownloadsScreen() {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const downloads = useDownloads()
   const books = useBooks()
@@ -27,11 +29,14 @@ export default function DownloadsScreen() {
 
   return (
     <Screen>
-      <BackButton label="Zpět" />
-      <PageHeader title="Stažené" description={rows.length > 0 ? `Zabráno ${formatBytes(total)}` : 'Knihy uložené v telefonu'} />
+      <BackButton label={t('common.back')} />
+      <PageHeader
+        title={t('mobile.downloads.title')}
+        description={rows.length > 0 ? t('mobile.downloads.used', { size: formatBytes(total) }) : t('mobile.downloads.description')}
+      />
 
       {rows.length === 0 ? (
-        <EmptyState icon={Download} title="Zatím nic staženého" description="V detailu knihy najdete tlačítko Stáhnout." />
+        <EmptyState icon={Download} title={t('mobile.downloads.emptyTitle')} description={t('mobile.downloads.emptyDescription')} />
       ) : (
         <View style={[styles.list, { backgroundColor: colors.card, borderColor: colors.border }]}>
           {rows.map((row, index) => {
@@ -53,11 +58,11 @@ export default function DownloadsScreen() {
                 )}
                 <View style={{ flex: 1, minWidth: 0 }}>
                   <Body medium numberOfLines={1}>
-                    {book?.title ?? 'Neznámá kniha'}
+                    {book?.title ?? t('mobile.downloads.unknownBook')}
                   </Body>
                   <Muted size={12}>{describe(row)}</Muted>
                 </View>
-                <Pressable hitSlop={10} onPress={() => void downloadManager.remove(row.bookId)} accessibilityLabel="Smazat z telefonu">
+                <Pressable hitSlop={10} onPress={() => void downloadManager.remove(row.bookId)} accessibilityLabel={t('mobile.downloads.remove')}>
                   <Trash2 color={colors.destructive} size={18} />
                 </Pressable>
               </Pressable>
@@ -72,15 +77,15 @@ export default function DownloadsScreen() {
 function describe(row: DownloadRow): string {
   switch (row.state) {
     case 'complete':
-      return `V telefonu · ${formatBytes(row.bytesDone)}`
+      return t('mobile.downloads.state.complete', { size: formatBytes(row.bytesDone) })
     case 'downloading':
-      return `Stahuji · ${formatBytes(row.bytesDone)} z ${formatBytes(row.bytesTotal)}`
+      return t('mobile.downloads.state.downloading', { done: formatBytes(row.bytesDone), total: formatBytes(row.bytesTotal) })
     case 'queued':
-      return 'Ve frontě'
+      return t('mobile.downloads.state.queued')
     case 'paused':
-      return row.error !== '' ? `Pozastaveno · ${row.error}` : 'Pozastaveno'
+      return row.error !== '' ? t('mobile.downloads.state.pausedWithReason', { reason: row.error }) : t('mobile.downloads.state.paused')
     case 'error':
-      return `Chyba · ${row.error}`
+      return t('mobile.downloads.state.error', { error: row.error })
   }
 }
 

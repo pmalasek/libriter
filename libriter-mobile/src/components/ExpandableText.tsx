@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Pressable, View, type NativeSyntheticEvent, type TextLayoutEventData } from 'react-native'
+import { useTranslation } from 'react-i18next'
 
 import { fonts, spacing, useTheme } from '@/theme'
 import { Body } from './ui/Text'
@@ -10,6 +11,7 @@ import { Body } from './ui/Text'
  * pod okraj obrazovky.
  */
 export function ExpandableText({ text, lines = 4 }: { text: string; lines?: number }) {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const [open, setOpen] = useState(false)
   const [overflows, setOverflows] = useState(false)
@@ -26,7 +28,7 @@ export function ExpandableText({ text, lines = 4 }: { text: string; lines?: numb
       {overflows ? (
         <Pressable onPress={() => setOpen((value) => !value)} hitSlop={8}>
           <Body size={13} style={{ color: colors.primary, fontFamily: fonts.sansMedium }}>
-            {open ? 'Zobrazit méně' : 'Zobrazit více'}
+            {open ? t('mobile.expandableText.less') : t('mobile.expandableText.more')}
           </Body>
         </Pressable>
       ) : null}

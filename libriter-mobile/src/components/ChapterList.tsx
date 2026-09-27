@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
 import { ChevronDown, Pause, Play } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import { chapterCount, formatClock, formatDuration, type Book } from 'libriter-shared'
 
 import { useChapters } from '@/data/hooks'
@@ -14,6 +15,7 @@ import { Body, Muted, SectionTitle } from './ui/Text'
  * rozpis; načítají se až po rozbalení, jako na webu.
  */
 export function ChapterList({ book }: { book: Book }) {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const [open, setOpen] = useState(false)
   const chapters = useChapters(book.id, open)
@@ -29,7 +31,7 @@ export function ChapterList({ book }: { book: Book }) {
           style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }}
         />
         <View style={{ flex: 1 }}>
-          <SectionTitle>Kapitoly</SectionTitle>
+          <SectionTitle>{t('mobile.chapters.title')}</SectionTitle>
           <Muted size={13}>
             {chapterCount(book.chapter_count)} · {formatDuration(book.duration_seconds)}
           </Muted>
@@ -43,7 +45,7 @@ export function ChapterList({ book }: { book: Book }) {
           ) : chapters.isError ? (
             <ErrorState error={chapters.error} onRetry={() => void chapters.refetch()} />
           ) : list.length === 0 ? (
-            <Muted size={14}>Kniha zatím nemá načtené kapitoly. Soubory přidá scanner při dalším průchodu knihovnou.</Muted>
+            <Muted size={14}>{t('mobile.chapters.empty')}</Muted>
           ) : (
             <View style={[styles.list, { borderColor: colors.border }]}>
               {list.map((chapter, index) => {
@@ -73,7 +75,9 @@ export function ChapterList({ book }: { book: Book }) {
                     <Pressable
                       hitSlop={8}
                       onPress={() => (isCurrent ? void player.toggle() : void player.playBook(book.id, chapter.id))}
-                      accessibilityLabel={playingThis ? `Pozastavit kapitolu ${chapter.title}` : `Přehrát kapitolu ${chapter.title}`}
+                      accessibilityLabel={
+                        playingThis ? t('mobile.chapters.pause', { title: chapter.title }) : t('mobile.chapters.play', { title: chapter.title })
+                      }
                       style={styles.play}
                     >
                       {playingThis ? <Pause color={colors.foreground} size={16} /> : <Play color={colors.foreground} size={16} />}

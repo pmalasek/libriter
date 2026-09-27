@@ -6,6 +6,7 @@ import {
   setAuthToken,
   setBaseUrl,
   setUnauthorizedHandler,
+  t,
   type AuthResponse,
   type LoginRequest,
   type MobileToken,
@@ -80,7 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback<AuthValue['signIn']>(async (input) => {
     const url = input.serverUrl.trim().replace(/\/+$/, '')
-    if (!url) throw new ApiError(0, 'Zadejte adresu serveru')
+    if (!url) throw new ApiError(0, t('mobile.auth.serverUrlRequired'))
 
     // Adresa musí platit dřív, než se pošle první požadavek.
     setBaseUrl(url)
@@ -101,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       mobile = await apiFetch<MobileToken>('/auth/mobile-token', {
         method: 'POST',
-        json: { device_name: Device.deviceName ?? Device.modelName ?? 'mobil' },
+        json: { device_name: Device.deviceName ?? Device.modelName ?? t('mobile.auth.defaultDeviceName') },
       })
     } catch (error: unknown) {
       // Přihlášení prošlo, ale server tenhle endpoint nezná: běží na starší
@@ -111,7 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setAuthToken(null)
         throw new ApiError(
           404,
-          'Server je starší verze a mobilní aplikaci zatím nepodporuje. Aktualizujte Libriter na serveru.',
+          t('mobile.auth.serverTooOld'),
         )
       }
       setAuthToken(null)

@@ -2,6 +2,7 @@ import { memo, useCallback, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Users } from 'lucide-react-native'
+import { useTranslation } from 'react-i18next'
 import {
   authorSortOptions,
   bookCount,
@@ -30,6 +31,7 @@ const COLUMNS: Record<ViewMode, number> = { tiles: 1, small: 2, list: 1 }
 
 /** Seznam autorů – AuthorsPage z webu. */
 export default function AuthorsScreen() {
+  const { t } = useTranslation()
   const authors = useAuthors()
   const books = useBooks()
   const prefs = useAuthorListPrefs()
@@ -81,11 +83,11 @@ export default function AuthorsScreen() {
   const header = (
     <PageHeader
       panel
-      title="Autoři"
-      description={authors.data ? `${withBooks.length} celkem` : undefined}
+      title={t('mobile.authors.title')}
+      description={authors.data ? t('mobile.list.total', { count: withBooks.length }) : undefined}
       actions={
         <>
-          <SearchInput value={query} onChangeText={setQuery} placeholder="Hledat podle jména…" />
+          <SearchInput value={query} onChangeText={setQuery} placeholder={t('mobile.authors.search')} />
           <View style={styles.controls}>
             <SortControl
               options={authorSortOptions()}
@@ -117,13 +119,13 @@ export default function AuthorsScreen() {
         ) : (
           <EmptyState
             icon={Users}
-            title={authors.isPending ? 'Načítám…' : query ? 'Nic nenalezeno' : 'Zatím žádní autoři'}
+            title={authors.isPending ? t('common.loading') : query ? t('mobile.list.noResults') : t('mobile.authors.emptyTitle')}
             description={
               authors.isPending
                 ? undefined
                 : query
-                  ? 'Zkuste jiný hledaný výraz.'
-                  : 'Autoři vznikají automaticky při načtení audio souborů scannerem.'
+                  ? t('mobile.list.tryAnotherQuery')
+                  : t('mobile.authors.emptyDescription')
             }
           />
         )
@@ -144,6 +146,8 @@ const AuthorItem = memo(function AuthorItem({
   name: string
   count: number
 }) {
+  // Překreslení při změně jazyka (počet knih).
+  useTranslation()
   const { colors } = useTheme()
   const router = useRouter()
   const details = [lifeYears(author), bookCount(count)].filter(Boolean).join(' · ')
