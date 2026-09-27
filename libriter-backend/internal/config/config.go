@@ -56,6 +56,30 @@ type StorageConfig struct {
 	MaxUploadMB int64 // limit jednoho importu (součet nahraných souborů)
 }
 
+// EnsureDirs vytvoří datové adresáře, které ještě neexistují. AUDIO_ROOT se
+// vytváří jen jako relativní cesta (výchozí ./data/books) – absolutní cesta
+// obvykle vede na externí disk a její chybění znamená nepřipojený disk.
+// Prázdný adresář by se pak tvářil jako prázdná knihovna na systémovém disku.
+func (s StorageConfig) EnsureDirs() error {
+	dirs := []struct{ name, path string }{
+		{"COVER_ROOT", s.CoverRoot},
+		{"AUTHOR_IMAGE_ROOT", s.AuthorImageRoot},
+		{"IMPORT_ROOT", s.ImportRoot},
+	}
+	if !filepath.IsAbs(s.AudioRoot) {
+		dirs = append(dirs, struct{ name, path string }{"AUDIO_ROOT", s.AudioRoot})
+	}
+	for _, d := range dirs {
+		if d.path == "" {
+			continue
+		}
+		if err := os.MkdirAll(d.path, 0o755); err != nil {
+			return fmt.Errorf("vytvoření %s %s: %w", d.name, d.path, err)
+		}
+	}
+	return nil
+}
+
 // LibraryConfig jsou výchozí hodnoty nastavení knihovny. Stejně jako u zdrojů
 // metadat platí jen do chvíle, kdy admin nastavení uloží v administraci.
 type LibraryConfig struct {

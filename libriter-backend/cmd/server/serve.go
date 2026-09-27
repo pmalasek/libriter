@@ -40,6 +40,9 @@ func runServe() error {
 	if err != nil {
 		return fmt.Errorf("konfigurace: %w", err)
 	}
+	if err := cfg.Storage.EnsureDirs(); err != nil {
+		return fmt.Errorf("datové adresáře: %w", err)
+	}
 
 	slog.Info("libriter", "verze", version.String())
 
