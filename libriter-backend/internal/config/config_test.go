@@ -37,3 +37,15 @@ func TestEnsureDirs(t *testing.T) {
 		t.Errorf("relativní AUDIO_ROOT nebyl vytvořen: %v", err)
 	}
 }
+
+func TestAuthorImageRootDefaultsNextToCovers(t *testing.T) {
+	t.Chdir(t.TempDir())
+	t.Setenv("LIBRITER_ENV_FILE", filepath.Join(t.TempDir(), "missing.env"))
+	t.Setenv("COVER_ROOT", "/opt/libriter-demo/data/covers")
+	t.Setenv("AUTHOR_IMAGE_ROOT", "")
+
+	cfg := load()
+	if want := "/opt/libriter-demo/data/author-images"; cfg.Storage.AuthorImageRoot != want {
+		t.Errorf("AuthorImageRoot = %q, chci %q", cfg.Storage.AuthorImageRoot, want)
+	}
+}

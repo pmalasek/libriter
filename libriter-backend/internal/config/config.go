@@ -149,7 +149,7 @@ func load() *Config {
 		Storage: StorageConfig{
 			AudioRoot:       env.path("AUDIO_ROOT", "/var/lib/libriter/audio"),
 			CoverRoot:       env.path("COVER_ROOT", "/var/lib/libriter/covers"),
-			AuthorImageRoot: env.path("AUTHOR_IMAGE_ROOT", "/var/lib/libriter/author-images"),
+			AuthorImageRoot: env.path("AUTHOR_IMAGE_ROOT", ""),
 			ImportRoot:      env.path("IMPORT_ROOT", ""),
 			MaxUploadMB:     int64(envInt("MAX_UPLOAD_MB", 3072)),
 		},
@@ -162,6 +162,11 @@ func load() *Config {
 			DefaultLanguage: strings.ToLower(strings.TrimSpace(envStr("DEFAULT_BOOK_LANGUAGE", "cs"))),
 		},
 		EnvFile: env.file,
+	}
+	// Fotky autorů vedle obálek – kdo nastaví jen COVER_ROOT, nechce fotky
+	// autorů jinde než ostatní obrázky.
+	if cfg.Storage.AuthorImageRoot == "" {
+		cfg.Storage.AuthorImageRoot = filepath.Join(filepath.Dir(cfg.Storage.CoverRoot), "author-images")
 	}
 	// Staging importu vedle knihovny: mimo ni, ale nejspíš na stejném disku.
 	if cfg.Storage.ImportRoot == "" {
