@@ -1,4 +1,4 @@
-import type { Author } from './types'
+import type { Author, Language } from './types'
 
 /** Písmena, která nejsou jen základ + diakritika, takže je NFD nerozloží. */
 const FOLDED_LETTERS: Record<string, string> = {
@@ -32,6 +32,17 @@ export function foldName(value: string): string {
  */
 export function sameName(a: string, b: string): boolean {
   return foldName(a) === foldName(b)
+}
+
+/**
+ * Český název jazyka pro zobrazení („Němčina“). V textu se píše malým
+ * písmenem, samostatně stojící popisek velkým. Kód mimo číselník (nebo
+ * číselník ještě nenačtený) se ukáže jako kód velkými písmeny.
+ */
+export function languageLabel(code: string, languages: Language[] | undefined): string {
+  const language = languages?.find((l) => l.code === code)
+  if (!language) return code.toUpperCase()
+  return language.name_cs.charAt(0).toLocaleUpperCase('cs') + language.name_cs.slice(1)
 }
 
 /**

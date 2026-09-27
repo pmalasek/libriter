@@ -5,16 +5,11 @@ import type { Language } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { foldName } from '@/lib/format'
+import { foldName, languageLabel } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 /** Jazyky, ve kterých je většina knihovny – v seznamu jsou nahoře. */
 const COMMON = ['cs', 'sk', 'en', 'de']
-
-/** Český název jazyka se v textu píše malým písmenem, v seznamu velkým. */
-function capitalize(value: string): string {
-  return value.charAt(0).toLocaleUpperCase('cs') + value.slice(1)
-}
 
 /**
  * Výběr jazyka knihy z číselníku (ISO 639-1). Hledá se v českém názvu,
@@ -53,8 +48,6 @@ export function LanguageSelect({
     )
   }, [sorted, query])
 
-  const current = sorted.find((l) => l.code === value)
-
   function pick(language: Language) {
     onChange(language.code)
     setOpen(false)
@@ -80,7 +73,7 @@ export function LanguageSelect({
         >
           <span className="truncate">
             {/* Kód mimo číselník (starší data) se ukáže tak, jak je uložený. */}
-            {current ? capitalize(current.name_cs) : value || 'Vyberte jazyk…'}
+            {value ? languageLabel(value, languages.data) : 'Vyberte jazyk…'}
           </span>
           <ChevronsUpDownIcon className="opacity-50" />
         </Button>
@@ -122,7 +115,7 @@ export function LanguageSelect({
                     className={cn('size-4 shrink-0', language.code !== value && 'invisible')}
                   />
                   <span className="truncate">
-                    {capitalize(language.name_cs)}
+                    {languageLabel(language.code, [language])}
                     {language.name_native !== language.name_cs ? (
                       <span className="text-muted-foreground"> · {language.name_native}</span>
                     ) : null}

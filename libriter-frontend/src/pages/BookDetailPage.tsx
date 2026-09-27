@@ -22,6 +22,7 @@ import {
   useBook,
   useBookProgress,
   useBooks,
+  useLanguages,
   useSeriesOne,
   useSeriesTitle,
   useDeleteBook,
@@ -42,7 +43,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
-import { chapterCount, formatClock, formatDate, formatDuration } from '@/lib/format'
+import { chapterCount, formatClock, formatDate, formatDuration, languageLabel } from '@/lib/format'
 import { sortBooks, useBookListPrefs } from '@/lib/sorting'
 import { usePlayer } from '@/player/playerContext'
 
@@ -57,6 +58,7 @@ export function BookDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const { sortKey, sortDir } = useBookListPrefs()
   const seriesTitle = useSeriesTitle()
+  const languages = useLanguages()
   const player = usePlayer()
   const sessions = useSessions()
   const progress = useBookProgress()
@@ -226,7 +228,7 @@ export function BookDetailPage() {
               ) : null}
               <Badge variant="outline">
                 <LanguagesIcon />
-                {data.language.toUpperCase()}
+                {languageLabel(data.language, languages.data)}
               </Badge>
               {bookStatus === 'finished' ? (
                 <Badge variant="highlight">

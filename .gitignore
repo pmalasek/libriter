@@ -1,5 +1,6 @@
-# Data directory
-data/
+# Data directory (databáze, obálky a audio backendu). Jen tahle cesta –
+# obecné „data/“ chytalo i zdrojáky libriter-mobile/src/data.
+/libriter-backend/data/
 
 # Environment variables
 .env

@@ -28,7 +28,6 @@ import { Body, Eyebrow, Heading, Muted, Title } from '@/components/ui/Text'
 import { useBookProgress, useBooks, useSeriesById, useSeriesList, useSessions } from '@/data/hooks'
 import { usePullRefresh } from '@/data/usePullRefresh'
 import { usePlayer } from '@/player/PlayerProvider'
-import { syncEngine } from '@/sync/syncEngine'
 import { spacing, useTheme } from '@/theme'
 
 /** Kolik položek se vejde do police, než začne být rolování únavné. */
@@ -106,9 +105,7 @@ export default function HomeScreen() {
     [seriesList.data, seriesBooksById],
   )
 
-  const pull = usePullRefresh(() =>
-    Promise.all([syncEngine.syncNow(), books.refetch(), sessions.refetch(), progress.refetch()]),
-  )
+  const pull = usePullRefresh(() => Promise.all([books.refetch(), sessions.refetch(), progress.refetch()]))
 
   const greeting = user?.display_name ? `Vítejte zpět, ${user.display_name}` : 'Vítejte zpět'
 

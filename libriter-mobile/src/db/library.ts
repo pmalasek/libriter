@@ -1,4 +1,4 @@
-import type { Author, Book, BookProgress, Chapter, PlaySession, Series } from 'libriter-shared'
+import type { Author, Book, BookProgress, Chapter, Language, PlaySession, Series } from 'libriter-shared'
 
 import { openDb } from './schema'
 
@@ -287,6 +287,29 @@ export async function listBookProgress(): Promise<BookProgress[]> {
   const db = await openDb()
   const rows = await db.getAllAsync<{ json: string }>('SELECT json FROM book_progress')
   return rows.map((row) => JSON.parse(row.json) as BookProgress)
+}
+
+// --- jazyky ---
+
+/** Číselník se mění jen s migrací backendu, takže se nahrazuje celý. */
+export async function replaceLanguages(list: Language[]): Promise<void> {
+  const db = await openDb()
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('DELETE FROM languages')
+    for (const language of list) {
+      await db.runAsync(
+        'INSERT INTO languages (code, json) VALUES (?, ?)',
+        language.code,
+        JSON.stringify(language),
+      )
+    }
+  })
+}
+
+export async function listLanguages(): Promise<Language[]> {
+  const db = await openDb()
+  const rows = await db.getAllAsync<{ json: string }>('SELECT json FROM languages')
+  return rows.map((row) => JSON.parse(row.json) as Language)
 }
 
 /** Smaže z tabulky řádky, které v seznamu ze serveru nejsou. */

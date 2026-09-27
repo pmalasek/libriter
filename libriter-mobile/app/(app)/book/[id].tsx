@@ -16,7 +16,7 @@ import {
   Star,
   Trash2,
 } from 'lucide-react-native'
-import { chapterCount, formatBytes, formatClock, formatDate, formatDuration, sortBooks } from 'libriter-shared'
+import { chapterCount, formatBytes, formatClock, formatDate, formatDuration, languageLabel, sortBooks } from 'libriter-shared'
 
 import { BookCover, coverUrl } from '@/components/BookCover'
 import { BookGrid } from '@/components/BookGrid'
@@ -34,6 +34,7 @@ import {
   useBookProgress,
   useBooks,
   useChapters,
+  useLanguages,
   useDownloads,
   useSeriesOne,
   useSeriesTitle,
@@ -59,6 +60,7 @@ export default function BookScreen() {
   const setFinished = useSetBookFinished()
   const downloads = useDownloads()
   const chapters = useChapters(id)
+  const languages = useLanguages()
 
   const status = progress.status(id)
   const finishedAt = progress.map.get(id)?.finished_at
@@ -143,7 +145,7 @@ export default function BookScreen() {
               <Badge variant="highlight" icon={Clock} label={formatDuration(data.duration_seconds)} />
               {data.narrator ? <Badge icon={Mic} label={data.narrator} /> : null}
               {data.published_year ? <Badge icon={Calendar} label={String(data.published_year)} /> : null}
-              <Badge variant="outline" icon={Languages} label={data.language.toUpperCase()} />
+              <Badge variant="outline" icon={Languages} label={languageLabel(data.language, languages.data)} />
               {status === 'finished' ? (
                 <Badge variant="highlight" icon={CheckCircle2} label={finishedAt ? `Doposlechnuto ${formatDate(finishedAt)}` : 'Doposlechnuto'} />
               ) : status === 'started' ? (

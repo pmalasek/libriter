@@ -10,6 +10,7 @@ import {
   type BookProgress,
   type Chapter,
   type CreateSessionRequest,
+  type Language,
   type PlaySession,
   type Series,
   type SyncResponse,
@@ -26,6 +27,7 @@ import {
   listLocalOnlySessions,
   replaceBookProgress,
   replaceChapters,
+  replaceLanguages,
   replaceSessions,
   saveSessionMirror,
   upsertAuthors,
@@ -278,11 +280,12 @@ class SyncEngine {
   }
 
   private async pullLibrary(): Promise<void> {
-    const [books, authors, series, progress] = await Promise.all([
+    const [books, authors, series, progress, languages] = await Promise.all([
       apiFetch<Book[] | null>('/books').then(asList),
       apiFetch<Author[] | null>('/authors').then(asList),
       apiFetch<Series[] | null>('/series').then(asList),
       apiFetch<BookProgress[] | null>('/books/progress').then(asList),
+      apiFetch<Language[] | null>('/languages').then(asList),
     ])
 
     // Kapitoly stojí jeden požadavek na knihu, proto se tahají jen tam, kde
@@ -297,6 +300,7 @@ class SyncEngine {
     await upsertAuthors(authors)
     await upsertSeries(series)
     await replaceBookProgress(progress)
+    await replaceLanguages(languages)
     await deleteMissingAuthors(authors.map((author) => author.id))
     await deleteMissingSeries(series.map((item) => item.id))
 

@@ -14,7 +14,7 @@ import * as SQLite from 'expo-sqlite'
 const DB_NAME = 'libriter.db'
 
 /** Verze schématu; zvýšit při každé změně a doplnit krok v `migrate`. */
-const SCHEMA_VERSION = 2
+const SCHEMA_VERSION = 3
 
 let handle: SQLite.SQLiteDatabase | null = null
 
@@ -136,6 +136,17 @@ async function migrate(db: SQLite.SQLiteDatabase): Promise<void> {
       CREATE TABLE IF NOT EXISTS book_progress (
         book_id TEXT PRIMARY KEY,
         json    TEXT NOT NULL
+      );
+    `)
+  }
+
+  if (current < 3) {
+    // Číselník jazyků (ISO 639-1) – detail knihy podle něj ukazuje český
+    // název jazyka místo kódu, i v letadle.
+    await db.execAsync(`
+      CREATE TABLE IF NOT EXISTS languages (
+        code TEXT PRIMARY KEY,
+        json TEXT NOT NULL
       );
     `)
   }
