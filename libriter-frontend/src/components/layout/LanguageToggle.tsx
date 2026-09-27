@@ -22,13 +22,15 @@ export function LanguageToggle({ className }: { className?: string }) {
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
-          size="icon"
-          aria-label={t('language.label')}
+          aria-label={`${t('language.label')}: ${UI_LANGUAGE_NAMES[language]}`}
           title={isSaving ? t('language.saving') : t('language.label')}
           aria-busy={isSaving}
-          className={cn('shrink-0', className)}
+          className={cn('shrink-0 gap-1.5 px-2', className)}
         >
           <LanguagesIcon className={isSaving ? 'animate-pulse' : undefined} />
+          <span aria-hidden="true" className="text-xs font-semibold uppercase tracking-wide">
+            {language}
+          </span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">

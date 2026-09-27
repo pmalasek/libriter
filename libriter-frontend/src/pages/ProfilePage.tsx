@@ -5,8 +5,8 @@ import { loginHint, LOGIN_PATTERN, roleLabel } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { PageHeader } from '@/components/PageHeader'
 import { useTranslation } from 'react-i18next'
-import { LanguageToggle } from '@/components/layout/LanguageToggle'
-import { ThemeToggle } from '@/components/layout/ThemeToggle'
+import { AppearanceSettings } from '@/components/layout/AppearanceSettings'
+import { UiLanguageSelect } from '@/components/layout/UiLanguageSelect'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -132,25 +132,23 @@ export function ProfilePage() {
       </Card>
 
       <Card className="mt-6">
-        <CardHeader className="flex-row items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <CardTitle>{t('profile.appearance.title')}</CardTitle>
-            <CardDescription>
-              {t('profile.appearance.description')}
-            </CardDescription>
-          </div>
-          <ThemeToggle />
+        <CardHeader>
+          <CardTitle>{t('profile.appearance.title')}</CardTitle>
+          <CardDescription>{t('profile.appearance.description')}</CardDescription>
         </CardHeader>
+        <CardContent>
+          <AppearanceSettings />
+        </CardContent>
       </Card>
 
       <Card className="mt-6">
-        <CardHeader className="flex-row items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <CardTitle>{t('language.title')}</CardTitle>
-            <CardDescription>{t('language.description')}</CardDescription>
-          </div>
-          <LanguageToggle />
+        <CardHeader>
+          <CardTitle>{t('language.title')}</CardTitle>
+          <CardDescription>{t('language.description')}</CardDescription>
         </CardHeader>
+        <CardContent>
+          <UiLanguageSelect />
+        </CardContent>
       </Card>
 
       <Card className="mt-6">
