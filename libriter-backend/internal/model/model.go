@@ -105,18 +105,26 @@ type Chapter struct {
 	SizeBytes int64 `json:"size_bytes"`
 }
 
+// UILanguages jsou podporované jazyky rozhraní; první je výchozí.
+var UILanguages = []string{"en", "cs", "fr", "de", "es"}
+
+// DefaultUILanguage je jazyk rozhraní pro nové uživatele.
+const DefaultUILanguage = "en"
+
 type User struct {
 	ID          uuid.UUID `json:"id"`
 	DisplayName string    `json:"display_name"`
 	Email       string    `json:"email"`
 	// Login je volitelné přihlašovací jméno; prázdné = uživatel se hlásí jen e-mailem.
-	Login        string    `json:"login"`
-	PasswordHash string    `json:"-"`
-	Role         string    `json:"role"`
-	ColorScheme  string    `json:"color_scheme"`
-	ThemeMode    string    `json:"theme_mode"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	Login        string `json:"login"`
+	PasswordHash string `json:"-"`
+	Role         string `json:"role"`
+	ColorScheme  string `json:"color_scheme"`
+	ThemeMode    string `json:"theme_mode"`
+	// UILanguage je jazyk uživatelského rozhraní (cs, en, fr, de, es).
+	UILanguage string    `json:"ui_language"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // AuditEntry je záznam administrativní akce. ActorEmail je snímek z doby

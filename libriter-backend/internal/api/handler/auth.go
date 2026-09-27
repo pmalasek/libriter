@@ -59,6 +59,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Email       string `json:"email"`
 		Login       string `json:"login"`
 		Password    string `json:"password"`
+		UILanguage  string `json:"ui_language"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
@@ -73,7 +74,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, token, err := h.svc.Register(r.Context(), req.DisplayName, req.Email, req.Login, req.Password, settings.DefaultRole)
+	user, token, err := h.svc.Register(r.Context(), req.DisplayName, req.Email, req.Login, req.Password, settings.DefaultRole, req.UILanguage)
+	if errors.Is(err, service.ErrInvalidLanguage) {
+		writeError(w, http.StatusBadRequest, "nepodporovaný jazyk rozhraní")
+		return
+	}
 	if errors.Is(err, service.ErrEmailTaken) {
 		writeError(w, http.StatusConflict, "email je již registrován")
 		return

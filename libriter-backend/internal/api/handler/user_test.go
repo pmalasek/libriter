@@ -106,3 +106,96 @@ func TestUserAppearanceRejectsUnauthorizedAndInvalidChanges(t *testing.T) {
 		t.Fatalf("rejected request changed profile: %+v", user)
 	}
 }
+
+func TestUserLanguageDefaultsAndPersists(t *testing.T) {
+	env := newAdminTestEnv(t)
+	token, id := env.login(t, "lang@example.com", model.RoleReader)
+	path := "/users/" + id
+
+	user, err := env.users.GetByEmail(context.Background(), "lang@example.com")
+	if err != nil || user.UILanguage != model.DefaultUILanguage {
+		t.Fatalf("default language: %+v, %v", user, err)
+	}
+	for _, lang := range model.UILanguages {
+		rec := env.do(t, http.MethodPut, path+"/language", token, map[string]string{"ui_language": lang})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("save %s: %d %s", lang, rec.Code, rec.Body.String())
+		}
+		var saved model.User
+		if err := json.Unmarshal(rec.Body.Bytes(), &saved); err != nil {
+			t.Fatal(err)
+		}
+		if saved.UILanguage != lang || saved.Role != model.RoleReader {
+			t.Fatalf("saved language: %+v", saved)
+		}
+	}
+
+	// Nové přihlášení vrací uložený jazyk.
+	user, _, err = env.auth.Login(context.Background(), "lang@example.com", "tajneheslo")
+	if err != nil || user.UILanguage != "es" {
+		t.Fatalf("login language: %+v, %v", user, err)
+	}
+}
+
+func TestUserLanguageRejectsUnauthorizedAndInvalidChanges(t *testing.T) {
+	env := newAdminTestEnv(t)
+	token, id := env.login(t, "reader@example.com", model.RoleReader)
+	otherToken, _ := env.login(t, "other@example.com", model.RoleReader)
+	adminToken, _ := env.login(t, "admin@example.com", model.RoleAdmin)
+	path := "/users/" + id + "/language"
+	for _, tc := range []struct {
+		token  string
+		status int
+	}{
+		{"", http.StatusUnauthorized}, {otherToken, http.StatusForbidden}, {adminToken, http.StatusForbidden},
+	} {
+		if rec := env.do(t, http.MethodPut, path, tc.token, map[string]string{"ui_language": "cs"}); rec.Code != tc.status {
+			t.Errorf("authorization: got %d, want %d", rec.Code, tc.status)
+		}
+	}
+	for _, body := range []any{
+		map[string]string{"ui_language": "pl"},
+		map[string]string{"ui_language": "CS"},
+		map[string]string{"ui_language": ""},
+		map[string]string{},
+		map[string]any{"ui_language": 42},
+	} {
+		if rec := env.do(t, http.MethodPut, path, token, body); rec.Code != http.StatusBadRequest {
+			t.Errorf("invalid input %+v: got %d", body, rec.Code)
+		}
+	}
+	user, err := env.users.GetByEmail(context.Background(), "reader@example.com")
+	if err != nil || user.UILanguage != model.DefaultUILanguage {
+		t.Fatalf("rejected request changed profile: %+v, %v", user, err)
+	}
+}
+
+func TestRegisterStoresUILanguage(t *testing.T) {
+	env := newAdminTestEnv(t)
+	register := func(email, lang string) (int, model.User) {
+		t.Helper()
+		body := map[string]string{"display_name": "Nový", "email": email, "password": "tajneheslo"}
+		if lang != "" {
+			body["ui_language"] = lang
+		}
+		rec := env.do(t, http.MethodPost, "/auth/register", "", body)
+		var resp struct {
+			User model.User `json:"user"`
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &resp)
+		return rec.Code, resp.User
+	}
+
+	if code, u := register("de@example.com", "de"); code != http.StatusCreated || u.UILanguage != "de" || u.Role != model.RoleReader {
+		t.Errorf("register de: %d %+v", code, u)
+	}
+	if code, u := register("default@example.com", ""); code != http.StatusCreated || u.UILanguage != model.DefaultUILanguage {
+		t.Errorf("register default: %d %+v", code, u)
+	}
+	if code, _ := register("bad@example.com", "xx"); code != http.StatusBadRequest {
+		t.Errorf("register invalid language: %d", code)
+	}
+	if _, err := env.users.GetByEmail(context.Background(), "bad@example.com"); err == nil {
+		t.Error("invalid language still created the user")
+	}
+}

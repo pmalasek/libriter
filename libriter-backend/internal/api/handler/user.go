@@ -143,6 +143,37 @@ func (h *UserHandler) UpdateAppearance(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// PUT /api/v1/users/{id}/language (pouze vlastní profil)
+func (h *UserHandler) UpdateLanguage(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	callerID, authenticated := middleware.UserIDFromCtx(r.Context())
+	if !authenticated || callerID != id {
+		writeError(w, http.StatusForbidden, "jazyk lze měnit pouze ve vlastním profilu")
+		return
+	}
+	var req struct {
+		UILanguage string `json:"ui_language"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		return
+	}
+	u, err := h.svc.UpdateLanguage(r.Context(), id, req.UILanguage)
+	switch {
+	case errors.Is(err, service.ErrInvalidLanguage):
+		writeError(w, http.StatusBadRequest, "nepodporovaný jazyk rozhraní")
+	case errors.Is(err, service.ErrNotFound):
+		writeError(w, http.StatusNotFound, "uživatel nenalezen")
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "jazyk se nepodařilo uložit do profilu")
+	default:
+		writeJSON(w, http.StatusOK, u)
+	}
+}
+
 // PUT /api/v1/users/{id}/password  (admin nebo vlastní profil)
 func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUID(w, r, "id")

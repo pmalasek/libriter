@@ -155,6 +155,7 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 		r.Get("/users/{id}", userH.Get)
 		r.Put("/users/{id}", userH.Update)
 		r.Put("/users/{id}/appearance", userH.UpdateAppearance)
+		r.Put("/users/{id}/language", userH.UpdateLanguage)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireRole(model.RoleReader))
 			r.Get("/books/progress", bookH.ListProgress)

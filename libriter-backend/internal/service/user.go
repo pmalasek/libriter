@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"libriter/internal/model"
 	"libriter/internal/storage"
@@ -90,6 +91,18 @@ func (u *UserService) UpdateAppearance(ctx context.Context, id uuid.UUID, colorS
 		return nil, fmt.Errorf("%w: neznámý režim zobrazení", ErrInvalidSetting)
 	}
 	usr, err := u.store.UpdateUserAppearance(ctx, id, colorScheme, themeMode)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	return usr, err
+}
+
+// UpdateLanguage nastaví jazyk rozhraní uživatele.
+func (u *UserService) UpdateLanguage(ctx context.Context, id uuid.UUID, uiLanguage string) (*model.User, error) {
+	if !slices.Contains(model.UILanguages, uiLanguage) {
+		return nil, ErrInvalidLanguage
+	}
+	usr, err := u.store.UpdateUserLanguage(ctx, id, uiLanguage)
 	if errors.Is(err, storage.ErrNotFound) {
 		return nil, ErrNotFound
 	}

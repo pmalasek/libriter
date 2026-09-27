@@ -56,7 +56,7 @@ func TestAuthenticateRejectsDeletedUser(t *testing.T) {
 	ctx := context.Background()
 	store, authSvc, h := newAuthTestEnv(t)
 
-	u, token, err := authSvc.Register(ctx, "Petr", "petr@example.com", "", "tajneheslo", model.RoleReader)
+	u, token, err := authSvc.Register(ctx, "Petr", "petr@example.com", "", "tajneheslo", model.RoleReader, "")
 	if err != nil {
 		t.Fatalf("Register: %v", err)
 	}

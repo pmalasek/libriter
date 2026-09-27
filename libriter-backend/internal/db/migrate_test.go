@@ -224,6 +224,50 @@ func TestMigrateExistingUserAppearance(t *testing.T) {
 	}
 }
 
+// Stávající uživatelé po migraci 017 zůstanou v češtině, noví začínají
+// v angličtině a opakovaná migrace uloženou volbu nepřepíše.
+func TestMigrateExistingUserUILanguage(t *testing.T) {
+	conn := openLegacy(t)
+	id := uuid.New().String()
+	if _, err := conn.Exec(`INSERT INTO users (id, display_name, email, password_hash) VALUES (?1, 'Původní účet', 'legacy@example.com', 'hash')`, id); err != nil {
+		t.Fatal(err)
+	}
+	if err := Migrate(context.Background(), conn); err != nil {
+		t.Fatal(err)
+	}
+	var lang string
+	if err := conn.QueryRow(`SELECT ui_language FROM users WHERE id = ?1`, id).Scan(&lang); err != nil {
+		t.Fatal(err)
+	}
+	if lang != "cs" {
+		t.Fatalf("existing user language = %q, want cs", lang)
+	}
+
+	newID := uuid.New().String()
+	if _, err := conn.Exec(`INSERT INTO users (id, display_name, email, password_hash) VALUES (?1, 'Nový', 'new@example.com', 'hash')`, newID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`UPDATE users SET ui_language = 'de' WHERE id = ?1`, id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`UPDATE users SET ui_language = 'pl' WHERE id = ?1`, id); err == nil {
+		t.Error("unsupported language passed the CHECK constraint")
+	}
+	if err := Migrate(context.Background(), conn); err != nil {
+		t.Fatal(err)
+	}
+	var newLang string
+	if err := conn.QueryRow(`SELECT ui_language FROM users WHERE id = ?1`, id).Scan(&lang); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.QueryRow(`SELECT ui_language FROM users WHERE id = ?1`, newID).Scan(&newLang); err != nil {
+		t.Fatal(err)
+	}
+	if lang != "de" || newLang != "en" {
+		t.Fatalf("after repeated migration: existing %q, new %q", lang, newLang)
+	}
+}
+
 // Poslechové session vzniknou i v databázi z dřívější verze a přežijí
 // opakované spuštění migrací.
 func TestMigrateAddsPlaySessionsToExistingDatabase(t *testing.T) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sync"
 	"time"
 
@@ -126,10 +127,19 @@ func (a *AuthService) cachedRole(userID uuid.UUID) (string, bool) {
 
 // Register vytvoří nového uživatele s danou rolí a vrátí JWT token.
 // Roli určuje nastavení registrace (viz SettingsService), ne klient.
-func (a *AuthService) Register(ctx context.Context, displayName, email, login, password, role string) (*model.User, string, error) {
+// Prázdný uiLanguage ponechá výchozí jazyk rozhraní.
+func (a *AuthService) Register(ctx context.Context, displayName, email, login, password, role, uiLanguage string) (*model.User, string, error) {
+	if uiLanguage != "" && !slices.Contains(model.UILanguages, uiLanguage) {
+		return nil, "", ErrInvalidLanguage
+	}
 	u, err := createUser(ctx, a.store, displayName, email, login, password, role)
 	if err != nil {
 		return nil, "", err
+	}
+	if uiLanguage != "" && uiLanguage != u.UILanguage {
+		if u, err = a.store.UpdateUserLanguage(ctx, u.ID, uiLanguage); err != nil {
+			return nil, "", fmt.Errorf("set ui language: %w", err)
+		}
 	}
 
 	token, err := a.generateToken(u.ID, u.Role)
@@ -321,4 +331,5 @@ var (
 	ErrNotFound           = errors.New("not found")
 	ErrConflict           = errors.New("záznam již existuje")
 	ErrLastAdmin          = errors.New("poslední administrátor")
+	ErrInvalidLanguage    = errors.New("nepodporovaný jazyk rozhraní")
 )
