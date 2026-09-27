@@ -1,0 +1,23 @@
+export default {
+  title: 'Aktuelle Hörsitzungen',
+  inProgress_one: '{{count}} begonnen · höre dort weiter, wo du aufgehört hast',
+  inProgress_other: '{{count}} begonnen · höre dort weiter, wo du aufgehört hast',
+  nothingInProgress: 'Noch keine laufenden Hörsitzungen',
+  emptyTitle: 'Du hörst noch nichts',
+  emptyDescription: 'Starte ein Buch über die Wiedergabetaste auf seiner Detailseite, eine ganze Reihe auf der Reihenseite oder wähle mehrere Bücher in der Bücherliste aus.',
+  finished: 'Abgeschlossen',
+  finishedBadge: 'Abgeschlossen',
+  finishedLower: 'abgeschlossen',
+  bookOf: 'Buch {{number}} von {{count}}',
+  bookMissing: 'Das Buch ist nicht mehr in der Bibliothek',
+  lastPlayed: 'Zuletzt abgespielt am {{date}}',
+  overview: 'Übersicht',
+  emptyMenu: 'Noch keine laufenden Hörsitzungen.',
+  remove: {
+    action: 'Entfernen',
+    label: 'Hörsitzung entfernen',
+    labelNamed: 'Hörsitzung {{title}} entfernen',
+    title: 'Hörsitzung entfernen?',
+    description: '„{{title}}“ wird zusammen mit der gespeicherten Position aus der Liste entfernt. Die Bücher bleiben in der Bibliothek.',
+  },
+}

@@ -1,0 +1,38 @@
+export default {
+  shell: {
+    headline: 'Deine Hörbücher. Alle an einem Ort.',
+    features: {
+      library: 'Deine gesamte Hörbuchsammlung an einem Ort',
+      authors: 'Autoren mit Fotos und Biografien',
+      series: 'Reihen nach Teilen geordnet',
+    },
+    tagline: 'Dein persönlicher Hörbuchverwalter und Player.',
+  },
+  login: {
+    title: 'Anmelden',
+    description: 'Gib deine Anmeldedaten ein.',
+    identifier: 'E-Mail oder Anmeldename',
+    password: 'Passwort',
+    submitting: 'Anmeldung läuft…',
+    submit: 'Anmelden',
+    noAccount: 'Noch kein Konto?',
+    registerLink: 'Registrieren',
+  },
+  register: {
+    title: 'Registrieren',
+    disabledDescription: 'Neue Konten werden von einem Administrator erstellt.',
+    defaultRole: 'Neue Konten erhalten die Rolle {{role}}.',
+    defaultRoleFallback: 'Leser',
+    disabled: 'Die Registrierung neuer Konten ist deaktiviert. Ein Administrator erstellt ein Konto für dich.',
+    name: 'Name',
+    email: 'E-Mail',
+    login: 'Anmeldename',
+    password: 'Passwort',
+    passwordTooShort: 'Das Passwort muss mindestens {{min}} Zeichen lang sein.',
+    passwordHint: 'Mindestens {{min}} Zeichen.',
+    submitting: 'Konto wird erstellt…',
+    submit: 'Konto erstellen',
+    haveAccount: 'Bereits ein Konto?',
+    loginLink: 'Anmelden',
+  },
+}

@@ -1,6 +1,5 @@
 // Přehled úplnosti překladů proti angličtině (zdroj pravdy).
-// Čeština musí být úplná – chybějící klíč je chyba (a zachytí ho i typecheck).
-// U ostatních jazyků se jen vypíše, co chybí; zobrazí se místo toho angličtina.
+// Všechny jazyky musí být úplné – chybějící klíč je chyba (i v typechecku).
 //
 //   npm run i18n:check -w libriter-shared            souhrn
 //   npm run i18n:check -w libriter-shared -- --list  i se seznamem klíčů
@@ -31,9 +30,9 @@ let failed = false
 
 for (const [lang, catalog, required] of [
   ['cs', cs, true],
-  ['fr', fr, false],
-  ['de', de, false],
-  ['es', es, false],
+  ['fr', fr, true],
+  ['de', de, true],
+  ['es', es, true],
 ] as const) {
   const present = keys(catalog)
   const missing = [...reference].filter((key) => !present.has(key))

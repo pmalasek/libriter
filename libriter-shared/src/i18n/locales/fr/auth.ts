@@ -1,0 +1,38 @@
+export default {
+  shell: {
+    headline: 'Vos livres audio. Tous au même endroit.',
+    features: {
+      library: 'Toute votre collection de livres audio au même endroit',
+      authors: 'Auteurs avec photos et biographies',
+      series: 'Séries classées par tome',
+    },
+    tagline: 'Un gestionnaire et lecteur personnel de livres audio.',
+  },
+  login: {
+    title: 'Se connecter',
+    description: 'Saisissez vos identifiants de connexion.',
+    identifier: 'E-mail ou identifiant',
+    password: 'Mot de passe',
+    submitting: 'Connexion…',
+    submit: 'Se connecter',
+    noAccount: 'Vous n’avez pas de compte ?',
+    registerLink: 'S’inscrire',
+  },
+  register: {
+    title: 'S’inscrire',
+    disabledDescription: 'Les nouveaux comptes sont créés par un administrateur.',
+    defaultRole: 'Les nouveaux comptes reçoivent le rôle {{role}}.',
+    defaultRoleFallback: 'lecteur',
+    disabled: 'L’inscription de nouveaux comptes est désactivée. Un administrateur créera un compte pour vous.',
+    name: 'Nom',
+    email: 'E-mail',
+    login: 'Identifiant',
+    password: 'Mot de passe',
+    passwordTooShort: 'Le mot de passe doit contenir au moins {{min}} caractères.',
+    passwordHint: 'Au moins {{min}} caractères.',
+    submitting: 'Création du compte…',
+    submit: 'Créer un compte',
+    haveAccount: 'Vous avez déjà un compte ?',
+    loginLink: 'Se connecter',
+  },
+}

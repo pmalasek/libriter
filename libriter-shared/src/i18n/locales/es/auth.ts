@@ -1,0 +1,38 @@
+export default {
+  shell: {
+    headline: 'Tus audiolibros. Todos en un solo lugar.',
+    features: {
+      library: 'Toda tu colección de audiolibros en un solo lugar',
+      authors: 'Autores con fotos y biografías',
+      series: 'Series ordenadas por entrega',
+    },
+    tagline: 'Un gestor y reproductor personal de audiolibros.',
+  },
+  login: {
+    title: 'Iniciar sesión',
+    description: 'Introduce tus credenciales.',
+    identifier: 'Correo electrónico o nombre de usuario',
+    password: 'Contraseña',
+    submitting: 'Iniciando sesión…',
+    submit: 'Iniciar sesión',
+    noAccount: '¿No tienes cuenta?',
+    registerLink: 'Registrarse',
+  },
+  register: {
+    title: 'Registrarse',
+    disabledDescription: 'Un administrador crea las cuentas nuevas.',
+    defaultRole: 'Las cuentas nuevas reciben el rol {{role}}.',
+    defaultRoleFallback: 'lector',
+    disabled: 'El registro de cuentas nuevas está desactivado. Un administrador creará una cuenta para ti.',
+    name: 'Nombre',
+    email: 'Correo electrónico',
+    login: 'Nombre de usuario',
+    password: 'Contraseña',
+    passwordTooShort: 'La contraseña debe tener al menos {{min}} caracteres.',
+    passwordHint: 'Al menos {{min}} caracteres.',
+    submitting: 'Creando cuenta…',
+    submit: 'Crear cuenta',
+    haveAccount: '¿Ya tienes cuenta?',
+    loginLink: 'Iniciar sesión',
+  },
+}
