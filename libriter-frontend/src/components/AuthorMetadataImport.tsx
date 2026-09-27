@@ -9,6 +9,7 @@ import {
 } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { useLanguage } from '@/i18n/language'
 
 function sourceLabel(source: string): string {
   return METADATA_SOURCE_LABELS[source] ?? source
@@ -37,6 +38,7 @@ export function AuthorMetadataImport({ defaultQuery, onApply }: Props) {
   const [results, setResults] = useState<AuthorSearchResult[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  const { language: uiLanguage } = useLanguage()
   const search = useAuthorMetadataSearch()
   const fetchMetadata = useFetchAuthorMetadata()
 
@@ -52,7 +54,7 @@ export function AuthorMetadataImport({ defaultQuery, onApply }: Props) {
   function handleSearch() {
     setError(null)
     setResults(null)
-    search.mutate(query.trim(), {
+    search.mutate({ query: query.trim(), uiLanguage }, {
       onSuccess: setResults,
       onError: (err) => setError(err.message),
     })

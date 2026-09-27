@@ -26,11 +26,12 @@ frontend:
     npm run build -w {{frontend_dir}}
 
 # go build -o bin/libriter (vkompiluje aktuální dist)
-# Verzi vkládá linker; administrace ji ukazuje v přehledu systému.
+# Verzi vkládá linker; administrace ji ukazuje v přehledu systému. Release
+# (`just deploy`) ji předává přes LIBRITER_VERSION, jinak platí `git describe`.
 backend:
     mkdir -p bin
     cd {{backend_dir}} && CGO_ENABLED=0 go build \
-        -ldflags "-X libriter/internal/version.Version=$(git describe --tags --always --dirty 2>/dev/null || echo dev)" \
+        -ldflags "-X libriter/internal/version.Version=${LIBRITER_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}" \
         -o ../{{bin}} ./cmd/server
 
 # Vývojový server na :8080
@@ -118,6 +119,10 @@ mobile-apk: mobile-deps
     fi
     npx expo prebuild --platform android
     cd android && ./gradlew assembleRelease
+
+# Nový release: zvýší verzi (patch/minor/major), sestaví .deb a vystaví ho na GitHubu
+deploy:
+    bash _scripts/release.sh
 
 # Nainstaluje vývojové nástroje: Go, Node, Android SDK; na macOS i iOS (Xcode CLT, CocoaPods)
 setup:

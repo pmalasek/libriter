@@ -6,8 +6,10 @@ import {
   useAuthors,
   useCreateAuthor,
   useCreateSeries,
+  useLanguages,
   usePatchBook,
   useSeriesList,
+  useSetBookCover,
 } from '@/api/hooks'
 import {
   METADATA_SOURCE_LABELS,
@@ -30,6 +32,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -38,7 +41,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { joinDuration, sameName, splitDuration } from '@/lib/format'
+import { joinDuration, languageLabel, sameName, splitDuration } from '@/lib/format'
 
 /** Hodnota Selectu pro „nic nevybráno“ – Radix nedovolí prázdný řetězec. */
 const NONE = 'none'
@@ -100,17 +103,27 @@ function BookEditForm({
   const [hours, setHours] = useState(String(initialDuration.hours))
   const [minutes, setMinutes] = useState(String(initialDuration.minutes))
   const [language, setLanguage] = useState(book.language)
+  // Jazyk vydání podle zdroje metadat. Jazyk se nepřepisuje sám – zdroj
+  // často popisuje jiné vydání (originál místo překladu) –, jen se nabídne.
+  const [sourceLanguage, setSourceLanguage] = useState<string | null>(null)
+  // Obálka ze zdroje metadat se stáhne až při uložení. Knize bez obálky se
+  // převezme rovnou, existující obálku nahradí jen na výslovnou volbu.
+  const [sourceCover, setSourceCover] = useState<string | null>(null)
+  const [useSourceCover, setUseSourceCover] = useState(false)
   const [rating, setRating] = useState(book.internal_rating ? String(book.internal_rating) : NONE)
   const [publishedYear, setPublishedYear] = useState(String(book.published_year ?? ''))
   const [description, setDescription] = useState(book.description ?? '')
 
   const authorList = useAuthors()
+  const languages = useLanguages()
   const seriesList = useSeriesList()
   const createAuthor = useCreateAuthor()
   const createSeries = useCreateSeries()
   const patchBook = usePatchBook(book.id)
+  const setCover = useSetBookCover(book.id)
 
-  const saving = patchBook.isPending || createSeries.isPending || createAuthor.isPending
+  const saving =
+    patchBook.isPending || setCover.isPending || createSeries.isPending || createAuthor.isPending
 
   /**
    * Autoři ze zdroje metadat nahradí dosavadní seznam – zdroj ví, kdo knihu
@@ -270,18 +283,39 @@ function BookEditForm({
       }
     }
 
-    if (Object.keys(patch).length === 0) {
+    const coverUrl = sourceCover && useSourceCover ? sourceCover : null
+    if (Object.keys(patch).length === 0 && !coverUrl) {
       finish()
       return
     }
 
-    patchBook.mutate(patch, {
-      onSuccess: () => {
-        toast.success(t('books.editDialog.saved'))
+    if (Object.keys(patch).length > 0) {
+      try {
+        await patchBook.mutateAsync(patch)
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : String(error))
+        return
+      }
+    }
+
+    // Obálka až po knize: když se stažení nepovede, zbytek úprav je uložený
+    // a dialog se zavře – obálku jde načíst znovu.
+    if (coverUrl) {
+      try {
+        await setCover.mutateAsync(coverUrl)
+      } catch (error) {
+        toast.error(
+          t('books.editDialog.coverFailed', {
+            message: error instanceof Error ? error.message : '',
+          }),
+        )
         finish()
-      },
-      onError: (error) => toast.error(error.message),
-    })
+        return
+      }
+    }
+
+    toast.success(t('books.editDialog.saved'))
+    finish()
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -309,12 +343,17 @@ function BookEditForm({
       <MetadataImport
         defaultTitle={book.title}
         defaultAuthor={book.authors?.[0]?.name ?? ''}
+        defaultLanguage={language}
         onApply={(meta) => {
           if (meta.title) setTitle(meta.title)
+          if (meta.narrator) setNarrator(meta.narrator)
           if (meta.authors?.length) applyAuthors(meta.authors)
           if (meta.description) setDescription(meta.description)
           if (meta.year) setPublishedYear(String(meta.year))
           if (meta.series) applySeries(meta.series, meta.series_position)
+          setSourceLanguage(meta.language || null)
+          setSourceCover(meta.cover_url || null)
+          setUseSourceCover(Boolean(meta.cover_url) && !book.cover_path)
           toast.success(
             t('books.editDialog.metadataLoaded', {
               source: METADATA_SOURCE_LABELS[meta.source] ?? meta.source,
@@ -322,6 +361,31 @@ function BookEditForm({
           )
         }}
       />
+
+      {sourceCover ? (
+        <div className="flex items-center gap-3 rounded-lg border p-3">
+          <img
+            src={sourceCover}
+            alt=""
+            className="h-20 w-14 shrink-0 rounded object-cover"
+            referrerPolicy="no-referrer"
+            onError={(e) => (e.currentTarget.style.visibility = 'hidden')}
+          />
+          <div className="min-w-0 flex-1 space-y-1">
+            <Label htmlFor="book_source_cover" className="font-normal">
+              {book.cover_path
+                ? t('books.editDialog.replaceCover')
+                : t('books.editDialog.coverFromSource')}
+            </Label>
+            <p className="text-xs text-muted-foreground">{t('books.editDialog.coverHint')}</p>
+          </div>
+          <Switch
+            id="book_source_cover"
+            checked={useSourceCover}
+            onCheckedChange={setUseSourceCover}
+          />
+        </div>
+      ) : null}
 
       <div className="space-y-2">
         <Label htmlFor="book_title">{t('books.editDialog.titleLabel')}</Label>
@@ -445,6 +509,25 @@ function BookEditForm({
         <div className="space-y-2">
           <Label htmlFor="book_language">{t('books.editDialog.language')}</Label>
           <LanguageSelect id="book_language" value={language} onChange={setLanguage} />
+          {/* Nabízí se jen jazyk z číselníku – jiný by server při uložení odmítl. */}
+          {sourceLanguage &&
+          sourceLanguage !== language &&
+          languages.data?.some((l) => l.code === sourceLanguage) ? (
+            <p className="text-xs text-muted-foreground">
+              {t('books.editDialog.sourceLanguage', {
+                language: languageLabel(sourceLanguage, languages.data),
+              })}{' '}
+              <Button
+                type="button"
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-xs"
+                onClick={() => setLanguage(sourceLanguage)}
+              >
+                {t('books.editDialog.useSourceLanguage')}
+              </Button>
+            </p>
+          ) : null}
         </div>
       </div>
 

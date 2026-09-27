@@ -18,6 +18,7 @@ import type {
   ImportBookEdit,
   ImportOverview,
   ImportSession,
+  LibrarySettings,
   LibraryStats,
   ListeningDetail,
   ListeningSummary,
@@ -39,6 +40,7 @@ export const adminKeys = {
   users: ['admin', 'users'] as const,
   metadata: ['admin', 'settings', 'metadata'] as const,
   registration: ['admin', 'settings', 'registration'] as const,
+  library: ['admin', 'settings', 'library'] as const,
   scanner: ['admin', 'scanner'] as const,
   duplicates: ['admin', 'library', 'duplicates'] as const,
   stats: ['admin', 'stats'] as const,
@@ -70,6 +72,13 @@ export function useRegistrationSettings() {
   return useQuery({
     queryKey: adminKeys.registration,
     queryFn: () => apiFetch<RegistrationSettings>('/admin/settings/registration'),
+  })
+}
+
+export function useLibrarySettings() {
+  return useQuery({
+    queryKey: adminKeys.library,
+    queryFn: () => apiFetch<LibrarySettings>('/admin/settings/library'),
   })
 }
 
@@ -197,7 +206,15 @@ export function useSaveMetadataSettings() {
   return useAdminMutation(
     (body: MetadataSettingsRequest) =>
       apiFetch<MetadataSettings>('/admin/settings/metadata', { method: 'PUT', json: body }),
-    [adminKeys.metadata],
+    [adminKeys.metadata, queryKeys.metadataSources],
+  )
+}
+
+export function useSaveLibrarySettings() {
+  return useAdminMutation(
+    (body: LibrarySettings) =>
+      apiFetch<LibrarySettings>('/admin/settings/library', { method: 'PUT', json: body }),
+    [adminKeys.library],
   )
 }
 

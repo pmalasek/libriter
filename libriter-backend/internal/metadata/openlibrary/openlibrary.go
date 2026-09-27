@@ -37,11 +37,38 @@ func NewClient() *Client {
 
 func (c *Client) Name() string { return providerName }
 
+// SupportsCoverURL: obálky jsou na covers.openlibrary.org.
+func (c *Client) SupportsCoverURL(rawURL string) bool {
+	return metadata.HostMatches(rawURL, coversHost)
+}
+
 func (c *Client) Supports(rawURL string) bool {
 	return metadata.HostMatches(rawURL, host)
 }
 
 // --- vyhledávání ---
+
+// marcLanguage převádí ISO 639-1 na kód MARC, ve kterém OpenLibrary vede
+// jazyk vydání (parametr language v /search.json).
+var marcLanguage = map[string]string{
+	"cs": "cze",
+	"sk": "slo",
+	"en": "eng",
+	"de": "ger",
+	"fr": "fre",
+	"es": "spa",
+	"it": "ita",
+	"pl": "pol",
+	"ru": "rus",
+	"nl": "dut",
+	"sv": "swe",
+	"no": "nor",
+	"da": "dan",
+	"fi": "fin",
+	"hu": "hun",
+	"pt": "por",
+	"ja": "jpn",
+}
 
 type searchResponse struct {
 	NumFound int `json:"numFound"`
@@ -66,6 +93,11 @@ func (c *Client) Search(ctx context.Context, q metadata.SearchQuery) ([]metadata
 	}
 	if len(params) == 0 {
 		return nil, nil
+	}
+	// OpenLibrary vede jazyky vydání v kódech MARC; neznámý jazyk se neposílá,
+	// ať dotaz zbytečně nevrací prázdno.
+	if lang, ok := marcLanguage[q.Language]; ok {
+		params.Set("language", lang)
 	}
 	params.Set("limit", strconv.Itoa(searchLimit))
 	params.Set("fields", "key,title,author_name,first_publish_year,cover_i")

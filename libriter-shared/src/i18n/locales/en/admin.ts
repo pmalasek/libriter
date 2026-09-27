@@ -143,6 +143,13 @@ export default {
     yes: 'yes',
     no: 'no',
   },
+  library: {
+    saved: 'Library settings saved – they apply to new books from now on.',
+    title: 'Library',
+    description:
+      'New books get the default language when neither the audio tags nor the person adding the book specify one. Existing books are not changed.',
+    defaultLanguage: 'Default language of new books',
+  },
   registration: {
     saved: 'Registration settings saved.',
     title: 'Registration',
@@ -157,7 +164,7 @@ export default {
     saved: 'Metadata sources saved – the change takes effect immediately.',
     title: 'Metadata sources',
     description:
-      'Sources are tried from top to bottom and the first one that finds something wins. A disabled source is not used for downloading author photos either.',
+      'Default order for books in a language without its own profile. Sources are tried from top to bottom and the first one that finds something wins. A source disabled in every profile is not used for downloading author photos either.',
     supportsAuthors: 'books, authors and photos',
     booksOnly: 'books only',
     disabled: 'disabled',
@@ -169,6 +176,13 @@ export default {
       'Without a key, an anonymous daily quota shared by the whole IP address applies, and it runs out easily. You can get a key in the Google Cloud console after enabling the Books API.',
     apiKey: 'API key',
     optional: 'optional',
+    languagesTitle: 'Sources by book language',
+    languagesDescription: 'Books in these languages use their own order instead of the default one. The search language is prefilled from the book and can be switched in the dialog.',
+    addLanguage: 'Add language',
+    removeLanguage: 'Remove profile for {{language}}',
+    removeLanguageShort: 'Remove',
+    languageExists: '{{language}} already has its own profile.',
+    noLanguages: 'No language profiles – all books use the default order.',
   },
   scanner: {
     title: 'Scanner',
@@ -282,6 +296,8 @@ export default {
     source: 'Folder: {{path}}',
     root: 'loose files',
     applySeries: 'Use for all books in “{{group}}”',
+    languageFromTags: 'From the audio tags.',
+    languageFromUi: 'The tags don’t specify a language – prefilled with your interface language.',
     fields: {
       title: 'Title',
       authors: 'Authors',
@@ -290,6 +306,7 @@ export default {
       series: 'Series',
       seriesPosition: 'No.',
       description: 'Description',
+      language: 'Language',
     },
     warnings: {
       no_title: 'Title is missing',

@@ -143,6 +143,13 @@ export default {
     yes: 'sí',
     no: 'no',
   },
+  library: {
+    saved: 'Ajustes de la biblioteca guardados. Se aplican a los libros nuevos a partir de ahora.',
+    title: 'Biblioteca',
+    description:
+      'Los libros nuevos reciben el idioma predeterminado cuando ni las etiquetas de audio ni quien añade el libro indican uno. Los libros existentes no cambian.',
+    defaultLanguage: 'Idioma predeterminado de los libros nuevos',
+  },
   registration: {
     saved: 'Ajustes de registro guardados.',
     title: 'Registro',
@@ -155,7 +162,8 @@ export default {
   metadata: {
     saved: 'Fuentes de metadatos guardadas. El cambio se aplica de inmediato.',
     title: 'Fuentes de metadatos',
-    description: 'Las fuentes se prueban de arriba abajo y se utiliza la primera que encuentre un resultado. Las fuentes desactivadas tampoco se usan para descargar fotos de autores.',
+    description:
+      'Orden predeterminado para libros en idiomas sin perfil propio. Las fuentes se prueban de arriba abajo y se utiliza la primera que encuentre un resultado. Una fuente desactivada en todos los perfiles tampoco se usa para descargar fotos de autores.',
     supportsAuthors: 'libros, autores y fotos',
     booksOnly: 'solo libros',
     disabled: 'desactivado',
@@ -166,6 +174,13 @@ export default {
     googleDescription: 'Sin una clave se aplica una cuota diaria anónima compartida por toda la dirección IP, que se agota fácilmente. Puedes obtener una clave en la consola de Google Cloud después de activar Books API.',
     apiKey: 'Clave de API',
     optional: 'opcional',
+    languagesTitle: 'Fuentes según el idioma del libro',
+    languagesDescription: 'Los libros en estos idiomas usan su propio orden en lugar del predeterminado. El idioma de búsqueda se toma del libro y se puede cambiar en el diálogo.',
+    addLanguage: 'Añadir idioma',
+    removeLanguage: 'Eliminar el perfil de {{language}}',
+    removeLanguageShort: 'Eliminar',
+    languageExists: '{{language}} ya tiene su propio perfil.',
+    noLanguages: 'No hay perfiles de idioma: todos los libros usan el orden predeterminado.',
   },
   scanner: {
     title: 'Escáner',
@@ -273,6 +288,8 @@ export default {
     source: 'Carpeta: {{path}}',
     root: 'archivos sueltos',
     applySeries: 'Usar para todos los libros de «{{group}}»',
+    languageFromTags: 'Según las etiquetas de audio.',
+    languageFromUi: 'Las etiquetas no indican el idioma: se ha rellenado el idioma de su interfaz.',
     fields: {
       title: 'Título',
       authors: 'Autores',
@@ -281,6 +298,7 @@ export default {
       series: 'Serie',
       seriesPosition: 'N.º',
       description: 'Descripción',
+      language: 'Idioma',
     },
     warnings: {
       no_title: 'Falta el título',

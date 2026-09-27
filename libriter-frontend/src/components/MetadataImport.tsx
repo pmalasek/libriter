@@ -1,8 +1,9 @@
 import { DownloadIcon, SearchIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useFetchMetadata, useMetadataSearch } from '@/api/hooks'
+import { useFetchMetadata, useMetadataSearch, useMetadataSources } from '@/api/hooks'
 import { METADATA_SOURCE_LABELS, type BookMetadata, type MetadataSearchResult } from '@/api/types'
+import { LanguageSelect } from '@/components/LanguageSelect'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 
@@ -15,30 +16,45 @@ interface Props {
   defaultTitle: string
   /** Předvyplněný hlavní autor; posílá se zvlášť, viz useMetadataSearch. */
   defaultAuthor: string
+  /** Jazyk knihy (ISO 639-1); podle něj backend vybere zdroje. */
+  defaultLanguage: string
   onApply: (meta: BookMetadata) => void
 }
 
 /**
  * Vyhledání knihy ve zdrojích metadat a předvyplnění formuláře. Zdroje i jejich
- * pořadí určuje backend (METADATA_PROVIDERS), použije se první, který něco najde.
+ * pořadí určuje backend podle jazyka knihy (nastavení v administraci), použije
+ * se první, který něco najde. Jazyk se předvyplní z formuláře a jde přepnout –
+ * třeba když česká kniha má anglický originál.
  *
  * Nic se neukládá – stažená metadata jen přepíšou rozpracovaný formulář, takže
  * „Zrušit“ je pořád plnohodnotná cesta zpět.
  */
-export function MetadataImport({ defaultTitle, defaultAuthor, onApply }: Props) {
+export function MetadataImport({ defaultTitle, defaultAuthor, defaultLanguage, onApply }: Props) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState(defaultTitle)
   const [author, setAuthor] = useState(defaultAuthor)
+  const [language, setLanguage] = useState(defaultLanguage)
   const [results, setResults] = useState<MetadataSearchResult[] | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const search = useMetadataSearch()
   const fetchMetadata = useFetchMetadata()
+  const sources = useMetadataSources(language, open)
 
   if (!open) {
     return (
-      <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => {
+          // Jazyk se mohl ve formuláři změnit od posledního otevření.
+          setLanguage(defaultLanguage)
+          setOpen(true)
+        }}
+      >
         <DownloadIcon />
         {t('books.metadataImport.open')}
       </Button>
@@ -49,7 +65,7 @@ export function MetadataImport({ defaultTitle, defaultAuthor, onApply }: Props) 
     setError(null)
     setResults(null)
     search.mutate(
-      { title: title.trim(), author: author.trim() },
+      { title: title.trim(), author: author.trim(), language },
       {
         onSuccess: setResults,
         onError: (err) => setError(err.message),
@@ -97,6 +113,15 @@ export function MetadataImport({ defaultTitle, defaultAuthor, onApply }: Props) 
           aria-label={t('books.metadataImport.authorPlaceholder')}
           onKeyDown={handleKeyDown}
         />
+        <div className="min-w-32 flex-1" title={t('books.metadataImport.languageLabel')}>
+          <LanguageSelect
+            value={language}
+            onChange={(code) => {
+              setLanguage(code)
+              setResults(null)
+            }}
+          />
+        </div>
         <Button type="button" size="sm" onClick={handleSearch} disabled={pending || !title.trim()}>
           <SearchIcon />
           {search.isPending ? t('books.metadataImport.searching') : t('common.search')}
@@ -140,6 +165,16 @@ export function MetadataImport({ defaultTitle, defaultAuthor, onApply }: Props) 
 
       {fetchMetadata.isPending ? (
         <p className="text-sm text-muted-foreground">{t('books.metadataImport.fetching')}</p>
+      ) : null}
+
+      {sources.data ? (
+        <p className="text-xs text-muted-foreground">
+          {sources.data.books.length
+            ? t('books.metadataImport.sourcesFor', {
+                sources: sources.data.books.map(sourceLabel).join(' → '),
+              })
+            : t('books.metadataImport.noSources')}
+        </p>
       ) : null}
 
       <p className="text-xs text-muted-foreground">

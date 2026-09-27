@@ -1,0 +1,9 @@
+#!/bin/sh
+set -e
+
+if [ -d /run/systemd/system ] && [ "$1" = "remove" ]; then
+    systemctl stop libriter.service || true
+    systemctl disable libriter.service >/dev/null || true
+fi
+
+exit 0

@@ -78,6 +78,9 @@ type Book struct {
 	Description    string   `json:"description"`
 	SeriesTitle    string   `json:"series_title"`
 	SeriesPosition *int     `json:"series_position"`
+	// Language je jazyk knihy (ISO 639-1) z audio tagů; prázdný = tagy ho
+	// neuvádějí a náhled ho předvyplní sám.
+	Language string `json:"language"`
 
 	Chapters        []Chapter `json:"chapters"`
 	DurationSeconds int       `json:"duration_seconds"`
@@ -124,6 +127,7 @@ type libraryScanner interface {
 	AudioRoot() string
 	ImportBook(ctx context.Context, in scanner.ImportBook) (*model.Book, error)
 	FindSimilarBook(ctx context.Context, title string) (*model.Book, error)
+	DefaultLanguage(ctx context.Context) string
 }
 
 // Service spravuje relace importu.

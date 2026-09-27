@@ -150,12 +150,17 @@ AUTHOR_IMAGE_ROOT=./data/author-images   # fotky autorů
 IMPORT_ROOT=./data/import       # staging importu knih (mimo AUDIO_ROOT)
 MAX_UPLOAD_MB=3072              # limit jednoho importu knih (součet souborů)
 
+# Výchozí jazyk nových knih, když ho neuvádějí tagy ani ten, kdo knihu zakládá
+DEFAULT_BOOK_LANGUAGE=cs
+
 # Zdroje metadat – výchozí pořadí, ve kterém se zkoušejí
 METADATA_PROVIDERS=databazeknih,cbdb,openlibrary,googlebooks
+# Vlastní pořadí pro jazyky knih (ostatní jazyky jedou na METADATA_PROVIDERS)
+METADATA_LANGUAGE_PROVIDERS=cs=databazeknih,cbdb,openlibrary,googlebooks;en=audible_com,goodreads,openlibrary,googlebooks;de=audible_de,googlebooks,openlibrary
 GOOGLE_BOOKS_API_KEY=           # nepovinné, viz Metadata knih
 ```
 
-> **Zdroje metadat** jsou tady jen výchozí hodnota pro prázdnou databázi.
+> **Zdroje metadat** a **výchozí jazyk** jsou tady jen výchozí hodnota pro prázdnou databázi.
 > Jakmile je admin uloží v administraci, platí nastavení z databáze a změny
 > v `.env` se už neprojeví (viz Administrace).
 
@@ -235,6 +240,38 @@ Soubory jako `src/api/types.ts` nebo `src/auth/permissions.ts` ve frontendu
 zůstaly jako tenké re-exporty z `libriter-shared`, takže importy uvnitř webu
 se přesunem nezměnily.
 
+### 4. Release a instalace z .deb
+
+```bash
+just deploy
+```
+
+Skript [_scripts/release.sh](_scripts/release.sh) najde poslední tag `vX.Y.Z`
+(první release začíná od `v0.0.0`), zeptá se na patch / minor / major, vypíše
+commity od posledního releasu a po potvrzení:
+
+1. sestaví web i backend s novou verzí vloženou do binárky,
+2. zabalí `dist/libriter_X.Y.Z_amd64.deb` (obsah balíčku: [packaging/deb/](packaging/deb/)),
+3. vytvoří a pushne tag a GitHub release se seznamem změn a `.deb` přílohou.
+
+Potřebuje přihlášené GitHub CLI (`gh auth login`), čistý pracovní strom na
+`main` shodný s `origin/main`. `DRY_RUN=1 just deploy` jen sestaví balíček.
+
+Instalace na serveru:
+
+```bash
+sudo apt install ./libriter_X.Y.Z_amd64.deb
+```
+
+Balíček založí systémového uživatele `libriter`, službu `libriter.service`
+(hned ji spustí), konfiguraci `/etc/libriter/libriter.env` s vygenerovaným
+`JWT_SECRET` a data pod `/var/lib/libriter`. Upgrade konfiguraci nepřepíše;
+`apt purge` smaže konfiguraci i uživatele, data nechá. Příkazy CLI na serveru:
+
+```bash
+sudo -u libriter LIBRITER_ENV_FILE=/etc/libriter/libriter.env libriter user list
+```
+
 ### Přehled cílů (justfile)
 
 | Cíl | Popis |
@@ -252,6 +289,7 @@ se přesunem nezměnily.
 | `just mobile-apk` | Release APK k ruční instalaci |
 | `just setup` | Nainstaluje vývojové nástroje (viz Požadavky) |
 | `just doctor` | Zkontroluje, co z nástrojů je a co chybí |
+| `just deploy` | Nový release: verze, `.deb` a GitHub release (viz níže) |
 | `just clean` | Smaže `bin/` a sestavený frontend |
 
 Backend jde sestavit i bez frontendu (`just backend` na čerstvém klonu) – server
@@ -320,9 +358,10 @@ v databázi a objeví se, jakmile k nim nějaká kniha patří.
 *Upravit*, které otevře formulář v dialogu. U knihy jde změnit název, autory
 (včetně pořadí – první je hlavní), sérii a díl, vypravěče, délku, jazyk, rok
 vydání, vlastní hodnocení a popis; tlačítko *Načíst metadata* vyhledá knihu ve
-zdrojích (databazeknih.cz, cbdb.cz, OpenLibrary, Google Books – viz Metadata
-knih) a předvyplní název, popis a rok prvního vydání (u překladů rok
-originálu). Ukládá se přes
+zdrojích (databazeknih.cz, cbdb.cz, OpenLibrary, Google Books, Audible.com,
+Audible.de, Goodreads – viz Metadata knih) a předvyplní název, autory,
+vypravěče, sérii, popis a rok prvního vydání (u překladů rok originálu).
+Které zdroje se zkusí, určuje jazyk knihy; v panelu hledání jde jazyk přepnout. Ukládá se přes
 `PATCH /books/{id}`, takže odchází jen skutečně změněná pole. Tlačítko *Uložit
 a další* (Ctrl+Enter) uloží a rovnou otevře editaci následující knihy v pořadí
 seznamu – hodí se při procházení celé knihovny.
@@ -523,6 +562,7 @@ v číslování ničemu nevadí, kapitoly se řadí podle relativního pořadí.
 | Název knihy | `Album` → `Title` tag → název souboru |
 | Autoři | `AlbumArtist` → `Composer` → `Artist` → název adresáře |
 | Vypravěč | `Artist` (pokud se liší od autorů) |
+| Jazyk | `TLAN` (ID3) / `LANGUAGE` (FLAC, Ogg, M4B), pokud je v číselníku → výchozí jazyk knihovny |
 | Délka | `ffprobe` → `1 s` (placeholder, opravit přes API) |
 
 **Autoři:** kniha jich může mít víc. Tag se rozdělí na jednotlivá jména podle
@@ -689,6 +729,8 @@ i pro snížení jeho role).
 | `PUT` | `/admin/settings/metadata` | Uložení zdrojů (platí okamžitě) | admin |
 | `GET` | `/admin/settings/registration` | Nastavení registrace | admin |
 | `PUT` | `/admin/settings/registration` | Uložení nastavení registrace | admin |
+| `GET` | `/admin/settings/library` | Nastavení knihovny (výchozí jazyk nových knih) | admin |
+| `PUT` | `/admin/settings/library` | Uložení nastavení knihovny | admin |
 | `GET` | `/admin/scanner` | Stav scanneru | admin |
 | `POST` | `/admin/scanner/rescan` | Spuštění průchodu knihovnou | admin |
 | `GET` | `/admin/library/repair` | Náhled kontroly kapitol a souborů (nic nemění) | admin |
@@ -704,13 +746,17 @@ i pro snížení jeho role).
 | `GET` | `/admin/listening` | Přehled poslechu všech uživatelů | admin |
 | `GET` | `/admin/listening/{id}` | Poslechy, stav knih a deník posledních 90 dní jednoho uživatele | admin |
 
-Zápis zdrojů metadat nahrazuje celý seznam a jeho pořadí je pořadí, ve kterém
-se zdroje zkoušejí:
+Zápis zdrojů metadat nahrazuje celé nastavení. Pořadí v seznamu je pořadí, ve
+kterém se zdroje zkoušejí; `providers` je výchozí pořadí, `languages` vlastní
+pořadí pro knihy v daném jazyce (kód ISO 639-1 z číselníku jazyků):
 
 ```jsonc
 // PUT /admin/settings/metadata
 { "providers": [ { "name": "databazeknih", "enabled": true },
                  { "name": "googlebooks",  "enabled": false } ],
+  "languages": [ { "language": "en",
+                   "providers": [ { "name": "audible_com", "enabled": true },
+                                  { "name": "goodreads",   "enabled": true } ] } ],
   "google_books_api_key": "" }
 ```
 
@@ -741,6 +787,7 @@ dat). Sepnutou pojistku přebije nepovinné tělo `POST`u:
 | `POST` | `/books` | Přidání knihy | editor+ |
 | `PUT` | `/books/{id}` | Aktualizace knihy (úplná náhrada) | editor+ |
 | `PATCH` | `/books/{id}` | Aktualizace jen poslaných polí | editor+ |
+| `PUT` | `/books/{id}/cover` | Stažení obálky ze zdroje metadat (`{"url": "<cover_url>"}`) | editor+ |
 | `PUT` | `/books/{id}/chapters/order` | Ruční pořadí kapitol | editor+ |
 | `DELETE` | `/books/{id}?delete_files=true` | Smazání knihy, volitelně i souborů | admin |
 
@@ -974,12 +1021,20 @@ Hotová konfigurace je v `deploy/nginx/`.
 
 | Metoda | Endpoint | Popis | Přístup |
 |--------|----------|-------|---------|
-| `GET` | `/metadata/sources` | Zdroje v pořadí, ve kterém se zkoušejí | editor+ |
-| `GET` | `/metadata/search?q=<dotaz>` | Vyhledání knihy | editor+ |
+| `GET` | `/metadata/sources?language=<kód>` | Zdroje v pořadí, ve kterém se pro jazyk zkoušejí | editor+ |
+| `GET` | `/metadata/search?q=<dotaz>&author=<autor>&language=<kód>` | Vyhledání knihy | editor+ |
 | `GET` | `/metadata/book?url=<url>` | Metadata knihy dle URL | editor+ |
 | `GET` | `/metadata/book/{id}` | Metadata knihy dle ID databazeknih.cz | editor+ |
-| `GET` | `/metadata/author/search?q=<dotaz>` | Vyhledání autora | editor+ |
+| `GET` | `/metadata/author/search?q=<dotaz>&ui_language=<kód>` | Vyhledání autora | editor+ |
 | `GET` | `/metadata/author?url=<url>` | Metadata autora dle URL | editor+ |
+
+Zdroje a jejich pořadí se vybírají podle `language` (jazyk knihy): jazyk
+s vlastním profilem v administraci použije ten, ostatní (i bez `language`)
+výchozí pořadí. Vyhrává první zdroj, který něco najde. Detail podle URL
+a metadata autorů přijmou adresu kteréhokoli zdroje zapnutého aspoň v jednom
+profilu. Audible (`audible_com`, `audible_de`) vrací i vypravěče (`narrator`)
+a jazyk vydání (`language`); Goodreads je scraper bez API a web občas roboty
+odmítne, proto je v pořadí za Audible.
 
 Typický workflow editora:
 ```
@@ -1039,8 +1094,16 @@ zvlášť pro knihy a zvlášť pro autory:
 
 #### Metadata autorů
 
+Zdroje pro hledání autora se vybírají podle jazyka rozhraní (`ui_language`),
+aby byl životopis v jazyce, kterému editor rozumí: profil toho jazyka, když
+pro něj profil není, anglický profil.
+
+Obálku z `cover_url` stáhne `PUT /books/{id}/cover`. Stahuje se jen z adres,
+které některý zapnutý zdroj prohlásí za své obálky; dialog úpravy knihy ji
+knize bez obálky převezme rovnou, existující obálku nahradí jen na vyžádání.
+
 `GET /metadata/author/search?q=` a `GET /metadata/author?url=` fungují stejně
-jako u knih, jen je neumí `googlebooks`. Vrací jméno (celé i rozdělené na
+jako u knih, jen je neumí `googlebooks`, `audible_*` a `goodreads`. Vrací jméno (celé i rozdělené na
 části stejně, jako se ukládá u autora), životopis, roky života a adresu fotky:
 
 ```jsonc

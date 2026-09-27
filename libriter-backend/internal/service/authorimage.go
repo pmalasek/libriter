@@ -109,7 +109,13 @@ func (s *AuthorImageService) setImagePath(ctx context.Context, authorID uuid.UUI
 
 // download stáhne obrázek a ověří, že obrázek skutečně je.
 func (s *AuthorImageService) download(ctx context.Context, imageURL string) ([]byte, string, error) {
-	body, contentType, err := s.fetcher.GetWithType(ctx, imageURL, "image/*")
+	return downloadImage(ctx, s.fetcher, imageURL)
+}
+
+// downloadImage stáhne obrázek a ověří, že obrázek skutečně je. Vrací data
+// a příponu souboru (".jpg"). Sdílí ho fotky autorů i obálky knih.
+func downloadImage(ctx context.Context, fetcher *metadata.Fetcher, imageURL string) ([]byte, string, error) {
+	body, contentType, err := fetcher.GetWithType(ctx, imageURL, "image/*")
 	if err != nil {
 		return nil, "", fmt.Errorf("stažení obrázku: %w", err)
 	}

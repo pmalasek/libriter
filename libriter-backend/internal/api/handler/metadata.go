@@ -12,20 +12,40 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+// LanguageChainSource dodává řetězce zdrojů: všech zapnutých (detail podle
+// URL, autoři) a pro konkrétní jazyk knihy (hledání). Server předává
+// metadata.Registry, testům stačí *metadata.Chain.
+type LanguageChainSource interface {
+	service.ChainSource
+	ChainFor(language string) *metadata.Chain
+	AuthorChainFor(uiLanguage string) *metadata.Chain
+}
+
 // MetadataHandler obsluhuje vyhledávání metadat. Které zdroje a v jakém
 // pořadí se zkoušejí, určuje nastavení v administraci – proto se řetězec
 // bere až při požadavku, ne jednou při startu.
 type MetadataHandler struct {
-	source service.ChainSource
+	source LanguageChainSource
 }
 
-func NewMetadata(source service.ChainSource) *MetadataHandler {
+func NewMetadata(source LanguageChainSource) *MetadataHandler {
 	return &MetadataHandler{source: source}
 }
 
-// chain vrátí aktuální řetězec zdrojů.
+// authorChain vrátí řetězec pro autory podle jazyka rozhraní z parametru
+// ui_language.
+func (h *MetadataHandler) authorChain(r *http.Request) *metadata.Chain {
+	return h.source.AuthorChainFor(normalizeLanguage(r.URL.Query().Get("ui_language")))
+}
+
+// chain vrátí aktuální řetězec všech zapnutých zdrojů.
 func (h *MetadataHandler) chain() *metadata.Chain {
 	return h.source.Chain()
+}
+
+// chainFor vrátí řetězec pro jazyk z parametru language; bez něj výchozí.
+func (h *MetadataHandler) chainFor(r *http.Request) *metadata.Chain {
+	return h.source.ChainFor(normalizeLanguage(r.URL.Query().Get("language")))
 }
 
 // dkClient vrátí klienta databazeknih.cz, pokud je tento zdroj zapnutý.
@@ -40,23 +60,25 @@ func (h *MetadataHandler) dkClient() (*databazeknih.Client, bool) {
 	return dk, ok
 }
 
-// GET /api/v1/metadata/search?q=<název>&author=<autor>
+// GET /api/v1/metadata/search?q=<název>&author=<autor>&language=<kód>
 //
-// Zkouší zdroje v nakonfigurovaném pořadí, vrátí výsledky prvního, který
-// něco najde. Autor je nepovinný, ale výrazně zpřesňuje hledání – viz
+// Zkouší zdroje v pořadí nastaveném pro jazyk knihy (bez jazyka nebo pro
+// jazyk bez vlastního profilu ve výchozím pořadí), vrátí výsledky prvního,
+// který něco najde. Autor je nepovinný, ale výrazně zpřesňuje hledání – viz
 // metadata.SearchQuery.
 // Přístup: editor+
 func (h *MetadataHandler) Search(w http.ResponseWriter, r *http.Request) {
 	query := metadata.SearchQuery{
-		Title:  r.URL.Query().Get("q"),
-		Author: r.URL.Query().Get("author"),
+		Title:    r.URL.Query().Get("q"),
+		Author:   r.URL.Query().Get("author"),
+		Language: normalizeLanguage(r.URL.Query().Get("language")),
 	}
 	if query.Title == "" {
 		writeError(w, http.StatusBadRequest, "validation.query_required", "parametr q je povinný")
 		return
 	}
 
-	results, err := h.chain().Search(r.Context(), query)
+	results, err := h.chainFor(r).Search(r.Context(), query)
 	if err != nil {
 		if errors.Is(err, r.Context().Err()) {
 			writeError(w, http.StatusGatewayTimeout, "request.timeout", "vypršel čas požadavku")
@@ -74,19 +96,22 @@ func (h *MetadataHandler) Search(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, results)
 }
 
-// GET /api/v1/metadata/sources
+// GET /api/v1/metadata/sources?language=<kód>&ui_language=<kód>
 //
-// Vrátí zdroje v pořadí, ve kterém se zkoušejí – rozhraní podle toho
-// popisuje, odkud data přijdou.
+// Vrátí zdroje v pořadí, ve kterém se zkoušejí – knihy pro jazyk knihy,
+// autory pro jazyk rozhraní. Rozhraní podle toho popisuje, odkud data přijdou.
 // Přístup: editor+
 func (h *MetadataHandler) Sources(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string][]string{
-		"books":   h.chain().Providers(),
-		"authors": h.chain().AuthorProviders(),
+		"books":   h.chainFor(r).Providers(),
+		"authors": h.authorChain(r).AuthorProviders(),
 	})
 }
 
-// GET /api/v1/metadata/author/search?q=<dotaz>  (editor+)
+// GET /api/v1/metadata/author/search?q=<dotaz>&ui_language=<kód>  (editor+)
+//
+// Zdroje se vybírají podle jazyka rozhraní (viz authorChain) – životopis
+// má být v jazyce, kterému hledající rozumí.
 func (h *MetadataHandler) SearchAuthors(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if q == "" {
@@ -94,7 +119,7 @@ func (h *MetadataHandler) SearchAuthors(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	results, err := h.chain().SearchAuthors(r.Context(), q)
+	results, err := h.authorChain(r).SearchAuthors(r.Context(), q)
 	if err != nil {
 		if errors.Is(err, r.Context().Err()) {
 			writeError(w, http.StatusGatewayTimeout, "request.timeout", "vypršel čas požadavku")

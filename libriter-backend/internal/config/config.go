@@ -18,6 +18,7 @@ type Config struct {
 	JWT      JWTConfig
 	Storage  StorageConfig
 	Metadata MetadataConfig
+	Library  LibraryConfig
 
 	// EnvFile je cesta k načtenému .env (prázdná, pokud se žádný nenašel).
 	EnvFile string
@@ -55,11 +56,22 @@ type StorageConfig struct {
 	MaxUploadMB int64 // limit jednoho importu (součet nahraných souborů)
 }
 
+// LibraryConfig jsou výchozí hodnoty nastavení knihovny. Stejně jako u zdrojů
+// metadat platí jen do chvíle, kdy admin nastavení uloží v administraci.
+type LibraryConfig struct {
+	// DefaultLanguage je jazyk nové knihy (ISO 639-1), když ho neuvádějí
+	// tagy ani ten, kdo knihu zakládá.
+	DefaultLanguage string
+}
+
 // MetadataConfig řídí zdroje knižních metadat.
 type MetadataConfig struct {
 	// Providers je pořadí, ve kterém se zdroje zkoušejí. Zdroj, který v
 	// seznamu není, je vypnutý; prázdný seznam vypne metadata úplně.
 	Providers []string
+	// LanguageProviders jsou vlastní pořadí zdrojů pro jazyky knih (klíč je
+	// kód ISO 639-1). Jazyk, který tu není, používá Providers.
+	LanguageProviders map[string][]string
 	// GoogleBooksAPIKey je nepovinný – bez něj se jede na sdílenou anonymní
 	// kvótu Google Books, která se u sdílené IP snadno vyčerpá.
 	GoogleBooksAPIKey string
@@ -68,6 +80,15 @@ type MetadataConfig struct {
 // DefaultMetadataProviders je výchozí pořadí: nejdřív české zdroje, pak
 // zahraniční API jako záloha.
 var DefaultMetadataProviders = []string{"databazeknih", "cbdb", "openlibrary", "googlebooks"}
+
+// DefaultLanguageProviders jsou výchozí pořadí pro jazyky knih. Čeština má
+// vlastní profil jako ostatní jazyky – výchozí pořadí (DefaultMetadataProviders)
+// je jen záloha pro jazyky, které tu nejsou.
+var DefaultLanguageProviders = map[string][]string{
+	"cs": {"databazeknih", "cbdb", "openlibrary", "googlebooks"},
+	"en": {"audible_com", "goodreads", "openlibrary", "googlebooks"},
+	"de": {"audible_de", "googlebooks", "openlibrary"},
+}
 
 // Load načte konfiguraci pro server. Vyžaduje JWT_SECRET, protože server
 // podepisuje a ověřuje tokeny.
@@ -110,7 +131,11 @@ func load() *Config {
 		},
 		Metadata: MetadataConfig{
 			Providers:         envList("METADATA_PROVIDERS", DefaultMetadataProviders),
+			LanguageProviders: envLanguageLists("METADATA_LANGUAGE_PROVIDERS", DefaultLanguageProviders),
 			GoogleBooksAPIKey: envStr("GOOGLE_BOOKS_API_KEY", ""),
+		},
+		Library: LibraryConfig{
+			DefaultLanguage: strings.ToLower(strings.TrimSpace(envStr("DEFAULT_BOOK_LANGUAGE", "cs"))),
 		},
 		EnvFile: env.file,
 	}
@@ -235,6 +260,39 @@ func envList(key string, fallback []string) []string {
 		}
 	}
 	return values
+}
+
+// envLanguageLists načte seznamy zdrojů podle jazyka ve tvaru
+// "en=audible_com,goodreads;de=audible_de". Položka bez "=" nebo bez
+// jazyka se přeskočí s varováním. Stejně jako envList rozlišuje
+// "nenastaveno" (fallback) od "nastaveno na prázdno" (žádné jazykové profily).
+func envLanguageLists(key string, fallback map[string][]string) map[string][]string {
+	raw, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+
+	out := make(map[string][]string)
+	for _, entry := range strings.Split(raw, ";") {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		lang, list, found := strings.Cut(entry, "=")
+		lang = strings.ToLower(strings.TrimSpace(lang))
+		if !found || lang == "" {
+			slog.Warn("neplatná položka v "+key, "položka", entry)
+			continue
+		}
+		var names []string
+		for _, part := range strings.Split(list, ",") {
+			if trimmed := strings.ToLower(strings.TrimSpace(part)); trimmed != "" {
+				names = append(names, trimmed)
+			}
+		}
+		out[lang] = names
+	}
+	return out
 }
 
 func envInt(key string, fallback int) int {

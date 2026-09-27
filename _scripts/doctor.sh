@@ -38,6 +38,7 @@ have git;  check 1 "git"  $? "$(git --version 2>/dev/null | awk '{print $3}')" "
 have just; check 1 "just" $? "$(just --version 2>/dev/null | awk '{print $2}')" "just setup"
 have curl; check 1 "curl" $? "$(curl --version 2>/dev/null | head -n1 | awk '{print $2}')" "just setup"
 have unzip; check 1 "unzip" $? "$(unzip -v 2>/dev/null | head -n1 | awk '{print $2}')" "just setup"
+have gh; check 0 "gh (just deploy)" $? "$(gh --version 2>/dev/null | head -n1 | awk '{print $3}')" "just setup"
 
 # -----------------------------------------------------------------------------
 echo; echo "${C_BOLD}Backend (Go)${C_OFF}"

@@ -19,6 +19,7 @@ const (
 	AuditUserPasswordReset    = "user.password_reset"
 	AuditSettingsMetadata     = "settings.metadata_update"
 	AuditSettingsRegistration = "settings.registration_update"
+	AuditSettingsLibrary      = "settings.library_update"
 	AuditBookDelete           = "book.delete"
 	AuditAuthorDelete         = "author.delete"
 	AuditSeriesDelete         = "series.delete"

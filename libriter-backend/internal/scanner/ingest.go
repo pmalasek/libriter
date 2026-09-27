@@ -195,7 +195,7 @@ func (s *Scanner) createBook(
 		DurationSeconds: duration,
 		FilePath:        relDir,
 		AlbumTag:        albumTagPtr,
-		Language:        "cs",
+		Language:        s.bookLanguage(ctx, meta.Language),
 	}
 
 	book, err := s.store.CreateBook(ctx, in)

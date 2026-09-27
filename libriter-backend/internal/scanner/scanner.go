@@ -99,6 +99,9 @@ type Scanner struct {
 	// appCtx je kontext života aplikace ze Start. Ruční průchod běží na něm,
 	// ne na kontextu HTTP požadavku – ten skončí dřív než scan.
 	appCtx context.Context
+
+	langMu          sync.Mutex
+	defaultLanguage func(context.Context) string // viz SetDefaultLanguage
 }
 
 // New vytvoří nový Scanner.

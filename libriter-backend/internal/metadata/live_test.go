@@ -17,8 +17,10 @@ import (
 	"time"
 
 	"libriter/internal/metadata"
+	"libriter/internal/metadata/audible"
 	"libriter/internal/metadata/cbdb"
 	"libriter/internal/metadata/databazeknih"
+	"libriter/internal/metadata/goodreads"
 	"libriter/internal/metadata/googlebooks"
 	"libriter/internal/metadata/openlibrary"
 )
@@ -28,19 +30,28 @@ func TestLiveProviders(t *testing.T) {
 		t.Skip("živý test zdrojů – zapne se LIBRITER_LIVE_METADATA=1")
 	}
 
-	providers := []metadata.Provider{
-		databazeknih.NewClient(),
-		cbdb.NewClient(),
-		openlibrary.NewClient(),
-		googlebooks.NewClient(os.Getenv("GOOGLE_BOOKS_API_KEY")),
+	czech := metadata.SearchQuery{Title: "Válka s mloky"}
+	cases := []struct {
+		provider metadata.Provider
+		query    metadata.SearchQuery
+	}{
+		{databazeknih.NewClient(), czech},
+		{cbdb.NewClient(), czech},
+		{openlibrary.NewClient(), czech},
+		{googlebooks.NewClient(os.Getenv("GOOGLE_BOOKS_API_KEY")), czech},
+		{openlibrary.NewClient(), metadata.SearchQuery{Title: "Dune", Author: "Frank Herbert", Language: "de"}},
+		{audible.NewClient(audible.MarketplaceCOM), metadata.SearchQuery{Title: "Project Hail Mary", Author: "Andy Weir", Language: "en"}},
+		{audible.NewClient(audible.MarketplaceDE), metadata.SearchQuery{Title: "Der Schwarm", Author: "Frank Schätzing", Language: "de"}},
+		{goodreads.NewClient(), metadata.SearchQuery{Title: "Harry Potter and the Sorcerer's Stone", Author: "J.K. Rowling", Language: "en"}},
 	}
 
-	for _, provider := range providers {
-		t.Run(provider.Name(), func(t *testing.T) {
+	for _, tc := range cases {
+		provider := tc.provider
+		t.Run(provider.Name()+"/"+tc.query.Title, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 
-			results, err := provider.Search(ctx, metadata.SearchQuery{Title: "Válka s mloky"})
+			results, err := provider.Search(ctx, tc.query)
 			if err != nil {
 				t.Fatalf("Search: %v", err)
 			}
@@ -70,8 +81,9 @@ func TestLiveProviders(t *testing.T) {
 			if meta.Title == "" {
 				t.Error("detail nemá název")
 			}
-			t.Logf("detail: %q | autor %q | rok %d | popis %d znaků | obálka %q",
-				meta.Title, meta.Author, meta.Year, len(meta.Description), meta.CoverURL)
+			t.Logf("detail: %q | autor %q | vypravěč %q | série %q #%d | rok %d | jazyk %q | popis %d znaků | obálka %q",
+				meta.Title, meta.Author, meta.Narrator, meta.Series, meta.SeriesPosition, meta.Year,
+				meta.Language, len(meta.Description), meta.CoverURL)
 		})
 	}
 }

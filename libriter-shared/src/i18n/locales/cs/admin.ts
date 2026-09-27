@@ -146,6 +146,13 @@ export default {
     yes: 'ano',
     no: 'ne',
   },
+  library: {
+    saved: 'Nastavení knihovny uloženo – platí pro další nové knihy.',
+    title: 'Knihovna',
+    description:
+      'Výchozí jazyk dostane nová kniha, když ho neuvádějí audio tagy ani ten, kdo knihu zakládá. Už založené knihy se nemění.',
+    defaultLanguage: 'Výchozí jazyk nových knih',
+  },
   registration: {
     saved: 'Nastavení registrace uloženo.',
     title: 'Registrace',
@@ -160,7 +167,7 @@ export default {
     saved: 'Zdroje metadat uloženy – změna platí okamžitě.',
     title: 'Zdroje metadat',
     description:
-      'Zdroje se zkoušejí shora dolů a vyhrají výsledky prvního, který něco najde. Vypnutý zdroj se nepoužije ani pro stahování fotek autorů.',
+      'Výchozí pořadí pro knihy v jazyce bez vlastního profilu. Zdroje se zkoušejí shora dolů a vyhrají výsledky prvního, který něco najde. Zdroj vypnutý ve všech profilech se nepoužije ani pro stahování fotek autorů.',
     supportsAuthors: 'knihy, autoři i fotky',
     booksOnly: 'jen knihy',
     disabled: 'vypnuto',
@@ -172,6 +179,13 @@ export default {
       'Bez klíče platí anonymní denní kvóta sdílená pro celou IP adresu, která se snadno vyčerpá. Klíč se získá v Google Cloud konzoli po zapnutí Books API.',
     apiKey: 'Klíč API',
     optional: 'nepovinné',
+    languagesTitle: 'Zdroje podle jazyka knihy',
+    languagesDescription: 'Pro knihy v těchto jazycích se místo výchozího pořadí použije vlastní. Jazyk hledání se předvyplní z knihy a v dialogu jde přepnout.',
+    addLanguage: 'Přidat jazyk',
+    removeLanguage: 'Odebrat profil pro {{language}}',
+    removeLanguageShort: 'Odebrat',
+    languageExists: '{{language}} už vlastní profil má.',
+    noLanguages: 'Žádné jazykové profily – všechny knihy používají výchozí pořadí.',
   },
   scanner: {
     title: 'Scanner',
@@ -285,6 +299,8 @@ export default {
     source: 'Složka: {{path}}',
     root: 'volné soubory',
     applySeries: 'Použít pro všechny knihy ve „{{group}}“',
+    languageFromTags: 'Podle audio tagů.',
+    languageFromUi: 'Tagy jazyk neuvádějí – předvyplněn jazyk vašeho rozhraní.',
     fields: {
       title: 'Název',
       authors: 'Autoři',
@@ -293,6 +309,7 @@ export default {
       series: 'Série',
       seriesPosition: 'Pořadí',
       description: 'Popis',
+      language: 'Jazyk',
     },
     warnings: {
       no_title: 'Chybí název',

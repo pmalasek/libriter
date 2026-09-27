@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"sync"
 	"time"
 )
@@ -18,18 +19,39 @@ const UserAgent = "Libriter/1.0 (osobni-audiobook-knihovna; +https://github.com/
 // Fetcher je HTTP klient s volitelnou prodlevou mezi požadavky. Scrapery
 // cizích webů si nastaví MinDelay (slušné chování), oficiální API ji nemají.
 type Fetcher struct {
-	client   *http.Client
-	minDelay time.Duration
+	client         *http.Client
+	minDelay       time.Duration
+	acceptLanguage string
 
 	mu      sync.Mutex
 	lastReq time.Time
 }
 
+// DefaultAcceptLanguage upřednostňuje češtinu – většina zdrojů jsou české weby.
+const DefaultAcceptLanguage = "cs,en;q=0.9"
+
 func NewFetcher(minDelay time.Duration) *Fetcher {
 	return &Fetcher{
-		client:   &http.Client{Timeout: 15 * time.Second},
-		minDelay: minDelay,
+		client:         &http.Client{Timeout: 15 * time.Second},
+		minDelay:       minDelay,
+		acceptLanguage: DefaultAcceptLanguage,
 	}
+}
+
+// WithCookies zapne úložiště cookies. Některé weby (Goodreads) nejdřív
+// nastaví relaci a přesměrují na stejnou adresu – bez cookies by se
+// přesměrování točilo dokola.
+func (f *Fetcher) WithCookies() *Fetcher {
+	jar, _ := cookiejar.New(nil) // chybu vrací jen s neplatnými Options
+	f.client.Jar = jar
+	return f
+}
+
+// WithAcceptLanguage nastaví hlavičku Accept-Language pro zdroje v jiném
+// jazyce než čeština (Audible.de, Goodreads). Volá se jen při vzniku klienta.
+func (f *Fetcher) WithAcceptLanguage(value string) *Fetcher {
+	f.acceptLanguage = value
+	return f
 }
 
 // Get stáhne URL. Volající musí tělo zavřít.
@@ -44,7 +66,7 @@ func (f *Fetcher) Get(ctx context.Context, targetURL string, accept string) (io.
 	}
 	req.Header.Set("User-Agent", UserAgent)
 	req.Header.Set("Accept", accept)
-	req.Header.Set("Accept-Language", "cs,en;q=0.9")
+	req.Header.Set("Accept-Language", f.acceptLanguage)
 
 	resp, err := f.client.Do(req)
 	if err != nil {

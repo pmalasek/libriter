@@ -21,12 +21,14 @@ import {
 import { apiBlob } from '@/api/client'
 import { importManager, type PendingFile, useImportManager } from '@/api/importManager'
 import type { ImportBook, ImportBookEdit, ImportSession } from '@/api/types'
+import { LanguageSelect } from '@/components/LanguageSelect'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { useLanguage } from '@/i18n/language'
 import { bookCount, chapterCount, formatBytes, formatDuration } from '@/lib/format'
 
 /** Stav, ve kterém import ještě běží na serveru a karta se k němu má vrátit. */
@@ -303,10 +305,19 @@ interface Draft {
   description: string
   seriesTitle: string
   seriesPosition: string
+  language: string
+  /** Odkud je jazyk: z tagů, podle jazyka rozhraní, nebo ho někdo vybral. */
+  languageSource: 'tags' | 'ui' | 'manual'
 }
 
-function toDraft(book: ImportBook): Draft {
+/**
+ * Jazyk knihy se vezme z audio tagů; když ho neuvádějí, předvyplní se jazyk
+ * rozhraní toho, kdo importuje. Je vidět v náhledu a jde změnit.
+ */
+function toDraft(book: ImportBook, uiLanguage: string): Draft {
   return {
+    language: book.language || uiLanguage,
+    languageSource: book.language ? 'tags' : 'ui',
     include: book.include,
     title: book.title,
     authors: book.authors.join('; '),
@@ -331,14 +342,16 @@ function toEdit(key: string, draft: Draft): ImportBookEdit {
     description: draft.description.trim(),
     series_title: draft.seriesTitle.trim(),
     series_position: Number.isFinite(position) ? position : null,
+    language: draft.language,
   }
 }
 
 function ImportPreview({ session, onCancel }: { session: ImportSession; onCancel: () => void }) {
   const { t } = useTranslation()
   const commit = useCommitImport()
+  const { language: uiLanguage } = useLanguage()
   const [drafts, setDrafts] = useState<Record<string, Draft>>(() =>
-    Object.fromEntries(session.books.map((b) => [b.key, toDraft(b)])),
+    Object.fromEntries(session.books.map((b) => [b.key, toDraft(b, uiLanguage)])),
   )
 
   const selected = session.books.filter((b) => drafts[b.key]?.include).length
@@ -503,6 +516,20 @@ function BookPreview({
               value={draft.narrator}
               onChange={(e) => onChange({ narrator: e.target.value })}
             />
+          </Field>
+          <Field id={`${id}-language`} label={t('admin.import.fields.language')}>
+            <LanguageSelect
+              id={`${id}-language`}
+              value={draft.language}
+              onChange={(language) => onChange({ language, languageSource: 'manual' })}
+            />
+            {draft.languageSource !== 'manual' ? (
+              <p className="text-xs text-muted-foreground">
+                {draft.languageSource === 'tags'
+                  ? t('admin.import.languageFromTags')
+                  : t('admin.import.languageFromUi')}
+              </p>
+            ) : null}
           </Field>
           <div className="grid grid-cols-[1fr_5rem] gap-2">
             <Field id={`${id}-series`} label={t('admin.import.fields.series')}>

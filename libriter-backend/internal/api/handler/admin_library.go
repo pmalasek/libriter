@@ -16,7 +16,26 @@ import (
 // zdroj má – rozhraní podle nich ukazuje, že Google Books autory neumí.
 type metadataSettingsResponse struct {
 	Providers         []metadataProviderResponse `json:"providers"`
+	Languages         []metadataLanguageResponse `json:"languages"`
 	GoogleBooksAPIKey string                     `json:"google_books_api_key"`
+}
+
+type metadataLanguageResponse struct {
+	Language  string                     `json:"language"`
+	Providers []metadataProviderResponse `json:"providers"`
+}
+
+type providerSettingRequest struct {
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
+}
+
+func toProviderSettings(in []providerSettingRequest) []service.ProviderSetting {
+	out := make([]service.ProviderSetting, 0, len(in))
+	for _, p := range in {
+		out = append(out, service.ProviderSetting{Name: p.Name, Enabled: p.Enabled})
+	}
+	return out
 }
 
 type metadataProviderResponse struct {
@@ -39,14 +58,15 @@ func (h *AdminHandler) MetadataSettings(w http.ResponseWriter, r *http.Request) 
 // PUT /api/v1/admin/settings/metadata  (admin)
 //
 // Tělo nahrazuje celé nastavení: pořadí v seznamu je pořadí, ve kterém se
-// zdroje zkoušejí. Po uložení se řetězec zdrojů rovnou vymění, takže změna
+// zdroje zkoušejí; languages jsou vlastní pořadí pro jazyky knih. Po uložení se řetězec zdrojů rovnou vymění, takže změna
 // platí bez restartu serveru.
 func (h *AdminHandler) SetMetadataSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Providers []struct {
-			Name    string `json:"name"`
-			Enabled bool   `json:"enabled"`
-		} `json:"providers"`
+		Providers []providerSettingRequest `json:"providers"`
+		Languages []struct {
+			Language  string                   `json:"language"`
+			Providers []providerSettingRequest `json:"providers"`
+		} `json:"languages"`
 		GoogleBooksAPIKey string `json:"google_books_api_key"`
 	}
 	if err := readJSON(r, &req); err != nil {
@@ -55,11 +75,15 @@ func (h *AdminHandler) SetMetadataSettings(w http.ResponseWriter, r *http.Reques
 	}
 
 	in := service.MetadataSettings{
-		Providers:         make([]service.ProviderSetting, 0, len(req.Providers)),
+		Providers:         toProviderSettings(req.Providers),
+		Languages:         make([]service.LanguageProfile, 0, len(req.Languages)),
 		GoogleBooksAPIKey: req.GoogleBooksAPIKey,
 	}
-	for _, p := range req.Providers {
-		in.Providers = append(in.Providers, service.ProviderSetting{Name: p.Name, Enabled: p.Enabled})
+	for _, l := range req.Languages {
+		in.Languages = append(in.Languages, service.LanguageProfile{
+			Language:  l.Language,
+			Providers: toProviderSettings(l.Providers),
+		})
 	}
 
 	saved, err := h.settings.SetMetadata(r.Context(), in)
@@ -72,13 +96,8 @@ func (h *AdminHandler) SetMetadataSettings(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	enabled := make([]string, 0, len(saved.Providers))
-	for _, p := range saved.Providers {
-		if p.Enabled {
-			enabled = append(enabled, p.Name)
-		}
-	}
-	h.registry.Rebuild(enabled, metadata.ProviderConfig{GoogleBooksAPIKey: saved.GoogleBooksAPIKey})
+	profiles := saved.Profiles()
+	h.registry.Rebuild(profiles, metadata.ProviderConfig{GoogleBooksAPIKey: saved.GoogleBooksAPIKey})
 
 	// Klíč do auditu nepatří – stačí, že se změnil.
 	h.audit.Record(r.Context(), actorID(r), service.AuditEvent{
@@ -86,7 +105,8 @@ func (h *AdminHandler) SetMetadataSettings(w http.ResponseWriter, r *http.Reques
 		TargetType: service.AuditTargetSettings,
 		TargetID:   service.SettingMetadataProviders,
 		Details: map[string]any{
-			"providers":                  enabled,
+			"providers":                  profiles.Default,
+			"languages":                  profiles.ByLanguage,
 			"google_books_api_key_saved": saved.GoogleBooksAPIKey != "",
 		},
 	})
@@ -100,17 +120,29 @@ func (h *AdminHandler) describeMetadata(settings service.MetadataSettings) metad
 		caps[info.Name] = info
 	}
 
+	describe := func(providers []service.ProviderSetting) []metadataProviderResponse {
+		out := make([]metadataProviderResponse, 0, len(providers))
+		for _, p := range providers {
+			info := caps[p.Name]
+			out = append(out, metadataProviderResponse{
+				Name:            p.Name,
+				Enabled:         p.Enabled,
+				SupportsAuthors: info.SupportsAuthors,
+				SupportsImages:  info.SupportsImages,
+			})
+		}
+		return out
+	}
+
 	out := metadataSettingsResponse{
-		Providers:         make([]metadataProviderResponse, 0, len(settings.Providers)),
+		Providers:         describe(settings.Providers),
+		Languages:         make([]metadataLanguageResponse, 0, len(settings.Languages)),
 		GoogleBooksAPIKey: settings.GoogleBooksAPIKey,
 	}
-	for _, p := range settings.Providers {
-		info := caps[p.Name]
-		out.Providers = append(out.Providers, metadataProviderResponse{
-			Name:            p.Name,
-			Enabled:         p.Enabled,
-			SupportsAuthors: info.SupportsAuthors,
-			SupportsImages:  info.SupportsImages,
+	for _, l := range settings.Languages {
+		out.Languages = append(out.Languages, metadataLanguageResponse{
+			Language:  l.Language,
+			Providers: describe(l.Providers),
 		})
 	}
 	return out
@@ -148,6 +180,47 @@ func (h *AdminHandler) SetRegistrationSettings(w http.ResponseWriter, r *http.Re
 		Action:     service.AuditSettingsRegistration,
 		TargetType: service.AuditTargetSettings,
 		TargetID:   service.SettingRegistration,
+		Details:    saved,
+	})
+
+	writeJSON(w, http.StatusOK, saved)
+}
+
+// GET /api/v1/admin/settings/library  (admin)
+func (h *AdminHandler) LibrarySettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.settings.Library(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání nastavení knihovny")
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
+}
+
+// PUT /api/v1/admin/settings/library  (admin)
+//
+// Výchozí jazyk platí hned: scanner, import i zakládání knih se na něj ptají
+// při každé nové knize.
+func (h *AdminHandler) SetLibrarySettings(w http.ResponseWriter, r *http.Request) {
+	var req service.LibrarySettings
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
+		return
+	}
+
+	saved, err := h.settings.SetLibrary(r.Context(), req)
+	if errors.Is(err, service.ErrInvalidSetting) {
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při ukládání nastavení knihovny")
+		return
+	}
+
+	h.audit.Record(r.Context(), actorID(r), service.AuditEvent{
+		Action:     service.AuditSettingsLibrary,
+		TargetType: service.AuditTargetSettings,
+		TargetID:   service.SettingLibrary,
 		Details:    saved,
 	})
 

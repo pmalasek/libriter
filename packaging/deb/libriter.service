@@ -1,0 +1,23 @@
+[Unit]
+Description=Libriter – knihovna audioknih
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=libriter
+Group=libriter
+Environment=LIBRITER_ENV_FILE=/etc/libriter/libriter.env
+WorkingDirectory=/var/lib/libriter
+ExecStart=/usr/bin/libriter serve
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/libriter
+
+[Install]
+WantedBy=multi-user.target

@@ -142,6 +142,13 @@ export default {
     yes: 'ja',
     no: 'nein',
   },
+  library: {
+    saved: 'Bibliothekseinstellungen gespeichert – sie gelten ab jetzt für neue Bücher.',
+    title: 'Bibliothek',
+    description:
+      'Neue Bücher erhalten die Standardsprache, wenn weder die Audio-Tags noch die Person, die das Buch anlegt, eine angeben. Vorhandene Bücher bleiben unverändert.',
+    defaultLanguage: 'Standardsprache neuer Bücher',
+  },
   registration: {
     saved: 'Registrierungseinstellungen gespeichert.',
     title: 'Registrierung',
@@ -154,7 +161,8 @@ export default {
   metadata: {
     saved: 'Metadatenquellen gespeichert – die Änderung gilt sofort.',
     title: 'Metadatenquellen',
-    description: 'Die Quellen werden von oben nach unten ausprobiert; die erste mit einem Ergebnis wird verwendet. Eine deaktivierte Quelle wird auch nicht zum Herunterladen von Autorenfotos genutzt.',
+    description:
+      'Standardreihenfolge für Bücher in Sprachen ohne eigenes Profil. Die Quellen werden von oben nach unten ausprobiert; die erste mit einem Ergebnis wird verwendet. Eine in allen Profilen deaktivierte Quelle wird auch nicht zum Herunterladen von Autorenfotos genutzt.',
     supportsAuthors: 'Bücher, Autoren und Fotos',
     booksOnly: 'nur Bücher',
     disabled: 'deaktiviert',
@@ -165,6 +173,13 @@ export default {
     googleDescription: 'Ohne Schlüssel gilt ein anonymes Tageskontingent für die gesamte IP-Adresse, das schnell aufgebraucht ist. Einen Schlüssel erhältst du in der Google Cloud Console nach Aktivierung der Books API.',
     apiKey: 'API-Schlüssel',
     optional: 'optional',
+    languagesTitle: 'Quellen nach Sprache des Buchs',
+    languagesDescription: 'Bücher in diesen Sprachen verwenden statt der Standardreihenfolge ihre eigene. Die Suchsprache wird aus dem Buch übernommen und lässt sich im Dialog umschalten.',
+    addLanguage: 'Sprache hinzufügen',
+    removeLanguage: 'Profil für {{language}} entfernen',
+    removeLanguageShort: 'Entfernen',
+    languageExists: '{{language}} hat bereits ein eigenes Profil.',
+    noLanguages: 'Keine Sprachprofile – alle Bücher verwenden die Standardreihenfolge.',
   },
   scanner: {
     title: 'Scanner',
@@ -272,6 +287,8 @@ export default {
     source: 'Ordner: {{path}}',
     root: 'lose Dateien',
     applySeries: 'Für alle Bücher in „{{group}}“ verwenden',
+    languageFromTags: 'Aus den Audio-Tags.',
+    languageFromUi: 'Die Tags geben keine Sprache an – Ihre Oberflächensprache wurde vorausgefüllt.',
     fields: {
       title: 'Titel',
       authors: 'Autoren',
@@ -280,6 +297,7 @@ export default {
       series: 'Reihe',
       seriesPosition: 'Nr.',
       description: 'Beschreibung',
+      language: 'Sprache',
     },
     warnings: {
       no_title: 'Titel fehlt',

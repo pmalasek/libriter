@@ -16,6 +16,8 @@ import (
 // typu drží službu testovatelnou bez souborového systému.
 type bookRemover interface {
 	DeleteBook(ctx context.Context, id uuid.UUID, deleteFiles bool) (scanner.DeleteResult, error)
+	// DefaultLanguage je jazyk nové knihy, když ho klient neposlal.
+	DefaultLanguage(ctx context.Context) string
 }
 
 type BookService struct {
@@ -74,6 +76,11 @@ func (b *BookService) Delete(
 
 // ErrUnknownLanguage znamená, že kód jazyka knihy není v číselníku.
 var ErrUnknownLanguage = errors.New("neznámý kód jazyka")
+
+// DefaultLanguage vrátí výchozí jazyk nových knih (nastavení knihovny).
+func (b *BookService) DefaultLanguage(ctx context.Context) string {
+	return b.scanner.DefaultLanguage(ctx)
+}
 
 // Languages vrátí číselník jazyků, ze kterého se jazyk knihy vybírá.
 func (b *BookService) Languages(ctx context.Context) ([]model.Language, error) {

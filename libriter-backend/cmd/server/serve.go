@@ -19,8 +19,10 @@ import (
 	"libriter/internal/db"
 	"libriter/internal/importer"
 	"libriter/internal/metadata"
+	"libriter/internal/metadata/audible"
 	"libriter/internal/metadata/cbdb"
 	"libriter/internal/metadata/databazeknih"
+	"libriter/internal/metadata/goodreads"
 	"libriter/internal/metadata/googlebooks"
 	"libriter/internal/metadata/openlibrary"
 	"libriter/internal/scanner"
@@ -60,21 +62,25 @@ func runServe() error {
 	store := storage.New(sqlDB)
 
 	// --- scanner ---
+	// Spouští se až po načtení nastavení – nové knihy dostávají výchozí jazyk
+	// knihovny a počáteční průchod by je jinak zakládal se záložním.
 	scn := scanner.New(cfg.Storage.AudioRoot, cfg.Storage.CoverRoot, store)
-	scn.Start(appCtx)
 
 	// Zdroje metadat musí vzniknout dřív než služby, které je používají –
 	// stahování fotek autorů si přes ně ověřuje povolené adresy. Registry
 	// drží aktuální řetězec a mění ho, když admin přenastaví zdroje; hodnoty
 	// z .env jsou jen výchozí, uložené nastavení má přednost.
 	registry := metadata.NewRegistry(providerFactories())
-	settingsSvc := service.NewSettings(store, cfg.Metadata, registry.KnownNames())
+	settingsSvc := service.NewSettings(store, cfg.Metadata, cfg.Library, registry.KnownNames())
 
-	providerNames, googleKey, err := settingsSvc.EnabledProviders(ctx)
+	profiles, googleKey, err := settingsSvc.Profiles(ctx)
 	if err != nil {
 		return fmt.Errorf("nastavení zdrojů metadat: %w", err)
 	}
-	registry.Rebuild(providerNames, metadata.ProviderConfig{GoogleBooksAPIKey: googleKey})
+	registry.Rebuild(profiles, metadata.ProviderConfig{GoogleBooksAPIKey: googleKey})
+
+	scn.SetDefaultLanguage(settingsSvc.DefaultLanguage)
+	scn.Start(appCtx)
 
 	authSvc := service.NewAuth(store, cfg.JWT)
 	userSvc := service.NewUser(store, authSvc)
@@ -89,7 +95,8 @@ func runServe() error {
 
 	authH := handler.NewAuth(authSvc, settingsSvc)
 	userH := handler.NewUser(userSvc, auditSvc)
-	bookH := handler.NewBook(bookSvc, cfg.Storage.CoverRoot, auditSvc)
+	bookH := handler.NewBook(bookSvc, cfg.Storage.CoverRoot, auditSvc).
+		WithCovers(service.NewBookCover(store, registry, cfg.Storage.CoverRoot))
 	authorH := handler.NewAuthor(authorSvc, cfg.Storage.AuthorImageRoot, authorImageSvc, auditSvc)
 	seriesH := handler.NewSeries(seriesSvc, auditSvc)
 	metadataH := handler.NewMetadata(registry)
@@ -196,6 +203,7 @@ func runServe() error {
 				r.Put("/books/{id}", bookH.Update)
 				r.Patch("/books/{id}", bookH.Patch) // částečná aktualizace (webové rozhraní)
 				r.Put("/books/{id}/chapters/order", bookH.ReorderChapters)
+				r.Put("/books/{id}/cover", bookH.SetCover) // stáhne obálku ze zdroje
 				r.Post("/authors", authorH.Create)
 				r.Put("/authors/{id}", authorH.Update)
 				r.Put("/authors/{id}/image", authorH.SetImage) // stáhne fotku ze zdroje
@@ -222,6 +230,8 @@ func runServe() error {
 				r.Put("/settings/metadata", adminH.SetMetadataSettings)
 				r.Get("/settings/registration", adminH.RegistrationSettings)
 				r.Put("/settings/registration", adminH.SetRegistrationSettings)
+				r.Get("/settings/library", adminH.LibrarySettings)
+				r.Put("/settings/library", adminH.SetLibrarySettings)
 
 				r.Get("/scanner", adminH.ScannerStatus)
 				r.Post("/scanner/rescan", adminH.Rescan)
@@ -316,5 +326,12 @@ func providerFactories() map[string]metadata.Factory {
 		"googlebooks": func(cfg metadata.ProviderConfig) metadata.Provider {
 			return googlebooks.NewClient(cfg.GoogleBooksAPIKey)
 		},
+		audible.MarketplaceCOM.Name: func(metadata.ProviderConfig) metadata.Provider {
+			return audible.NewClient(audible.MarketplaceCOM)
+		},
+		audible.MarketplaceDE.Name: func(metadata.ProviderConfig) metadata.Provider {
+			return audible.NewClient(audible.MarketplaceDE)
+		},
+		"goodreads": func(metadata.ProviderConfig) metadata.Provider { return goodreads.NewClient() },
 	}
 }

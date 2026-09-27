@@ -28,8 +28,28 @@ type Client struct {
 	fetcher *metadata.Fetcher
 	apiKey  string
 	// country je potřeba tam, kde API nedokáže určit zemi z IP, jinak
-	// odpovídá chybou o nedostupnosti služby v dané lokalitě.
+	// odpovídá chybou o nedostupnosti služby v dané lokalitě. Hledání ji
+	// odvozuje z jazyka knihy (countryFor), tohle je výchozí hodnota.
 	country string
+}
+
+// languageCountry je země, jejíž katalog se prohledává pro knihu v daném
+// jazyce. Jazyk, který tu není, jede na výchozí zemi klienta.
+var languageCountry = map[string]string{
+	"en": "US",
+	"de": "DE",
+	"sk": "SK",
+	"pl": "PL",
+	"fr": "FR",
+	"es": "ES",
+	"it": "IT",
+}
+
+func (c *Client) countryFor(language string) string {
+	if country, ok := languageCountry[language]; ok {
+		return country
+	}
+	return c.country
 }
 
 // NewClient vytvoří klienta. apiKey smí být prázdný – pak se jede na sdílenou
@@ -43,6 +63,13 @@ func NewClient(apiKey string) *Client {
 }
 
 func (c *Client) Name() string { return providerName }
+
+// SupportsCoverURL: náhledy jsou na books.google.com, u některých svazků
+// na books.googleusercontent.com.
+func (c *Client) SupportsCoverURL(rawURL string) bool {
+	return metadata.HostMatches(rawURL, "books.google.com") ||
+		metadata.HostMatches(rawURL, "books.googleusercontent.com")
+}
 
 func (c *Client) Supports(rawURL string) bool {
 	return metadata.HostMatches(rawURL, host) && strings.Contains(rawURL, "/books/v1/volumes/")
@@ -60,6 +87,7 @@ type volume struct {
 		PublishedDate string   `json:"publishedDate"`
 		Description   string   `json:"description"`
 		Categories    []string `json:"categories"`
+		Language      string   `json:"language"`      // ISO 639-1
 		AverageRating float64  `json:"averageRating"` // 1–5
 		ImageLinks    struct {
 			Thumbnail      string `json:"thumbnail"`
@@ -78,7 +106,12 @@ func (c *Client) Search(ctx context.Context, q metadata.SearchQuery) ([]metadata
 	params := url.Values{}
 	params.Set("q", searchExpr(q))
 	params.Set("maxResults", strconv.Itoa(searchLimit))
-	params.Set("country", c.country)
+	params.Set("country", c.countryFor(q.Language))
+	// langRestrict omezí výsledky na vydání v jazyce knihy – bez něj vrací
+	// na anglický název i české a německé překlady.
+	if q.Language != "" {
+		params.Set("langRestrict", q.Language)
+	}
 	if c.apiKey != "" {
 		params.Set("key", c.apiKey)
 	}
@@ -148,6 +181,7 @@ func (c *Client) FetchByURL(ctx context.Context, rawURL string) (*metadata.BookM
 		Rating:    int(info.AverageRating * 20),
 		Publisher: info.Publisher,
 		Year:      parseYear(info.PublishedDate),
+		Language:  strings.ToLower(info.Language),
 		SourceURL: rawURL,
 		Source:    providerName,
 	}

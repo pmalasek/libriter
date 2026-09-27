@@ -52,6 +52,11 @@ func NewClient() *Client {
 
 func (c *Client) Name() string { return providerName }
 
+// SupportsCoverURL: obálky vydává skript na stejném webu (/img.php?…).
+func (c *Client) SupportsCoverURL(rawURL string) bool {
+	return metadata.HostMatches(rawURL, host)
+}
+
 func (c *Client) Supports(rawURL string) bool {
 	return metadata.HostMatches(rawURL, host)
 }

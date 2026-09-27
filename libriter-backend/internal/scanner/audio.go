@@ -7,6 +7,7 @@
 //               Tag může obsahovat víc autorů oddělených ";", "/", "&", " a ", …;
 //               každé jméno se rozdělí na křestní / prostřední / příjmení.
 // Narrator:     Artist, pokud se liší od autorů
+// Language:     TLAN (ID3), LANGUAGE (Vorbis/FLAC, MP4) → prázdný
 // ChapterTitle: Title tag → název souboru bez přípony
 // TrackNumber:  Track tag → 0 (pořadí z filesystému jako fallback)
 // DiscNumber:   Disc tag → 0 (jednodiskové vydání)
@@ -34,6 +35,9 @@ type AudioMeta struct {
 	BookTitle string // album tag, vyčištěný od číselných prefixů
 	Authors   []model.AuthorName
 	Narrator  string // prázdný = neuveden
+	// Language je jazyk z tagu (ISO 639-1); prázdný = neuveden nebo
+	// nerozpoznaný. Proti číselníku jazyků ho ověřuje až ten, kdo zakládá knihu.
+	Language string
 
 	// Metadata na úrovni kapitoly
 	ChapterTitle    string
@@ -104,8 +108,31 @@ func readTagMeta(absPath string) (*AudioMeta, error) {
 		if artist != "" && artist != authorTag && !isAuthor(meta.Authors, artist) {
 			meta.Narrator = artist
 		}
+
+		meta.Language = tagLanguage(m.Raw())
 	}
 	return meta, nil
+}
+
+// languageKeys jsou klíče jazyka v Raw() podle formátu: ID3v2.3/2.4 (TLAN),
+// ID3v2.2 (TLA), Vorbis/FLAC a vlastní atom MP4 (language, u MP4 i velkými).
+var languageKeys = []string{"TLAN", "TLA", "language", "LANGUAGE", "Language"}
+
+// tagLanguage najde jazyk v surových tazích a převede ho na ISO 639-1.
+func tagLanguage(raw map[string]interface{}) string {
+	for _, key := range languageKeys {
+		var value string
+		switch v := raw[key].(type) {
+		case string:
+			value = v
+		case []string:
+			value = strings.Join(v, "/")
+		}
+		if lang := model.LanguageFromTag(value); lang != "" {
+			return lang
+		}
+	}
+	return ""
 }
 
 // firstNonEmpty vrátí první neprázdnou hodnotu.

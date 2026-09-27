@@ -400,6 +400,10 @@ export interface BookMetadata {
   series: string
   /** Pořadí dílu v sérii; 0, když ho zdroj neuvádí. */
   series_position: number
+  /** Vypravěč audioknihy; dávají ho jen zdroje audioknih (Audible). */
+  narrator: string
+  /** Jazyk vydání (ISO 639-1), pokud ho zdroj uvádí. */
+  language: string
   source_url: string
   source: string
 }
@@ -451,6 +455,9 @@ export const METADATA_SOURCE_LABELS: Record<string, string> = {
   cbdb: 'cbdb.cz',
   openlibrary: 'OpenLibrary',
   googlebooks: 'Google Books',
+  audible_com: 'Audible.com',
+  audible_de: 'Audible.de',
+  goodreads: 'Goodreads',
 }
 
 export function roleLabel(role: Role): string {
@@ -487,16 +494,30 @@ export interface AdminProvider {
   supports_images: boolean
 }
 
-/** GET /admin/settings/metadata */
+/** Vlastní pořadí zdrojů pro knihy v jednom jazyce (ISO 639-1). */
+export interface MetadataLanguageProfile {
+  language: string
+  providers: AdminProvider[]
+}
+
+/** GET /admin/settings/metadata – providers je výchozí pořadí pro jazyky bez profilu. */
 export interface MetadataSettings {
   providers: AdminProvider[]
+  languages: MetadataLanguageProfile[]
   google_books_api_key: string
 }
 
 /** PUT /admin/settings/metadata – backend má DisallowUnknownFields. */
 export interface MetadataSettingsRequest {
   providers: { name: string; enabled: boolean }[]
+  languages: { language: string; providers: { name: string; enabled: boolean }[] }[]
   google_books_api_key: string
+}
+
+/** GET a PUT /admin/settings/library */
+export interface LibrarySettings {
+  /** Jazyk nové knihy (ISO 639-1), když ho neuvádějí tagy ani ten, kdo ji zakládá. */
+  default_language: string
 }
 
 /** GET a PUT /admin/settings/registration */
@@ -734,6 +755,7 @@ const AUDIT_ACTIONS = [
   'user.password_reset',
   'settings.metadata_update',
   'settings.registration_update',
+  'settings.library_update',
   'book.delete',
   'author.delete',
   'series.delete',
@@ -819,6 +841,8 @@ export interface ImportBook {
   description: string
   series_title: string
   series_position: number | null
+  /** Jazyk knihy (ISO 639-1) z audio tagů; prázdný, když ho tagy neuvádějí. */
+  language: string
   chapters: ImportChapter[]
   duration_seconds: number
   size_bytes: number
@@ -871,4 +895,5 @@ export type ImportBookEdit = Pick<
   | 'description'
   | 'series_title'
   | 'series_position'
+  | 'language'
 >

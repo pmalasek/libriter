@@ -19,6 +19,7 @@ export default {
     settings: {
       metadata_update: 'Metadatenquellen geändert',
       registration_update: 'Registrierungseinstellungen geändert',
+      library_update: 'Bibliothekseinstellungen geändert',
     },
     book: {
       delete: 'Buch gelöscht',

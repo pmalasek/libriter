@@ -123,7 +123,7 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 
 	registry := metadata.NewRegistry(map[string]metadata.Factory{})
 	cfg := &config.Config{Server: config.ServerConfig{Env: "test"}}
-	settingsSvc := service.NewSettings(store, config.MetadataConfig{}, registry.KnownNames())
+	settingsSvc := service.NewSettings(store, config.MetadataConfig{}, config.LibraryConfig{}, registry.KnownNames())
 	systemSvc := service.NewSystem(store, cfg, time.Now())
 
 	scn := &fakeScanner{

@@ -20,10 +20,18 @@ type BookHandler struct {
 	coverRoot string // adresář s obálkami (COVER_ROOT)
 	// audit je volitelný (nil = mazání se nezaznamenává).
 	audit *service.AuditService
+	// covers stahuje obálky ze zdrojů metadat; nil = PUT /cover odpoví 404.
+	covers *service.BookCoverService
 }
 
 func NewBook(svc *service.BookService, coverRoot string, audit *service.AuditService) *BookHandler {
 	return &BookHandler{svc: svc, coverRoot: coverRoot, audit: audit}
+}
+
+// WithCovers zapne stahování obálek ze zdrojů metadat (PUT /books/{id}/cover).
+func (h *BookHandler) WithCovers(covers *service.BookCoverService) *BookHandler {
+	h.covers = covers
+	return h
 }
 
 // GET /api/v1/books
@@ -52,6 +60,48 @@ func (h *BookHandler) Get(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání knihy")
 		return
 	}
+	writeJSON(w, http.StatusOK, book)
+}
+
+// PUT /api/v1/books/{id}/cover  (editor+)
+//
+// Tělo {"url": "…"} – adresa obálky z metadat (cover_url). Server obrázek
+// stáhne a uloží do COVER_ROOT; adresa musí patřit zapnutému zdroji metadat.
+func (h *BookHandler) SetCover(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	if h.covers == nil {
+		writeError(w, http.StatusNotFound, "metadata.no_providers", "zdroje metadat nejsou zapnuté")
+		return
+	}
+
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
+		return
+	}
+	if strings.TrimSpace(req.URL) == "" {
+		writeError(w, http.StatusBadRequest, "validation.url_required", "url je povinná")
+		return
+	}
+
+	book, err := h.covers.SetFromURL(r.Context(), id, strings.TrimSpace(req.URL))
+	switch {
+	case errors.Is(err, service.ErrCoverNotAllowed):
+		writeError(w, http.StatusBadRequest, "metadata.url_unsupported", "adresa obálky nepatří žádnému zapnutému zdroji metadat")
+		return
+	case errors.Is(err, service.ErrNotFound):
+		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
+		return
+	case err != nil:
+		writeError(w, http.StatusBadGateway, "image.download_failed", "obálku se nepodařilo stáhnout – "+err.Error())
+		return
+	}
+
 	writeJSON(w, http.StatusOK, book)
 }
 
@@ -110,6 +160,10 @@ func (h *BookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
+	}
+	// Bez jazyka dostane nová kniha výchozí jazyk knihovny.
+	if normalizeLanguage(req.Language) == "" {
+		in.Language = h.svc.DefaultLanguage(r.Context())
 	}
 	if !h.checkLanguage(w, r, in.Language) {
 		return

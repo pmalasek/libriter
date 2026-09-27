@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
 )
 
 // Attr vrátí hodnotu atributu, nebo prázdný řetězec.
@@ -122,4 +123,52 @@ func ResolveURL(base, href string) string {
 		return "https:" + href
 	}
 	return strings.TrimSuffix(base, "/") + "/" + strings.TrimPrefix(href, "/")
+}
+
+// blockElements ukončují odstavec – v textu se z nich stane prázdný řádek.
+var blockElements = map[string]bool{
+	"p": true, "br": true, "div": true, "li": true, "h1": true, "h2": true,
+	"h3": true, "h4": true, "blockquote": true, "ul": true, "ol": true,
+}
+
+// FragmentText převede kus HTML (anotaci z API) na prostý text. Odstavce
+// zůstanou oddělené prázdným řádkem, bílé znaky uvnitř se sloučí.
+func FragmentText(fragment string) string {
+	nodes, err := html.ParseFragment(strings.NewReader(fragment), &html.Node{
+		Type: html.ElementNode, Data: "body", DataAtom: atom.Body,
+	})
+	if err != nil {
+		return Collapse(fragment)
+	}
+
+	var paragraphs []string
+	var current strings.Builder
+	flush := func() {
+		if text := Collapse(current.String()); text != "" {
+			paragraphs = append(paragraphs, text)
+		}
+		current.Reset()
+	}
+	var walk func(n *html.Node)
+	walk = func(n *html.Node) {
+		switch {
+		case n.Type == html.TextNode:
+			current.WriteString(n.Data)
+		case n.Type == html.ElementNode && blockElements[n.Data]:
+			flush()
+			for c := n.FirstChild; c != nil; c = c.NextSibling {
+				walk(c)
+			}
+			flush()
+			return
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	for _, n := range nodes {
+		walk(n)
+	}
+	flush()
+	return strings.Join(paragraphs, "\n\n")
 }

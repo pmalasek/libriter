@@ -27,6 +27,7 @@ type BookEdit struct {
 	Description    string   `json:"description"`
 	SeriesTitle    string   `json:"series_title"`
 	SeriesPosition *int     `json:"series_position"`
+	Language       string   `json:"language"`
 }
 
 // maxSeriesPosition odpovídá books.series_position (int16).
@@ -103,6 +104,7 @@ func applyEdit(b *Book, e BookEdit) error {
 	b.Description = strings.TrimSpace(e.Description)
 	b.SeriesTitle = strings.TrimSpace(e.SeriesTitle)
 	b.SeriesPosition = e.SeriesPosition
+	b.Language = strings.ToLower(strings.TrimSpace(e.Language))
 	return nil
 }
 
@@ -137,6 +139,23 @@ func (s *Service) runCommit(ctx context.Context, id uuid.UUID) {
 	_ = os.RemoveAll(s.filesDir(id))
 }
 
+// bookLanguage ověří jazyk z náhledu proti číselníku. Prázdný jazyk (tagy ho
+// neuvádějí a klient žádný neposlal) dostane výchozí jazyk knihovny;
+// kód mimo číselník je chyba – knihu by pak nešlo uložit v editaci.
+func (s *Service) bookLanguage(ctx context.Context, language string) (string, error) {
+	if language == "" {
+		return s.scanner.DefaultLanguage(ctx), nil
+	}
+	ok, err := s.store.LanguageExists(ctx, language)
+	if err != nil {
+		return "", fmt.Errorf("jazyk: %w", err)
+	}
+	if !ok {
+		return "", fmt.Errorf("%w: neznámý kód jazyka %q", ErrInvalidBook, language)
+	}
+	return language, nil
+}
+
 func (s *Service) importBook(ctx context.Context, id uuid.UUID, b Book, series map[string]uuid.UUID) (*model.Book, error) {
 	names := make([]model.AuthorName, 0, len(b.Authors))
 	for _, a := range b.Authors {
@@ -152,9 +171,13 @@ func (s *Service) importBook(ctx context.Context, id uuid.UUID, b Book, series m
 		return nil, fmt.Errorf("autoři: %w", err)
 	}
 
+	language, err := s.bookLanguage(ctx, b.Language)
+	if err != nil {
+		return nil, err
+	}
 	in := storage.BookInput{
 		Title:    b.Title,
-		Language: "cs",
+		Language: language,
 	}
 	for _, a := range authors {
 		in.AuthorIDs = append(in.AuthorIDs, a.ID)

@@ -310,6 +310,7 @@ func TestImportEndToEnd(t *testing.T) {
 	base := t.TempDir()
 	audioRoot := filepath.Join(base, "books")
 	scn := scanner.New(audioRoot, "", store)
+	scn.SetDefaultLanguage(func(context.Context) string { return "de" })
 
 	if _, err := New(ctx, filepath.Join(audioRoot, "import"), 1<<20, scn, store); err == nil {
 		t.Fatal("staging uvnitř AUDIO_ROOT měl být odmítnut")
@@ -354,7 +355,8 @@ func TestImportEndToEnd(t *testing.T) {
 	pos1, pos2 := 1, 2
 	edits := []BookEdit{
 		{Key: "Cooper, Ellison/01 - V Kleci", Include: true, Title: "V kleci",
-			Authors: []string{"Ellison Cooper"}, SeriesTitle: "Sayer Altair", SeriesPosition: &pos1},
+			Authors: []string{"Ellison Cooper"}, SeriesTitle: "Sayer Altair", SeriesPosition: &pos1,
+			Language: "EN"},
 		{Key: "Cooper, Ellison/02 - Pohřbená", Include: true, Title: "Pohřbená",
 			Authors: []string{"Ellison Cooper"}, SeriesTitle: "sayer altair", SeriesPosition: &pos2},
 		{Key: "warlord_mars", Include: false},
@@ -385,6 +387,10 @@ func TestImportEndToEnd(t *testing.T) {
 	second, _ := store.GetBook(ctx, *done.Results[1].BookID)
 	if second.SeriesID == nil || *second.SeriesID != *book.SeriesID {
 		t.Error("obě knihy mají patřit do jedné série")
+	}
+	// Jazyk z náhledu se převezme, bez něj platí výchozí jazyk knihovny.
+	if book.Language != "en" || second.Language != "de" {
+		t.Errorf("jazyky = %q a %q, chtěno en a de", book.Language, second.Language)
 	}
 
 	chapters, _ := store.GetChaptersByBookID(ctx, book.ID)

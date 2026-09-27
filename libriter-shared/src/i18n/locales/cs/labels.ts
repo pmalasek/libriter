@@ -19,6 +19,7 @@ export default {
     settings: {
       metadata_update: 'Změna zdrojů metadat',
       registration_update: 'Změna nastavení registrace',
+      library_update: 'Změna nastavení knihovny',
     },
     book: {
       delete: 'Smazání knihy',

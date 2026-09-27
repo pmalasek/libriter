@@ -63,6 +63,11 @@ func (c *Client) Name() string { return providerName }
 
 // Supports přijímá jen adresy z databazeknih.cz – slouží zároveň jako
 // allowlist pro /metadata/book?url=.
+// SupportsCoverURL: obálky jsou na stejném webu (/img/books/…).
+func (c *Client) SupportsCoverURL(rawURL string) bool {
+	return metadata.HostMatches(rawURL, host)
+}
+
 func (c *Client) Supports(rawURL string) bool {
 	return metadata.HostMatches(rawURL, host)
 }

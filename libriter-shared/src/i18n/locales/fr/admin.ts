@@ -143,6 +143,13 @@ export default {
     yes: 'oui',
     no: 'non',
   },
+  library: {
+    saved: 'Paramètres de la bibliothèque enregistrés ; ils s’appliquent désormais aux nouveaux livres.',
+    title: 'Bibliothèque',
+    description:
+      'Les nouveaux livres reçoivent la langue par défaut lorsque ni les tags audio ni la personne qui ajoute le livre n’en indiquent une. Les livres existants ne changent pas.',
+    defaultLanguage: 'Langue par défaut des nouveaux livres',
+  },
   registration: {
     saved: 'Paramètres d’inscription enregistrés.',
     title: 'Inscription',
@@ -155,7 +162,8 @@ export default {
   metadata: {
     saved: 'Sources de métadonnées enregistrées ; la modification prend effet immédiatement.',
     title: 'Sources de métadonnées',
-    description: 'Les sources sont interrogées de haut en bas ; la première qui trouve un résultat est retenue. Une source désactivée n’est pas non plus utilisée pour télécharger les photos des auteurs.',
+    description:
+      'Ordre par défaut pour les livres dans une langue sans profil propre. Les sources sont interrogées de haut en bas ; la première qui trouve un résultat est retenue. Une source désactivée dans tous les profils n’est pas non plus utilisée pour télécharger les photos des auteurs.',
     supportsAuthors: 'livres, auteurs et photos',
     booksOnly: 'livres uniquement',
     disabled: 'désactivé',
@@ -166,6 +174,13 @@ export default {
     googleDescription: 'Sans clé, un quota quotidien anonyme s’applique à l’ensemble de l’adresse IP et s’épuise rapidement. Vous pouvez obtenir une clé dans la console Google Cloud après avoir activé Books API.',
     apiKey: 'Clé API',
     optional: 'facultatif',
+    languagesTitle: 'Sources selon la langue du livre',
+    languagesDescription: 'Les livres dans ces langues utilisent leur propre ordre au lieu de l’ordre par défaut. La langue de recherche est reprise du livre et peut être changée dans la boîte de dialogue.',
+    addLanguage: 'Ajouter une langue',
+    removeLanguage: 'Supprimer le profil pour {{language}}',
+    removeLanguageShort: 'Supprimer',
+    languageExists: '{{language}} a déjà son propre profil.',
+    noLanguages: 'Aucun profil de langue – tous les livres utilisent l’ordre par défaut.',
   },
   scanner: {
     title: 'Analyseur',
@@ -273,6 +288,8 @@ export default {
     source: 'Dossier : {{path}}',
     root: 'fichiers isolés',
     applySeries: 'Utiliser pour tous les livres de « {{group}} »',
+    languageFromTags: 'D’après les tags audio.',
+    languageFromUi: 'Les tags n’indiquent pas de langue – la langue de votre interface a été préremplie.',
     fields: {
       title: 'Titre',
       authors: 'Auteurs',
@@ -281,6 +298,7 @@ export default {
       series: 'Série',
       seriesPosition: 'N°',
       description: 'Description',
+      language: 'Langue',
     },
     warnings: {
       no_title: 'Le titre manque',

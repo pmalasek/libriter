@@ -358,3 +358,32 @@ func TestRankByAuthor(t *testing.T) {
 		t.Errorf("bez autora se pořadí změnilo: %+v", got)
 	}
 }
+
+// fakeCoverProvider má obálky na vlastním hostiteli.
+type fakeCoverProvider struct {
+	fakeProvider
+	coverHost string
+}
+
+func (f *fakeCoverProvider) SupportsCoverURL(rawURL string) bool {
+	return HostMatches(rawURL, f.coverHost)
+}
+
+func TestChainSupportsCoverURL(t *testing.T) {
+	chain := NewChain(
+		&fakeProvider{name: "bezobalek"},
+		&fakeCoverProvider{fakeProvider: fakeProvider{name: "sobalkami"}, coverHost: "covers.example"},
+	)
+	tests := map[string]bool{
+		"https://covers.example/b/1.jpg":    true,
+		"http://covers.example/b/1.jpg":     true,
+		"https://evil.example/b/1.jpg":      false,
+		"file:///etc/passwd":                false,
+		"https://covers.example.evil/1.jpg": false,
+	}
+	for u, want := range tests {
+		if got := chain.SupportsCoverURL(u); got != want {
+			t.Errorf("SupportsCoverURL(%s) = %v, chtěno %v", u, got, want)
+		}
+	}
+}

@@ -299,7 +299,8 @@ func describeBook(filesDir string, d draft, tick func()) Book {
 		}
 	}
 
-	tagAlbum, tagAuthors, tagNarrator := commonTags(files)
+	tagAlbum, tagAuthors, tagNarrator, tagLanguage := commonTags(files)
+	b.Language = tagLanguage
 
 	// Název
 	switch {
@@ -450,10 +451,15 @@ func fileKey(name string) string {
 	return strings.ToLower(norm.NFC.String(strings.TrimSpace(name)))
 }
 
-// commonTags vrátí nejčastější album tag a první nalezené autory a interpreta.
-func commonTags(files []fileMeta) (album string, authors []model.AuthorName, narrator string) {
+// commonTags vrátí nejčastější album tag a jazyk a první nalezené autory
+// a interpreta.
+func commonTags(files []fileMeta) (album string, authors []model.AuthorName, narrator, language string) {
 	counts := map[string]int{}
+	langCounts := map[string]int{}
 	for _, f := range files {
+		if f.tags.Language != "" {
+			langCounts[f.tags.Language]++
+		}
 		if f.tags.BookTitle != "" {
 			counts[f.tags.BookTitle]++
 		}
@@ -464,13 +470,20 @@ func commonTags(files []fileMeta) (album string, authors []model.AuthorName, nar
 			narrator = f.tags.Narrator
 		}
 	}
+	return mostCommon(counts), authors, narrator, mostCommon(langCounts)
+}
+
+// mostCommon vrátí nejčastější hodnotu; při shodě abecedně první, ať je
+// výsledek stálý.
+func mostCommon(counts map[string]int) string {
+	var out string
 	best := 0
-	for a, n := range counts {
-		if n > best || (n == best && a < album) {
-			album, best = a, n
+	for v, n := range counts {
+		if n > best || (n == best && v < out) {
+			out, best = v, n
 		}
 	}
-	return album, authors, narrator
+	return out
 }
 
 // cleanDescription odstraní reklamní odstavce („Knižní předloha … k zakoupení“).

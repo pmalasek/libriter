@@ -22,8 +22,24 @@ function keepGitkeep(): Plugin {
   }
 }
 
+// Node (a tím i dev server Vite) shodí požadavek, který nedorazí celý do
+// 5 minut (requestTimeout 300 s). Import knih nahrává soubory po gigabajtech
+// a přes síť to trvá déle – upload by skončil chybou těsně před koncem.
+// Produkční nginx má pro upload vlastní limity, tady limit prostě vypneme.
+function noRequestTimeout(): Plugin {
+  return {
+    name: 'libriter-no-request-timeout',
+    apply: 'serve',
+    configureServer(server) {
+      if (server.httpServer && 'requestTimeout' in server.httpServer) {
+        server.httpServer.requestTimeout = 0
+      }
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), keepGitkeep()],
+  plugins: [react(), tailwindcss(), keepGitkeep(), noRequestTimeout()],
   resolve: {
     alias: {
       '@': path.resolve(import.meta.dirname, 'src'),

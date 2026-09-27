@@ -20,6 +20,7 @@ import type {
   Language,
   LoginRequest,
   MetadataSearchResult,
+  MetadataSources,
   PlaySession,
   RegisterRequest,
   ReorderChaptersRequest,
@@ -298,6 +299,19 @@ export function usePatchBook(bookId: string) {
   })
 }
 
+/** Stažení obálky ze zdroje metadat (adresa cover_url z BookMetadata). */
+export function useSetBookCover(bookId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (url: string) =>
+      apiFetch<Book>(`/books/${bookId}/cover`, { method: 'PUT', json: { url } }),
+    onSuccess: (book) => {
+      queryClient.setQueryData(queryKeys.book(bookId), book)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+    },
+  })
+}
+
 /**
  * Smazání knihy (admin). `deleteFiles` rozhoduje, jestli se smažou i audio
  * soubory na disku – bez nich scanner knihu při dalším průchodu založí znovu.
@@ -413,14 +427,19 @@ export function useDeleteAuthorImage(authorId: string) {
   })
 }
 
+/**
+ * Vyhledání autora ve zdrojích metadat. Zdroje vybírá backend podle jazyka
+ * rozhraní (`uiLanguage`) – životopis má být v jazyce, kterému hledající
+ * rozumí; pro jazyk bez vlastních zdrojů se hledá anglicky.
+ */
 export function useAuthorMetadataSearch() {
   return useMutation({
-    mutationFn: async (query: string) =>
-      asList(
-        await apiFetch<AuthorSearchResult[] | null>(
-          `/metadata/author/search?q=${encodeURIComponent(query)}`,
-        ),
-      ),
+    mutationFn: async ({ query, uiLanguage }: { query: string; uiLanguage: string }) => {
+      const params = new URLSearchParams({ q: query, ui_language: uiLanguage })
+      return asList(
+        await apiFetch<AuthorSearchResult[] | null>(`/metadata/author/search?${params}`),
+      )
+    },
   })
 }
 
@@ -431,10 +450,14 @@ export function useFetchAuthorMetadata() {
   })
 }
 
-/** Dotaz na knihu. Autor je nepovinný, ale hledání výrazně zpřesňuje. */
+/**
+ * Dotaz na knihu. Autor je nepovinný, ale hledání výrazně zpřesňuje. Jazyk
+ * (ISO 639-1) určuje, které zdroje a v jakém pořadí backend zkusí.
+ */
 export interface MetadataSearchInput {
   title: string
   author?: string
+  language?: string
 }
 
 /**
@@ -444,13 +467,24 @@ export interface MetadataSearchInput {
  */
 export function useMetadataSearch() {
   return useMutation({
-    mutationFn: async ({ title, author }: MetadataSearchInput) => {
+    mutationFn: async ({ title, author, language }: MetadataSearchInput) => {
       const params = new URLSearchParams({ q: title })
       if (author?.trim()) params.set('author', author.trim())
+      if (language) params.set('language', language)
       return asList(
         await apiFetch<MetadataSearchResult[] | null>(`/metadata/search?${params}`),
       )
     },
+  })
+}
+
+/** Zdroje, které se pro knihu v daném jazyce zkusí (GET /metadata/sources). */
+export function useMetadataSources(language: string, enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: queryKeys.metadataSourcesFor(language),
+    queryFn: () =>
+      apiFetch<MetadataSources>(`/metadata/sources?language=${encodeURIComponent(language)}`),
   })
 }
 

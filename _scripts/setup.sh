@@ -100,6 +100,13 @@ else
     brew) pkg_install ffmpeg ;;
   esac
 fi
+# GitHub CLI – `just deploy` jím vystavuje release
+if have gh; then
+  ok "gh"
+else
+  pkg_update_once
+  pkg_install gh
+fi
 
 # -----------------------------------------------------------------------------
 #  3. Node ≥ 22 (web + Expo)

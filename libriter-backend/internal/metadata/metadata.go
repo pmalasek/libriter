@@ -23,9 +23,14 @@ import (
 // Ostrovů nenajde. Zdroj s vlastním hledáním podle autora (Google Books,
 // OpenLibrary) ho pošle rovnou v dotazu, scraper podle něj výsledky seřadí
 // nebo zkusí knihu najít přes stránku autora.
+//
+// Language je jazyk knihy (ISO 639-1). Podle něj se vybírá řetězec zdrojů
+// (Registry.ChainFor) a zdroje s jazykovým filtrem (Google Books,
+// OpenLibrary) ho posílají dál; prázdný znamená „bez omezení“.
 type SearchQuery struct {
-	Title  string
-	Author string
+	Title    string
+	Author   string
+	Language string
 }
 
 // String složí dotaz do jednoho řetězce.
@@ -91,8 +96,12 @@ type BookMetadata struct {
 	// obě pole nulová, u série bez číslování jen SeriesPosition.
 	Series         string `json:"series"`
 	SeriesPosition int    `json:"series_position"`
-	SourceURL      string `json:"source_url"`
-	Source         string `json:"source"`
+	// Narrator je vypravěč audioknihy; dávají ho jen zdroje audioknih (Audible).
+	Narrator string `json:"narrator"`
+	// Language je jazyk vydání (ISO 639-1), pokud ho zdroj uvádí.
+	Language  string `json:"language"`
+	SourceURL string `json:"source_url"`
+	Source    string `json:"source"`
 }
 
 // AuthorMetadata jsou metadata jednoho autora. Nevyplněná pole zůstávají nulová.
@@ -145,6 +154,14 @@ type Provider interface {
 	FetchByURL(ctx context.Context, rawURL string) (*BookMetadata, error)
 }
 
+// CoverProvider říká, ze kterých adres pocházejí obálky knih zdroje. Obálky
+// bývají na jiném hostiteli než stránky (covers.openlibrary.org,
+// m.media-amazon.com) a stahují se na adresu, kterou pošle klient – bez
+// tohoto allowlistu by šlo server donutit stáhnout cokoliv odkudkoliv.
+type CoverProvider interface {
+	SupportsCoverURL(rawURL string) bool
+}
+
 // AuthorProvider umí navíc metadata autorů. Implementují ho jen zdroje, které
 // autory znají jako samostatné záznamy – Google Books je nemá, ten zůstane
 // pouze u knih.
@@ -174,6 +191,12 @@ func NewChain(providers ...Provider) *Chain {
 // Chain vrací sám sebe, aby statický řetězec šlo předat všude, kde se čeká
 // zdroj řetězce (ChainSource). Server tam posílá Registry, testy Chain.
 func (c *Chain) Chain() *Chain { return c }
+
+// ChainFor vrací sám sebe pro každý jazyk – statický řetězec jazyky nerozlišuje.
+func (c *Chain) ChainFor(string) *Chain { return c }
+
+// AuthorChainFor vrací sám sebe – viz ChainFor.
+func (c *Chain) AuthorChainFor(string) *Chain { return c }
 
 // Provider najde zapnutý zdroj podle jména. Používá ho endpoint pracující
 // s číselným ID databazeknih.cz, které ostatní zdroje nesdílejí.
@@ -219,7 +242,7 @@ func (c *Chain) Search(ctx context.Context, q SearchQuery) ([]SearchResult, erro
 			}
 			return results, nil
 		default:
-			slog.Debug("zdroj metadat nic nenašel", "zdroj", p.Name(), "dotaz", q.String())
+			slog.Debug("zdroj metadat nic nenašel", "zdroj", p.Name(), "dotaz", q.String(), "jazyk", q.Language)
 		}
 	}
 
@@ -393,6 +416,17 @@ func (c *Chain) FetchAuthorByURL(ctx context.Context, rawURL string) (*AuthorMet
 		return meta, nil
 	}
 	return nil, ErrNoProvider
+}
+
+// SupportsCoverURL říká, jestli adresa obálky patří některému zapnutému
+// zdroji. Handler se na to ptá dřív, než začne cokoliv stahovat.
+func (c *Chain) SupportsCoverURL(rawURL string) bool {
+	for _, p := range c.providers {
+		if cp, ok := p.(CoverProvider); ok && cp.SupportsCoverURL(rawURL) {
+			return true
+		}
+	}
+	return false
 }
 
 // SupportsImageURL říká, jestli adresa obrázku patří některému zapnutému

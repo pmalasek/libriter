@@ -1,0 +1,16 @@
+#!/bin/sh
+set -e
+
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+fi
+
+# Purge maže konfiguraci a uživatele; data v /var/lib/libriter zůstávají.
+if [ "$1" = "purge" ]; then
+    rm -rf /etc/libriter
+    if getent passwd libriter >/dev/null; then
+        deluser --system libriter >/dev/null || true
+    fi
+fi
+
+exit 0
