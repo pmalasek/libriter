@@ -30,7 +30,7 @@ type metadataProviderResponse struct {
 func (h *AdminHandler) MetadataSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.settings.Metadata(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání nastavení zdrojů")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání nastavení zdrojů")
 		return
 	}
 	writeJSON(w, http.StatusOK, h.describeMetadata(settings))
@@ -50,7 +50,7 @@ func (h *AdminHandler) SetMetadataSettings(w http.ResponseWriter, r *http.Reques
 		GoogleBooksAPIKey string `json:"google_books_api_key"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
@@ -64,11 +64,11 @@ func (h *AdminHandler) SetMetadataSettings(w http.ResponseWriter, r *http.Reques
 
 	saved, err := h.settings.SetMetadata(r.Context(), in)
 	if errors.Is(err, service.ErrInvalidSetting) {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při ukládání nastavení zdrojů")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při ukládání nastavení zdrojů")
 		return
 	}
 
@@ -120,7 +120,7 @@ func (h *AdminHandler) describeMetadata(settings service.MetadataSettings) metad
 func (h *AdminHandler) RegistrationSettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.settings.Registration(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání nastavení registrace")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání nastavení registrace")
 		return
 	}
 	writeJSON(w, http.StatusOK, settings)
@@ -130,17 +130,17 @@ func (h *AdminHandler) RegistrationSettings(w http.ResponseWriter, r *http.Reque
 func (h *AdminHandler) SetRegistrationSettings(w http.ResponseWriter, r *http.Request) {
 	var req service.RegistrationSettings
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
 	saved, err := h.settings.SetRegistration(r.Context(), req)
 	if errors.Is(err, service.ErrInvalidSetting) {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při ukládání nastavení registrace")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při ukládání nastavení registrace")
 		return
 	}
 
@@ -164,10 +164,10 @@ func (h *AdminHandler) ScannerStatus(w http.ResponseWriter, r *http.Request) {
 // Průchod běží na pozadí; odpověď je jen potvrzení, že se rozjel.
 func (h *AdminHandler) Rescan(w http.ResponseWriter, r *http.Request) {
 	if err := h.scanner.Rescan(); errors.Is(err, scanner.ErrScanRunning) {
-		writeError(w, http.StatusConflict, "kontrola knihovny už běží")
+		writeError(w, http.StatusConflict, "library.scan_running", "kontrola knihovny už běží")
 		return
 	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, "kontrolu knihovny se nepodařilo spustit")
+		writeError(w, http.StatusInternalServerError, "library.scan_start_failed", "kontrolu knihovny se nepodařilo spustit")
 		return
 	}
 
@@ -185,11 +185,11 @@ func (h *AdminHandler) Rescan(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) RepairPlan(w http.ResponseWriter, r *http.Request) {
 	plan, err := h.scanner.PlanRepair(r.Context())
 	if errors.Is(err, scanner.ErrAudioRootUnavailable) {
-		writeError(w, http.StatusServiceUnavailable, audioRootUnavailableMessage(err))
+		writeError(w, http.StatusServiceUnavailable, "library.audio_root_unavailable", audioRootUnavailableMessage(err))
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "kontrolu kapitol se nepodařilo provést – "+err.Error())
+		writeError(w, http.StatusInternalServerError, "library.check_failed", "kontrolu kapitol se nepodařilo provést – "+err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, plan)
@@ -209,22 +209,22 @@ func (h *AdminHandler) Repair(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.ContentLength > 0 {
 		if err := readJSON(r, &body); err != nil {
-			writeError(w, http.StatusBadRequest, "neplatný vstup – "+err.Error())
+			writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný vstup – "+err.Error())
 			return
 		}
 	}
 
 	result, err := h.scanner.Repair(r.Context(), body.ForceMissing)
 	if errors.Is(err, scanner.ErrScanRunning) {
-		writeError(w, http.StatusConflict, "kontrola knihovny právě běží, zkuste to za chvíli")
+		writeError(w, http.StatusConflict, "library.scan_running", "kontrola knihovny právě běží, zkuste to za chvíli")
 		return
 	}
 	if errors.Is(err, scanner.ErrAudioRootUnavailable) {
-		writeError(w, http.StatusServiceUnavailable, audioRootUnavailableMessage(err))
+		writeError(w, http.StatusServiceUnavailable, "library.audio_root_unavailable", audioRootUnavailableMessage(err))
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "oprava kapitol selhala – "+err.Error())
+		writeError(w, http.StatusInternalServerError, "library.repair_failed", "oprava kapitol selhala – "+err.Error())
 		return
 	}
 
@@ -266,7 +266,7 @@ func audioRootUnavailableMessage(err error) string {
 func (h *AdminHandler) DuplicateReport(w http.ResponseWriter, r *http.Request) {
 	report, err := h.scanner.PlanDuplicates(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError,
+		writeError(w, http.StatusInternalServerError, "library.check_failed",
 			"kontrolu duplicitních knih se nepodařilo provést – "+err.Error())
 		return
 	}
@@ -283,23 +283,23 @@ func (h *AdminHandler) DismissDuplicate(w http.ResponseWriter, r *http.Request) 
 		Key string `json:"key"`
 	}
 	if err := readJSON(r, &body); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný vstup – "+err.Error())
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný vstup – "+err.Error())
 		return
 	}
 	if body.Key == "" {
-		writeError(w, http.StatusBadRequest, "chybí klíč skupiny")
+		writeError(w, http.StatusBadRequest, "validation.invalid", "chybí klíč skupiny")
 		return
 	}
 
 	actor := actorID(r)
 	group, err := h.scanner.DismissDuplicate(r.Context(), body.Key, &actor)
 	if errors.Is(err, scanner.ErrDuplicateGroupUnknown) {
-		writeError(w, http.StatusConflict,
+		writeError(w, http.StatusConflict, "library.changed",
 			"knihovna se mezitím změnila – spusťte kontrolu znovu")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "odmítnutí se nepodařilo – "+err.Error())
+		writeError(w, http.StatusInternalServerError, "library.dismiss_failed", "odmítnutí se nepodařilo – "+err.Error())
 		return
 	}
 
@@ -323,17 +323,17 @@ func (h *AdminHandler) DismissDuplicate(w http.ResponseWriter, r *http.Request) 
 func (h *AdminHandler) RestoreDuplicate(w http.ResponseWriter, r *http.Request) {
 	key := r.URL.Query().Get("key")
 	if key == "" {
-		writeError(w, http.StatusBadRequest, "chybí klíč skupiny")
+		writeError(w, http.StatusBadRequest, "validation.invalid", "chybí klíč skupiny")
 		return
 	}
 
 	err := h.scanner.RestoreDuplicate(r.Context(), key)
 	if errors.Is(err, storage.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "taková odmítnutá skupina není")
+		writeError(w, http.StatusNotFound, "library.changed", "taková odmítnutá skupina není")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "obnovení se nepodařilo – "+err.Error())
+		writeError(w, http.StatusInternalServerError, "library.dismiss_failed", "obnovení se nepodařilo – "+err.Error())
 		return
 	}
 
@@ -352,7 +352,7 @@ func (h *AdminHandler) RestoreDuplicate(w http.ResponseWriter, r *http.Request) 
 func (h *AdminHandler) MergePlan(w http.ResponseWriter, r *http.Request) {
 	plan, err := h.scanner.PlanMerge(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError,
+		writeError(w, http.StatusInternalServerError, "library.check_failed",
 			"kontrolu rozdělených knih se nepodařilo provést – "+err.Error())
 		return
 	}
@@ -370,18 +370,18 @@ func (h *AdminHandler) Merge(w http.ResponseWriter, r *http.Request) {
 	}
 	if r.ContentLength > 0 {
 		if err := readJSON(r, &body); err != nil {
-			writeError(w, http.StatusBadRequest, "neplatný vstup – "+err.Error())
+			writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný vstup – "+err.Error())
 			return
 		}
 	}
 
 	result, err := h.scanner.Merge(r.Context(), body.Targets)
 	if errors.Is(err, scanner.ErrScanRunning) {
-		writeError(w, http.StatusConflict, "kontrola knihovny právě běží, zkuste to za chvíli")
+		writeError(w, http.StatusConflict, "library.scan_running", "kontrola knihovny právě běží, zkuste to za chvíli")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "sloučení knih selhalo – "+err.Error())
+		writeError(w, http.StatusInternalServerError, "library.merge_failed", "sloučení knih selhalo – "+err.Error())
 		return
 	}
 

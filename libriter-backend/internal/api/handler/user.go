@@ -27,7 +27,7 @@ func NewUser(svc *service.UserService, audit *service.AuditService) *UserHandler
 func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 	users, err := h.svc.List(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání uživatelů")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání uživatelů")
 		return
 	}
 	if users == nil {
@@ -47,17 +47,17 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 	callerRole := middleware.RoleFromCtx(r.Context())
 
 	if callerRole != model.RoleAdmin && callerID != id {
-		writeError(w, http.StatusForbidden, "nedostatečná oprávnění")
+		writeError(w, http.StatusForbidden, "auth.forbidden", "nedostatečná oprávnění")
 		return
 	}
 
 	u, err := h.svc.GetByID(r.Context(), id)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "uživatel nenalezen")
+		writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání uživatele")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání uživatele")
 		return
 	}
 	writeJSON(w, http.StatusOK, u)
@@ -74,7 +74,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	callerRole := middleware.RoleFromCtx(r.Context())
 
 	if callerRole != model.RoleAdmin && callerID != id {
-		writeError(w, http.StatusForbidden, "nedostatečná oprávnění")
+		writeError(w, http.StatusForbidden, "auth.forbidden", "nedostatečná oprávnění")
 		return
 	}
 
@@ -84,7 +84,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Login       string `json:"login"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
@@ -92,20 +92,20 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.TrimSpace(req.Email)
 
 	if req.DisplayName == "" || req.Email == "" {
-		writeError(w, http.StatusBadRequest, "display_name a email jsou povinné")
+		writeError(w, http.StatusBadRequest, "validation.profile_fields", "display_name a email jsou povinné")
 		return
 	}
 
 	u, err := h.svc.Update(r.Context(), id, req.DisplayName, req.Email, req.Login)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "uživatel nenalezen")
+		writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
 		return
 	}
 	if writeUserInputError(w, err) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při aktualizaci")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při aktualizaci")
 		return
 	}
 	writeJSON(w, http.StatusOK, u)
@@ -119,7 +119,7 @@ func (h *UserHandler) UpdateAppearance(w http.ResponseWriter, r *http.Request) {
 	}
 	callerID, authenticated := middleware.UserIDFromCtx(r.Context())
 	if !authenticated || callerID != id {
-		writeError(w, http.StatusForbidden, "vzhled lze měnit pouze ve vlastním profilu")
+		writeError(w, http.StatusForbidden, "user.own_profile_only", "vzhled lze měnit pouze ve vlastním profilu")
 		return
 	}
 	var req struct {
@@ -127,17 +127,17 @@ func (h *UserHandler) UpdateAppearance(w http.ResponseWriter, r *http.Request) {
 		ThemeMode   string `json:"theme_mode"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 	u, err := h.svc.UpdateAppearance(r.Context(), id, req.ColorScheme, req.ThemeMode)
 	switch {
 	case errors.Is(err, service.ErrInvalidSetting):
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "uživatel nenalezen")
+		writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "vzhled se nepodařilo uložit do profilu")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "vzhled se nepodařilo uložit do profilu")
 	default:
 		writeJSON(w, http.StatusOK, u)
 	}
@@ -151,24 +151,24 @@ func (h *UserHandler) UpdateLanguage(w http.ResponseWriter, r *http.Request) {
 	}
 	callerID, authenticated := middleware.UserIDFromCtx(r.Context())
 	if !authenticated || callerID != id {
-		writeError(w, http.StatusForbidden, "jazyk lze měnit pouze ve vlastním profilu")
+		writeError(w, http.StatusForbidden, "user.own_profile_only", "jazyk lze měnit pouze ve vlastním profilu")
 		return
 	}
 	var req struct {
 		UILanguage string `json:"ui_language"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 	u, err := h.svc.UpdateLanguage(r.Context(), id, req.UILanguage)
 	switch {
 	case errors.Is(err, service.ErrInvalidLanguage):
-		writeError(w, http.StatusBadRequest, "nepodporovaný jazyk rozhraní")
+		writeError(w, http.StatusBadRequest, "user.invalid_language", "nepodporovaný jazyk rozhraní")
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "uživatel nenalezen")
+		writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "jazyk se nepodařilo uložit do profilu")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "jazyk se nepodařilo uložit do profilu")
 	default:
 		writeJSON(w, http.StatusOK, u)
 	}
@@ -185,7 +185,7 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	callerRole := middleware.RoleFromCtx(r.Context())
 
 	if callerRole != model.RoleAdmin && callerID != id {
-		writeError(w, http.StatusForbidden, "nedostatečná oprávnění")
+		writeError(w, http.StatusForbidden, "auth.forbidden", "nedostatečná oprávnění")
 		return
 	}
 
@@ -193,20 +193,20 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
 	if len(req.Password) < minPasswordLength {
-		writeError(w, http.StatusBadRequest, "heslo musí mít alespoň 8 znaků")
+		writeError(w, http.StatusBadRequest, "validation.password_too_short", "heslo musí mít alespoň 8 znaků")
 		return
 	}
 
 	if err := h.svc.ChangePassword(r.Context(), id, req.Password); errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "uživatel nenalezen")
+		writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
 		return
 	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při změně hesla")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při změně hesla")
 		return
 	}
 
@@ -234,7 +234,7 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// nebo (u posledního admina) nechal knihovnu bez správce.
 	callerID, _ := middleware.UserIDFromCtx(r.Context())
 	if callerID == id {
-		writeError(w, http.StatusBadRequest, "nemůžete smazat vlastní účet")
+		writeError(w, http.StatusBadRequest, "user.cannot_delete_self", "nemůžete smazat vlastní účet")
 		return
 	}
 
@@ -244,13 +244,13 @@ func (h *UserHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.Delete(r.Context(), id)
 	switch {
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "uživatel nenalezen")
+		writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
 		return
 	case errors.Is(err, service.ErrLastAdmin):
-		writeError(w, http.StatusConflict, "nelze smazat posledního administrátora")
+		writeError(w, http.StatusConflict, "user.last_admin", "nelze smazat posledního administrátora")
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "chyba při mazání")
+		writeError(w, http.StatusInternalServerError, "common.delete_failed", "chyba při mazání")
 		return
 	}
 
@@ -275,7 +275,7 @@ func (h *UserHandler) SetRole(w http.ResponseWriter, r *http.Request) {
 		Role string `json:"role"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
@@ -287,11 +287,11 @@ func (h *UserHandler) SetRole(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.SetRole(r.Context(), id, req.Role); err != nil {
 		switch {
 		case errors.Is(err, service.ErrNotFound):
-			writeError(w, http.StatusNotFound, "uživatel nenalezen")
+			writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
 		case errors.Is(err, service.ErrLastAdmin):
-			writeError(w, http.StatusConflict, "nelze odebrat roli poslednímu administrátorovi")
+			writeError(w, http.StatusConflict, "user.last_admin", "nelze odebrat roli poslednímu administrátorovi")
 		default:
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeError(w, http.StatusBadRequest, "user.unknown_role", err.Error())
 		}
 		return
 	}
@@ -322,7 +322,7 @@ func userLabel(r *http.Request, svc *service.UserService, id uuid.UUID) string {
 func parseUUID(w http.ResponseWriter, r *http.Request, param string) (uuid.UUID, bool) {
 	id, err := uuid.Parse(chi.URLParam(r, param))
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "neplatné ID")
+		writeError(w, http.StatusBadRequest, "request.invalid_id", "neplatné ID")
 		return uuid.UUID{}, false
 	}
 	return id, true
@@ -333,11 +333,11 @@ func parseUUID(w http.ResponseWriter, r *http.Request, param string) (uuid.UUID,
 func writeUserInputError(w http.ResponseWriter, err error) bool {
 	switch {
 	case errors.Is(err, service.ErrInvalidLogin):
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "user.invalid_login", err.Error())
 	case errors.Is(err, service.ErrLoginTaken):
-		writeError(w, http.StatusConflict, "login je již použit")
+		writeError(w, http.StatusConflict, "user.login_taken", "login je již použit")
 	case errors.Is(err, service.ErrEmailTaken):
-		writeError(w, http.StatusConflict, "email je již použit")
+		writeError(w, http.StatusConflict, "user.email_taken", "email je již použit")
 	default:
 		return false
 	}

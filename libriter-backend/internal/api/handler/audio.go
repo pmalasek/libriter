@@ -32,7 +32,7 @@ func NewAudio(chapters *service.BookService, auth *service.AuthService, audioRoo
 func (h *AudioHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	userID, err := h.auth.ParseStreamToken(r.URL.Query().Get("t"))
 	if err != nil {
-		writeError(w, http.StatusUnauthorized, "neplatný nebo vypršelý token pro přehrávání")
+		writeError(w, http.StatusUnauthorized, "auth.stream_token_invalid", "neplatný nebo vypršelý token pro přehrávání")
 		return
 	}
 
@@ -40,17 +40,17 @@ func (h *AudioHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	// proti databázi stejně jako v běžném middleware.
 	role, err := h.auth.ResolveRole(r.Context(), userID)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusUnauthorized, "účet již neexistuje")
+		writeError(w, http.StatusUnauthorized, "auth.account_gone", "účet již neexistuje")
 		return
 	}
 	if err != nil {
 		slog.Error("stream audia: ověření uživatele", "user_id", userID, "err", err)
-		writeError(w, http.StatusInternalServerError, "chyba při ověření uživatele")
+		writeError(w, http.StatusInternalServerError, "common.internal", "chyba při ověření uživatele")
 		return
 	}
 	// Stejná hranice jako u čtení knihovny (viz middleware.RequireRole).
 	if level, known := model.RoleLevel[role]; !known || level > model.RoleLevel[model.RoleReader] {
-		writeError(w, http.StatusForbidden, "nedostatečná oprávnění")
+		writeError(w, http.StatusForbidden, "auth.forbidden", "nedostatečná oprávnění")
 		return
 	}
 
@@ -61,31 +61,31 @@ func (h *AudioHandler) Stream(w http.ResponseWriter, r *http.Request) {
 
 	chapter, err := h.chapters.Chapter(r.Context(), id)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "kapitola nenalezena")
+		writeError(w, http.StatusNotFound, "chapter.not_found", "kapitola nenalezena")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání kapitoly")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání kapitoly")
 		return
 	}
 
 	// file_path může do databáze vložit editor i scanner, proto se ověřuje.
 	abs, ok := audiostore.Resolve(h.audioRoot, chapter.FilePath)
 	if !ok {
-		writeError(w, http.StatusNotFound, "audio soubor nenalezen")
+		writeError(w, http.StatusNotFound, "audio.not_found", "audio soubor nenalezen")
 		return
 	}
 
 	file, err := os.Open(abs)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "audio soubor nenalezen")
+		writeError(w, http.StatusNotFound, "audio.not_found", "audio soubor nenalezen")
 		return
 	}
 	defer file.Close()
 
 	info, err := file.Stat()
 	if err != nil || !info.Mode().IsRegular() {
-		writeError(w, http.StatusNotFound, "audio soubor nenalezen")
+		writeError(w, http.StatusNotFound, "audio.not_found", "audio soubor nenalezen")
 		return
 	}
 

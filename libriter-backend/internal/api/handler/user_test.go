@@ -164,6 +164,18 @@ func TestUserLanguageRejectsUnauthorizedAndInvalidChanges(t *testing.T) {
 			t.Errorf("invalid input %+v: got %d", body, rec.Code)
 		}
 	}
+	rec := env.do(t, http.MethodPut, path, token, map[string]string{"ui_language": "pl"})
+	if code := errorCode(t, rec.Body.Bytes()); code != "user.invalid_language" {
+		t.Errorf("error code = %q, want user.invalid_language", code)
+	}
+	rec = env.do(t, http.MethodPut, path, otherToken, map[string]string{"ui_language": "cs"})
+	if code := errorCode(t, rec.Body.Bytes()); code != "user.own_profile_only" {
+		t.Errorf("error code = %q, want user.own_profile_only", code)
+	}
+	rec = env.do(t, http.MethodPut, path, "", map[string]string{"ui_language": "cs"})
+	if code := errorCode(t, rec.Body.Bytes()); code != "auth.missing_token" {
+		t.Errorf("error code = %q, want auth.missing_token", code)
+	}
 	user, err := env.users.GetByEmail(context.Background(), "reader@example.com")
 	if err != nil || user.UILanguage != model.DefaultUILanguage {
 		t.Fatalf("rejected request changed profile: %+v, %v", user, err)
@@ -198,4 +210,20 @@ func TestRegisterStoresUILanguage(t *testing.T) {
 	if _, err := env.users.GetByEmail(context.Background(), "bad@example.com"); err == nil {
 		t.Error("invalid language still created the user")
 	}
+}
+
+// errorCode vrátí stabilní kód z chybové odpovědi API.
+func errorCode(t *testing.T, body []byte) string {
+	t.Helper()
+	var resp struct {
+		Error string `json:"error"`
+		Code  string `json:"code"`
+	}
+	if err := json.Unmarshal(body, &resp); err != nil {
+		t.Fatalf("chybová odpověď není JSON: %v (%s)", err, body)
+	}
+	if resp.Error == "" {
+		t.Errorf("chybová odpověď bez zprávy: %s", body)
+	}
+	return resp.Code
 }

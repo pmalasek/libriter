@@ -52,19 +52,19 @@ func (h *MetadataHandler) Search(w http.ResponseWriter, r *http.Request) {
 		Author: r.URL.Query().Get("author"),
 	}
 	if query.Title == "" {
-		writeError(w, http.StatusBadRequest, "parametr q je povinný")
+		writeError(w, http.StatusBadRequest, "validation.query_required", "parametr q je povinný")
 		return
 	}
 
 	results, err := h.chain().Search(r.Context(), query)
 	if err != nil {
 		if errors.Is(err, r.Context().Err()) {
-			writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
+			writeError(w, http.StatusGatewayTimeout, "request.timeout", "vypršel čas požadavku")
 			return
 		}
 		// Důvod se propouští k editorovi schválně: typicky jde o vyčerpanou
 		// kvótu nebo rozbitý scraper a z obecné hlášky by nešlo poznat, co dělat.
-		writeError(w, http.StatusBadGateway, "zdroje metadat selhaly – "+err.Error())
+		writeError(w, http.StatusBadGateway, "metadata.fetch_failed", "zdroje metadat selhaly – "+err.Error())
 		return
 	}
 
@@ -90,17 +90,17 @@ func (h *MetadataHandler) Sources(w http.ResponseWriter, r *http.Request) {
 func (h *MetadataHandler) SearchAuthors(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query().Get("q")
 	if q == "" {
-		writeError(w, http.StatusBadRequest, "parametr q je povinný")
+		writeError(w, http.StatusBadRequest, "validation.query_required", "parametr q je povinný")
 		return
 	}
 
 	results, err := h.chain().SearchAuthors(r.Context(), q)
 	if err != nil {
 		if errors.Is(err, r.Context().Err()) {
-			writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
+			writeError(w, http.StatusGatewayTimeout, "request.timeout", "vypršel čas požadavku")
 			return
 		}
-		writeError(w, http.StatusBadGateway, "zdroje metadat selhaly – "+err.Error())
+		writeError(w, http.StatusBadGateway, "metadata.fetch_failed", "zdroje metadat selhaly – "+err.Error())
 		return
 	}
 
@@ -116,20 +116,20 @@ func (h *MetadataHandler) SearchAuthors(w http.ResponseWriter, r *http.Request) 
 func (h *MetadataHandler) FetchAuthorByURL(w http.ResponseWriter, r *http.Request) {
 	authorURL := r.URL.Query().Get("url")
 	if authorURL == "" {
-		writeError(w, http.StatusBadRequest, "parametr url je povinný")
+		writeError(w, http.StatusBadRequest, "validation.url_required", "parametr url je povinný")
 		return
 	}
 
 	meta, err := h.chain().FetchAuthorByURL(r.Context(), authorURL)
 	switch {
 	case errors.Is(err, metadata.ErrNoProvider):
-		writeError(w, http.StatusBadRequest, "url nepatří žádnému zapnutému zdroji metadat")
+		writeError(w, http.StatusBadRequest, "metadata.url_unsupported", "url nepatří žádnému zapnutému zdroji metadat")
 		return
 	case errors.Is(err, r.Context().Err()) && err != nil:
-		writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
+		writeError(w, http.StatusGatewayTimeout, "request.timeout", "vypršel čas požadavku")
 		return
 	case err != nil:
-		writeError(w, http.StatusBadGateway, "chyba při stahování metadat autora")
+		writeError(w, http.StatusBadGateway, "metadata.fetch_failed", "chyba při stahování metadat autora")
 		return
 	}
 
@@ -144,24 +144,24 @@ func (h *MetadataHandler) FetchAuthorByURL(w http.ResponseWriter, r *http.Reques
 func (h *MetadataHandler) FetchByID(w http.ResponseWriter, r *http.Request) {
 	dk, ok := h.dkClient()
 	if !ok {
-		writeError(w, http.StatusNotFound, "zdroj databazeknih.cz není zapnutý")
+		writeError(w, http.StatusNotFound, "metadata.no_providers", "zdroj databazeknih.cz není zapnutý")
 		return
 	}
 
 	idStr := chi.URLParam(r, "id")
 	id, err := strconv.Atoi(idStr)
 	if err != nil || id <= 0 {
-		writeError(w, http.StatusBadRequest, "neplatné ID knihy")
+		writeError(w, http.StatusBadRequest, "request.invalid_id", "neplatné ID knihy")
 		return
 	}
 
 	meta, err := dk.FetchBook(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, r.Context().Err()) {
-			writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
+			writeError(w, http.StatusGatewayTimeout, "request.timeout", "vypršel čas požadavku")
 			return
 		}
-		writeError(w, http.StatusBadGateway, "chyba při stahování metadat z databazeknih.cz")
+		writeError(w, http.StatusBadGateway, "metadata.fetch_failed", "chyba při stahování metadat z databazeknih.cz")
 		return
 	}
 
@@ -180,20 +180,20 @@ func (h *MetadataHandler) FetchByID(w http.ResponseWriter, r *http.Request) {
 func (h *MetadataHandler) FetchByURL(w http.ResponseWriter, r *http.Request) {
 	bookURL := r.URL.Query().Get("url")
 	if bookURL == "" {
-		writeError(w, http.StatusBadRequest, "parametr url je povinný")
+		writeError(w, http.StatusBadRequest, "validation.url_required", "parametr url je povinný")
 		return
 	}
 
 	meta, err := h.chain().FetchByURL(r.Context(), bookURL)
 	switch {
 	case errors.Is(err, metadata.ErrNoProvider):
-		writeError(w, http.StatusBadRequest, "url nepatří žádnému zapnutému zdroji metadat")
+		writeError(w, http.StatusBadRequest, "metadata.url_unsupported", "url nepatří žádnému zapnutému zdroji metadat")
 		return
 	case errors.Is(err, r.Context().Err()) && err != nil:
-		writeError(w, http.StatusGatewayTimeout, "vypršel čas požadavku")
+		writeError(w, http.StatusGatewayTimeout, "request.timeout", "vypršel čas požadavku")
 		return
 	case err != nil:
-		writeError(w, http.StatusBadGateway, "chyba při stahování metadat")
+		writeError(w, http.StatusBadGateway, "metadata.fetch_failed", "chyba při stahování metadat")
 		return
 	}
 

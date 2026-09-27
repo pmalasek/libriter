@@ -20,7 +20,7 @@ func (h *BookHandler) ListProgress(w http.ResponseWriter, r *http.Request) {
 
 	progress, err := h.svc.ListProgress(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání stavu knih")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání stavu knih")
 		return
 	}
 	writeJSON(w, http.StatusOK, progress)
@@ -45,7 +45,7 @@ func (h *BookHandler) SetProgress(w http.ResponseWriter, r *http.Request) {
 		Finished bool `json:"finished"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
@@ -58,9 +58,9 @@ func (h *BookHandler) SetProgress(w http.ResponseWriter, r *http.Request) {
 
 	switch {
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "kniha nenalezena")
+		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "stav knihy se nepodařilo uložit")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "stav knihy se nepodařilo uložit")
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{"finished": req.Finished})
 	}
@@ -81,9 +81,9 @@ func (h *BookHandler) ResetProgress(w http.ResponseWriter, r *http.Request) {
 
 	switch err := h.svc.ResetProgress(r.Context(), userID, id); {
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "kniha nenalezena")
+		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "stav knihy se nepodařilo smazat")
+		writeError(w, http.StatusInternalServerError, "common.delete_failed", "stav knihy se nepodařilo smazat")
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}

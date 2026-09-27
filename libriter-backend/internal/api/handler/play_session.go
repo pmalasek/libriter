@@ -35,7 +35,7 @@ func (h *PlaySessionHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	sessions, err := h.svc.List(r.Context(), userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání poslechů")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání poslechů")
 		return
 	}
 	writeJSON(w, http.StatusOK, sessions)
@@ -55,9 +55,9 @@ func (h *PlaySessionHandler) Get(w http.ResponseWriter, r *http.Request) {
 	session, err := h.svc.Get(r.Context(), userID, id)
 	switch {
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "poslech nenalezen")
+		writeError(w, http.StatusNotFound, "session.not_found", "poslech nenalezen")
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "chyba při načítání poslechu")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání poslechu")
 	default:
 		writeJSON(w, http.StatusOK, session)
 	}
@@ -82,7 +82,7 @@ func (h *PlaySessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		SeriesIDs []string `json:"series_ids"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
@@ -95,7 +95,7 @@ func (h *PlaySessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	case model.PlaySessionBook:
 		bookID, perr := parseUUIDStr(req.BookID, "book_id")
 		if perr != nil {
-			writeError(w, http.StatusBadRequest, perr.Error())
+			writeError(w, http.StatusBadRequest, "validation.invalid", perr.Error())
 			return
 		}
 		session, created, err = h.svc.StartBook(r.Context(), userID, bookID)
@@ -103,7 +103,7 @@ func (h *PlaySessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	case model.PlaySessionSeries:
 		seriesID, perr := parseUUIDStr(req.SeriesID, "series_id")
 		if perr != nil {
-			writeError(w, http.StatusBadRequest, perr.Error())
+			writeError(w, http.StatusBadRequest, "validation.invalid", perr.Error())
 			return
 		}
 		session, created, err = h.svc.StartSeries(r.Context(), userID, seriesID)
@@ -111,24 +111,24 @@ func (h *PlaySessionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	case model.PlaySessionList:
 		bookIDs, seriesIDs, perr := parseSelection(req.BookIDs, req.SeriesIDs)
 		if perr != nil {
-			writeError(w, http.StatusBadRequest, perr.Error())
+			writeError(w, http.StatusBadRequest, "validation.invalid", perr.Error())
 			return
 		}
 		session, err = h.svc.StartList(r.Context(), userID, strings.TrimSpace(req.Title), bookIDs, seriesIDs)
 		created = true
 
 	default:
-		writeError(w, http.StatusBadRequest, "kind musí být book, series nebo list")
+		writeError(w, http.StatusBadRequest, "validation.invalid", "kind musí být book, series nebo list")
 		return
 	}
 
 	switch {
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "kniha nebo série nenalezena")
+		writeError(w, http.StatusNotFound, "session.target_not_found", "kniha nebo série nenalezena")
 	case errors.Is(err, service.ErrEmptySession):
-		writeError(w, http.StatusBadRequest, "poslech nemá žádné knihy k přehrání")
+		writeError(w, http.StatusBadRequest, "session.empty", "poslech nemá žádné knihy k přehrání")
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "poslech se nepodařilo založit")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "poslech se nepodařilo založit")
 	case created:
 		writeJSON(w, http.StatusCreated, session)
 	default:
@@ -168,13 +168,13 @@ func (h *PlaySessionHandler) SavePosition(w http.ResponseWriter, r *http.Request
 		DeviceID   string     `json:"device_id"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
 	bookID, err := parseUUIDStr(req.BookID, "book_id")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
 	}
 
@@ -193,7 +193,7 @@ func (h *PlaySessionHandler) SavePosition(w http.ResponseWriter, r *http.Request
 	if req.ChapterID != "" {
 		chapterID, err := parseUUIDStr(req.ChapterID, "chapter_id")
 		if err != nil {
-			writeError(w, http.StatusBadRequest, err.Error())
+			writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 			return
 		}
 		in.ChapterID = &chapterID
@@ -206,13 +206,13 @@ func (h *PlaySessionHandler) SavePosition(w http.ResponseWriter, r *http.Request
 	case errors.Is(err, service.ErrStalePosition):
 		writeJSON(w, http.StatusOK, session)
 	case errors.Is(err, service.ErrInvalidSetting):
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 	case errors.Is(err, service.ErrBookNotInSession):
-		writeError(w, http.StatusBadRequest, "kniha není součástí tohoto poslechu")
+		writeError(w, http.StatusBadRequest, "session.book_not_in_session", "kniha není součástí tohoto poslechu")
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "poslech nenalezen")
+		writeError(w, http.StatusNotFound, "session.not_found", "poslech nenalezen")
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "pozici se nepodařilo uložit")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "pozici se nepodařilo uložit")
 	default:
 		writeJSON(w, http.StatusOK, session)
 	}
@@ -251,22 +251,22 @@ func (h *PlaySessionHandler) Sync(w http.ResponseWriter, r *http.Request) {
 		Events   []syncEventRequest `json:"events"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
 	events, err := parseSyncEvents(req.Events)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
 	}
 
 	results, sessions, err := h.svc.Sync(r.Context(), userID, strings.TrimSpace(req.DeviceID), events)
 	switch {
 	case errors.Is(err, service.ErrInvalidSetting):
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "dávku se nepodařilo zpracovat")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "dávku se nepodařilo zpracovat")
 	default:
 		writeJSON(w, http.StatusOK, map[string]any{
 			"results":  results,
@@ -333,24 +333,24 @@ func (h *PlaySessionHandler) AddItems(w http.ResponseWriter, r *http.Request) {
 		SeriesIDs []string `json:"series_ids"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
 	bookIDs, seriesIDs, err := parseSelection(req.BookIDs, req.SeriesIDs)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
 	}
 
 	session, err := h.svc.AddItems(r.Context(), userID, id, bookIDs, seriesIDs)
 	switch {
 	case errors.Is(err, service.ErrEmptySession):
-		writeError(w, http.StatusBadRequest, "nebyla vybrána žádná kniha")
+		writeError(w, http.StatusBadRequest, "validation.no_books_selected", "nebyla vybrána žádná kniha")
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "poslech, kniha nebo série nenalezena")
+		writeError(w, http.StatusNotFound, "session.target_not_found", "poslech, kniha nebo série nenalezena")
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "knihy se nepodařilo přidat")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "knihy se nepodařilo přidat")
 	default:
 		writeJSON(w, http.StatusOK, session)
 	}
@@ -370,9 +370,9 @@ func (h *PlaySessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.Delete(r.Context(), userID, id)
 	switch {
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "poslech nenalezen")
+		writeError(w, http.StatusNotFound, "session.not_found", "poslech nenalezen")
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "poslech se nepodařilo smazat")
+		writeError(w, http.StatusInternalServerError, "common.delete_failed", "poslech se nepodařilo smazat")
 	default:
 		w.WriteHeader(http.StatusNoContent)
 	}
@@ -382,7 +382,7 @@ func (h *PlaySessionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 func callerID(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	userID, ok := middleware.UserIDFromCtx(r.Context())
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "chybí autorizační token")
+		writeError(w, http.StatusUnauthorized, "auth.missing_token", "chybí autorizační token")
 		return uuid.UUID{}, false
 	}
 	return userID, true

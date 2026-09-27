@@ -32,7 +32,7 @@ func NewAuth(svc *service.AuthService, settings *service.SettingsService) *AuthH
 func (h *AuthHandler) Config(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.settings.Registration(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání nastavení")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání nastavení")
 		return
 	}
 
@@ -46,11 +46,11 @@ func (h *AuthHandler) Config(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.settings.Registration(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při registraci")
+		writeError(w, http.StatusInternalServerError, "auth.register_failed", "chyba při registraci")
 		return
 	}
 	if !settings.Enabled {
-		writeError(w, http.StatusForbidden, "registrace nových uživatelů je vypnutá")
+		writeError(w, http.StatusForbidden, "auth.registration_disabled", "registrace nových uživatelů je vypnutá")
 		return
 	}
 
@@ -62,7 +62,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		UILanguage  string `json:"ui_language"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
@@ -70,24 +70,24 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	req.Email = strings.TrimSpace(req.Email)
 
 	if req.DisplayName == "" || req.Email == "" || len(req.Password) < minPasswordLength {
-		writeError(w, http.StatusBadRequest, "display_name, email a heslo (min. 8 znaků) jsou povinné")
+		writeError(w, http.StatusBadRequest, "validation.register_fields", "display_name, email a heslo (min. 8 znaků) jsou povinné")
 		return
 	}
 
 	user, token, err := h.svc.Register(r.Context(), req.DisplayName, req.Email, req.Login, req.Password, settings.DefaultRole, req.UILanguage)
 	if errors.Is(err, service.ErrInvalidLanguage) {
-		writeError(w, http.StatusBadRequest, "nepodporovaný jazyk rozhraní")
+		writeError(w, http.StatusBadRequest, "user.invalid_language", "nepodporovaný jazyk rozhraní")
 		return
 	}
 	if errors.Is(err, service.ErrEmailTaken) {
-		writeError(w, http.StatusConflict, "email je již registrován")
+		writeError(w, http.StatusConflict, "user.email_taken", "email je již registrován")
 		return
 	}
 	if writeUserInputError(w, err) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při registraci")
+		writeError(w, http.StatusInternalServerError, "auth.register_failed", "chyba při registraci")
 		return
 	}
 
@@ -105,13 +105,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) StreamToken(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromCtx(r.Context())
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "chybí autorizační token")
+		writeError(w, http.StatusUnauthorized, "auth.missing_token", "chybí autorizační token")
 		return
 	}
 
 	token, expiresAt, err := h.svc.GenerateStreamToken(userID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "token pro přehrávání se nepodařilo vydat")
+		writeError(w, http.StatusInternalServerError, "auth.token_failed", "token pro přehrávání se nepodařilo vydat")
 		return
 	}
 
@@ -132,11 +132,11 @@ func (h *AuthHandler) StreamToken(w http.ResponseWriter, r *http.Request) {
 func (h *AuthHandler) MobileToken(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromCtx(r.Context())
 	if !ok {
-		writeError(w, http.StatusUnauthorized, "chybí autorizační token")
+		writeError(w, http.StatusUnauthorized, "auth.missing_token", "chybí autorizační token")
 		return
 	}
 	if middleware.ScopeFromCtx(r.Context()) == service.ScopeMobile {
-		writeError(w, http.StatusForbidden, "mobilní token nelze obnovit mobilním tokenem – přihlaste se znovu")
+		writeError(w, http.StatusForbidden, "auth.mobile_token_refresh", "mobilní token nelze obnovit mobilním tokenem – přihlaste se znovu")
 		return
 	}
 
@@ -148,14 +148,14 @@ func (h *AuthHandler) MobileToken(w http.ResponseWriter, r *http.Request) {
 	// Prázdné tělo je v pořádku – jméno zařízení je nepovinné.
 	if r.ContentLength > 0 {
 		if err := readJSON(r, &req); err != nil {
-			writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+			writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 			return
 		}
 	}
 
 	token, expiresAt, err := h.svc.GenerateMobileToken(userID, middleware.RoleFromCtx(r.Context()))
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "token pro mobilní aplikaci se nepodařilo vydat")
+		writeError(w, http.StatusInternalServerError, "auth.token_failed", "token pro mobilní aplikaci se nepodařilo vydat")
 		return
 	}
 
@@ -177,17 +177,17 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Password string `json:"password"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
 	user, token, err := h.svc.Login(r.Context(), strings.TrimSpace(req.Login), req.Password)
 	if errors.Is(err, service.ErrInvalidCredentials) {
-		writeError(w, http.StatusUnauthorized, "neplatné přihlašovací údaje")
+		writeError(w, http.StatusUnauthorized, "auth.invalid_credentials", "neplatné přihlašovací údaje")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při přihlášení")
+		writeError(w, http.StatusInternalServerError, "auth.login_failed", "chyba při přihlášení")
 		return
 	}
 

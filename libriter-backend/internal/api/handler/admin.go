@@ -87,7 +87,7 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		Role        string `json:"role"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
@@ -99,11 +99,11 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.DisplayName == "" || req.Email == "" || len(req.Password) < minPasswordLength {
-		writeError(w, http.StatusBadRequest, "display_name, email a heslo (min. 8 znaků) jsou povinné")
+		writeError(w, http.StatusBadRequest, "validation.register_fields", "display_name, email a heslo (min. 8 znaků) jsou povinné")
 		return
 	}
 	if _, ok := model.RoleLevel[req.Role]; !ok {
-		writeError(w, http.StatusBadRequest, "neznámá role")
+		writeError(w, http.StatusBadRequest, "user.unknown_role", "neznámá role")
 		return
 	}
 
@@ -112,7 +112,7 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při vytváření uživatele")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při vytváření uživatele")
 		return
 	}
 
@@ -131,7 +131,7 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.system.Stats(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání statistik")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání statistik")
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
@@ -149,7 +149,7 @@ func (h *AdminHandler) System(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) Audit(w http.ResponseWriter, r *http.Request) {
 	limit, err := intParam(r, "limit", auditPageSize)
 	if err != nil || limit <= 0 {
-		writeError(w, http.StatusBadRequest, "parametr limit musí být kladné číslo")
+		writeError(w, http.StatusBadRequest, "validation.invalid", "parametr limit musí být kladné číslo")
 		return
 	}
 	// Strop držíme i tady, aby kurzor níž odpovídal skutečné velikosti stránky.
@@ -158,13 +158,13 @@ func (h *AdminHandler) Audit(w http.ResponseWriter, r *http.Request) {
 	}
 	before, err := intParam(r, "before", 0)
 	if err != nil || before < 0 {
-		writeError(w, http.StatusBadRequest, "parametr before musí být nezáporné číslo")
+		writeError(w, http.StatusBadRequest, "validation.invalid", "parametr before musí být nezáporné číslo")
 		return
 	}
 
 	entries, err := h.audit.List(r.Context(), int(limit), before)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání auditu")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání auditu")
 		return
 	}
 
@@ -188,7 +188,7 @@ func (h *AdminHandler) Audit(w http.ResponseWriter, r *http.Request) {
 func (h *AdminHandler) Listening(w http.ResponseWriter, r *http.Request) {
 	summaries, err := h.listening.Overview(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání poslechů")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání poslechů")
 		return
 	}
 	writeJSON(w, http.StatusOK, summaries)
@@ -206,9 +206,9 @@ func (h *AdminHandler) ListeningUser(w http.ResponseWriter, r *http.Request) {
 	detail, err := h.listening.UserDetail(r.Context(), id)
 	switch {
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "uživatel nenalezen")
+		writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "chyba při načítání poslechů")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání poslechů")
 	default:
 		writeJSON(w, http.StatusOK, detail)
 	}

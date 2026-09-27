@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -32,30 +33,30 @@ func Authenticate(authSvc *service.AuthService) func(http.Handler) http.Handler 
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			header := r.Header.Get("Authorization")
 			if !strings.HasPrefix(header, "Bearer ") {
-				http.Error(w, `{"error":"chybí autorizační token"}`, http.StatusUnauthorized)
+				writeError(w, http.StatusUnauthorized, "auth.missing_token", "chybí autorizační token")
 				return
 			}
 
 			claims, err := authSvc.ParseToken(strings.TrimPrefix(header, "Bearer "))
 			if err != nil {
-				http.Error(w, `{"error":"neplatný token"}`, http.StatusUnauthorized)
+				writeError(w, http.StatusUnauthorized, "auth.invalid_token", "neplatný token")
 				return
 			}
 
 			userID, err := uuid.Parse(claims.Subject)
 			if err != nil {
-				http.Error(w, `{"error":"neplatný token"}`, http.StatusUnauthorized)
+				writeError(w, http.StatusUnauthorized, "auth.invalid_token", "neplatný token")
 				return
 			}
 
 			role, err := authSvc.ResolveRole(r.Context(), userID)
 			if errors.Is(err, service.ErrNotFound) {
-				http.Error(w, `{"error":"účet již neexistuje"}`, http.StatusUnauthorized)
+				writeError(w, http.StatusUnauthorized, "auth.account_gone", "účet již neexistuje")
 				return
 			}
 			if err != nil {
 				slog.Error("ověření uživatele", "user_id", userID, "err", err)
-				http.Error(w, `{"error":"chyba při ověření uživatele"}`, http.StatusInternalServerError)
+				writeError(w, http.StatusInternalServerError, "common.internal", "chyba při ověření uživatele")
 				return
 			}
 
@@ -77,7 +78,7 @@ func RequireRole(minRole string) func(http.Handler) http.Handler {
 			role, _ := r.Context().Value(ctxKeyRole).(string)
 			level, ok := model.RoleLevel[role]
 			if !ok || level > minLevel {
-				http.Error(w, `{"error":"nedostatečná oprávnění"}`, http.StatusForbidden)
+				writeError(w, http.StatusForbidden, "auth.forbidden", "nedostatečná oprávnění")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -102,4 +103,11 @@ func RoleFromCtx(ctx context.Context) string {
 func ScopeFromCtx(ctx context.Context) string {
 	scope, _ := ctx.Value(ctxKeyScope).(string)
 	return scope
+}
+
+// writeError odpoví JSON chybou se stabilním kódem, stejně jako handlery.
+func writeError(w http.ResponseWriter, status int, code, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(map[string]string{"error": msg, "code": code})
 }

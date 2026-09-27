@@ -54,11 +54,11 @@ func (h *BookHandler) ListChapters(w http.ResponseWriter, r *http.Request) {
 
 	chapters, err := h.svc.Chapters(r.Context(), id)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "kniha nenalezena")
+		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání kapitol")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání kapitol")
 		return
 	}
 	writeJSON(w, http.StatusOK, chapterResponses(chapters))
@@ -81,26 +81,26 @@ func (h *BookHandler) ReorderChapters(w http.ResponseWriter, r *http.Request) {
 
 	var req reorderChaptersRequest
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 	chapterIDs, err := parseUUIDs(req.ChapterIDs, "chapter_ids")
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
 	}
 
 	chapters, err := h.svc.ReorderChapters(r.Context(), id, chapterIDs)
 	switch {
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "kniha nenalezena")
+		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 		return
 	case errors.Is(err, service.ErrChapterSetMismatch):
-		writeError(w, http.StatusBadRequest,
+		writeError(w, http.StatusBadRequest, "validation.invalid",
 			"chapter_ids musí obsahovat všechny kapitoly knihy, každou právě jednou")
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "chyba při ukládání pořadí kapitol")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při ukládání pořadí kapitol")
 		return
 	}
 	writeJSON(w, http.StatusOK, chapterResponses(chapters))

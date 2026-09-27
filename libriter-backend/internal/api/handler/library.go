@@ -35,7 +35,7 @@ func NewAuthor(
 func (h *AuthorHandler) List(w http.ResponseWriter, r *http.Request) {
 	authors, err := h.svc.List(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání autorů")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání autorů")
 		return
 	}
 	writeJSON(w, http.StatusOK, authors)
@@ -49,11 +49,11 @@ func (h *AuthorHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	a, err := h.svc.GetByID(r.Context(), id)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "autor nenalezen")
+		writeError(w, http.StatusNotFound, "author.not_found", "autor nenalezen")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání autora")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání autora")
 		return
 	}
 	writeJSON(w, http.StatusOK, a)
@@ -63,23 +63,23 @@ func (h *AuthorHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *AuthorHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req authorRequest
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
 	in, err := req.toInput()
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
 	}
 
 	a, err := h.svc.Create(r.Context(), in)
 	if errors.Is(err, service.ErrConflict) {
-		writeError(w, http.StatusConflict, "autor se stejným jménem už existuje")
+		writeError(w, http.StatusConflict, "author.name_taken", "autor se stejným jménem už existuje")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při vytváření autora")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při vytváření autora")
 		return
 	}
 	writeJSON(w, http.StatusCreated, a)
@@ -94,26 +94,26 @@ func (h *AuthorHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req authorRequest
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
 	in, err := req.toInput()
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
 	}
 
 	a, err := h.svc.Update(r.Context(), id, in)
 	switch {
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "autor nenalezen")
+		writeError(w, http.StatusNotFound, "author.not_found", "autor nenalezen")
 		return
 	case errors.Is(err, service.ErrConflict):
-		writeError(w, http.StatusConflict, "autor se stejným jménem už existuje")
+		writeError(w, http.StatusConflict, "author.name_taken", "autor se stejným jménem už existuje")
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "chyba při aktualizaci autora")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při aktualizaci autora")
 		return
 	}
 	writeJSON(w, http.StatusOK, a)
@@ -133,13 +133,13 @@ func (h *AuthorHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.Delete(r.Context(), id)
 	switch {
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "autor nenalezen")
+		writeError(w, http.StatusNotFound, "author.not_found", "autor nenalezen")
 		return
 	case errors.Is(err, service.ErrConflict):
-		writeError(w, http.StatusConflict, "autor má v knihovně knihy")
+		writeError(w, http.StatusConflict, "author.has_books", "autor má v knihovně knihy")
 		return
 	case err != nil:
-		writeError(w, http.StatusInternalServerError, "chyba při mazání autora")
+		writeError(w, http.StatusInternalServerError, "common.delete_failed", "chyba při mazání autora")
 		return
 	}
 
@@ -165,23 +165,23 @@ func (h *AuthorHandler) Image(w http.ResponseWriter, r *http.Request) {
 
 	author, err := h.svc.GetByID(r.Context(), id)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "autor nenalezen")
+		writeError(w, http.StatusNotFound, "author.not_found", "autor nenalezen")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání autora")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání autora")
 		return
 	}
 
 	if author.ImagePath == nil {
-		writeError(w, http.StatusNotFound, "autor nemá obrázek")
+		writeError(w, http.StatusNotFound, "image.not_found", "autor nemá obrázek")
 		return
 	}
 
 	// image_path může editor nastavit přes PUT na cokoliv, proto validujeme.
 	abs, ok := imagestore.Resolve(h.imageRoot, *author.ImagePath)
 	if !ok || !imagestore.Exists(h.imageRoot, *author.ImagePath) {
-		writeError(w, http.StatusNotFound, "obrázek nenalezen")
+		writeError(w, http.StatusNotFound, "image.not_found", "obrázek nenalezen")
 		return
 	}
 
@@ -200,7 +200,7 @@ func (h *AuthorHandler) SetImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.images == nil {
-		writeError(w, http.StatusNotFound, "zdroje metadat nejsou zapnuté")
+		writeError(w, http.StatusNotFound, "metadata.no_providers", "zdroje metadat nejsou zapnuté")
 		return
 	}
 
@@ -208,24 +208,24 @@ func (h *AuthorHandler) SetImage(w http.ResponseWriter, r *http.Request) {
 		URL string `json:"url"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 	if strings.TrimSpace(req.URL) == "" {
-		writeError(w, http.StatusBadRequest, "url je povinná")
+		writeError(w, http.StatusBadRequest, "validation.url_required", "url je povinná")
 		return
 	}
 
 	author, err := h.images.SetFromURL(r.Context(), id, strings.TrimSpace(req.URL))
 	switch {
 	case errors.Is(err, service.ErrImageNotAllowed):
-		writeError(w, http.StatusBadRequest, "adresa obrázku nepatří žádnému zapnutému zdroji metadat")
+		writeError(w, http.StatusBadRequest, "metadata.url_unsupported", "adresa obrázku nepatří žádnému zapnutému zdroji metadat")
 		return
 	case errors.Is(err, service.ErrNotFound):
-		writeError(w, http.StatusNotFound, "autor nenalezen")
+		writeError(w, http.StatusNotFound, "author.not_found", "autor nenalezen")
 		return
 	case err != nil:
-		writeError(w, http.StatusBadGateway, "obrázek se nepodařilo stáhnout – "+err.Error())
+		writeError(w, http.StatusBadGateway, "image.download_failed", "obrázek se nepodařilo stáhnout – "+err.Error())
 		return
 	}
 
@@ -239,17 +239,17 @@ func (h *AuthorHandler) DeleteImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.images == nil {
-		writeError(w, http.StatusNotFound, "zdroje metadat nejsou zapnuté")
+		writeError(w, http.StatusNotFound, "metadata.no_providers", "zdroje metadat nejsou zapnuté")
 		return
 	}
 
 	author, err := h.images.Clear(r.Context(), id)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "autor nenalezen")
+		writeError(w, http.StatusNotFound, "author.not_found", "autor nenalezen")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při mazání obrázku")
+		writeError(w, http.StatusInternalServerError, "common.delete_failed", "chyba při mazání obrázku")
 		return
 	}
 	writeJSON(w, http.StatusOK, author)
@@ -324,7 +324,7 @@ func NewSeries(svc *service.SeriesService, audit *service.AuditService) *SeriesH
 func (h *SeriesHandler) List(w http.ResponseWriter, r *http.Request) {
 	list, err := h.svc.List(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání sérií")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání sérií")
 		return
 	}
 	writeJSON(w, http.StatusOK, list)
@@ -338,11 +338,11 @@ func (h *SeriesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	}
 	sr, err := h.svc.GetByID(r.Context(), id)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "série nenalezena")
+		writeError(w, http.StatusNotFound, "series.not_found", "série nenalezena")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání série")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání série")
 		return
 	}
 	writeJSON(w, http.StatusOK, sr)
@@ -355,17 +355,17 @@ func (h *SeriesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description *string `json:"description"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 	if strings.TrimSpace(req.Title) == "" {
-		writeError(w, http.StatusBadRequest, "title je povinný")
+		writeError(w, http.StatusBadRequest, "validation.title_required", "title je povinný")
 		return
 	}
 
 	sr, err := h.svc.Create(r.Context(), strings.TrimSpace(req.Title), req.Description)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při vytváření série")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při vytváření série")
 		return
 	}
 	writeJSON(w, http.StatusCreated, sr)
@@ -382,21 +382,21 @@ func (h *SeriesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Description *string `json:"description"`
 	}
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 	if strings.TrimSpace(req.Title) == "" {
-		writeError(w, http.StatusBadRequest, "title je povinný")
+		writeError(w, http.StatusBadRequest, "validation.title_required", "title je povinný")
 		return
 	}
 
 	sr, err := h.svc.Update(r.Context(), id, strings.TrimSpace(req.Title), req.Description)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "série nenalezena")
+		writeError(w, http.StatusNotFound, "series.not_found", "série nenalezena")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při aktualizaci série")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při aktualizaci série")
 		return
 	}
 	writeJSON(w, http.StatusOK, sr)
@@ -414,10 +414,10 @@ func (h *SeriesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.svc.Delete(r.Context(), id); errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "série nenalezena")
+		writeError(w, http.StatusNotFound, "series.not_found", "série nenalezena")
 		return
 	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při mazání série")
+		writeError(w, http.StatusInternalServerError, "common.delete_failed", "chyba při mazání série")
 		return
 	}
 

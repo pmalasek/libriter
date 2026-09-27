@@ -30,7 +30,7 @@ func NewBook(svc *service.BookService, coverRoot string, audit *service.AuditSer
 func (h *BookHandler) List(w http.ResponseWriter, r *http.Request) {
 	books, err := h.svc.List(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání knih")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání knih")
 		return
 	}
 	writeJSON(w, http.StatusOK, books)
@@ -45,11 +45,11 @@ func (h *BookHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	book, err := h.svc.GetByID(r.Context(), id)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "kniha nenalezena")
+		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání knihy")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání knihy")
 		return
 	}
 	writeJSON(w, http.StatusOK, book)
@@ -67,29 +67,29 @@ func (h *BookHandler) Cover(w http.ResponseWriter, r *http.Request) {
 
 	book, err := h.svc.GetByID(r.Context(), id)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "kniha nenalezena")
+		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání knihy")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání knihy")
 		return
 	}
 
 	if book.CoverPath == nil {
-		writeError(w, http.StatusNotFound, "kniha nemá obálku")
+		writeError(w, http.StatusNotFound, "cover.not_found", "kniha nemá obálku")
 		return
 	}
 
 	// cover_path může editor nastavit přes PUT na cokoliv, proto validujeme.
 	abs, ok := imagestore.Resolve(h.coverRoot, *book.CoverPath)
 	if !ok {
-		writeError(w, http.StatusNotFound, "obálka nenalezena")
+		writeError(w, http.StatusNotFound, "cover.not_found", "obálka nenalezena")
 		return
 	}
 
 	info, err := os.Stat(abs)
 	if err != nil || !info.Mode().IsRegular() {
-		writeError(w, http.StatusNotFound, "obálka nenalezena")
+		writeError(w, http.StatusNotFound, "cover.not_found", "obálka nenalezena")
 		return
 	}
 
@@ -102,13 +102,13 @@ func (h *BookHandler) Cover(w http.ResponseWriter, r *http.Request) {
 func (h *BookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req bookRequest
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
 	in, err := req.toInput()
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
 	}
 	if !h.checkLanguage(w, r, in.Language) {
@@ -117,7 +117,7 @@ func (h *BookHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	book, err := h.svc.Create(r.Context(), in)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při vytváření knihy")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při vytváření knihy")
 		return
 	}
 	writeJSON(w, http.StatusCreated, book)
@@ -132,13 +132,13 @@ func (h *BookHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req bookRequest
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
 	in, err := req.toInput()
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
 	}
 	if !h.checkLanguage(w, r, in.Language) {
@@ -147,11 +147,11 @@ func (h *BookHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	book, err := h.svc.Update(r.Context(), id, in)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "kniha nenalezena")
+		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při aktualizaci knihy")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při aktualizaci knihy")
 		return
 	}
 	writeJSON(w, http.StatusOK, book)
@@ -170,13 +170,13 @@ func (h *BookHandler) Patch(w http.ResponseWriter, r *http.Request) {
 
 	var req bookPatchRequest
 	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
 
 	apply, err := req.toPatch()
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
 		return
 	}
 	if req.Language.Set && req.Language.Value != "" && !h.checkLanguage(w, r, req.Language.Value) {
@@ -185,11 +185,11 @@ func (h *BookHandler) Patch(w http.ResponseWriter, r *http.Request) {
 
 	book, err := h.svc.Patch(r.Context(), id, apply)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "kniha nenalezena")
+		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 		return
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při aktualizaci knihy")
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při aktualizaci knihy")
 		return
 	}
 	writeJSON(w, http.StatusOK, book)
@@ -215,10 +215,10 @@ func (h *BookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.svc.Delete(r.Context(), id, deleteFiles)
 	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusNotFound, "kniha nenalezena")
+		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 		return
 	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při mazání knihy – "+err.Error())
+		writeError(w, http.StatusInternalServerError, "common.delete_failed", "chyba při mazání knihy – "+err.Error())
 		return
 	}
 
@@ -419,11 +419,11 @@ func normalizeLanguage(code string) string {
 func (h *BookHandler) checkLanguage(w http.ResponseWriter, r *http.Request, code string) bool {
 	err := h.svc.CheckLanguage(r.Context(), code)
 	if errors.Is(err, service.ErrUnknownLanguage) {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("language: neznámý kód jazyka %q", code))
+		writeError(w, http.StatusBadRequest, "book.language_unknown", fmt.Sprintf("language: neznámý kód jazyka %q", code))
 		return false
 	}
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při ověřování jazyka")
+		writeError(w, http.StatusInternalServerError, "common.internal", "chyba při ověřování jazyka")
 		return false
 	}
 	return true
@@ -433,7 +433,7 @@ func (h *BookHandler) checkLanguage(w http.ResponseWriter, r *http.Request, code
 func (h *BookHandler) Languages(w http.ResponseWriter, r *http.Request) {
 	list, err := h.svc.Languages(r.Context())
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "chyba při načítání jazyků")
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání jazyků")
 		return
 	}
 	writeJSON(w, http.StatusOK, list)

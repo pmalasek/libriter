@@ -12,8 +12,11 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 	_ = json.NewEncoder(w).Encode(v)
 }
 
-func writeError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
+// writeError odpoví chybou ve tvaru {"error": msg, "code": code}. Klient
+// podle stabilního kódu zobrazí zprávu v jazyce uživatele; česká zpráva
+// slouží jako záložní text a pro ladění.
+func writeError(w http.ResponseWriter, status int, code, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg, "code": code})
 }
 
 func readJSON(r *http.Request, v any) error {
@@ -26,10 +29,10 @@ func readJSON(r *http.Request, v any) error {
 // Je nutné registrovat ji uvnitř /api/v1 subrouteru, protože root handler pro SPA
 // by jinak na neznámé API cesty vracel index.html.
 func NotFoundJSON(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusNotFound, "endpoint nenalezen")
+	writeError(w, http.StatusNotFound, "request.not_found", "endpoint nenalezen")
 }
 
 // MethodNotAllowedJSON odpovídá na nepodporovanou HTTP metodu v JSONu.
 func MethodNotAllowedJSON(w http.ResponseWriter, _ *http.Request) {
-	writeError(w, http.StatusMethodNotAllowed, "metoda není povolena")
+	writeError(w, http.StatusMethodNotAllowed, "request.method_not_allowed", "metoda není povolena")
 }
