@@ -165,6 +165,7 @@ func runServe() error {
 				r.Get("/authors", authorH.List)
 				r.Get("/authors/{id}", authorH.Get)
 				r.Get("/series", seriesH.List)
+				r.Get("/languages", bookH.Languages)
 				r.Get("/series/{id}", seriesH.Get)
 
 				// Poslechové session – vlastní data přihlášeného uživatele

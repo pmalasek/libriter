@@ -285,3 +285,47 @@ func TestBookPatchRejectsFilePath(t *testing.T) {
 		t.Error("readJSON přijal file_path, chtěna chyba")
 	}
 }
+
+func TestBookPatchLanguage(t *testing.T) {
+	store, _, coverRoot := newCoverTestEnv(t)
+	book := createTestBook(t, store)
+
+	h := NewBook(service.NewBook(store, scanner.New(t.TempDir(), coverRoot, store)), coverRoot, nil)
+	r := chi.NewRouter()
+	r.Patch("/books/{id}", h.Patch)
+
+	patch := func(body string) *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPatch, "/books/"+book.ID.String(), strings.NewReader(body))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
+		return rec
+	}
+
+	t.Run("neznámý kód", func(t *testing.T) {
+		rec := patch(`{"language":"xx"}`)
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("status = %d, chtěno 400 (%s)", rec.Code, rec.Body)
+		}
+		got, err := store.GetBook(context.Background(), book.ID)
+		if err != nil {
+			t.Fatalf("GetBook: %v", err)
+		}
+		if got.Language != "cs" {
+			t.Errorf("jazyk = %q, neplatný patch ho neměl změnit", got.Language)
+		}
+	})
+
+	t.Run("platný kód se normalizuje", func(t *testing.T) {
+		rec := patch(`{"language":" DE "}`)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status = %d, chtěno 200 (%s)", rec.Code, rec.Body)
+		}
+		var got model.Book
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if got.Language != "de" {
+			t.Errorf("jazyk = %q, chtěno de", got.Language)
+		}
+	})
+}

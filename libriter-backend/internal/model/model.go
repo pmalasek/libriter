@@ -65,6 +65,13 @@ type Series struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+// Language je položka číselníku jazyků (ISO 639-1).
+type Language struct {
+	Code       string `json:"code"`
+	NameCs     string `json:"name_cs"`     // český název, malým písmenem („němčina“)
+	NameNative string `json:"name_native"` // název v jazyce samotném („Deutsch“)
+}
+
 type Book struct {
 	ID              uuid.UUID  `json:"id"`
 	Authors         []Author   `json:"authors"` // seřazeno podle book_authors.position

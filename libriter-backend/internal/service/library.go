@@ -72,6 +72,27 @@ func (b *BookService) Delete(
 	return result, err
 }
 
+// ErrUnknownLanguage znamená, že kód jazyka knihy není v číselníku.
+var ErrUnknownLanguage = errors.New("neznámý kód jazyka")
+
+// Languages vrátí číselník jazyků, ze kterého se jazyk knihy vybírá.
+func (b *BookService) Languages(ctx context.Context) ([]model.Language, error) {
+	return b.store.ListLanguages(ctx)
+}
+
+// CheckLanguage ověří kód jazyka proti číselníku; neznámý vrátí jako
+// ErrUnknownLanguage.
+func (b *BookService) CheckLanguage(ctx context.Context, code string) error {
+	ok, err := b.store.LanguageExists(ctx, code)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrUnknownLanguage
+	}
+	return nil
+}
+
 // ErrChapterSetMismatch znamená, že seznam kapitol k seřazení neodpovídá
 // kapitolám knihy – typicky scanner mezitím přidal soubor.
 var ErrChapterSetMismatch = errors.New("seznam kapitol neodpovídá knize")

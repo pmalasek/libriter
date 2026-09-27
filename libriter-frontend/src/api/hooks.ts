@@ -17,6 +17,7 @@ import type {
   BookStatus,
   ChangePasswordRequest,
   Chapter,
+  Language,
   LoginRequest,
   MetadataSearchResult,
   PlaySession,
@@ -97,6 +98,15 @@ export function useSeriesList(): UseQueryResult<Series[], Error> {
   return useQuery({
     queryKey: queryKeys.series,
     queryFn: async () => asList(await apiFetch<Series[] | null>('/series')),
+  })
+}
+
+/** Číselník jazyků se za běhu nemění – stačí ho načíst jednou. */
+export function useLanguages(): UseQueryResult<Language[], Error> {
+  return useQuery({
+    queryKey: queryKeys.languages,
+    queryFn: async () => asList(await apiFetch<Language[] | null>('/languages')),
+    staleTime: Infinity,
   })
 }
 

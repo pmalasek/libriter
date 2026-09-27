@@ -111,6 +111,9 @@ func (h *BookHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	if !h.checkLanguage(w, r, in.Language) {
+		return
+	}
 
 	book, err := h.svc.Create(r.Context(), in)
 	if err != nil {
@@ -136,6 +139,9 @@ func (h *BookHandler) Update(w http.ResponseWriter, r *http.Request) {
 	in, err := req.toInput()
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !h.checkLanguage(w, r, in.Language) {
 		return
 	}
 
@@ -171,6 +177,9 @@ func (h *BookHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	apply, err := req.toPatch()
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if req.Language.Set && req.Language.Value != "" && !h.checkLanguage(w, r, req.Language.Value) {
 		return
 	}
 
@@ -280,13 +289,13 @@ func (req *bookRequest) toInput() (storage.BookInput, error) {
 		DurationSeconds: req.DurationSeconds,
 		FilePath:        strings.TrimSpace(req.FilePath),
 		CoverPath:       req.CoverPath,
-		Language:        req.Language,
+		Language:        normalizeLanguage(req.Language),
 		Description:     req.Description,
 		InternalRating:  req.InternalRating,
 		PublishedYear:   req.PublishedYear,
 	}
 
-	if req.Language == "" {
+	if in.Language == "" {
 		in.Language = "cs"
 	}
 
@@ -339,6 +348,9 @@ func (req *bookPatchRequest) toPatch() (func(*storage.BookInput), error) {
 			return nil, err
 		}
 	}
+	// Normalizuje se už tady, aby handler ověřoval proti číselníku stejný kód,
+	// jaký se pak uloží.
+	req.Language.Value = normalizeLanguage(req.Language.Value)
 
 	var authorIDs []uuid.UUID
 	if req.AuthorIDs.Set {
@@ -396,6 +408,35 @@ func (req *bookPatchRequest) toPatch() (func(*storage.BookInput), error) {
 			in.PublishedYear = req.PublishedYear.Value
 		}
 	}, nil
+}
+
+// normalizeLanguage převede kód jazyka do podoby, v jaké je v číselníku.
+func normalizeLanguage(code string) string {
+	return strings.ToLower(strings.TrimSpace(code))
+}
+
+// checkLanguage odpoví 400, když kód jazyka není v číselníku; true = kód platí.
+func (h *BookHandler) checkLanguage(w http.ResponseWriter, r *http.Request, code string) bool {
+	err := h.svc.CheckLanguage(r.Context(), code)
+	if errors.Is(err, service.ErrUnknownLanguage) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("language: neznámý kód jazyka %q", code))
+		return false
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "chyba při ověřování jazyka")
+		return false
+	}
+	return true
+}
+
+// GET /api/v1/languages
+func (h *BookHandler) Languages(w http.ResponseWriter, r *http.Request) {
+	list, err := h.svc.Languages(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "chyba při načítání jazyků")
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
 }
 
 // checkPublishedYear odmítne nesmyslný rok vydání. Zdroje metadat rok občas

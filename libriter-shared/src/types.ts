@@ -51,6 +51,15 @@ export interface Series {
   created_at: string
 }
 
+/** Položka číselníku jazyků (ISO 639-1) – GET /languages. */
+export interface Language {
+  code: string
+  /** Český název, malým písmenem („němčina“). */
+  name_cs: string
+  /** Název v jazyce samotném („Deutsch“). */
+  name_native: string
+}
+
 export interface Book {
   id: string
   /** Kniha může mít víc autorů; pořadí určuje backend (hlavní autor první). */

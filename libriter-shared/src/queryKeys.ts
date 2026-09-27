@@ -11,6 +11,7 @@ export const queryKeys = {
   author: (id: string) => ['authors', id] as const,
   series: ['series'] as const,
   seriesOne: (id: string) => ['series', id] as const,
+  languages: ['languages'] as const,
   user: (id: string) => ['users', id] as const,
   authConfig: ['auth', 'config'] as const,
   sessions: ['sessions'] as const,

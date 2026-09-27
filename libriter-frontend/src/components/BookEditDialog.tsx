@@ -16,6 +16,7 @@ import {
   type BookPatchRequest,
 } from '@/api/types'
 import { BookAuthorsField } from '@/components/BookAuthorsField'
+import { LanguageSelect } from '@/components/LanguageSelect'
 import { MetadataImport } from '@/components/MetadataImport'
 import { Button } from '@/components/ui/button'
 import {
@@ -177,7 +178,7 @@ function BookEditForm({
       patch.duration_seconds = nextDuration
     }
 
-    if (language.trim() !== book.language) patch.language = language.trim()
+    if (language !== book.language) patch.language = language
 
     const nextRating = rating === NONE ? null : Number(rating)
     if (nextRating !== (book.internal_rating ?? null)) patch.internal_rating = nextRating
@@ -361,7 +362,7 @@ function BookEditForm({
         </div>
       ) : null}
 
-      <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
+      <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
         <div className="space-y-2">
           <Label htmlFor="book_series">Série</Label>
           <Select value={seriesId} onValueChange={setSeriesId}>
@@ -439,12 +440,7 @@ function BookEditForm({
         </div>
         <div className="space-y-2">
           <Label htmlFor="book_language">Jazyk</Label>
-          <Input
-            id="book_language"
-            maxLength={5}
-            value={language}
-            onChange={(e) => setLanguage(e.target.value)}
-          />
+          <LanguageSelect id="book_language" value={language} onChange={setLanguage} />
         </div>
       </div>
 
