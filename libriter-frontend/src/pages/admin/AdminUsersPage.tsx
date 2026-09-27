@@ -6,6 +6,7 @@ import type { User } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { CreateUserDialog } from '@/components/admin/CreateUserDialog'
+import { EditUserDialog } from '@/components/admin/EditUserDialog'
 import { ResetPasswordDialog } from '@/components/admin/ResetPasswordDialog'
 import { UserTable } from '@/components/admin/UserTable'
 import { EmptyState } from '@/components/EmptyState'
@@ -19,6 +20,7 @@ export function AdminUsersPage() {
   const deleteUser = useDeleteUser()
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [editTarget, setEditTarget] = useState<User | null>(null)
   const [resetTarget, setResetTarget] = useState<User | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
 
@@ -53,12 +55,14 @@ export function AdminUsersPage() {
         <UserTable
           users={users.data}
           currentUserId={currentUser?.id ?? ''}
+          onEdit={setEditTarget}
           onResetPassword={setResetTarget}
           onDelete={setDeleteTarget}
         />
       ) : null}
 
       <CreateUserDialog open={createOpen} onOpenChange={setCreateOpen} />
+      <EditUserDialog user={editTarget} onClose={() => setEditTarget(null)} />
       <ResetPasswordDialog user={resetTarget} onClose={() => setResetTarget(null)} />
       <ConfirmDialog
         open={deleteTarget !== null}

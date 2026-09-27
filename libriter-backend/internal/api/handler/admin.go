@@ -82,6 +82,7 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		DisplayName string `json:"display_name"`
 		Email       string `json:"email"`
+		Login       string `json:"login"`
 		Password    string `json:"password"`
 		Role        string `json:"role"`
 	}
@@ -106,9 +107,8 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := h.users.Create(r.Context(), req.DisplayName, req.Email, req.Password, req.Role)
-	if errors.Is(err, service.ErrEmailTaken) {
-		writeError(w, http.StatusConflict, "email je již použit")
+	u, err := h.users.Create(r.Context(), req.DisplayName, req.Email, req.Login, req.Password, req.Role)
+	if writeUserInputError(w, err) {
 		return
 	}
 	if err != nil {

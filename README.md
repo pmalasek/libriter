@@ -304,7 +304,7 @@ přehled: hlavička *Pokračovat v poslechu* s rozposlouchanou knihou a pod ní
 police – rozposlouchané, nově přidané, série a doposlechnuté.
 
 **Co první verze umí:** přihlášení a registraci, seznam a detail knih, autory,
-série, profil (změna jména, e-mailu a hesla), hledání v knihách, obálky knih,
+série, profil (změna jména, e-mailu, loginu a hesla), hledání v knihách, obálky knih,
 světlý i tmavý režim podle systému.
 
 **Seznamy knih a autorů** mají tři zobrazení (dlaždice, malé dlaždice, seznam)
@@ -435,7 +435,7 @@ zůstávají ve webovém rozhraní.
 | Vlastnost | Jak to funguje |
 |-----------|----------------|
 | Rozsah | Totéž co čtecí část webu: Domů, Knihy, Autoři, Série, Právě posloucháno, detaily – stejné komponenty, řazení, hledání i vzhled (schéma a světlý/tmavý režim z profilu). |
-| Přihlášení | Adresa serveru + e-mail a heslo. Přihlašovací token se hned vymění za mobilní (rok platnosti) a zahodí; mobilní leží v Keychain / Keystore. |
+| Přihlášení | Adresa serveru + e-mail nebo login a heslo. Přihlašovací token se hned vymění za mobilní (rok platnosti) a zahodí; mobilní leží v Keychain / Keystore. |
 | Režimy | **Online** (výchozí) čte živě ze serveru jako web. **Offline** (přepínač v Nastavení) zrcadlí celou knihovnu do SQLite. Stažené knihy hrají v obou režimech i bez signálu. |
 | Pozice | Každé uložení jde do fronty a odesílá se dávkově přes `POST /sessions/sync`. O tom, čí pozice vyhraje, rozhoduje čas vzniku na klientovi. |
 | Přehrávání | react-native-track-player: běh na pozadí, ovládání ze zamčené obrazovky, rychlosti, skoky a časovač vypnutí. |
@@ -458,7 +458,7 @@ zakládat i v administraci webového rozhraní.
 
 ```bash
 # nové konto (bez --password se heslo zadá interaktivně, skrytě a dvakrát)
-bin/libriter user add --email admin@example.com --name "Jan Novák" --role admin
+bin/libriter user add --email admin@example.com --name "Jan Novák" --login jan --role admin
 
 # povýšení už registrovaného účtu
 bin/libriter user set-role --email jan@example.com --role editor
@@ -471,7 +471,7 @@ Ve vývoji bez buildu: `go run ./cmd/server user add --email … --name …`.
 
 | Příkaz | Přepínače |
 |--------|-----------|
-| `user add` | `--email` a `--name` (povinné), `--role` (`admin`\|`editor`\|`reader`, výchozí `reader`), `--password` (min. 8 znaků) |
+| `user add` | `--email` a `--name` (povinné), `--login` (nepovinné), `--role` (`admin`\|`editor`\|`reader`, výchozí `reader`), `--password` (min. 8 znaků) |
 | `user set-role` | `--email`, `--role` |
 | `user list` | – |
 | `repair-chapters` | bez přepínačů vypíše plán; `--apply` ho provede, `--force-missing` přebije pojistku proti nepřipojenému disku |
@@ -626,7 +626,7 @@ Základní URL: `http://localhost:8080/api/v1`
 |--------|----------|-------|---------|
 | `GET` | `/auth/config` | Je registrace zapnutá a s jakou rolí | veřejné |
 | `POST` | `/auth/register` | Registrace nového uživatele | veřejné |
-| `POST` | `/auth/login` | Přihlášení, vrátí JWT token | veřejné |
+| `POST` | `/auth/login` | Přihlášení `{login, password}` – `login` se porovná s loginem i e-mailem; vrátí JWT token | veřejné |
 | `GET` | `/auth/stream-token` | Krátkodobý token pro adresu audia (24 h) | přihlášený |
 | `POST` | `/auth/mobile-token` | Dlouhodobý token pro mobilní aplikaci | přihlášený |
 
@@ -670,7 +670,7 @@ požadavku dohledává v databázi.
 |--------|----------|-------|---------|
 | `GET` | `/users` | Seznam uživatelů | admin |
 | `GET` | `/users/{id}` | Detail uživatele | admin / vlastní profil |
-| `PUT` | `/users/{id}` | Aktualizace jména a emailu | admin / vlastní profil |
+| `PUT` | `/users/{id}` | Aktualizace jména, emailu a loginu (prázdný login ho odebere) | admin / vlastní profil |
 | `PUT` | `/users/{id}/password` | Změna hesla | admin / vlastní profil |
 | `PUT` | `/users/{id}/appearance` | Uložení vzhledu (`color_scheme`, `theme_mode`) | vlastní profil |
 | `PUT` | `/users/{id}/role` | Nastavení role | admin |

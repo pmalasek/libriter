@@ -15,6 +15,10 @@ var ErrNotFound = errors.New("not found")
 // ErrConflict se vrátí při porušení unique constraint.
 var ErrConflict = errors.New("conflict")
 
+// ErrLoginConflict se vrátí, když je přihlašovací jméno už obsazené jiným
+// uživatelem (u uživatelů odlišuje obsazený login od obsazeného e-mailu).
+var ErrLoginConflict = errors.New("login conflict")
+
 // ErrLastAdmin se vrátí při pokusu odebrat roli nebo smazat účet posledního
 // administrátora. Bez admina by knihovnu nešlo spravovat jinak než přes CLI.
 var ErrLastAdmin = errors.New("last admin")

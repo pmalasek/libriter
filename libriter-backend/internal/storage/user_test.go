@@ -14,11 +14,11 @@ func TestLastAdminCannotBeDemotedOrDeleted(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)
 
-	admin, err := store.CreateUser(ctx, "Admin", "admin@example.com", "hash", model.RoleAdmin)
+	admin, err := store.CreateUser(ctx, "Admin", "admin@example.com", "", "hash", model.RoleAdmin)
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	if _, err := store.CreateUser(ctx, "Čtenář", "reader@example.com", "hash", model.RoleReader); err != nil {
+	if _, err := store.CreateUser(ctx, "Čtenář", "reader@example.com", "", "hash", model.RoleReader); err != nil {
 		t.Fatalf("CreateUser čtenáře: %v", err)
 	}
 
@@ -43,11 +43,11 @@ func TestSecondAdminAllowsDemotionAndDeletion(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)
 
-	first, err := store.CreateUser(ctx, "Admin", "admin@example.com", "hash", model.RoleAdmin)
+	first, err := store.CreateUser(ctx, "Admin", "admin@example.com", "", "hash", model.RoleAdmin)
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	second, err := store.CreateUser(ctx, "Admin 2", "admin2@example.com", "hash", model.RoleAdmin)
+	second, err := store.CreateUser(ctx, "Admin 2", "admin2@example.com", "", "hash", model.RoleAdmin)
 	if err != nil {
 		t.Fatalf("CreateUser druhého admina: %v", err)
 	}
@@ -69,10 +69,10 @@ func TestCountUsersByRole(t *testing.T) {
 	ctx := context.Background()
 	store := newTestStore(t)
 
-	if _, err := store.CreateUser(ctx, "Admin", "admin@example.com", "hash", model.RoleAdmin); err != nil {
+	if _, err := store.CreateUser(ctx, "Admin", "admin@example.com", "", "hash", model.RoleAdmin); err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	if _, err := store.CreateUser(ctx, "Editor", "editor@example.com", "hash", model.RoleEditor); err != nil {
+	if _, err := store.CreateUser(ctx, "Editor", "editor@example.com", "", "hash", model.RoleEditor); err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
 

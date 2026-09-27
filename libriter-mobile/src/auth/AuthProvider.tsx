@@ -7,6 +7,7 @@ import {
   setBaseUrl,
   setUnauthorizedHandler,
   type AuthResponse,
+  type LoginRequest,
   type MobileToken,
   type Session,
   type User,
@@ -21,7 +22,8 @@ interface AuthValue {
   user: User | null
   serverUrl: string
   loading: boolean
-  signIn: (input: { serverUrl: string; email: string; password: string }) => Promise<void>
+  /** `login` se na serveru porovná s loginem i s e-mailem uživatele. */
+  signIn: (input: { serverUrl: string; login: string; password: string }) => Promise<void>
   signOut: () => Promise<void>
   /** Promítne změnu profilu (vzhled) do uložené session. */
   updateUser: (patch: Partial<User>) => void
@@ -87,7 +89,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const auth = await apiFetch<AuthResponse>('/auth/login', {
       method: 'POST',
       anonymous: true,
-      json: { email: input.email.trim(), password: input.password },
+      json: { login: input.login.trim(), password: input.password } satisfies LoginRequest,
     })
 
     // Přihlašovací token žije 72 hodin a telefon bývá offline dýl. Hned se

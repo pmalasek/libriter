@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useCreateUser } from '@/api/adminHooks'
-import { ROLE_LABELS, type Role } from '@/api/types'
+import { LOGIN_HINT, LOGIN_PATTERN, ROLE_LABELS, type Role } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -38,6 +38,7 @@ export function CreateUserDialog({
 function CreateUserForm({ onDone }: { onDone: () => void }) {
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
+  const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [role, setRole] = useState<Role>('reader')
   const [error, setError] = useState<string | null>(null)
@@ -54,7 +55,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
     }
 
     createUser.mutate(
-      { display_name: displayName.trim(), email: email.trim(), password, role },
+      { display_name: displayName.trim(), email: email.trim(), login: login.trim(), password, role },
       {
         onSuccess: (user) => {
           toast.success(`Účet ${user.email} byl založen.`)
@@ -93,6 +94,20 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="new_user_login">Login</Label>
+        <Input
+          id="new_user_login"
+          autoComplete="off"
+          autoCapitalize="none"
+          spellCheck={false}
+          pattern={LOGIN_PATTERN}
+          value={login}
+          onChange={(e) => setLogin(e.target.value)}
+        />
+        <p className="text-xs text-muted-foreground">{LOGIN_HINT}</p>
       </div>
 
       <div className="space-y-2">

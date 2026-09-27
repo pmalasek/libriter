@@ -81,6 +81,7 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		DisplayName string `json:"display_name"`
 		Email       string `json:"email"`
+		Login       string `json:"login"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "neplatný formát požadavku")
@@ -95,13 +96,12 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	u, err := h.svc.Update(r.Context(), id, req.DisplayName, req.Email)
+	u, err := h.svc.Update(r.Context(), id, req.DisplayName, req.Email, req.Login)
 	if errors.Is(err, service.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "uživatel nenalezen")
 		return
 	}
-	if errors.Is(err, service.ErrEmailTaken) {
-		writeError(w, http.StatusConflict, "email je již použit")
+	if writeUserInputError(w, err) {
 		return
 	}
 	if err != nil {
@@ -295,4 +295,20 @@ func parseUUID(w http.ResponseWriter, r *http.Request, param string) (uuid.UUID,
 		return uuid.UUID{}, false
 	}
 	return id, true
+}
+
+// writeUserInputError odpoví na chyby údajů uživatele, které zavinil klient
+// (neplatný nebo obsazený login, obsazený e-mail). Vrací true, pokud odpověděl.
+func writeUserInputError(w http.ResponseWriter, err error) bool {
+	switch {
+	case errors.Is(err, service.ErrInvalidLogin):
+		writeError(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, service.ErrLoginTaken):
+		writeError(w, http.StatusConflict, "login je již použit")
+	case errors.Is(err, service.ErrEmailTaken):
+		writeError(w, http.StatusConflict, "email je již použit")
+	default:
+		return false
+	}
+	return true
 }

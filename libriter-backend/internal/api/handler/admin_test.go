@@ -143,6 +143,7 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 	r := chi.NewRouter()
 	r.Get("/auth/config", authH.Config)
 	r.Post("/auth/register", authH.Register)
+	r.Post("/auth/login", authH.Login)
 	// Audio se streamuje mimo Authenticate – token je v adrese.
 	r.Get("/chapters/{id}/audio", audioH.Stream)
 	r.Head("/chapters/{id}/audio", audioH.Stream)
@@ -208,7 +209,7 @@ func (e *adminTestEnv) login(t *testing.T, email, role string) (string, string) 
 	t.Helper()
 	ctx := context.Background()
 
-	u, err := e.users.Create(ctx, "Test "+role, email, "tajneheslo", role)
+	u, err := e.users.Create(ctx, "Test "+role, email, "", "tajneheslo", role)
 	if err != nil {
 		t.Fatalf("Create %s: %v", role, err)
 	}

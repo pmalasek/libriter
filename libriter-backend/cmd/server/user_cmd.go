@@ -23,7 +23,7 @@ import (
 const userUsage = `Správa uživatelů z příkazové řádky.
 
 Použití:
-  libriter user add --email <email> --name <jméno> [--role <role>] [--password <heslo>]
+  libriter user add --email <email> --name <jméno> [--login <login>] [--role <role>] [--password <heslo>]
   libriter user set-role --email <email> --role <role>
   libriter user list
 
@@ -60,10 +60,11 @@ func runUserAdd(args []string) error {
 	fs := flag.NewFlagSet("user add", flag.ContinueOnError)
 	email := fs.String("email", "", "email uživatele (povinné)")
 	name := fs.String("name", "", "zobrazované jméno (povinné)")
+	login := fs.String("login", "", "přihlašovací jméno (nepovinné; přihlásit se jde i e-mailem)")
 	role := fs.String("role", model.RoleReader, "role: admin | editor | reader")
 	password := fs.String("password", "", "heslo; bez tohoto přepínače se zadá interaktivně")
 	fs.Usage = func() {
-		fmt.Fprintln(fs.Output(), "Použití: libriter user add --email <email> --name <jméno> [--role <role>] [--password <heslo>]")
+		fmt.Fprintln(fs.Output(), "Použití: libriter user add --email <email> --name <jméno> [--login <login>] [--role <role>] [--password <heslo>]")
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -80,6 +81,10 @@ func runUserAdd(args []string) error {
 	}
 	if _, ok := model.RoleLevel[*role]; !ok {
 		return fmt.Errorf("neznámá role %q (povolené: admin, editor, reader)", *role)
+	}
+	var err error
+	if *login, err = service.NormalizeLogin(*login); err != nil {
+		return err
 	}
 
 	// Databázi otevíráme dřív než se ptáme na heslo – chyba konfigurace se tak
@@ -103,16 +108,19 @@ func runUserAdd(args []string) error {
 		return fmt.Errorf("heslo musí mít alespoň %d znaků", minPasswordLen)
 	}
 
-	u, err := userSvc.Create(ctx, *name, *email, pass, *role)
+	u, err := userSvc.Create(ctx, *name, *email, *login, pass, *role)
 	if errors.Is(err, service.ErrEmailTaken) {
 		return fmt.Errorf("uživatel s emailem %s už existuje", *email)
+	}
+	if errors.Is(err, service.ErrLoginTaken) {
+		return fmt.Errorf("login %s už používá jiný uživatel", *login)
 	}
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Uživatel vytvořen:\n  id:    %s\n  jméno: %s\n  email: %s\n  role:  %s\n",
-		u.ID, u.DisplayName, u.Email, u.Role)
+	fmt.Printf("Uživatel vytvořen:\n  id:    %s\n  jméno: %s\n  email: %s\n  login: %s\n  role:  %s\n",
+		u.ID, u.DisplayName, u.Email, u.Login, u.Role)
 	return nil
 }
 
@@ -193,9 +201,9 @@ func runUserList(args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 4, 2, ' ', 0)
-	fmt.Fprintln(w, "ROLE\tEMAIL\tJMÉNO\tID")
+	fmt.Fprintln(w, "ROLE\tEMAIL\tLOGIN\tJMÉNO\tID")
 	for _, u := range users {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", u.Role, u.Email, u.DisplayName, u.ID)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\n", u.Role, u.Email, u.Login, u.DisplayName, u.ID)
 	}
 	return w.Flush()
 }

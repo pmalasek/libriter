@@ -1,4 +1,4 @@
-import { HeadphonesIcon, KeyRoundIcon, Trash2Icon } from 'lucide-react'
+import { HeadphonesIcon, KeyRoundIcon, PencilIcon, Trash2Icon } from 'lucide-react'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { useSetUserRole } from '@/api/adminHooks'
@@ -20,11 +20,13 @@ const ROLES: Role[] = ['reader', 'editor', 'admin']
 export function UserTable({
   users,
   currentUserId,
+  onEdit,
   onResetPassword,
   onDelete,
 }: {
   users: User[]
   currentUserId: string
+  onEdit: (user: User) => void
   onResetPassword: (user: User) => void
   onDelete: (user: User) => void
 }) {
@@ -49,9 +51,10 @@ export function UserTable({
           <TableRow>
             <TableHead>Jméno</TableHead>
             <TableHead>E-mail</TableHead>
+            <TableHead>Login</TableHead>
             <TableHead className="w-44">Role</TableHead>
             <TableHead className="w-36">Vytvořen</TableHead>
-            <TableHead className="w-32 text-right">Akce</TableHead>
+            <TableHead className="w-40 text-right">Akce</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -67,6 +70,9 @@ export function UserTable({
                   {isSelf ? <span className="ml-2 text-xs text-muted-foreground">(vy)</span> : null}
                 </TableCell>
                 <TableCell className="break-all">{user.email}</TableCell>
+                <TableCell className="break-all">
+                  {user.login || <span className="text-muted-foreground">—</span>}
+                </TableCell>
                 <TableCell>
                   <Select
                     value={user.role}
@@ -97,6 +103,14 @@ export function UserTable({
                       >
                         <HeadphonesIcon />
                       </Link>
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Upravit účet ${user.email}`}
+                      onClick={() => onEdit(user)}
+                    >
+                      <PencilIcon />
                     </Button>
                     <Button
                       variant="ghost"

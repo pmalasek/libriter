@@ -38,8 +38,8 @@ func (u *UserService) List(ctx context.Context) ([]model.User, error) {
 // Create vytvoří uživatele s explicitní rolí. Používá ji CLI
 // (`libriter user add`) i administrace; veřejná registrace jde přes
 // AuthService.Register, kde roli určuje nastavení registrace.
-func (u *UserService) Create(ctx context.Context, displayName, email, password, role string) (*model.User, error) {
-	return createUser(ctx, u.store, displayName, email, password, role)
+func (u *UserService) Create(ctx context.Context, displayName, email, login, password, role string) (*model.User, error) {
+	return createUser(ctx, u.store, displayName, email, login, password, role)
 }
 
 // GetByEmail vrátí uživatele podle emailu (používá CLI pro adresování uživatele).
@@ -59,13 +59,21 @@ func (u *UserService) GetByID(ctx context.Context, id uuid.UUID) (*model.User, e
 	return usr, err
 }
 
-func (u *UserService) Update(ctx context.Context, id uuid.UUID, displayName, email string) (*model.User, error) {
-	usr, err := u.store.UpdateUser(ctx, id, displayName, email)
+// Update změní jméno, e-mail a login. Prázdný login uživateli login odebere.
+func (u *UserService) Update(ctx context.Context, id uuid.UUID, displayName, email, login string) (*model.User, error) {
+	login, err := NormalizeLogin(login)
+	if err != nil {
+		return nil, err
+	}
+	usr, err := u.store.UpdateUser(ctx, id, displayName, email, login)
 	if errors.Is(err, storage.ErrNotFound) {
 		return nil, ErrNotFound
 	}
 	if errors.Is(err, storage.ErrConflict) {
 		return nil, ErrEmailTaken
+	}
+	if errors.Is(err, storage.ErrLoginConflict) {
+		return nil, ErrLoginTaken
 	}
 	return usr, err
 }

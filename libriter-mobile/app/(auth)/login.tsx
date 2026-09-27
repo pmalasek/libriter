@@ -15,7 +15,7 @@ export default function LoginScreen() {
 
   // Adresa serveru se předvyplní z minula: po odhlášení se mění heslo, ne server.
   const [url, setUrl] = useState(serverUrl || 'https://')
-  const [email, setEmail] = useState('')
+  const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -24,7 +24,7 @@ export default function LoginScreen() {
     setBusy(true)
     setError('')
     try {
-      await signIn({ serverUrl: url, email, password })
+      await signIn({ serverUrl: url, login, password })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Přihlášení se nepodařilo')
     } finally {
@@ -55,15 +55,15 @@ export default function LoginScreen() {
               placeholderTextColor={colors.mutedForeground}
             />
           </Field>
-          <Field label="E-mail">
+          <Field label="E-mail nebo login">
             <TextInput
               style={input}
-              value={email}
-              onChangeText={setEmail}
+              value={login}
+              onChangeText={setLogin}
               autoCapitalize="none"
               autoCorrect={false}
-              keyboardType="email-address"
               textContentType="username"
+              autoComplete="username"
             />
           </Field>
           <Field label="Heslo">

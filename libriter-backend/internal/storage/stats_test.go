@@ -55,7 +55,7 @@ func TestLibraryStats(t *testing.T) {
 		t.Fatalf("UpsertChapter: %v", err)
 	}
 
-	if _, err := store.CreateUser(ctx, "Admin", "admin@example.com", "hash", model.RoleAdmin); err != nil {
+	if _, err := store.CreateUser(ctx, "Admin", "admin@example.com", "", "hash", model.RoleAdmin); err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
 

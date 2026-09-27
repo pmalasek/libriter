@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAuthConfig, useRegister } from '@/api/hooks'
-import { ROLE_LABELS } from '@/api/types'
+import { LOGIN_HINT, LOGIN_PATTERN, ROLE_LABELS } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { AuthShell } from '@/components/layout/AuthShell'
 import { Button } from '@/components/ui/button'
@@ -14,6 +14,7 @@ const MIN_PASSWORD = 8
 export function RegisterPage() {
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
+  const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
   const { signIn } = useAuth()
@@ -31,7 +32,7 @@ export function RegisterPage() {
     }
 
     register.mutate(
-      { display_name: displayName.trim(), email: email.trim(), password },
+      { display_name: displayName.trim(), email: email.trim(), login: login.trim(), password },
       {
         onSuccess: (response) => {
           signIn(response)
@@ -83,6 +84,19 @@ export function RegisterPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="login">Login</Label>
+              <Input
+                id="login"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                pattern={LOGIN_PATTERN}
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">{LOGIN_HINT}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Heslo</Label>

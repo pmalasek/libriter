@@ -14,10 +14,20 @@ export interface User extends UserAppearance {
   id: string
   display_name: string
   email: string
+  /** Volitelné přihlašovací jméno; prázdný řetězec = uživatel login nemá. */
+  login: string
   role: Role
   created_at: string
   updated_at: string
 }
+
+/**
+ * Formát přihlašovacího jména – musí odpovídat backendu
+ * (internal/service/login.go). Hodí se do atributu `pattern` u inputu.
+ */
+export const LOGIN_PATTERN = '[A-Za-z0-9._\\-]{3,32}'
+export const LOGIN_HINT =
+  'Nepovinné. 3–32 znaků: písmena bez diakritiky, číslice, tečka, podtržítko a pomlčka.'
 
 export interface Author {
   id: string
@@ -253,19 +263,23 @@ export interface AuthResponse {
 
 // Backend používá DisallowUnknownFields – posílat jen tato pole, nic navíc.
 export interface LoginRequest {
-  email: string
+  /** Porovnává se s loginem i s e-mailem uživatele. */
+  login: string
   password: string
 }
 
 export interface RegisterRequest {
   display_name: string
   email: string
+  login?: string
   password: string
 }
 
+/** Prázdný login uživateli login odebere. */
 export interface UpdateUserRequest {
   display_name: string
   email: string
+  login: string
 }
 
 export interface ChangePasswordRequest {
@@ -443,6 +457,7 @@ export interface AuthConfig {
 export interface CreateUserRequest {
   display_name: string
   email: string
+  login?: string
   password: string
   role: Role
 }

@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 export function LoginPage() {
-  const [email, setEmail] = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const { signIn } = useAuth()
   const navigate = useNavigate()
@@ -22,7 +22,7 @@ export function LoginPage() {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     login.mutate(
-      { email: email.trim(), password },
+      { login: identifier.trim(), password },
       {
         onSuccess: (response) => {
           signIn(response)
@@ -42,14 +42,16 @@ export function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
+              <Label htmlFor="login">E-mail nebo login</Label>
               <Input
-                id="email"
-                type="email"
-                autoComplete="email"
+                id="login"
+                type="text"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
               />
             </div>
             <div className="space-y-2">

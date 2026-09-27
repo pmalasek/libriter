@@ -28,6 +28,7 @@ import type {
   Role,
   ScannerStatus,
   SystemInfo,
+  UpdateUserRequest,
   User,
 } from './types'
 
@@ -145,6 +146,15 @@ export function useCreateUser() {
   return useAdminMutation(
     (body: CreateUserRequest) => apiFetch<User>('/admin/users', { method: 'POST', json: body }),
     [adminKeys.users, adminKeys.stats],
+  )
+}
+
+/** Úprava údajů libovolného účtu adminem – stejný endpoint jako vlastní profil. */
+export function useUpdateUser() {
+  return useAdminMutation(
+    ({ userId, ...body }: UpdateUserRequest & { userId: string }) =>
+      apiFetch<User>(`/users/${userId}`, { method: 'PUT', json: body }),
+    [adminKeys.users],
   )
 }
 

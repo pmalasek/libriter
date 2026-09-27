@@ -126,8 +126,8 @@ func (a *AuthService) cachedRole(userID uuid.UUID) (string, bool) {
 
 // Register vytvoří nového uživatele s danou rolí a vrátí JWT token.
 // Roli určuje nastavení registrace (viz SettingsService), ne klient.
-func (a *AuthService) Register(ctx context.Context, displayName, email, password, role string) (*model.User, string, error) {
-	u, err := createUser(ctx, a.store, displayName, email, password, role)
+func (a *AuthService) Register(ctx context.Context, displayName, email, login, password, role string) (*model.User, string, error) {
+	u, err := createUser(ctx, a.store, displayName, email, login, password, role)
 	if err != nil {
 		return nil, "", err
 	}
@@ -141,10 +141,14 @@ func (a *AuthService) Register(ctx context.Context, displayName, email, password
 }
 
 // createUser je společná cesta vytvoření uživatele pro API registraci i CLI.
-// Zahashuje heslo a uloží uživatele s danou rolí.
-func createUser(ctx context.Context, store *storage.Store, displayName, email, password, role string) (*model.User, error) {
+// Ověří login, zahashuje heslo a uloží uživatele s danou rolí.
+func createUser(ctx context.Context, store *storage.Store, displayName, email, login, password, role string) (*model.User, error) {
 	if _, ok := model.RoleLevel[role]; !ok {
 		return nil, fmt.Errorf("neznámá role: %s", role)
+	}
+	login, err := NormalizeLogin(login)
+	if err != nil {
+		return nil, err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
@@ -152,9 +156,12 @@ func createUser(ctx context.Context, store *storage.Store, displayName, email, p
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	u, err := store.CreateUser(ctx, displayName, email, string(hash), role)
+	u, err := store.CreateUser(ctx, displayName, email, login, string(hash), role)
 	if errors.Is(err, storage.ErrConflict) {
 		return nil, ErrEmailTaken
+	}
+	if errors.Is(err, storage.ErrLoginConflict) {
+		return nil, ErrLoginTaken
 	}
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
@@ -163,9 +170,10 @@ func createUser(ctx context.Context, store *storage.Store, displayName, email, p
 	return u, nil
 }
 
-// Login ověří přihlašovací údaje a vrátí JWT token.
-func (a *AuthService) Login(ctx context.Context, email, password string) (*model.User, string, error) {
-	u, err := a.store.GetUserByEmail(ctx, email)
+// Login ověří přihlašovací údaje a vrátí JWT token. Parametr login se
+// porovnává s přihlašovacím jménem i s e-mailem uživatele.
+func (a *AuthService) Login(ctx context.Context, login, password string) (*model.User, string, error) {
+	u, err := a.store.GetUserByIdentifier(ctx, login)
 	if errors.Is(err, storage.ErrNotFound) {
 		return nil, "", ErrInvalidCredentials
 	}
@@ -305,6 +313,8 @@ func (a *AuthService) signToken(claims Claims) (string, error) {
 // Chybové typy service vrstvy
 var (
 	ErrEmailTaken         = errors.New("email je již použit")
+	ErrLoginTaken         = errors.New("login je již použit")
+	ErrInvalidLogin       = errors.New("neplatný login")
 	ErrInvalidCredentials = errors.New("neplatné přihlašovací údaje")
 	ErrInvalidToken       = errors.New("neplatný token")
 	ErrForbidden          = errors.New("nedostatečná oprávnění")

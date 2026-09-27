@@ -60,7 +60,7 @@ func mergeTestChapter(t *testing.T, store *Store, bookID uuid.UUID, position int
 func mergeTestUser(t *testing.T, store *Store, email string) *model.User {
 	t.Helper()
 
-	user, err := store.CreateUser(context.Background(), "Čtenář", email, "hash", "user")
+	user, err := store.CreateUser(context.Background(), "Čtenář", email, "", "hash", "user")
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}

@@ -55,6 +55,7 @@ export default function SettingsScreen() {
       <Section title="Účet">
         <Row label="Přihlášen jako" value={user?.display_name ?? '—'} />
         <Row label="E-mail" value={user?.email ?? '—'} />
+        {user?.login ? <Row label="Login" value={user.login} /> : null}
         <Row label="Server" value={serverUrl || '—'} />
       </Section>
 

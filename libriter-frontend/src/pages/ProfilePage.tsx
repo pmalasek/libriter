@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useChangePassword, useUpdateProfile } from '@/api/hooks'
-import { ROLE_LABELS } from '@/api/types'
+import { LOGIN_HINT, LOGIN_PATTERN, ROLE_LABELS } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { PageHeader } from '@/components/PageHeader'
 import { ThemeToggle } from '@/components/layout/ThemeToggle'
@@ -20,6 +20,7 @@ export function ProfilePage() {
   // ProfilePage se renderuje jen přihlášenému uživateli, takže stačí inicializace.
   const [displayName, setDisplayName] = useState(user?.display_name ?? '')
   const [email, setEmail] = useState(user?.email ?? '')
+  const [login, setLogin] = useState(user?.login ?? '')
   const [password, setPassword] = useState('')
   const [passwordAgain, setPasswordAgain] = useState('')
   const [passwordError, setPasswordError] = useState<string | null>(null)
@@ -32,13 +33,14 @@ export function ProfilePage() {
   function handleProfileSubmit(event: React.FormEvent) {
     event.preventDefault()
     updateProfile.mutate(
-      { display_name: displayName.trim(), email: email.trim() },
+      { display_name: displayName.trim(), email: email.trim(), login: login.trim() },
       {
         onSuccess: (updated) => {
           // Server hodnoty normalizuje (trim), proto formulář přepíšeme jeho odpovědí.
           updateUser(updated)
           setDisplayName(updated.display_name)
           setEmail(updated.email)
+          setLogin(updated.login)
           toast.success('Profil byl uložen.')
         },
         onError: (error) => toast.error(error.message),
@@ -83,7 +85,7 @@ export function ProfilePage() {
       <Card>
         <CardHeader>
           <CardTitle>Osobní údaje</CardTitle>
-          <CardDescription>Změna zobrazovaného jména a e-mailu.</CardDescription>
+          <CardDescription>Změna zobrazovaného jména, e-mailu a loginu. Přihlásit se můžete e-mailem i loginem.</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleProfileSubmit} className="space-y-4">
@@ -105,6 +107,19 @@ export function ProfilePage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="login">Login</Label>
+              <Input
+                id="login"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                pattern={LOGIN_PATTERN}
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">{LOGIN_HINT}</p>
             </div>
             <Button type="submit" disabled={updateProfile.isPending}>
               {updateProfile.isPending ? 'Ukládám…' : 'Uložit změny'}

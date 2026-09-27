@@ -99,9 +99,11 @@ type Chapter struct {
 }
 
 type User struct {
-	ID           uuid.UUID `json:"id"`
-	DisplayName  string    `json:"display_name"`
-	Email        string    `json:"email"`
+	ID          uuid.UUID `json:"id"`
+	DisplayName string    `json:"display_name"`
+	Email       string    `json:"email"`
+	// Login je volitelné přihlašovací jméno; prázdné = uživatel se hlásí jen e-mailem.
+	Login        string    `json:"login"`
 	PasswordHash string    `json:"-"`
 	Role         string    `json:"role"`
 	ColorScheme  string    `json:"color_scheme"`

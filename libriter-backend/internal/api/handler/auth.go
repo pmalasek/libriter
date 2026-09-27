@@ -57,6 +57,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		DisplayName string `json:"display_name"`
 		Email       string `json:"email"`
+		Login       string `json:"login"`
 		Password    string `json:"password"`
 	}
 	if err := readJSON(r, &req); err != nil {
@@ -72,9 +73,12 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, token, err := h.svc.Register(r.Context(), req.DisplayName, req.Email, req.Password, settings.DefaultRole)
+	user, token, err := h.svc.Register(r.Context(), req.DisplayName, req.Email, req.Login, req.Password, settings.DefaultRole)
 	if errors.Is(err, service.ErrEmailTaken) {
 		writeError(w, http.StatusConflict, "email je již registrován")
+		return
+	}
+	if writeUserInputError(w, err) {
 		return
 	}
 	if err != nil {
@@ -160,9 +164,11 @@ func (h *AuthHandler) MobileToken(w http.ResponseWriter, r *http.Request) {
 }
 
 // POST /api/v1/auth/login
+//
+// Pole login se porovnává s přihlašovacím jménem i s e-mailem uživatele.
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Email    string `json:"email"`
+		Login    string `json:"login"`
 		Password string `json:"password"`
 	}
 	if err := readJSON(r, &req); err != nil {
@@ -170,9 +176,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, token, err := h.svc.Login(r.Context(), strings.TrimSpace(req.Email), req.Password)
+	user, token, err := h.svc.Login(r.Context(), strings.TrimSpace(req.Login), req.Password)
 	if errors.Is(err, service.ErrInvalidCredentials) {
-		writeError(w, http.StatusUnauthorized, "neplatný email nebo heslo")
+		writeError(w, http.StatusUnauthorized, "neplatné přihlašovací údaje")
 		return
 	}
 	if err != nil {

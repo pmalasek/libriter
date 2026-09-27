@@ -13,7 +13,8 @@ import (
 )
 
 // CreateUser vytvoří uživatele a přiřadí mu roli v jedné transakci.
-func (s *Store) CreateUser(ctx context.Context, displayName, email, passwordHash, roleName string) (*model.User, error) {
+// Prázdný login se uloží jako NULL.
+func (s *Store) CreateUser(ctx context.Context, displayName, email, login, passwordHash, roleName string) (*model.User, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("begin tx: %w", err)
@@ -21,15 +22,15 @@ func (s *Store) CreateUser(ctx context.Context, displayName, email, passwordHash
 	defer tx.Rollback() //nolint:errcheck
 
 	const qUser = `
-		INSERT INTO users (id, display_name, email, password_hash)
-		VALUES (?1, ?2, ?3, ?4)
-		RETURNING id, display_name, email, password_hash, created_at, updated_at, color_scheme, theme_mode`
+		INSERT INTO users (id, display_name, email, login, password_hash)
+		VALUES (?1, ?2, ?3, NULLIF(?4, ''), ?5)
+		RETURNING id, display_name, email, login, password_hash, created_at, updated_at, color_scheme, theme_mode`
 
-	row := tx.QueryRowContext(ctx, qUser, uuid.New(), displayName, email, passwordHash)
+	row := tx.QueryRowContext(ctx, qUser, uuid.New(), displayName, email, login, passwordHash)
 	u, err := scanUser(row)
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, ErrConflict
+			return nil, userConflict(err)
 		}
 		return nil, fmt.Errorf("insert user: %w", err)
 	}
@@ -46,10 +47,32 @@ func (s *Store) CreateUser(ctx context.Context, displayName, email, passwordHash
 	return u, tx.Commit()
 }
 
+// GetUserByIdentifier najde uživatele pro přihlášení: identifikátor se
+// porovná s loginem i s e-mailem (bez ohledu na velikost písmen). Login nesmí
+// obsahovat „@“, takže se nemůže shodovat s cizím e-mailem.
+func (s *Store) GetUserByIdentifier(ctx context.Context, identifier string) (*model.User, error) {
+	const q = `
+		SELECT u.id, u.display_name, u.email, u.login, u.password_hash,
+		       COALESCE(r.name, 'reader') AS role,
+		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode
+		FROM users u
+		LEFT JOIN user_roles ur ON ur.user_id = u.id
+		LEFT JOIN roles r       ON r.id = ur.role_id
+		WHERE lower(u.login) = lower(?1) OR lower(u.email) = lower(?1)
+		LIMIT 1`
+
+	row := s.db.QueryRowContext(ctx, q, identifier)
+	u, err := scanUserWithRole(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return u, err
+}
+
 // GetUserByEmail vrátí uživatele včetně jeho role.
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
 	const q = `
-		SELECT u.id, u.display_name, u.email, u.password_hash,
+		SELECT u.id, u.display_name, u.email, u.login, u.password_hash,
 		       COALESCE(r.name, 'reader') AS role,
 		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode
 		FROM users u
@@ -69,7 +92,7 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*model.User, 
 // GetUserByID vrátí uživatele včetně jeho role.
 func (s *Store) GetUserByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	const q = `
-		SELECT u.id, u.display_name, u.email, u.password_hash,
+		SELECT u.id, u.display_name, u.email, u.login, u.password_hash,
 		       COALESCE(r.name, 'reader') AS role,
 		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode
 		FROM users u
@@ -89,7 +112,7 @@ func (s *Store) GetUserByID(ctx context.Context, id uuid.UUID) (*model.User, err
 // ListUsers vrátí všechny uživatele s jejich rolí.
 func (s *Store) ListUsers(ctx context.Context) ([]model.User, error) {
 	const q = `
-		SELECT u.id, u.display_name, u.email, u.password_hash,
+		SELECT u.id, u.display_name, u.email, u.login, u.password_hash,
 		       COALESCE(r.name, 'reader') AS role,
 		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode
 		FROM users u
@@ -114,22 +137,23 @@ func (s *Store) ListUsers(ctx context.Context) ([]model.User, error) {
 	return users, rows.Err()
 }
 
-// UpdateUser aktualizuje display_name a email uživatele.
-func (s *Store) UpdateUser(ctx context.Context, id uuid.UUID, displayName, email string) (*model.User, error) {
+// UpdateUser aktualizuje display_name, email a login uživatele. Prázdný login
+// se uloží jako NULL.
+func (s *Store) UpdateUser(ctx context.Context, id uuid.UUID, displayName, email, login string) (*model.User, error) {
 	const q = `
 		UPDATE users
-		SET display_name = ?2, email = ?3, updated_at = CURRENT_TIMESTAMP
+		SET display_name = ?2, email = ?3, login = NULLIF(?4, ''), updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?1
-		RETURNING id, display_name, email, password_hash, created_at, updated_at, color_scheme, theme_mode`
+		RETURNING id, display_name, email, login, password_hash, created_at, updated_at, color_scheme, theme_mode`
 
-	row := s.db.QueryRowContext(ctx, q, id, displayName, email)
+	row := s.db.QueryRowContext(ctx, q, id, displayName, email, login)
 	u, err := scanUser(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		if isUniqueViolation(err) {
-			return nil, ErrConflict
+			return nil, userConflict(err)
 		}
 		return nil, err
 	}
@@ -298,20 +322,33 @@ type scanner interface {
 	Scan(dest ...any) error
 }
 
+// userConflict rozliší, který unikátní index uživatel porušil: obsazený login
+// vrací ErrLoginConflict, cokoliv jiného (e-mail) ErrConflict.
+func userConflict(err error) error {
+	if strings.Contains(err.Error(), "users_login_unique") {
+		return ErrLoginConflict
+	}
+	return ErrConflict
+}
+
 func scanUser(row scanner) (*model.User, error) {
 	var u model.User
-	err := row.Scan(&u.ID, &u.DisplayName, &u.Email, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt, &u.ColorScheme, &u.ThemeMode)
+	var login sql.NullString
+	err := row.Scan(&u.ID, &u.DisplayName, &u.Email, &login, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt, &u.ColorScheme, &u.ThemeMode)
 	if err != nil {
 		return nil, err
 	}
+	u.Login = login.String
 	return &u, nil
 }
 
 func scanUserWithRole(row scanner) (*model.User, error) {
 	var u model.User
-	err := row.Scan(&u.ID, &u.DisplayName, &u.Email, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt, &u.ColorScheme, &u.ThemeMode)
+	var login sql.NullString
+	err := row.Scan(&u.ID, &u.DisplayName, &u.Email, &login, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt, &u.ColorScheme, &u.ThemeMode)
 	if err != nil {
 		return nil, err
 	}
+	u.Login = login.String
 	return &u, nil
 }

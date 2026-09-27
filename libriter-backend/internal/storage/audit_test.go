@@ -43,11 +43,11 @@ func TestAuditKeepsEmailAfterActorDeleted(t *testing.T) {
 	store := newTestStore(t)
 
 	// Druhý admin je tu proto, aby první šel smazat.
-	actor, err := store.CreateUser(ctx, "Admin", "admin@example.com", "hash", model.RoleAdmin)
+	actor, err := store.CreateUser(ctx, "Admin", "admin@example.com", "", "hash", model.RoleAdmin)
 	if err != nil {
 		t.Fatalf("CreateUser: %v", err)
 	}
-	if _, err := store.CreateUser(ctx, "Admin 2", "admin2@example.com", "hash", model.RoleAdmin); err != nil {
+	if _, err := store.CreateUser(ctx, "Admin 2", "admin2@example.com", "", "hash", model.RoleAdmin); err != nil {
 		t.Fatalf("CreateUser druhého admina: %v", err)
 	}
 
