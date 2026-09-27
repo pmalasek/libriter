@@ -27,6 +27,7 @@ const (
 	AuditLibraryMerge         = "library.merge_books"
 	AuditDuplicateDismiss     = "library.duplicate_dismiss"
 	AuditDuplicateRestore     = "library.duplicate_restore"
+	AuditLibraryImport        = "library.import"
 )
 
 // Typy cílů akce (pro rozhraní, ne pro logiku).

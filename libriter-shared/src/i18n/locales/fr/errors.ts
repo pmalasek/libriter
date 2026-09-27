@@ -88,6 +88,17 @@ export default {
     dismiss_failed: 'Impossible d’enregistrer la modification',
     audio_root_unavailable: 'Le dossier des livres audio est indisponible. Vérifiez que le disque est monté',
   },
+  import: {
+    not_found: 'L’import n’existe plus – recommencez',
+    wrong_state: 'L’import est dans une autre phase – rechargez la page',
+    invalid_path: 'Chemin de fichier non valide',
+    file_type: 'Type de fichier non pris en charge',
+    too_large: 'L’import dépasse la limite de taille',
+    nothing_selected: 'Aucun livre n’est sélectionné',
+    invalid_book: 'Un livre n’a pas de titre ou a un numéro de série non valide',
+    failed: 'L’import a échoué',
+    create_failed: 'Impossible de démarrer l’import',
+  },
   common: {
     load_failed: 'Impossible de charger les données',
     save_failed: 'Impossible d’enregistrer les modifications',

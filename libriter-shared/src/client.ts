@@ -151,3 +151,67 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
 export function asList<T>(value: T[] | null | undefined): T[] {
   return value ?? []
 }
+
+interface UploadOptions {
+  method?: 'PUT' | 'POST'
+  /** Průběh odesílání v bajtech (fetch ho neumí hlásit, proto XHR). */
+  onProgress?: (loaded: number, total: number) => void
+  signal?: AbortSignal
+}
+
+/** Odešle binární tělo (soubor) s autorizací; odpověď je JSON. */
+export function apiUpload<T>(path: string, body: Blob, options: UploadOptions = {}): Promise<T> {
+  const { method = 'PUT', onProgress, signal } = options
+  const token = authToken
+
+  return new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open(method, apiUrl(path))
+    xhr.setRequestHeader('Accept', 'application/json')
+    xhr.setRequestHeader('Content-Type', 'application/octet-stream')
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+
+    if (onProgress) {
+      xhr.upload.onprogress = (e) => onProgress(e.loaded, e.lengthComputable ? e.total : body.size)
+    }
+
+    const onAbort = () => xhr.abort()
+    signal?.addEventListener('abort', onAbort, { once: true })
+    const done = () => signal?.removeEventListener('abort', onAbort)
+
+    xhr.onload = () => {
+      done()
+      const res = new Response(xhr.responseText, { status: xhr.status })
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve((xhr.responseText ? JSON.parse(xhr.responseText) : undefined) as T)
+        return
+      }
+      if (xhr.status === 401 && token) onUnauthorized?.()
+      void parseError(res).then(reject)
+    }
+    xhr.onerror = () => {
+      done()
+      reject(new ApiError(0, t('errors.network')))
+    }
+    xhr.onabort = () => {
+      done()
+      reject(new DOMException('Aborted', 'AbortError'))
+    }
+
+    xhr.send(body)
+  })
+}
+
+/** Stáhne binární odpověď s autorizací (obrázky, které <img> neumí poslat s tokenem). */
+export async function apiBlob(path: string, signal?: AbortSignal): Promise<Blob> {
+  const headers = new Headers()
+  if (authToken) headers.set('Authorization', `Bearer ${authToken}`)
+  let res: Response
+  try {
+    res = await fetch(apiUrl(path), { headers, signal })
+  } catch {
+    throw new ApiError(0, t('errors.network'))
+  }
+  if (!res.ok) throw await parseError(res)
+  return res.blob()
+}

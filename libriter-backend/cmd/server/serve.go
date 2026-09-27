@@ -17,6 +17,7 @@ import (
 	"libriter/internal/api/middleware"
 	"libriter/internal/config"
 	"libriter/internal/db"
+	"libriter/internal/importer"
 	"libriter/internal/metadata"
 	"libriter/internal/metadata/cbdb"
 	"libriter/internal/metadata/databazeknih"
@@ -95,6 +96,13 @@ func runServe() error {
 	adminH := handler.NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc, listeningSvc)
 	sessionH := handler.NewPlaySession(playSessionSvc)
 	audioH := handler.NewAudio(bookSvc, authSvc, cfg.Storage.AudioRoot)
+
+	importSvc, err := importer.New(appCtx, cfg.Storage.ImportRoot,
+		cfg.Storage.MaxUploadMB<<20, scn, store)
+	if err != nil {
+		return fmt.Errorf("import knih (IMPORT_ROOT=%s): %w", cfg.Storage.ImportRoot, err)
+	}
+	importH := handler.NewImport(importSvc, auditSvc)
 
 	// --- router ---
 	r := chi.NewRouter()
@@ -222,8 +230,18 @@ func runServe() error {
 				r.Get("/library/duplicates", adminH.DuplicateReport) // jen hlášení
 				r.Post("/library/duplicates/dismiss", adminH.DismissDuplicate)
 				r.Delete("/library/duplicates/dismiss", adminH.RestoreDuplicate)
-				r.Get("/library/merge", adminH.MergePlan)            // náhled, nic nemění
+				r.Get("/library/merge", adminH.MergePlan) // náhled, nic nemění
 				r.Post("/library/merge", adminH.Merge)
+
+				r.Get("/import", importH.List)
+				r.Post("/import", importH.Create)
+				r.Get("/import/{id}", importH.Get)
+				r.Delete("/import/{id}", importH.Delete)
+				r.Get("/import/{id}/files", importH.Files)
+				r.Put("/import/{id}/files", importH.Upload) // ?path=<relativní cesta>
+				r.Post("/import/{id}/analyze", importH.Analyze)
+				r.Post("/import/{id}/commit", importH.Commit)
+				r.Get("/import/{id}/cover", importH.Cover) // ?key=<adresář knihy>
 
 				r.Get("/stats", adminH.Stats)
 				r.Get("/system", adminH.System)

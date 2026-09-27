@@ -35,6 +35,7 @@ export default {
     library: {
       repair_apply: 'Chapters repaired',
       merge_books: 'Split books merged',
+      import: 'Books imported',
     },
   },
   viewMode: {

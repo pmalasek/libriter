@@ -48,7 +48,11 @@ type StorageConfig struct {
 	// AuthorImageRoot je adresář s fotkami autorů. Drží se odděleně od obálek,
 	// aby se obsah obou adresářů nemíchal.
 	AuthorImageRoot string
-	MaxUploadMB     int64
+	// ImportRoot je staging pro nahrávané knihy. Musí ležet mimo AudioRoot
+	// (jinak by rozpracované soubory ingestoval scanner) a ideálně na stejném
+	// disku, aby se knihy do knihovny jen přejmenovaly, ne kopírovaly.
+	ImportRoot  string
+	MaxUploadMB int64 // limit jednoho importu (součet nahraných souborů)
 }
 
 // MetadataConfig řídí zdroje knižních metadat.
@@ -84,7 +88,7 @@ func LoadCLI() (*Config, error) {
 func load() *Config {
 	env := loadDotEnv()
 
-	return &Config{
+	cfg := &Config{
 		Server: ServerConfig{
 			Port: envInt("SERVER_PORT", 8080),
 			Env:  envStr("SERVER_ENV", "development"),
@@ -101,7 +105,8 @@ func load() *Config {
 			AudioRoot:       env.path("AUDIO_ROOT", "/var/lib/libriter/audio"),
 			CoverRoot:       env.path("COVER_ROOT", "/var/lib/libriter/covers"),
 			AuthorImageRoot: env.path("AUTHOR_IMAGE_ROOT", "/var/lib/libriter/author-images"),
-			MaxUploadMB:     int64(envInt("MAX_UPLOAD_MB", 500)),
+			ImportRoot:      env.path("IMPORT_ROOT", ""),
+			MaxUploadMB:     int64(envInt("MAX_UPLOAD_MB", 3072)),
 		},
 		Metadata: MetadataConfig{
 			Providers:         envList("METADATA_PROVIDERS", DefaultMetadataProviders),
@@ -109,6 +114,11 @@ func load() *Config {
 		},
 		EnvFile: env.file,
 	}
+	// Staging importu vedle knihovny: mimo ni, ale nejspíš na stejném disku.
+	if cfg.Storage.ImportRoot == "" {
+		cfg.Storage.ImportRoot = filepath.Join(filepath.Dir(cfg.Storage.AudioRoot), "import")
+	}
+	return cfg
 }
 
 // dotEnv drží výsledek načtení .env: odkud se čerpalo a které klíče z něj přišly.

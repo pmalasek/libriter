@@ -787,3 +787,88 @@ export interface ListeningDetail {
   /** Posledních 90 dní. */
   days: ListeningDay[]
 }
+
+// --- Import knih (administrace) ---
+
+/** Fáze importu: nahrávání → analýza → náhled → import → hotovo. */
+export type ImportState = 'uploading' | 'analyzing' | 'ready' | 'importing' | 'done' | 'failed'
+
+/** Kódy varování u knihy v náhledu importu. */
+export type ImportWarning = 'no_title' | 'no_author' | 'no_duration' | 'similar_exists'
+
+export interface ImportChapter {
+  /** Cesta souboru relativně k adresáři knihy. */
+  path: string
+  title: string
+  duration_seconds: number
+  size_bytes: number
+}
+
+export interface ImportBook {
+  /** Adresář knihy v nahraných souborech („.“ = kořen); identifikuje knihu. */
+  key: string
+  /** Nadřazená složka (typicky autor, u série společná), „“ = žádná. */
+  group: string
+  include: boolean
+  has_cover: boolean
+  /** Vydavatel z bookinfo.html – jen pro informaci, kniha ho neukládá. */
+  publisher: string
+  title: string
+  authors: string[]
+  narrator: string
+  description: string
+  series_title: string
+  series_position: number | null
+  chapters: ImportChapter[]
+  duration_seconds: number
+  size_bytes: number
+  warnings: ImportWarning[]
+  similar_title?: string
+}
+
+export interface ImportResult {
+  key: string
+  title: string
+  book_id?: string
+  error?: string
+}
+
+export interface ImportSession {
+  id: string
+  state: ImportState
+  created_at: string
+  updated_at: string
+  uploaded_files: number
+  uploaded_bytes: number
+  max_bytes: number
+  progress: { done: number; total: number }
+  books: ImportBook[]
+  skipped: string[]
+  results: ImportResult[]
+  error?: string
+}
+
+/** Soubor, který už je v rozpracovaném importu nahraný. */
+export interface ImportUploadedFile {
+  path: string
+  size: number
+}
+
+export interface ImportOverview {
+  /** Limit velikosti jednoho importu (součet souborů). */
+  max_bytes: number
+  sessions: ImportSession[] | null
+}
+
+/** Úpravy knihy z náhledu, se kterými se importuje. */
+export type ImportBookEdit = Pick<
+  ImportBook,
+  | 'key'
+  | 'include'
+  | 'title'
+  | 'authors'
+  | 'narrator'
+  | 'description'
+  | 'series_title'
+  | 'series_position'
+>

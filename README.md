@@ -147,7 +147,8 @@ JWT_EXPIRY_HOURS=72
 AUDIO_ROOT=./data/audio         # kořenový adresář audio souborů
 COVER_ROOT=./data/covers        # kořenový adresář obálek knih
 AUTHOR_IMAGE_ROOT=./data/author-images   # fotky autorů
-MAX_UPLOAD_MB=500
+IMPORT_ROOT=./data/import       # staging importu knih (mimo AUDIO_ROOT)
+MAX_UPLOAD_MB=3072              # limit jednoho importu knih (součet souborů)
 
 # Zdroje metadat – výchozí pořadí, ve kterém se zkoušejí
 METADATA_PROVIDERS=databazeknih,cbdb,openlibrary,googlebooks

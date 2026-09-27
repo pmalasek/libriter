@@ -31,3 +31,9 @@ func (rw *responseWriter) WriteHeader(code int) {
 	rw.status = code
 	rw.ResponseWriter.WriteHeader(code)
 }
+
+// Unwrap zpřístupní původní writer pro http.ResponseController – import knih
+// si přes něj prodlužuje timeouty u dlouhých uploadů.
+func (rw *responseWriter) Unwrap() http.ResponseWriter {
+	return rw.ResponseWriter
+}

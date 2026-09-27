@@ -1,7 +1,10 @@
 import { Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet } from 'react-router'
+import { useAuth } from '@/auth/AuthContext'
+import { isAdmin } from '@/auth/permissions'
 import { useRefreshProfile } from '@/auth/useRefreshProfile'
+import { ImportProgressToast } from '@/components/admin/ImportProgressToast'
 import { PlayerCapsule } from '@/components/player/PlayerCapsule'
 import { cn } from '@/lib/utils'
 import { usePlayer } from '@/player/playerContext'
@@ -14,6 +17,7 @@ import { TabBar } from './TabBar'
 export function AppLayout() {
   const { t } = useTranslation()
   const player = usePlayer()
+  const { user } = useAuth()
 
   // Role v prohlížeči může být z minulého přihlášení – srovnáme ji se serverem.
   useRefreshProfile()
@@ -58,6 +62,9 @@ export function AppLayout() {
           </Suspense>
         </main>
       </div>
+
+      {/* Průběh importu knih, i když admin odešel z Knihovny. */}
+      {isAdmin(user) ? <ImportProgressToast /> : null}
 
       <PlayerCapsule />
       <NowPlayingColumn />

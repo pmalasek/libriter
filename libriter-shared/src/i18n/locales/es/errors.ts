@@ -88,6 +88,17 @@ export default {
     dismiss_failed: 'No se ha podido guardar el cambio',
     audio_root_unavailable: 'El directorio de audiolibros no está disponible. Comprueba que el disco esté montado',
   },
+  import: {
+    not_found: 'La importación ya no existe; empieza de nuevo',
+    wrong_state: 'La importación está en otra fase; recarga la página',
+    invalid_path: 'Ruta de archivo no válida',
+    file_type: 'Tipo de archivo no compatible',
+    too_large: 'La importación supera el límite de tamaño',
+    nothing_selected: 'No hay ningún libro seleccionado',
+    invalid_book: 'A algún libro le falta el título o tiene un número de serie no válido',
+    failed: 'La importación falló',
+    create_failed: 'No se pudo iniciar la importación',
+  },
   common: {
     load_failed: 'No se han podido cargar los datos',
     save_failed: 'No se han podido guardar los cambios',

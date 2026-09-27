@@ -88,6 +88,17 @@ export default {
     dismiss_failed: 'The change could not be saved',
     audio_root_unavailable: 'The audiobook directory is not available – check that the disk is mounted',
   },
+  import: {
+    not_found: 'The import no longer exists – start again',
+    wrong_state: 'The import is in a different phase – reload the page',
+    invalid_path: 'Invalid file path',
+    file_type: 'Unsupported file type',
+    too_large: 'The import exceeds the size limit',
+    nothing_selected: 'No book is selected',
+    invalid_book: 'Some book is missing a title or has an invalid series number',
+    failed: 'The import failed',
+    create_failed: 'Could not start the import',
+  },
   common: {
     load_failed: 'Could not load data',
     save_failed: 'Could not save changes',

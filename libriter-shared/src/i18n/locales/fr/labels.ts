@@ -35,6 +35,7 @@ export default {
     library: {
       repair_apply: 'Chapitres réparés',
       merge_books: 'Livres scindés fusionnés',
+      import: 'Livres importés',
     },
   },
   viewMode: {

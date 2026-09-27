@@ -88,6 +88,17 @@ export default {
     dismiss_failed: 'Změnu se nepodařilo uložit',
     audio_root_unavailable: 'Adresář s audioknihami není dostupný – zkontrolujte, že je disk připojený',
   },
+  import: {
+    not_found: 'Import už neexistuje – začněte znovu',
+    wrong_state: 'Import je v jiné fázi – načtěte stránku znovu',
+    invalid_path: 'Neplatná cesta souboru',
+    file_type: 'Nepodporovaný typ souboru',
+    too_large: 'Import překračuje limit velikosti',
+    nothing_selected: 'Není vybrána žádná kniha',
+    invalid_book: 'Některé knize chybí název nebo má neplatné pořadí v sérii',
+    failed: 'Import se nezdařil',
+    create_failed: 'Import se nepodařilo založit',
+  },
   common: {
     load_failed: 'Data se nepodařilo načíst',
     save_failed: 'Změny se nepodařilo uložit',

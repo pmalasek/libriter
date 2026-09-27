@@ -45,6 +45,33 @@ type AudioMeta struct {
 // extractMeta přečte tagy audio souboru a vrátí AudioMeta.
 // absPath = absolutní cesta; dirName = název adresáře (fallback pro název knihy/autora).
 func extractMeta(absPath, dirName string) (*AudioMeta, error) {
+	meta, err := readTagMeta(absPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Fallbacky
+	if meta.BookTitle == "" {
+		meta.BookTitle = dirName
+	}
+	if meta.ChapterTitle == "" {
+		base := filepath.Base(absPath)
+		meta.ChapterTitle = strings.TrimSuffix(base, filepath.Ext(base))
+	}
+	if len(meta.Authors) == 0 {
+		meta.Authors = model.ParseAuthorNames(dirName)
+	}
+	if len(meta.Authors) == 0 {
+		meta.Authors = []model.AuthorName{model.UnknownAuthor}
+	}
+
+	meta.DurationSeconds = ffprobeDuration(absPath)
+	return meta, nil
+}
+
+// readTagMeta přečte jen to, co je v tagech souboru – bez náhradních hodnot
+// a bez délky. Chybějící nebo nečitelné tagy nejsou chyba.
+func readTagMeta(absPath string) (*AudioMeta, error) {
 	f, err := os.Open(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
@@ -78,23 +105,6 @@ func extractMeta(absPath, dirName string) (*AudioMeta, error) {
 			meta.Narrator = artist
 		}
 	}
-
-	// Fallbacky
-	if meta.BookTitle == "" {
-		meta.BookTitle = dirName
-	}
-	if meta.ChapterTitle == "" {
-		base := filepath.Base(absPath)
-		meta.ChapterTitle = strings.TrimSuffix(base, filepath.Ext(base))
-	}
-	if len(meta.Authors) == 0 {
-		meta.Authors = model.ParseAuthorNames(dirName)
-	}
-	if len(meta.Authors) == 0 {
-		meta.Authors = []model.AuthorName{model.UnknownAuthor}
-	}
-
-	meta.DurationSeconds = ffprobeDuration(absPath)
 	return meta, nil
 }
 

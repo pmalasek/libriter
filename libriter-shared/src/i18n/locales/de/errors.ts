@@ -88,6 +88,17 @@ export default {
     dismiss_failed: 'Die Änderung konnte nicht gespeichert werden',
     audio_root_unavailable: 'Das Hörbuchverzeichnis ist nicht verfügbar – prüfe, ob der Datenträger eingebunden ist',
   },
+  import: {
+    not_found: 'Der Import existiert nicht mehr – bitte neu beginnen',
+    wrong_state: 'Der Import befindet sich in einer anderen Phase – Seite neu laden',
+    invalid_path: 'Ungültiger Dateipfad',
+    file_type: 'Nicht unterstützter Dateityp',
+    too_large: 'Der Import überschreitet das Größenlimit',
+    nothing_selected: 'Kein Buch ausgewählt',
+    invalid_book: 'Einem Buch fehlt der Titel oder es hat eine ungültige Reihennummer',
+    failed: 'Der Import ist fehlgeschlagen',
+    create_failed: 'Der Import konnte nicht gestartet werden',
+  },
   common: {
     load_failed: 'Daten konnten nicht geladen werden',
     save_failed: 'Änderungen konnten nicht gespeichert werden',

@@ -15,6 +15,9 @@ import type {
   CreateUserRequest,
   DuplicateGroup,
   DuplicateReport,
+  ImportBookEdit,
+  ImportOverview,
+  ImportSession,
   LibraryStats,
   ListeningDetail,
   ListeningSummary,
@@ -43,6 +46,8 @@ export const adminKeys = {
   audit: ['admin', 'audit'] as const,
   listening: ['admin', 'listening'] as const,
   listeningUser: (userId: string) => ['admin', 'listening', userId] as const,
+  imports: ['admin', 'import'] as const,
+  importSession: (id: string) => ['admin', 'import', id] as const,
 }
 
 // --- čtení ---
@@ -293,4 +298,71 @@ export function useApplyMerge() {
       apiFetch<MergeResult>('/admin/library/merge', { method: 'POST', json: { targets } }),
     [adminKeys.stats, queryKeys.books],
   )
+}
+
+// --- import knih ---
+
+/** Rozpracované importy – karta se podle nich po obnovení stránky vrátí k náhledu. */
+export function useImportSessions() {
+  return useQuery({
+    queryKey: adminKeys.imports,
+    queryFn: async () => {
+      const overview = await apiFetch<ImportOverview>('/admin/import')
+      return { ...overview, sessions: asList(overview.sessions) }
+    },
+    // Rozpracovaný import mohl vzniknout nebo skončit mezitím jinde.
+    refetchOnMount: 'always',
+  })
+}
+
+/**
+ * Stav importu; během analýzy a importu se obnovuje každou sekundu, během
+ * nahrávání občas – analýzu spouští správce nahrávání mimo react-query.
+ */
+export function useImportSession(id: string | null) {
+  return useQuery({
+    queryKey: adminKeys.importSession(id ?? ''),
+    queryFn: () => apiFetch<ImportSession>(`/admin/import/${id}`),
+    enabled: id !== null,
+    refetchInterval: (query) => {
+      const state = query.state.data?.state
+      if (state === 'analyzing' || state === 'importing') return 1000
+      return state === 'uploading' ? 2000 : false
+    },
+  })
+}
+
+export function useCommitImport() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, books }: { id: string; books: ImportBookEdit[] }) =>
+      apiFetch<ImportSession>(`/admin/import/${id}/commit`, { method: 'POST', json: { books } }),
+    onSuccess: (session) => {
+      queryClient.setQueryData(adminKeys.importSession(session.id), session)
+      void queryClient.invalidateQueries({ queryKey: adminKeys.audit })
+    },
+  })
+}
+
+/** Rozpozná knihy z toho, co se stihlo nahrát (pokračování přerušeného importu). */
+export function useAnalyzeImport() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<ImportSession>(`/admin/import/${id}/analyze`, { method: 'POST' }),
+    onSuccess: (session) => {
+      queryClient.setQueryData(adminKeys.importSession(session.id), session)
+    },
+  })
+}
+
+export function useDeleteImport() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`/admin/import/${id}`, { method: 'DELETE' }),
+    onSettled: (_data, _error, id) => {
+      queryClient.removeQueries({ queryKey: adminKeys.importSession(id) })
+      void queryClient.invalidateQueries({ queryKey: adminKeys.imports })
+    },
+  })
 }

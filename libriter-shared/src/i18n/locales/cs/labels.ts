@@ -35,6 +35,7 @@ export default {
     library: {
       repair_apply: 'Oprava kapitol',
       merge_books: 'Sloučení rozdělených knih',
+      import: 'Import knih',
     },
   },
   viewMode: {
