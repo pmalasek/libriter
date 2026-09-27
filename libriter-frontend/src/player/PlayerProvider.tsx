@@ -269,7 +269,10 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
 
   /** Otevře poslech v liště a začne u jeho rozposlouchaného místa. */
   const openSession = useCallback(
-    (next: PlaySession, options: { bookId?: string; chapterId?: string; autoplay: boolean }) => {
+    (
+      next: PlaySession,
+      options: { bookId?: string; chapterId?: string; fromStart?: boolean; autoplay: boolean },
+    ) => {
       sessionRef.current = next
       setSession(next)
       cacheSession(next)
@@ -282,9 +285,15 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
       speedRef.current = next.playback_speed
       setSpeedState(next.playback_speed)
 
-      const bookId = options.bookId ?? currentBookId(next)
+      // Doposlechnutý poslech se pouští znovu od první kapitoly první knihy.
+      const firstBookId = [...next.items].sort((a, b) => a.position - b.position)[0]?.book_id
+      const bookId = options.fromStart ? firstBookId : (options.bookId ?? currentBookId(next))
       if (!bookId) {
         toast.error(t('player.toast.sessionEmpty'))
+        return
+      }
+      if (options.fromStart) {
+        void load({ bookId, position: 0, autoplay: options.autoplay })
         return
       }
       const item = sessionItem(next, bookId)
@@ -373,11 +382,11 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
   )
 
   const switchSession = useCallback(
-    (sessionId: string) => {
+    (sessionId: string, options: { fromStart?: boolean } = {}) => {
       savePosition()
       // Pozice mohla mezitím povyrůst na jiném zařízení, proto čerstvě ze serveru.
       apiFetch<PlaySession>(`/sessions/${sessionId}`)
-        .then((next) => openSession(next, { autoplay: true }))
+        .then((next) => openSession(next, { fromStart: options.fromStart, autoplay: true }))
         .catch((error: Error) => toast.error(t('player.toast.openFailed', { error: error.message })))
     },
     [openSession, savePosition],

@@ -6,6 +6,7 @@ export default {
   play: 'Play',
   pause: 'Pause',
   resume: 'Continue',
+  restart: 'Listen again',
   previousChapter: 'Previous chapter',
   nextChapter: 'Next chapter',
   skipBack_one: 'Back {{count}} second',

@@ -49,8 +49,11 @@ export interface PlayerValue {
   playList: (input: { bookIds?: string[]; seriesIds?: string[]; title?: string }) => void
   /** Přidá knihy nebo série na konec otevřeného poslechu. */
   addToSession: (input: { bookIds?: string[]; seriesIds?: string[] }) => void
-  /** Přepne na jiný rozposlouchaný poslech a načte jeho pozici ze serveru. */
-  switchSession: (sessionId: string) => void
+  /**
+   * Přepne na jiný rozposlouchaný poslech a načte jeho pozici ze serveru;
+   * s `fromStart` ho pustí od první kapitoly první knihy.
+   */
+  switchSession: (sessionId: string, options?: { fromStart?: boolean }) => void
   removeSession: (sessionId: string) => void
   /** Přepne knihu uvnitř otevřeného poslechu. */
   playItem: (bookId: string) => void

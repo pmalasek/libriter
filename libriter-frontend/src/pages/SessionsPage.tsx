@@ -1,4 +1,4 @@
-import { CheckCircle2Icon, HeadphonesIcon, PauseIcon, PlayIcon, Trash2Icon } from 'lucide-react'
+import { CheckCircle2Icon, HeadphonesIcon, PauseIcon, PlayIcon, RotateCcwIcon, Trash2Icon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -177,6 +177,16 @@ function SessionCard({
   // serveru by zahodilo pozici, kterou přehrávač právě drží.
   const isOpen = player.session?.id === session.id
   const isPlaying = isOpen && player.playing
+  // Doposlechnutý poslech stojí na konci poslední kapitoly – „pokračovat“ by
+  // přehrálo pár posledních sekund. Nabídne se proto poslech od začátku.
+  const restart = Boolean(session.finished_at) && !isPlaying
+  const label = isPlaying
+    ? t('player.pause')
+    : restart
+      ? t('player.restart')
+      : isOpen
+        ? t('player.play')
+        : t('player.resume')
 
   return (
     <Card className="@container">
@@ -227,15 +237,19 @@ function SessionCard({
 
         <div className="ml-auto flex shrink-0 items-center gap-2">
           <Button
-            onClick={() => (isOpen ? player.toggle() : player.switchSession(session.id))}
+            onClick={() =>
+              restart
+                ? player.switchSession(session.id, { fromStart: true })
+                : isOpen
+                  ? player.toggle()
+                  : player.switchSession(session.id)
+            }
             disabled={player.loading}
-            aria-label={isPlaying ? t('player.pause') : isOpen ? t('player.play') : t('player.resume')}
+            aria-label={label}
           >
-            {isPlaying ? <PauseIcon /> : <PlayIcon />}
+            {isPlaying ? <PauseIcon /> : restart ? <RotateCcwIcon /> : <PlayIcon />}
             {/* Na úzké kartě mluví ikona sama za sebe. */}
-            <span className="hidden @sm:inline">
-              {isPlaying ? t('player.pause') : isOpen ? t('player.play') : t('player.resume')}
-            </span>
+            <span className="hidden @sm:inline">{label}</span>
           </Button>
           <Button variant="ghost" size="icon" onClick={onRemove} aria-label={t('sessions.remove.labelNamed', { title })}>
             <Trash2Icon />

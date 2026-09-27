@@ -6,6 +6,7 @@ export default {
   play: 'Přehrát',
   pause: 'Pozastavit',
   resume: 'Pokračovat',
+  restart: 'Poslechnout znovu',
   previousChapter: 'Předchozí kapitola',
   nextChapter: 'Další kapitola',
   skipBack_one: 'Zpět o {{count}} sekundu',
