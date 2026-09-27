@@ -1,4 +1,5 @@
 import { CheckCircle2Icon, CheckIcon, HeadphonesIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { bookStatusLabel, type Book, type BookStatus } from '@/api/types'
 import { BookCover } from '@/components/BookCover'
@@ -71,6 +72,7 @@ function CardShell({
   className?: string
   children: React.ReactNode
 }) {
+  const { t } = useTranslation()
   const base = cn(
     'group block w-full rounded-2xl text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
     className,
@@ -81,7 +83,11 @@ function CardShell({
       <button
         type="button"
         aria-pressed={selection.selected}
-        aria-label={`${selection.selected ? 'Odebrat z výběru' : 'Vybrat'}: ${book.title}`}
+        aria-label={
+          selection.selected
+            ? t('books.card.deselect', { title: book.title })
+            : t('books.card.select', { title: book.title })
+        }
         onClick={selection.onToggle}
         className={base}
       >
@@ -168,14 +174,15 @@ export function BookCard({
  * v řádcích měla popisek – jinak nejde poznat rok vydání od data přidání.
  */
 export function BookRowHeader({ selecting = false }: { selecting?: boolean }) {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center gap-3 bg-foreground/4 px-3 py-2 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
       {selecting ? <span className="size-6 shrink-0" /> : null}
       <span className="size-12 shrink-0" />
-      <span className="min-w-0 flex-1">Název, autor a série</span>
-      <span className="w-12 shrink-0 text-right">Vydáno</span>
-      <span className="hidden w-16 shrink-0 text-right sm:block">Délka</span>
-      <span className="hidden w-32 shrink-0 text-right md:block">Přidáno</span>
+      <span className="min-w-0 flex-1">{t('books.card.columns.title')}</span>
+      <span className="w-12 shrink-0 text-right">{t('books.card.columns.published')}</span>
+      <span className="hidden w-16 shrink-0 text-right sm:block">{t('books.card.columns.duration')}</span>
+      <span className="hidden w-32 shrink-0 text-right md:block">{t('books.card.columns.added')}</span>
     </div>
   )
 }

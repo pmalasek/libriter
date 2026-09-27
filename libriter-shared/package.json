@@ -9,9 +9,11 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "i18n:check": "tsx scripts/i18n-check.ts"
   },
   "devDependencies": {
+    "tsx": "^4.23.15",
     "typescript": "~6.0.2"
   },
   "dependencies": {

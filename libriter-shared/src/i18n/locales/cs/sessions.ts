@@ -1,1 +1,26 @@
-export default {}
+export default {
+  title: 'Právě posloucháno',
+  inProgress_one: '{{count}} rozposlouchaných · pokračujte tam, kde jste skončili',
+  inProgress_few: '{{count}} rozposlouchaných · pokračujte tam, kde jste skončili',
+  inProgress_many: '{{count}} rozposlouchaných · pokračujte tam, kde jste skončili',
+  inProgress_other: '{{count}} rozposlouchaných · pokračujte tam, kde jste skončili',
+  nothingInProgress: 'Zatím nic rozposlouchaného',
+  emptyTitle: 'Zatím nic neposloucháte',
+  emptyDescription:
+    'Spusťte knihu tlačítkem Přehrát v jejím detailu, celou sérii u série, nebo si vyberte víc knih naráz v seznamu knih.',
+  finished: 'Doposlechnuté',
+  finishedBadge: 'Doposlechnuto',
+  finishedLower: 'doposlechnuto',
+  bookOf: 'Kniha {{number}} z {{count}}',
+  bookMissing: 'Kniha už není v knihovně',
+  lastPlayed: 'Naposledy {{date}}',
+  overview: 'Přehled',
+  emptyMenu: 'Zatím nic rozposlouchaného.',
+  remove: {
+    action: 'Odebrat',
+    label: 'Odebrat poslech',
+    labelNamed: 'Odebrat poslech {{title}}',
+    title: 'Odebrat poslech?',
+    description: '„{{title}}“ zmizí ze seznamu včetně uložené pozice. Knihy v knihovně zůstanou.',
+  },
+}

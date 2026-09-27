@@ -1,4 +1,5 @@
 import { LibraryIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useBookProgress, useSeriesById } from '@/api/hooks'
 import type { Book } from '@/api/types'
 import { BookCard, BookRow, BookRowHeader } from '@/components/BookCard'
@@ -23,7 +24,7 @@ export function BookGrid({
   view = 'tiles',
   seriesContext,
   selection,
-  emptyTitle = 'Žádné knihy',
+  emptyTitle,
   emptyDescription,
 }: {
   books: Book[]
@@ -37,6 +38,7 @@ export function BookGrid({
   emptyTitle?: string
   emptyDescription?: string
 }) {
+  const { t } = useTranslation()
   // Knihy nesou jen series_id, název série si doplňujeme z jednoho
   // společného seznamu – ne v každé kartě zvlášť.
   const seriesById = useSeriesById()
@@ -57,7 +59,13 @@ export function BookGrid({
   }
 
   if (books.length === 0) {
-    return <EmptyState title={emptyTitle} description={emptyDescription} icon={LibraryIcon} />
+    return (
+      <EmptyState
+        title={emptyTitle ?? t('books.grid.empty')}
+        description={emptyDescription}
+        icon={LibraryIcon}
+      />
+    )
   }
 
   if (view === 'list') {

@@ -1,5 +1,6 @@
 import { BookHeadphonesIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { API_PREFIX } from '@/api/client'
 import type { Book } from '@/api/types'
 import { cn } from '@/lib/utils'
@@ -39,6 +40,7 @@ export function BookCover({
   /** Nadzvednutí při najetí na kartu; vypnout v seznamu a v hlavičce detailu. */
   lift?: boolean
 }) {
+  const { t } = useTranslation()
   const [failed, setFailed] = useState(false)
 
   if (!book.cover_path || failed) {
@@ -73,7 +75,7 @@ export function BookCover({
       />
       <img
         src={src}
-        alt={`Obálka knihy ${book.title}`}
+        alt={t('books.cover.alt', { title: book.title })}
         loading="lazy"
         decoding="async"
         onError={() => setFailed(true)}

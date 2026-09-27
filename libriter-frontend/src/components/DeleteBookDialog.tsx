@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +31,7 @@ export function DeleteBookDialog({
   pending?: boolean
   onConfirm: (deleteFiles: boolean) => void
 }) {
+  const { t } = useTranslation()
   // Mazání souborů je nevratné, proto je vždy vypnuté, dokud ho admin nezapne.
   const [deleteFiles, setDeleteFiles] = useState(false)
 
@@ -42,13 +44,10 @@ export function DeleteBookDialog({
     <AlertDialog open={open} onOpenChange={handleOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Smazat knihu {title}?</AlertDialogTitle>
+          <AlertDialogTitle>{t('books.deleteDialog.title', { title })}</AlertDialogTitle>
           <AlertDialogDescription asChild>
             <div className="space-y-3">
-              <p>
-                Záznam zmizí i s obálkou, popisem a hodnocením. Spolu s ním se smaže historie
-                poslechu a stav „doposlechnuto“, který u téhle knihy mají všichni uživatelé.
-              </p>
+              <p>{t('books.deleteDialog.description')}</p>
               <div className="rounded-lg border p-3">
                 <div className="flex items-center gap-2">
                   <Switch
@@ -57,20 +56,20 @@ export function DeleteBookDialog({
                     onCheckedChange={setDeleteFiles}
                   />
                   <Label htmlFor="delete_book_files" className="text-sm font-normal">
-                    Smazat i audio soubory z disku (nevratné)
+                    {t('books.deleteDialog.deleteFiles')}
                   </Label>
                 </div>
                 <p className="mt-2 text-sm">
                   {deleteFiles
-                    ? 'Audio soubory se smažou z disku, stejně tak adresáře, které po nich zůstanou prázdné.'
-                    : 'Soubory na disku zůstanou, takže scanner knihu při dalším průchodu knihovnou založí znovu.'}
+                    ? t('books.deleteDialog.filesDeleted')
+                    : t('books.deleteDialog.filesKept')}
                 </p>
               </div>
             </div>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={pending}>Zrušit</AlertDialogCancel>
+          <AlertDialogCancel disabled={pending}>{t('common.cancel')}</AlertDialogCancel>
           <AlertDialogAction
             variant="destructive"
             disabled={pending}
@@ -80,7 +79,7 @@ export function DeleteBookDialog({
               onConfirm(deleteFiles)
             }}
           >
-            {pending ? 'Mažu…' : 'Smazat'}
+            {pending ? t('books.deleteDialog.deleting') : t('common.delete')}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

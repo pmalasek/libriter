@@ -1,5 +1,6 @@
 import { Trash2Icon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
 import { useDeleteAuthorImage, useSetAuthorImage, useUpdateAuthor } from '@/api/hooks'
@@ -47,6 +48,7 @@ function toYear(value: string): number | null {
 }
 
 function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void }) {
+  const { t } = useTranslation()
   const [firstName, setFirstName] = useState(author.first_name)
   const [middleName, setMiddleName] = useState(author.middle_name)
   const [lastName, setLastName] = useState(author.last_name)
@@ -91,7 +93,7 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
             downloadImage(pendingImageURL)
             return
           }
-          toast.success('Autor byl uložen.')
+          toast.success(t('authors.editDialog.saved'))
           onDone()
         },
         onError: (error) => {
@@ -111,11 +113,11 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
   function downloadImage(url: string) {
     setImage.mutate(url, {
       onSuccess: () => {
-        toast.success('Autor byl uložen i s fotkou.')
+        toast.success(t('authors.editDialog.savedWithImage'))
         onDone()
       },
       onError: (error) => {
-        toast.warning(`Autor uložen, ale fotku se nepodařilo stáhnout: ${error.message}`)
+        toast.warning(t('authors.editDialog.imageDownloadFailed', { error: error.message }))
         onDone()
       },
     })
@@ -124,7 +126,7 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
   function handleDeleteImage() {
     setPendingImageURL(null)
     deleteImage.mutate(undefined, {
-      onSuccess: () => toast.success('Fotka byla smazána.'),
+      onSuccess: () => toast.success(t('authors.editDialog.imageDeleted')),
       onError: (error) => toast.error(error.message),
     })
   }
@@ -134,9 +136,9 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
   return (
     <form onSubmit={handleSubmit} className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>Upravit autora</DialogTitle>
+        <DialogTitle>{t('authors.editDialog.title')}</DialogTitle>
         <DialogDescription>
-          Jméno se ukládá po částech – řadí a vyhledává se podle příjmení.
+          {t('authors.editDialog.description')}
         </DialogDescription>
       </DialogHeader>
 
@@ -172,14 +174,14 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
           if (meta.image_url) setPendingImageURL(meta.image_url)
           if (pseudonym) {
             toast.success(
-              `Metadata načtena. Jméno „${pseudonym.name}“ je pseudonym – zdroj vede autora pod jménem „${meta.name}“.`,
+              t('authors.editDialog.metadataPseudonym', { pseudonym: pseudonym.name, name: meta.name }),
             )
           } else if (keepName) {
             toast.success(
-              `Metadata načtena. Jméno zůstalo – zdroj vede autora pod jménem „${meta.name}“.`,
+              t('authors.editDialog.metadataNameKept', { name: meta.name }),
             )
           } else {
-            toast.success('Metadata načtena – zkontroluj je a ulož.')
+            toast.success(t('authors.editDialog.metadataLoaded'))
           }
         }}
       />
@@ -188,7 +190,7 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
         <AuthorImage key={author.id} author={author} className="size-16 shrink-0" />
         <div className="min-w-0 text-sm">
           {pendingImageURL ? (
-            <p className="text-muted-foreground">Nová fotka se stáhne při uložení.</p>
+            <p className="text-muted-foreground">{t('authors.editDialog.pendingImage')}</p>
           ) : author.image_path ? (
             <Button
               type="button"
@@ -198,17 +200,17 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
               disabled={deleteImage.isPending}
             >
               <Trash2Icon />
-              Smazat fotku
+              {t('authors.editDialog.deleteImage')}
             </Button>
           ) : (
-            <p className="text-muted-foreground">Bez fotky. Doplní ji „Načíst metadata“.</p>
+            <p className="text-muted-foreground">{t('authors.editDialog.noImage')}</p>
           )}
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="author_first_name">Křestní jméno</Label>
+          <Label htmlFor="author_first_name">{t('authors.editDialog.firstName')}</Label>
           <Input
             id="author_first_name"
             value={firstName}
@@ -216,7 +218,7 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="author_middle_name">Prostřední jméno</Label>
+          <Label htmlFor="author_middle_name">{t('authors.editDialog.middleName')}</Label>
           <Input
             id="author_middle_name"
             value={middleName}
@@ -226,7 +228,7 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="author_last_name">Příjmení</Label>
+        <Label htmlFor="author_last_name">{t('authors.editDialog.lastName')}</Label>
         <Input
           id="author_last_name"
           required
@@ -234,13 +236,13 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
           onChange={(e) => setLastName(e.target.value)}
         />
         <p className="text-xs text-muted-foreground">
-          Jednoslovné jméno (např. Homér) patří sem.
+          {t('authors.editDialog.lastNameHint')}
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="author_birth_year">Rok narození</Label>
+          <Label htmlFor="author_birth_year">{t('authors.editDialog.birthYear')}</Label>
           <Input
             id="author_birth_year"
             type="number"
@@ -251,7 +253,7 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="author_death_year">Rok úmrtí</Label>
+          <Label htmlFor="author_death_year">{t('authors.editDialog.deathYear')}</Label>
           <Input
             id="author_death_year"
             type="number"
@@ -264,7 +266,7 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="author_bio">Životopis</Label>
+        <Label htmlFor="author_bio">{t('authors.editDialog.bio')}</Label>
         <Textarea id="author_bio" rows={6} value={bio} onChange={(e) => setBio(e.target.value)} />
       </div>
 
@@ -272,10 +274,10 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
 
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onDone}>
-          Zrušit
+          {t('common.cancel')}
         </Button>
         <Button type="submit" disabled={pending}>
-          {pending ? 'Ukládám…' : 'Uložit'}
+          {pending ? t('common.saving') : t('common.save')}
         </Button>
       </DialogFooter>
     </form>

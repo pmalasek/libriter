@@ -1,5 +1,6 @@
 import { ArrowUpIcon, ChevronsUpDownIcon, XIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuthors } from '@/api/hooks'
 import type { Author } from '@/api/types'
 import { Button } from '@/components/ui/button'
@@ -45,6 +46,7 @@ function AuthorPicker({
   available: Author[]
   onPick: (author: Author) => void
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
 
@@ -81,7 +83,7 @@ function AuthorPicker({
           disabled={available.length === 0}
           className="w-full justify-between font-normal"
         >
-          {available.length ? 'Přidat autora…' : 'Další autoři nejsou'}
+          {available.length ? t('books.authorsField.add') : t('books.authorsField.noMore')}
           <ChevronsUpDownIcon className="opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -90,7 +92,7 @@ function AuthorPicker({
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Hledat autora…"
+          placeholder={t('books.authorsField.searchPlaceholder')}
           // Enter uvnitř formuláře knihy by ho jinak odeslal (a Ctrl+Enter
           // rovnou uložil a přeskočil na další knihu); tady vybere první
           // shodu, což je u vyfiltrovaného seznamu to očekávané.
@@ -117,7 +119,7 @@ function AuthorPicker({
             ))}
           </ul>
         ) : (
-          <p className="px-2 py-1.5 text-sm text-muted-foreground">Nic nenalezeno.</p>
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">{t('books.authorsField.noResults')}</p>
         )}
       </PopoverContent>
     </Popover>
@@ -140,6 +142,7 @@ interface Props {
  * něj scanner párování souborů i sekce „Další knihy autora“ na detailu.
  */
 export function BookAuthorsField({ value, onChange, hasPending = false }: Props) {
+  const { t } = useTranslation()
   const authors = useAuthors()
 
   const available = useMemo(() => {
@@ -158,7 +161,7 @@ export function BookAuthorsField({ value, onChange, hasPending = false }: Props)
 
   return (
     <div className="space-y-2">
-      <Label>Autoři</Label>
+      <Label>{t('books.authorsField.label')}</Label>
 
       {value.length > 0 ? (
         <ul className="flex flex-wrap gap-2">
@@ -174,16 +177,16 @@ export function BookAuthorsField({ value, onChange, hasPending = false }: Props)
             >
               {author.name}
               {index === 0 ? (
-                <span className="pr-1.5 text-muted-foreground">· hlavní</span>
+                <span className="pr-1.5 text-muted-foreground">· {t('books.authorsField.main')}</span>
               ) : (
                 <ChipButton
-                  label={`Nastavit ${author.name} jako hlavního autora`}
+                  label={t('books.authorsField.makeMain', { name: author.name })}
                   onClick={() => promote(author.id)}
                 >
                   <ArrowUpIcon className="size-3" />
                 </ChipButton>
               )}
-              <ChipButton label={`Odebrat ${author.name}`} onClick={() => remove(author.id)}>
+              <ChipButton label={t('books.authorsField.remove', { name: author.name })} onClick={() => remove(author.id)}>
                 <XIcon className="size-3" />
               </ChipButton>
             </li>
@@ -191,16 +194,16 @@ export function BookAuthorsField({ value, onChange, hasPending = false }: Props)
         </ul>
       ) : hasPending ? (
         <p className="text-sm text-muted-foreground">
-          Autoři ze zdroje metadat se založí při uložení – viz seznam níže.
+          {t('books.authorsField.pendingHint')}
         </p>
       ) : (
-        <p className="text-sm text-destructive">Kniha musí mít alespoň jednoho autora.</p>
+        <p className="text-sm text-destructive">{t('books.authorsField.required')}</p>
       )}
 
       <AuthorPicker available={available} onPick={(author) => onChange([...value, author])} />
 
       {authors.isError ? (
-        <p className="text-sm text-destructive">Seznam autorů se nepodařilo načíst.</p>
+        <p className="text-sm text-destructive">{t('books.authorsField.loadFailed')}</p>
       ) : null}
     </div>
   )

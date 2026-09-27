@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, Outlet } from 'react-router'
 import { useRefreshProfile } from '@/auth/useRefreshProfile'
 import { PlayerCapsule } from '@/components/player/PlayerCapsule'
@@ -11,6 +12,7 @@ import { NowPlayingColumn } from './NowPlayingColumn'
 import { TabBar } from './TabBar'
 
 export function AppLayout() {
+  const { t } = useTranslation()
   const player = usePlayer()
 
   // Role v prohlížeči může být z minulého přihlášení – srovnáme ji se serverem.
@@ -28,7 +30,7 @@ export function AppLayout() {
 
       {/* Hlavička je jen na telefonu – rail značku i účet unese sám. */}
       <header className="glass inset-shadow-glass sticky top-0 z-30 flex h-14 items-center px-4 md:hidden">
-        <Link to="/" className="flex items-center" aria-label="Libriter – domů">
+        <Link to="/" className="flex items-center" aria-label={t('layout.homeLink')}>
           <Logo size="sm" />
         </Link>
       </header>
@@ -48,7 +50,7 @@ export function AppLayout() {
           <Suspense
             fallback={
               <p role="status" className="py-8 text-center text-muted-foreground">
-                Načítání stránky…
+                {t('layout.pageLoading')}
               </p>
             }
           >

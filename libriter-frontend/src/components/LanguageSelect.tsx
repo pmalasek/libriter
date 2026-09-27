@@ -1,7 +1,8 @@
 import { CheckIcon, ChevronsUpDownIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useLanguages } from '@/api/hooks'
-import type { Language } from '@/api/types'
+import { collator, type Language } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -25,26 +26,34 @@ export function LanguageSelect({
   value: string
   onChange: (code: string) => void
 }) {
+  const { t } = useTranslation()
   const languages = useLanguages()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
 
+  // Porovnávač jazyka rozhraní – po jeho přepnutí se seznam přeřadí.
+  const uiCollator = collator()
+
   const sorted = useMemo(() => {
-    const list = [...(languages.data ?? [])].sort((a, b) =>
-      a.name_cs.localeCompare(b.name_cs, 'cs'),
-    )
+    // Řadí se podle názvu v jazyce rozhraní – tak, jak ho seznam ukazuje.
+    const all = languages.data ?? []
+    const label = (l: Language) => languageLabel(l.code, all)
+    const list = [...all].sort((a, b) => uiCollator.compare(label(a), label(b)))
     const common = COMMON.map((code) => list.find((l) => l.code === code)).filter(
       (l): l is Language => Boolean(l),
     )
     return [...common, ...list.filter((l) => !COMMON.includes(l.code))]
-  }, [languages.data])
+  }, [languages.data, uiCollator])
 
   const matches = useMemo(() => {
     const q = foldName(query)
     if (!q) return sorted
     return sorted.filter(
       (l) =>
-        l.code === q || foldName(l.name_cs).includes(q) || foldName(l.name_native).includes(q),
+        l.code === q ||
+        foldName(languageLabel(l.code, [l])).includes(q) ||
+        foldName(l.name_cs).includes(q) ||
+        foldName(l.name_native).includes(q),
     )
   }, [sorted, query])
 
@@ -73,7 +82,7 @@ export function LanguageSelect({
         >
           <span className="truncate">
             {/* Kód mimo číselník (starší data) se ukáže tak, jak je uložený. */}
-            {value ? languageLabel(value, languages.data) : 'Vyberte jazyk…'}
+            {value ? languageLabel(value, languages.data) : t('books.languageSelect.placeholder')}
           </span>
           <ChevronsUpDownIcon className="opacity-50" />
         </Button>
@@ -83,7 +92,7 @@ export function LanguageSelect({
           autoFocus
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Hledat jazyk…"
+          placeholder={t('books.languageSelect.searchPlaceholder')}
           // Enter uvnitř formuláře knihy by ho jinak odeslal; tady vybere
           // první shodu (stejně jako výběr autora).
           onKeyDown={(e) => {
@@ -95,7 +104,7 @@ export function LanguageSelect({
           }}
         />
         {languages.isPending ? (
-          <p className="px-2 py-1.5 text-sm text-muted-foreground">Načítám…</p>
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">{t('common.loading')}</p>
         ) : matches.length > 0 ? (
           <ul className="mt-1 max-h-64 overflow-y-auto">
             {matches.map((language, index) => (
@@ -116,7 +125,7 @@ export function LanguageSelect({
                   />
                   <span className="truncate">
                     {languageLabel(language.code, [language])}
-                    {language.name_native !== language.name_cs ? (
+                    {language.name_native !== languageLabel(language.code, [language]) ? (
                       <span className="text-muted-foreground"> · {language.name_native}</span>
                     ) : null}
                   </span>
@@ -128,7 +137,7 @@ export function LanguageSelect({
             ))}
           </ul>
         ) : (
-          <p className="px-2 py-1.5 text-sm text-muted-foreground">Nic nenalezeno.</p>
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">{t('books.languageSelect.noResults')}</p>
         )}
       </PopoverContent>
     </Popover>

@@ -1,5 +1,6 @@
 import { ArrowDownIcon, ArrowUpIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useSaveMetadataSettings } from '@/api/adminHooks'
 import {
@@ -19,6 +20,7 @@ function sourceLabel(name: string) {
 }
 
 export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings }) {
+  const { t } = useTranslation()
   const [providers, setProviders] = useState<AdminProvider[]>(settings.providers)
   const [apiKey, setApiKey] = useState(settings.google_books_api_key)
   const [baseline, setBaseline] = useState(settings)
@@ -58,7 +60,7 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
         google_books_api_key: apiKey.trim(),
       },
       {
-        onSuccess: () => toast.success('Zdroje metadat uloženy – změna platí okamžitě.'),
+        onSuccess: () => toast.success(t('admin.metadata.saved')),
         onError: (error) => toast.error(error.message),
       },
     )
@@ -70,11 +72,8 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle>Zdroje metadat</CardTitle>
-          <CardDescription>
-            Zdroje se zkoušejí shora dolů a vyhrají výsledky prvního, který něco najde. Vypnutý
-            zdroj se nepoužije ani pro stahování fotek autorů.
-          </CardDescription>
+          <CardTitle>{t('admin.metadata.title')}</CardTitle>
+          <CardDescription>{t('admin.metadata.description')}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <ol className="divide-y rounded-lg border">
@@ -87,17 +86,19 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{sourceLabel(provider.name)}</p>
                   <p className="text-xs text-muted-foreground">
-                    {provider.supports_authors ? 'knihy, autoři i fotky' : 'jen knihy'}
+                    {provider.supports_authors
+                      ? t('admin.metadata.supportsAuthors')
+                      : t('admin.metadata.booksOnly')}
                   </p>
                 </div>
 
-                {!provider.enabled ? <Badge variant="outline">vypnuto</Badge> : null}
+                {!provider.enabled ? <Badge variant="outline">{t('admin.metadata.disabled')}</Badge> : null}
 
                 <div className="flex items-center gap-1">
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={`Posunout ${sourceLabel(provider.name)} nahoru`}
+                    aria-label={t('admin.metadata.moveUp', { source: sourceLabel(provider.name) })}
                     disabled={index === 0}
                     onClick={() => move(index, -1)}
                   >
@@ -106,7 +107,7 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
                   <Button
                     variant="ghost"
                     size="icon"
-                    aria-label={`Posunout ${sourceLabel(provider.name)} dolů`}
+                    aria-label={t('admin.metadata.moveDown', { source: sourceLabel(provider.name) })}
                     disabled={index === providers.length - 1}
                     onClick={() => move(index, 1)}
                   >
@@ -114,7 +115,7 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
                   </Button>
                   <Switch
                     checked={provider.enabled}
-                    aria-label={`Zapnout zdroj ${sourceLabel(provider.name)}`}
+                    aria-label={t('admin.metadata.enable', { source: sourceLabel(provider.name) })}
                     onCheckedChange={(checked) => toggle(index, checked)}
                   />
                 </div>
@@ -124,7 +125,7 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
 
           {enabledCount === 0 ? (
             <p className="text-sm text-destructive">
-              Všechny zdroje jsou vypnuté – načítání metadat nebude fungovat.
+              {t('admin.metadata.allDisabled')}
             </p>
           ) : null}
         </CardContent>
@@ -133,18 +134,15 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
       <Card>
         <CardHeader>
           <CardTitle>Google Books</CardTitle>
-          <CardDescription>
-            Bez klíče platí anonymní denní kvóta sdílená pro celou IP adresu, která se snadno
-            vyčerpá. Klíč se získá v Google Cloud konzoli po zapnutí Books API.
-          </CardDescription>
+          <CardDescription>{t('admin.metadata.googleDescription')}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            <Label htmlFor="google_books_api_key">Klíč API</Label>
+            <Label htmlFor="google_books_api_key">{t('admin.metadata.apiKey')}</Label>
             <Input
               id="google_books_api_key"
               value={apiKey}
-              placeholder="nepovinné"
+              placeholder={t('admin.metadata.optional')}
               onChange={(e) => setApiKey(e.target.value)}
             />
           </div>
@@ -153,9 +151,11 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
 
       <div className="flex items-center gap-3">
         <Button disabled={!dirty || save.isPending} onClick={handleSave}>
-          {save.isPending ? 'Ukládám…' : 'Uložit'}
+          {save.isPending ? t('common.saving') : t('common.save')}
         </Button>
-        {dirty ? <p className="text-sm text-muted-foreground">Máte neuložené změny.</p> : null}
+        {dirty ? (
+          <p className="text-sm text-muted-foreground">{t('admin.unsavedChanges')}</p>
+        ) : null}
       </div>
     </div>
   )

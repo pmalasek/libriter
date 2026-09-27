@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useCreateUser } from '@/api/adminHooks'
 import { loginHint, LOGIN_PATTERN, roleLabel, type Role } from '@/api/types'
@@ -36,6 +37,7 @@ export function CreateUserDialog({
 }
 
 function CreateUserForm({ onDone }: { onDone: () => void }) {
+  const { t } = useTranslation()
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [login, setLogin] = useState('')
@@ -50,7 +52,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
     setError(null)
 
     if (password.length < MIN_PASSWORD) {
-      setError(`Heslo musí mít alespoň ${MIN_PASSWORD} znaků.`)
+      setError(t('admin.users.passwordTooShort', { min: MIN_PASSWORD }))
       return
     }
 
@@ -58,7 +60,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
       { display_name: displayName.trim(), email: email.trim(), login: login.trim(), password, role },
       {
         onSuccess: (user) => {
-          toast.success(`Účet ${user.email} byl založen.`)
+          toast.success(t('admin.users.create.created', { email: user.email }))
           onDone()
         },
         onError: (err) => setError(err.message),
@@ -69,14 +71,12 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <DialogHeader>
-        <DialogTitle>Nový uživatel</DialogTitle>
-        <DialogDescription>
-          Účet je použitelný hned; heslo si uživatel změní v profilu.
-        </DialogDescription>
+        <DialogTitle>{t('admin.users.create.title')}</DialogTitle>
+        <DialogDescription>{t('admin.users.create.description')}</DialogDescription>
       </DialogHeader>
 
       <div className="space-y-2">
-        <Label htmlFor="new_user_name">Jméno</Label>
+        <Label htmlFor="new_user_name">{t('admin.users.fields.name')}</Label>
         <Input
           id="new_user_name"
           required
@@ -86,7 +86,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="new_user_email">E-mail</Label>
+        <Label htmlFor="new_user_email">{t('admin.users.fields.email')}</Label>
         <Input
           id="new_user_email"
           type="email"
@@ -97,7 +97,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="new_user_login">Login</Label>
+        <Label htmlFor="new_user_login">{t('admin.users.fields.login')}</Label>
         <Input
           id="new_user_login"
           autoComplete="off"
@@ -111,7 +111,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="new_user_password">Heslo</Label>
+        <Label htmlFor="new_user_password">{t('admin.users.fields.password')}</Label>
         <Input
           id="new_user_password"
           type="password"
@@ -124,7 +124,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="new_user_role">Role</Label>
+        <Label htmlFor="new_user_role">{t('admin.users.fields.role')}</Label>
         <Select value={role} onValueChange={(value) => setRole(value as Role)}>
           <SelectTrigger id="new_user_role" className="w-full">
             <SelectValue />
@@ -143,10 +143,12 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone} disabled={createUser.isPending}>
-          Zrušit
+          {t('common.cancel')}
         </Button>
         <Button type="submit" disabled={createUser.isPending}>
-          {createUser.isPending ? 'Zakládám…' : 'Založit účet'}
+          {createUser.isPending
+            ? t('admin.users.create.submitting')
+            : t('admin.users.create.submit')}
         </Button>
       </DialogFooter>
     </form>

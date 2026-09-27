@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Slider } from '@/components/ui/slider'
 import { formatClock } from '@/lib/format'
 import { usePlayer } from '@/player/playerContext'
@@ -8,6 +9,7 @@ import { usePlayer } from '@/player/playerContext'
  * jezdce, v rozbaleném přehrávači pod ním, aby byl jezdec přes celou šířku.
  */
 export function SeekBar({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
+  const { t } = useTranslation()
   const player = usePlayer()
   // Pozice ukazovaná během tažení posuvníku, než ji uživatel pustí.
   const [scrub, setScrub] = useState<number | null>(null)
@@ -29,7 +31,7 @@ export function SeekBar({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
         player.seek(value)
         setScrub(null)
       }}
-      aria-label="Pozice v kapitole"
+      aria-label={t('player.position')}
     />
   )
 

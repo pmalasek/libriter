@@ -1,4 +1,5 @@
 import { ArrowDownNarrowWideIcon, ArrowUpNarrowWideIcon, Grid3x3Icon, LayoutGridIcon, ListIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -24,8 +25,9 @@ export function ViewModeToggle({
   value: ViewMode
   onChange: (view: ViewMode) => void
 }) {
+  const { t } = useTranslation()
   return (
-    <div role="group" aria-label="Zobrazení" className="inline-flex rounded-full bg-foreground/6 p-1 ring-1 ring-inset ring-foreground/5">
+    <div role="group" aria-label={t('books.listControls.view')} className="inline-flex rounded-full bg-foreground/6 p-1 ring-1 ring-inset ring-foreground/5">
       {VIEW_MODES.map((mode) => {
         const Icon = VIEW_ICONS[mode]
         const active = mode === value
@@ -68,13 +70,14 @@ export function SortControl<K extends string>({
   onDirChange: (dir: SortDir) => void
   className?: string
 }) {
+  const { t } = useTranslation()
   const DirIcon = dir === 'asc' ? ArrowDownNarrowWideIcon : ArrowUpNarrowWideIcon
-  const dirLabel = dir === 'asc' ? 'Vzestupně – přepnout na sestupně' : 'Sestupně – přepnout na vzestupně'
+  const dirLabel = dir === 'asc' ? t('books.listControls.ascending') : t('books.listControls.descending')
 
   return (
     <div className={cn('flex items-center gap-1', className)}>
       <Select value={value} onValueChange={(next) => onChange(next as K)}>
-        <SelectTrigger aria-label="Řadit podle" className="w-40">
+        <SelectTrigger aria-label={t('books.listControls.sortBy')} className="w-40">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

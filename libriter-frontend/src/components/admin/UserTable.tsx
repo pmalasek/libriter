@@ -1,4 +1,5 @@
 import { HeadphonesIcon, KeyRoundIcon, PencilIcon, Trash2Icon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { useSetUserRole } from '@/api/adminHooks'
@@ -30,6 +31,7 @@ export function UserTable({
   onResetPassword: (user: User) => void
   onDelete: (user: User) => void
 }) {
+  const { t } = useTranslation()
   const setRole = useSetUserRole()
 
   function handleRoleChange(user: User, role: Role) {
@@ -38,7 +40,9 @@ export function UserTable({
     setRole.mutate(
       { userId: user.id, role },
       {
-        onSuccess: () => toast.success(`${user.email} má nově roli ${roleLabel(role)}.`),
+        onSuccess: () => toast.success(
+            t('admin.users.table.roleChanged', { email: user.email, role: roleLabel(role) }),
+          ),
         onError: (error) => toast.error(error.message),
       },
     )
@@ -49,12 +53,12 @@ export function UserTable({
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Jméno</TableHead>
-            <TableHead>E-mail</TableHead>
-            <TableHead>Login</TableHead>
-            <TableHead className="w-44">Role</TableHead>
-            <TableHead className="w-36">Vytvořen</TableHead>
-            <TableHead className="w-40 text-right">Akce</TableHead>
+            <TableHead>{t('admin.users.fields.name')}</TableHead>
+            <TableHead>{t('admin.users.fields.email')}</TableHead>
+            <TableHead>{t('admin.users.fields.login')}</TableHead>
+            <TableHead className="w-44">{t('admin.users.fields.role')}</TableHead>
+            <TableHead className="w-36">{t('admin.users.table.created')}</TableHead>
+            <TableHead className="w-40 text-right">{t('admin.users.table.actions')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -67,7 +71,11 @@ export function UserTable({
               <TableRow key={user.id}>
                 <TableCell className="font-medium">
                   {user.display_name}
-                  {isSelf ? <span className="ml-2 text-xs text-muted-foreground">(vy)</span> : null}
+                  {isSelf ? (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      {t('admin.users.table.you')}
+                    </span>
+                  ) : null}
                 </TableCell>
                 <TableCell className="break-all">{user.email}</TableCell>
                 <TableCell className="break-all">
@@ -79,7 +87,7 @@ export function UserTable({
                     disabled={isSelf || setRole.isPending}
                     onValueChange={(value) => handleRoleChange(user, value as Role)}
                   >
-                    <SelectTrigger className="w-full" aria-label={`Role uživatele ${user.email}`}>
+                    <SelectTrigger className="w-full" aria-label={t('admin.users.table.roleOf', { email: user.email })}>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -99,7 +107,7 @@ export function UserTable({
                     <Button asChild variant="ghost" size="icon">
                       <Link
                         to={`/admin/listening/${user.id}`}
-                        aria-label={`Poslechy uživatele ${user.email}`}
+                        aria-label={t('admin.users.table.listeningOf', { email: user.email })}
                       >
                         <HeadphonesIcon />
                       </Link>
@@ -107,7 +115,7 @@ export function UserTable({
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Upravit účet ${user.email}`}
+                      aria-label={t('admin.users.table.editAccount', { email: user.email })}
                       onClick={() => onEdit(user)}
                     >
                       <PencilIcon />
@@ -115,7 +123,7 @@ export function UserTable({
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Reset hesla účtu ${user.email}`}
+                      aria-label={t('admin.users.table.resetPassword', { email: user.email })}
                       onClick={() => onResetPassword(user)}
                     >
                       <KeyRoundIcon />
@@ -123,7 +131,7 @@ export function UserTable({
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Smazat účet ${user.email}`}
+                      aria-label={t('admin.users.table.deleteAccount', { email: user.email })}
                       disabled={isSelf}
                       onClick={() => onDelete(user)}
                     >

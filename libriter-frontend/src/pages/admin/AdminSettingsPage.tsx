@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useRegistrationSettings, useSaveRegistrationSettings } from '@/api/adminHooks'
 import { roleLabel, type RegistrationSettings } from '@/api/types'
@@ -25,6 +26,7 @@ export function AdminSettingsPage() {
 }
 
 function RegistrationForm({ settings }: { settings: RegistrationSettings }) {
+  const { t } = useTranslation()
   const [enabled, setEnabled] = useState(settings.enabled)
   const [defaultRole, setDefaultRole] = useState(settings.default_role)
   const [baseline, setBaseline] = useState(settings)
@@ -44,7 +46,7 @@ function RegistrationForm({ settings }: { settings: RegistrationSettings }) {
     save.mutate(
       { enabled, default_role: defaultRole },
       {
-        onSuccess: () => toast.success('Nastavení registrace uloženo.'),
+        onSuccess: () => toast.success(t('admin.registration.saved')),
         onError: (error) => toast.error(error.message),
       },
     )
@@ -54,22 +56,21 @@ function RegistrationForm({ settings }: { settings: RegistrationSettings }) {
     <div className="max-w-2xl space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Registrace</CardTitle>
+          <CardTitle>{t('admin.registration.title')}</CardTitle>
           <CardDescription>
-            Při vypnuté registraci zakládá účty výhradně administrátor (záložka Uživatelé nebo
-            příkaz <code>libriter user add</code>).
+            <Trans i18nKey="admin.registration.description" components={{ code: <code /> }} />
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center justify-between gap-4">
             <Label htmlFor="registration_enabled" className="font-normal">
-              Povolit veřejnou registraci
+              {t('admin.registration.enable')}
             </Label>
             <Switch id="registration_enabled" checked={enabled} onCheckedChange={setEnabled} />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="registration_role">Role nového účtu</Label>
+            <Label htmlFor="registration_role">{t('admin.registration.defaultRole')}</Label>
             <Select
               value={defaultRole}
               onValueChange={(value) =>
@@ -88,7 +89,7 @@ function RegistrationForm({ settings }: { settings: RegistrationSettings }) {
               </SelectContent>
             </Select>
             <p className="text-sm text-muted-foreground">
-              Čtenář si knihovnu jen prohlíží, editor smí upravovat knihy a autory.
+              {t('admin.registration.roleHint')}
             </p>
           </div>
         </CardContent>
@@ -96,9 +97,11 @@ function RegistrationForm({ settings }: { settings: RegistrationSettings }) {
 
       <div className="flex items-center gap-3">
         <Button disabled={!dirty || save.isPending} onClick={handleSave}>
-          {save.isPending ? 'Ukládám…' : 'Uložit'}
+          {save.isPending ? t('common.saving') : t('common.save')}
         </Button>
-        {dirty ? <p className="text-sm text-muted-foreground">Máte neuložené změny.</p> : null}
+        {dirty ? (
+          <p className="text-sm text-muted-foreground">{t('admin.unsavedChanges')}</p>
+        ) : null}
       </div>
     </div>
   )

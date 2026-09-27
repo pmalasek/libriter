@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { useAuthConfig, useLogin } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
@@ -9,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
 export function LoginPage() {
+  const { t } = useTranslation()
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const { signIn } = useAuth()
@@ -36,13 +38,13 @@ export function LoginPage() {
     <AuthShell>
       <Card surface="strong" className="rounded-3xl shadow-glass-lg [--card-spacing:--spacing(6)]">
         <CardHeader>
-          <CardTitle className="text-2xl">Přihlášení</CardTitle>
-          <CardDescription>Zadejte své přihlašovací údaje.</CardDescription>
+          <CardTitle className="text-2xl">{t('auth.login.title')}</CardTitle>
+          <CardDescription>{t('auth.login.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="login">E-mail nebo login</Label>
+              <Label htmlFor="login">{t('auth.login.identifier')}</Label>
               <Input
                 id="login"
                 type="text"
@@ -55,7 +57,7 @@ export function LoginPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Heslo</Label>
+              <Label htmlFor="password">{t('auth.login.password')}</Label>
               <Input
                 id="password"
                 type="password"
@@ -71,7 +73,7 @@ export function LoginPage() {
             ) : null}
 
             <Button type="submit" size="lg" className="w-full" disabled={login.isPending}>
-              {login.isPending ? 'Přihlašuji…' : 'Přihlásit se'}
+              {login.isPending ? t('auth.login.submitting') : t('auth.login.submit')}
             </Button>
           </form>
 
@@ -79,9 +81,9 @@ export function LoginPage() {
               při vypnuté registraci blikl a zmizel. */}
           {authConfig.data?.registration_enabled ? (
             <p className="mt-4 text-center text-sm text-muted-foreground">
-              Nemáte účet?{' '}
+              {t('auth.login.noAccount')}{' '}
               <Link to="/register" className="font-medium text-primary underline-offset-4 hover:underline">
-                Zaregistrujte se
+                {t('auth.login.registerLink')}
               </Link>
             </p>
           ) : null}

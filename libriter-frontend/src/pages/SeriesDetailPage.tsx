@@ -1,5 +1,6 @@
 import { ArrowLeftIcon, ListPlusIcon, PauseIcon, PlayIcon } from 'lucide-react'
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { useBooks, useSeriesOne, useSessions } from '@/api/hooks'
 import { BookGrid } from '@/components/BookGrid'
@@ -14,6 +15,7 @@ import { seriesAuthors } from '@/lib/sorting'
 import { usePlayer } from '@/player/playerContext'
 
 export function SeriesDetailPage() {
+  const { t } = useTranslation()
   const { id = '' } = useParams()
   const series = useSeriesOne(id)
   const books = useBooks()
@@ -47,7 +49,7 @@ export function SeriesDetailPage() {
       <Button variant="ghost" size="sm" asChild className="mb-4 -ml-2">
         <Link to="/series">
           <ArrowLeftIcon />
-          Zpět na série
+          {t('series.detail.back')}
         </Link>
       </Button>
 
@@ -59,7 +61,7 @@ export function SeriesDetailPage() {
           <div className="min-w-0 flex-1">
             <PageHeader
               className="mb-0"
-              eyebrow="Série"
+              eyebrow={t('series.detail.eyebrow')}
               title={series.data.title}
               description={[authorsLabel(seriesAuthors(seriesBooks)), bookCount(seriesBooks.length)]
                 .filter(Boolean)
@@ -80,22 +82,22 @@ export function SeriesDetailPage() {
                 >
                   {isPlayingSeries ? <PauseIcon /> : <PlayIcon />}
                   {isPlayingSeries
-                    ? 'Pozastavit'
+                    ? t('series.detail.pause')
                     : playingFromSeries
-                      ? 'Přehrát'
+                      ? t('series.detail.play')
                       : openSeries
-                        ? 'Pokračovat v sérii'
-                        : 'Přehrát sérii'}
+                        ? t('series.detail.resume')
+                        : t('series.detail.playSeries')}
                 </Button>
                 {player.session && !openSeries ? (
                   <Button
                     variant="outline"
                     size="lg"
                     onClick={() => player.addToSession({ seriesIds: [id] })}
-                    title="Zařadit díly série na konec právě otevřeného poslechu"
+                    title={t('series.detail.addToSessionTitle')}
                   >
                     <ListPlusIcon />
-                    Přidat do poslechu
+                    {t('series.detail.addToSession')}
                   </Button>
                 ) : null}
               </div>
@@ -107,7 +109,7 @@ export function SeriesDetailPage() {
       <BookGrid
         books={seriesBooks}
         seriesContext={id}
-        emptyTitle="V této sérii nejsou žádné knihy"
+        emptyTitle={t('series.detail.noBooks')}
       />
     </>
   )

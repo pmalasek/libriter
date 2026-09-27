@@ -1,4 +1,5 @@
 import { CheckCircle2Icon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import type { Book, PlaySession, Series } from '@/api/types'
 import { BookCover } from '@/components/BookCover'
@@ -27,6 +28,7 @@ export function ListeningSessionRow({
   bookById: Map<string, Book>
   seriesById: Map<string, Series>
 }) {
+  const { t } = useTranslation()
   const title = sessionTitle(session, bookById, seriesById)
   const books = sessionBooks(session, bookById)
   const progress = sessionProgress(session)
@@ -52,25 +54,30 @@ export function ListeningSessionRow({
             {session.finished_at ? (
               <Badge variant="outline">
                 <CheckCircle2Icon />
-                Doposlechnuto
+                {t('admin.listening.finishedBadge')}
               </Badge>
             ) : null}
           </div>
 
           <p className="mt-1 truncate text-sm text-muted-foreground">
-            {progress.bookCount > 1 ? `Kniha ${progress.bookNumber} z ${progress.bookCount}` : null}
+            {progress.bookCount > 1
+              ? t('admin.listening.bookOf', {
+                  number: progress.bookNumber,
+                  total: progress.bookCount,
+                })
+              : null}
             {progress.bookCount > 1 && currentBook ? ' · ' : null}
             {currentBook ? (
               <Link to={`/books/${currentBook.id}`} className="hover:underline">
                 {currentBook.title}
               </Link>
             ) : (
-              'Kniha už není v knihovně'
+              t('admin.listening.bookMissing')
             )}
             {progress.positionSeconds > 0 ? ` · ${formatClock(progress.positionSeconds)}` : null}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Naposledy {formatDateTime(session.updated_at)}
+            {t('admin.listening.lastAt', { date: formatDateTime(session.updated_at) })}
           </p>
         </div>
       </CardContent>

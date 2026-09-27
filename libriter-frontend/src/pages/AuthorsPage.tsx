@@ -1,5 +1,6 @@
 import { UsersIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useAuthors, useBooks } from '@/api/hooks'
 import type { Author } from '@/api/types'
@@ -23,6 +24,7 @@ import {
 } from '@/lib/sorting'
 
 export function AuthorsPage() {
+  const { t } = useTranslation()
   const authors = useAuthors()
   const books = useBooks()
   const prefs = useAuthorListPrefs()
@@ -65,7 +67,7 @@ export function AuthorsPage() {
   if (authors.isPending) {
     return (
       <>
-        <PageHeader title="Autoři" />
+        <PageHeader title={t('authors.list.title')} />
         <LoadingList />
       </>
     )
@@ -74,7 +76,7 @@ export function AuthorsPage() {
   if (authors.isError) {
     return (
       <>
-        <PageHeader title="Autoři" />
+        <PageHeader title={t('authors.list.title')} />
         <ErrorState error={authors.error} onRetry={() => void authors.refetch()} />
       </>
     )
@@ -92,13 +94,13 @@ export function AuthorsPage() {
     <>
       <PageHeader
         sticky
-        title="Autoři"
-        description={`${withBooks.length} celkem`}
+        title={t('authors.list.title')}
+        description={t('authors.list.total', { count: withBooks.length })}
         actions={
           <>
             <Input
               type="search"
-              placeholder="Hledat podle jména…"
+              placeholder={t('authors.list.searchPlaceholder')}
               className="w-full sm:w-56"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -118,11 +120,11 @@ export function AuthorsPage() {
       {filtered.length === 0 ? (
         <EmptyState
           icon={UsersIcon}
-          title={query ? 'Nic nenalezeno' : 'Zatím žádní autoři'}
+          title={query ? t('authors.list.noResults') : t('authors.list.empty')}
           description={
             query
-              ? 'Zkuste jiný hledaný výraz.'
-              : 'Autoři vznikají automaticky při načtení audio souborů scannerem.'
+              ? t('authors.list.noResultsHint')
+              : t('authors.list.emptyHint')
           }
         />
       ) : (

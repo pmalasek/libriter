@@ -1,5 +1,6 @@
 import { PauseIcon, PlayIcon, RotateCcwIcon, RotateCwIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BookCover } from '@/components/BookCover'
 import { Button } from '@/components/ui/button'
 import { SKIP_BACK, SKIP_FORWARD, playerSubtitle, usePlayer } from '@/player/playerContext'
@@ -14,6 +15,7 @@ import { PlayerSheet } from './PlayerSheet'
  * Od xl kapsle mizí – tam je všechno ve sloupci u pravé hrany.
  */
 export function PlayerCapsule() {
+  const { t } = useTranslation()
   const player = usePlayer()
   const [expanded, setExpanded] = useState(false)
   const { session, book, chapter, currentTime, duration, playing } = player
@@ -27,7 +29,7 @@ export function PlayerCapsule() {
     <>
       <div
         role="region"
-        aria-label="Přehrávač"
+        aria-label={t('player.region')}
         className="glass-strong inset-shadow-glass fixed bottom-[5.5rem] left-1/2 z-40 h-16 w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-full px-2 shadow-glass-lg ring-1 ring-glass-edge md:bottom-3 md:left-[calc(50%+2.25rem)] md:w-[min(36rem,calc(100%-7rem))] xl:hidden"
       >
         <div className="flex h-full items-center gap-1">
@@ -35,7 +37,7 @@ export function PlayerCapsule() {
             type="button"
             onClick={() => setExpanded(true)}
             className="flex h-12 min-w-0 flex-1 items-center gap-3 rounded-full pr-2 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-            aria-label="Rozbalit přehrávač"
+            aria-label={t('player.expand')}
             aria-expanded={expanded}
           >
             {book ? (
@@ -50,7 +52,7 @@ export function PlayerCapsule() {
             )}
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">
-                {book ? book.title : 'Načítání…'}
+                {book ? book.title : t('player.loading')}
               </span>
               <span className="block truncate text-xs text-muted-foreground">
                 {playerSubtitle(player)}
@@ -64,8 +66,8 @@ export function PlayerCapsule() {
               size="icon-lg"
               className="size-10 rounded-full max-[24rem]:hidden"
               onClick={() => player.skip(-SKIP_BACK)}
-              aria-label={`Zpět o ${SKIP_BACK} sekund`}
-              title={`Zpět o ${SKIP_BACK} s`}
+              aria-label={t('player.skipBack', { count: SKIP_BACK })}
+              title={t('player.skipBackShort', { seconds: SKIP_BACK })}
             >
               <RotateCcwIcon className="size-5" />
             </Button>
@@ -74,8 +76,8 @@ export function PlayerCapsule() {
               className="size-12 rounded-full shadow-glow transition-transform active:scale-95 motion-reduce:active:scale-100"
               onClick={player.toggle}
               disabled={!chapter}
-              aria-label={playing ? 'Pozastavit' : 'Přehrát'}
-              title={playing ? 'Pozastavit' : 'Přehrát'}
+              aria-label={playing ? t('player.pause') : t('player.play')}
+              title={playing ? t('player.pause') : t('player.play')}
             >
               {playing ? <PauseIcon className="size-6" /> : <PlayIcon className="size-6" />}
             </Button>
@@ -84,8 +86,8 @@ export function PlayerCapsule() {
               size="icon-lg"
               className="size-10 rounded-full max-[24rem]:hidden"
               onClick={() => player.skip(SKIP_FORWARD)}
-              aria-label={`Vpřed o ${SKIP_FORWARD} sekund`}
-              title={`Vpřed o ${SKIP_FORWARD} s`}
+              aria-label={t('player.skipForward', { count: SKIP_FORWARD })}
+              title={t('player.skipForwardShort', { seconds: SKIP_FORWARD })}
             >
               <RotateCwIcon className="size-5" />
             </Button>

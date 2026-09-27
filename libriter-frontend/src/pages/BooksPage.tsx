@@ -1,6 +1,8 @@
 import { HeadphonesIcon, LibraryBigIcon, ListPlusIcon, SquareCheckBigIcon, XIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useBooks, useSeriesTitle } from '@/api/hooks'
+import { currentLanguage } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { canEdit } from '@/auth/permissions'
 import { AddToSeriesDialog } from '@/components/AddToSeriesDialog'
@@ -16,6 +18,7 @@ import { bookSortOptions, sortBooks, useBookListPrefs } from '@/lib/sorting'
 import { usePlayer } from '@/player/playerContext'
 
 export function BooksPage() {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const books = useBooks()
   const { user } = useAuth()
@@ -33,13 +36,14 @@ export function BooksPage() {
   )
 
   const filtered = useMemo(() => {
-    const needle = query.trim().toLocaleLowerCase('cs')
+    const locale = currentLanguage()
+    const needle = query.trim().toLocaleLowerCase(locale)
     if (!needle) return sorted
 
     return sorted.filter(
       (book) =>
-        book.title.toLocaleLowerCase('cs').includes(needle) ||
-        authorNames(book.authors).toLocaleLowerCase('cs').includes(needle),
+        book.title.toLocaleLowerCase(locale).includes(needle) ||
+        authorNames(book.authors).toLocaleLowerCase(locale).includes(needle),
     )
   }, [sorted, query])
 
@@ -69,7 +73,7 @@ export function BooksPage() {
   if (books.isPending) {
     return (
       <>
-        <PageHeader title="Knihy" />
+        <PageHeader title={t('books.list.title')} />
         <LoadingGrid view={prefs.view} />
       </>
     )
@@ -78,7 +82,7 @@ export function BooksPage() {
   if (books.isError) {
     return (
       <>
-        <PageHeader title="Knihy" />
+        <PageHeader title={t('books.list.title')} />
         <ErrorState error={books.error} onRetry={() => void books.refetch()} />
       </>
     )
@@ -90,13 +94,13 @@ export function BooksPage() {
     <>
       <PageHeader
         sticky
-        title="Knihy"
+        title={t('books.list.title')}
         description={bookCount(books.data.length)}
         actions={
           <>
             <Input
               type="search"
-              placeholder="Hledat podle názvu nebo autora…"
+              placeholder={t('books.list.searchPlaceholder')}
               className="w-full sm:w-56"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -114,7 +118,7 @@ export function BooksPage() {
             {!selecting ? (
               <Button variant="outline" onClick={() => setSelected(new Set())}>
                 <SquareCheckBigIcon />
-                Vybrat
+                {t('books.list.select')}
               </Button>
             ) : null}
           </>
@@ -125,11 +129,13 @@ export function BooksPage() {
         {selecting ? (
           <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl bg-foreground/5 px-3 py-2 ring-1 ring-inset ring-foreground/5">
             <p className="text-sm font-medium">
-              {selected.size === 0 ? 'Klikněte na knihy, které chcete vybrat.' : `Vybráno: ${bookCount(selected.size)}`}
+              {selected.size === 0
+                ? t('books.list.selectHint')
+                : t('books.list.selectedCount', { books: bookCount(selected.size) })}
             </p>
             <div className="flex-1" />
             <Button variant="ghost" size="sm" onClick={selectAllFiltered} disabled={filtered.length === 0}>
-              Vybrat vše{query ? ' nalezené' : ''}
+              {query ? t('books.list.selectAllFound') : t('books.list.selectAll')}
             </Button>
             <Button
               variant="ghost"
@@ -137,7 +143,7 @@ export function BooksPage() {
               onClick={() => setSelected(new Set())}
               disabled={selected.size === 0}
             >
-              Zrušit výběr
+              {t('books.list.clearSelection')}
             </Button>
             {player.session ? (
               <Button
@@ -148,10 +154,10 @@ export function BooksPage() {
                   setSelected(null)
                 }}
                 disabled={selected.size === 0}
-                title="Zařadit vybrané knihy na konec otevřeného poslechu"
+                title={t('books.list.addToSessionTitle')}
               >
                 <ListPlusIcon />
-                Přidat do poslechu
+                {t('books.list.addToSession')}
               </Button>
             ) : null}
             <Button
@@ -163,7 +169,7 @@ export function BooksPage() {
               disabled={selected.size === 0}
             >
               <HeadphonesIcon />
-              Poslouchat výběr
+              {t('books.list.playSelection')}
             </Button>
             {canEdit(user) ? (
               <Button
@@ -173,12 +179,12 @@ export function BooksPage() {
                 disabled={selected.size === 0}
               >
                 <LibraryBigIcon />
-                Přidat do série
+                {t('books.list.addToSeries')}
               </Button>
             ) : null}
-            <Button variant="outline" size="sm" onClick={() => setSelected(null)} aria-label="Ukončit výběr">
+            <Button variant="outline" size="sm" onClick={() => setSelected(null)} aria-label={t('books.list.endSelection')}>
               <XIcon />
-              Hotovo
+              {t('books.list.done')}
             </Button>
           </div>
         ) : null}
@@ -188,11 +194,11 @@ export function BooksPage() {
         books={filtered}
         view={prefs.view}
         selection={selected ? { selected, onToggle: toggle } : undefined}
-        emptyTitle={query ? 'Nic nenalezeno' : 'Zatím žádné knihy'}
+        emptyTitle={query ? t('books.list.noResults') : t('books.list.empty')}
         emptyDescription={
           query
-            ? 'Zkuste jiný hledaný výraz.'
-            : 'Přidejte audio soubory do adresáře AUDIO_ROOT – scanner je načte automaticky.'
+            ? t('books.list.noResultsHint')
+            : t('books.list.emptyHint')
         }
       />
 

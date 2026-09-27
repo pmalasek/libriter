@@ -1,4 +1,5 @@
 import { LogOutIcon, UserIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { roleLabel } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
@@ -20,6 +21,7 @@ import { cn } from '@/lib/utils'
  * se jménem a rolí, roztažený na celou šířku).
  */
 export function UserMenu({ showName = false, className }: { showName?: boolean; className?: string }) {
+  const { t } = useTranslation()
   const { user, signOut } = useAuth()
   const navigate = useNavigate()
 
@@ -32,7 +34,7 @@ export function UserMenu({ showName = false, className }: { showName?: boolean; 
           <Button
             variant="ghost"
             size="lg"
-            aria-label="Uživatelské menu"
+            aria-label={t('layout.account.menu')}
             className={cn('h-auto min-w-0 flex-1 justify-start gap-2 px-1.5 py-1.5', className)}
           >
             <Avatar className="size-8">
@@ -46,7 +48,7 @@ export function UserMenu({ showName = false, className }: { showName?: boolean; 
             </span>
           </Button>
         ) : (
-          <Button variant="ghost" size="icon" aria-label="Uživatelské menu" className={className}>
+          <Button variant="ghost" size="icon" aria-label={t('layout.account.menu')} className={className}>
             <Avatar className="size-7">
               <AvatarFallback className="text-xs">{initials(user.display_name)}</AvatarFallback>
             </Avatar>
@@ -64,7 +66,7 @@ export function UserMenu({ showName = false, className }: { showName?: boolean; 
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={() => navigate('/profile')}>
           <UserIcon />
-          Profil
+          {t('layout.account.profile')}
         </DropdownMenuItem>
         <DropdownMenuItem
           onSelect={() => {
@@ -73,7 +75,7 @@ export function UserMenu({ showName = false, className }: { showName?: boolean; 
           }}
         >
           <LogOutIcon />
-          Odhlásit se
+          {t('layout.account.signOut')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

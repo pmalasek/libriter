@@ -1,4 +1,5 @@
 import { ChevronRightIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { cn } from '@/lib/utils'
 
@@ -18,6 +19,7 @@ export function Shelf({
   children: React.ReactNode
   className?: string
 }) {
+  const { t } = useTranslation()
   return (
     <section className={cn('mt-10', className)}>
       <div className="mb-3 flex items-end justify-between gap-4">
@@ -27,7 +29,7 @@ export function Shelf({
             to={to}
             className="flex shrink-0 items-center gap-0.5 text-sm text-primary underline-offset-4 hover:underline"
           >
-            Zobrazit vše
+            {t('books.shelf.showAll')}
             <ChevronRightIcon className="size-4" />
           </Link>
         ) : null}

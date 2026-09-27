@@ -1,5 +1,6 @@
 import { ChevronDownIcon, ListOrderedIcon, PauseIcon, PlayIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useChapters, useReorderChapters } from '@/api/hooks'
 import type { Book } from '@/api/types'
@@ -22,6 +23,7 @@ import { usePlayer } from '@/player/playerContext'
  * odpovídat skutečnému pořadí kapitol.
  */
 export function ChapterList({ book }: { book: Book }) {
+  const { t } = useTranslation()
   const { user } = useAuth()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -35,7 +37,7 @@ export function ChapterList({ book }: { book: Book }) {
   function handleSave(chapterIds: string[]) {
     reorder.mutate(chapterIds, {
       onSuccess: () => {
-        toast.success('Pořadí kapitol uloženo.')
+        toast.success(t('books.chapters.orderSaved'))
         setEditing(false)
       },
       onError: (error) => toast.error(error.message),
@@ -57,7 +59,7 @@ export function ChapterList({ book }: { book: Book }) {
               <ChevronDownIcon
                 className={cn('size-4 text-muted-foreground transition-transform', open && 'rotate-180')}
               />
-              <CardTitle>Kapitoly</CardTitle>
+              <CardTitle>{t('books.chapters.title')}</CardTitle>
             </button>
           </CollapsibleTrigger>
           <CardDescription className="pl-6">
@@ -67,7 +69,7 @@ export function ChapterList({ book }: { book: Book }) {
             <CardAction>
               <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
                 <ListOrderedIcon />
-                Změnit pořadí
+                {t('books.chapters.reorder')}
               </Button>
             </CardAction>
           ) : null}
@@ -85,8 +87,7 @@ export function ChapterList({ book }: { book: Book }) {
               <ErrorState error={chapters.error} onRetry={() => void chapters.refetch()} />
             ) : list.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Kniha zatím nemá načtené kapitoly. Soubory přidá scanner při dalším průchodu
-                knihovnou.
+                {t('books.chapters.empty')}
               </p>
             ) : editing ? (
               <ChapterOrderEditor
@@ -123,8 +124,8 @@ export function ChapterList({ book }: { book: Book }) {
                         size="icon-sm"
                         aria-label={
                           isCurrent && player.playing
-                            ? `Pozastavit kapitolu ${chapter.title}`
-                            : `Přehrát kapitolu ${chapter.title}`
+                            ? t('books.chapters.pause', { title: chapter.title })
+                            : t('books.chapters.play', { title: chapter.title })
                         }
                         onClick={() =>
                           isCurrent ? player.toggle() : player.playBook(book.id, chapter.id)

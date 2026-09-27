@@ -1,5 +1,6 @@
 import { LayersIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useBooks, useSeriesList } from '@/api/hooks'
 import type { Author, Book } from '@/api/types'
@@ -24,6 +25,7 @@ interface SeriesInfo {
 const EMPTY: SeriesInfo = { count: 0, authors: [], covers: [] }
 
 export function SeriesPage() {
+  const { t } = useTranslation()
   const series = useSeriesList()
   const books = useBooks()
   const [query, setQuery] = useState('')
@@ -79,7 +81,7 @@ export function SeriesPage() {
   if (series.isPending) {
     return (
       <>
-        <PageHeader title="Série" />
+        <PageHeader title={t('series.list.title')} />
         <LoadingList />
       </>
     )
@@ -88,7 +90,7 @@ export function SeriesPage() {
   if (series.isError) {
     return (
       <>
-        <PageHeader title="Série" />
+        <PageHeader title={t('series.list.title')} />
         <ErrorState error={series.error} onRetry={() => void series.refetch()} />
       </>
     )
@@ -98,12 +100,12 @@ export function SeriesPage() {
     <>
       <PageHeader
         sticky
-        title="Série"
-        description={`${withBooks.length} celkem`}
+        title={t('series.list.title')}
+        description={t('series.list.total', { count: withBooks.length })}
         actions={
           <Input
             type="search"
-            placeholder="Hledat podle názvu nebo autora…"
+            placeholder={t('series.list.searchPlaceholder')}
             className="w-full sm:w-56"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -114,11 +116,11 @@ export function SeriesPage() {
       {filtered.length === 0 ? (
         <EmptyState
           icon={LayersIcon}
-          title={query ? 'Nic nenalezeno' : 'Zatím žádné série'}
+          title={query ? t('series.list.noResults') : t('series.list.empty')}
           description={
             query
-              ? 'Zkuste jiný hledaný výraz.'
-              : 'Série lze zakládat přes API (role editor a vyšší).'
+              ? t('series.list.noResultsHint')
+              : t('series.list.emptyHint')
           }
         />
       ) : (

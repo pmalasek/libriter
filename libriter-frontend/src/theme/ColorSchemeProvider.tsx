@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { apiFetch } from '@/api/client'
 import { queryKeys } from '@/api/hooks'
-import type { User, UserAppearance } from '@/api/types'
+import { t, type User, type UserAppearance } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { ColorSchemeContext, parseScheme, readScheme, STORAGE_KEY } from './colorScheme'
 
@@ -65,7 +65,7 @@ export function ColorSchemeProvider({ children }: { children: React.ReactNode })
         queryClient.setQueryData(queryKeys.user(updated.id), updated)
         updateUser(updated)
       },
-      onError: (error) => toast.error(`Vzhled se nepodařilo uložit do profilu: ${error.message}`),
+      onError: (error) => toast.error(t('layout.appearance.saveFailed', { error: error.message })),
       onSettled: () => { saving.current = false },
     })
   }

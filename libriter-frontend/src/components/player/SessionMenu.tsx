@@ -1,5 +1,6 @@
 import { CheckIcon, HeadphonesIcon, Trash2Icon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useBooks, useSeriesById, useSessions } from '@/api/hooks'
 import type { PlaySession } from '@/api/types'
@@ -25,6 +26,7 @@ import { cn } from '@/lib/utils'
  * i s úklidem je na stránce Právě posloucháno, sem se vejde řádka na poslech.
  */
 export function SessionMenu({ triggerClassName }: { triggerClassName?: string }) {
+  const { t } = useTranslation()
   const { session, switchSession, removeSession } = usePlayer()
   const [open, setOpen] = useState(false)
   const [toRemove, setToRemove] = useState<PlaySession | null>(null)
@@ -38,9 +40,9 @@ export function SessionMenu({ triggerClassName }: { triggerClassName?: string })
   function subtitle(item: PlaySession): string {
     const progress = sessionProgress(item)
     const parts: string[] = []
-    if (progress.bookCount > 1) parts.push(`Kniha ${progress.bookNumber} z ${progress.bookCount}`)
+    if (progress.bookCount > 1) parts.push(t('sessions.bookOf', { number: progress.bookNumber, count: progress.bookCount }))
     if (progress.positionSeconds > 0) parts.push(formatClock(progress.positionSeconds))
-    if (item.finished_at) parts.push('doposlechnuto')
+    if (item.finished_at) parts.push(t('sessions.finishedLower'))
     return parts.join(' · ')
   }
 
@@ -54,28 +56,28 @@ export function SessionMenu({ triggerClassName }: { triggerClassName?: string })
             variant="ghost"
             size="icon"
             className={triggerClassName}
-            aria-label="Právě posloucháno"
-            title="Právě posloucháno"
+            aria-label={t('sessions.title')}
+            title={t('sessions.title')}
           >
             <HeadphonesIcon />
           </Button>
         </PopoverTrigger>
         <PopoverContent align="end" side="top" className="w-80 max-w-[calc(100vw-2rem)] p-2">
           <div className="flex items-center justify-between gap-2 px-2 pt-1 pb-2">
-            <p className="text-xs font-medium text-muted-foreground">Právě posloucháno</p>
+            <p className="text-xs font-medium text-muted-foreground">{t('sessions.title')}</p>
             <Link
               to="/sessions"
               onClick={() => setOpen(false)}
               className="text-xs text-primary underline-offset-4 hover:underline"
             >
-              Přehled
+              {t('sessions.overview')}
             </Link>
           </div>
 
           {sessions.isPending ? (
-            <p className="px-2 py-3 text-sm text-muted-foreground">Načítání…</p>
+            <p className="px-2 py-3 text-sm text-muted-foreground">{t('player.loading')}</p>
           ) : list.length === 0 ? (
-            <p className="px-2 py-3 text-sm text-muted-foreground">Zatím nic rozposlouchaného.</p>
+            <p className="px-2 py-3 text-sm text-muted-foreground">{t('sessions.emptyMenu')}</p>
           ) : (
             <ul className="max-h-80 space-y-0.5 overflow-y-auto">
               {list.map((item) => {
@@ -104,8 +106,8 @@ export function SessionMenu({ triggerClassName }: { triggerClassName?: string })
                     <Button
                       variant="ghost"
                       size="icon-sm"
-                      aria-label="Odebrat poslech"
-                      title="Odebrat poslech"
+                      aria-label={t('sessions.remove.label')}
+                      title={t('sessions.remove.label')}
                       onClick={() => setToRemove(item)}
                     >
                       <Trash2Icon />
@@ -121,20 +123,20 @@ export function SessionMenu({ triggerClassName }: { triggerClassName?: string })
       <AlertDialog open={toRemove !== null} onOpenChange={(next) => !next && setToRemove(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Odebrat poslech?</AlertDialogTitle>
+            <AlertDialogTitle>{t('sessions.remove.title')}</AlertDialogTitle>
             <AlertDialogDescription>
-              {toRemove ? `„${title(toRemove)}“ zmizí ze seznamu včetně uložené pozice. Knihy v knihovně zůstanou.` : null}
+              {toRemove ? t('sessions.remove.description', { title: title(toRemove) }) : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Zrušit</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (toRemove) removeSession(toRemove.id)
                 setToRemove(null)
               }}
             >
-              Odebrat
+              {t('sessions.remove.action')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

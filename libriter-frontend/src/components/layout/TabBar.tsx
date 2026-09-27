@@ -1,5 +1,6 @@
 import { EllipsisIcon, LogOutIcon, UserIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { NavLink, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/ui/button'
@@ -17,6 +18,7 @@ const TABS = 4
  * účet, vzhled) je v panelu „Více“.
  */
 export function TabBar() {
+  const { t } = useTranslation()
   const items = useNavItems()
   const [more, setMore] = useState(false)
   const location = useLocation()
@@ -45,17 +47,17 @@ export function TabBar() {
       <nav
         // Rail i tahle lišta jsou v DOM zároveň (přepíná je šířka okna),
         // proto každá vlastní popisek – dva stejné by odečítač hlásil dvakrát.
-        aria-label="Spodní navigace"
+        aria-label={t('layout.nav.bottom')}
         className="glass-strong inset-shadow-glass fixed inset-x-3 bottom-3 z-40 flex h-16 items-stretch gap-0.5 rounded-3xl p-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] shadow-glass-lg ring-1 ring-glass-edge md:hidden"
       >
-        {tabs.map(({ to, label, icon: Icon, end }) => (
+        {tabs.map(({ to, labelKey, icon: Icon, end }) => (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => tabClass(isActive)}>
             {({ isActive }) => (
               <>
                 <span className={iconClass(isActive)}>
                   <Icon className="size-5" />
                 </span>
-                <span className="max-w-full truncate">{label}</span>
+                <span className="max-w-full truncate">{t(labelKey)}</span>
               </>
             )}
           </NavLink>
@@ -65,7 +67,7 @@ export function TabBar() {
           <span className={iconClass(restActive)}>
             <EllipsisIcon className="size-5" />
           </span>
-          <span>Více</span>
+          <span>{t('layout.nav.more')}</span>
         </button>
       </nav>
 
@@ -75,11 +77,11 @@ export function TabBar() {
           className="gap-2 rounded-t-4xl px-4 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
         >
           <SheetHeader className="p-0">
-            <SheetTitle>{user?.display_name ?? 'Účet'}</SheetTitle>
+            <SheetTitle>{user?.display_name ?? t('layout.account.fallbackTitle')}</SheetTitle>
           </SheetHeader>
 
           <div className="flex flex-col gap-1">
-            {rest.map(({ to, label, icon: Icon, end }) => (
+            {rest.map(({ to, labelKey, icon: Icon, end }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -93,7 +95,7 @@ export function TabBar() {
                 }
               >
                 <Icon className="size-5 shrink-0" />
-                {label}
+                {t(labelKey)}
               </NavLink>
             ))}
 
@@ -106,7 +108,7 @@ export function TabBar() {
               className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-foreground/6"
             >
               <UserIcon className="size-5 shrink-0" />
-              Profil
+              {t('layout.account.profile')}
             </button>
 
             <button
@@ -119,17 +121,17 @@ export function TabBar() {
               className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-medium transition-colors hover:bg-foreground/6"
             >
               <LogOutIcon className="size-5 shrink-0" />
-              Odhlásit se
+              {t('layout.account.signOut')}
             </button>
           </div>
 
           <div className="hairline-t mt-2 flex items-center justify-between pt-3">
-            <span className="text-sm text-muted-foreground">Vzhled</span>
+            <span className="text-sm text-muted-foreground">{t('layout.appearance.title')}</span>
             <ThemeToggle />
           </div>
 
           <Button variant="outline" onClick={() => setMore(false)} className="mt-1">
-            Zavřít
+            {t('common.close')}
           </Button>
         </SheetContent>
       </Sheet>

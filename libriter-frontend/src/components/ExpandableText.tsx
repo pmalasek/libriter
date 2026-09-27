@@ -1,5 +1,6 @@
 import { ChevronDownIcon } from 'lucide-react'
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 /** Jak vysoko od spodní hrany text prolíná do pozadí, když je sbalený. */
@@ -29,6 +30,7 @@ export function ExpandableText({
   lines?: number
   className?: string
 }) {
+  const { t } = useTranslation()
   const textRef = useRef<HTMLParagraphElement>(null)
   const [expanded, setExpanded] = useState(false)
   const [animating, setAnimating] = useState(false)
@@ -123,7 +125,7 @@ export function ExpandableText({
               )}
             />
           </span>
-          {expanded ? 'Zobrazit méně' : 'Zobrazit více'}
+          {expanded ? t('layout.expandableText.less') : t('layout.expandableText.more')}
         </button>
       ) : null}
     </div>

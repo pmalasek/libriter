@@ -44,7 +44,7 @@ export function ProfilePage() {
           setDisplayName(updated.display_name)
           setEmail(updated.email)
           setLogin(updated.login)
-          toast.success('Profil byl uložen.')
+          toast.success(t('profile.saved'))
         },
         onError: (error) => toast.error(error.message),
       },
@@ -56,11 +56,11 @@ export function ProfilePage() {
     setPasswordError(null)
 
     if (password.length < MIN_PASSWORD) {
-      setPasswordError(`Heslo musí mít alespoň ${MIN_PASSWORD} znaků.`)
+      setPasswordError(t('profile.password.tooShort', { min: MIN_PASSWORD }))
       return
     }
     if (password !== passwordAgain) {
-      setPasswordError('Hesla se neshodují.')
+      setPasswordError(t('profile.password.mismatch'))
       return
     }
 
@@ -70,7 +70,7 @@ export function ProfilePage() {
         onSuccess: () => {
           setPassword('')
           setPasswordAgain('')
-          toast.success('Heslo bylo změněno.')
+          toast.success(t('profile.password.changed'))
         },
         onError: (error) => toast.error(error.message),
       },
@@ -80,20 +80,20 @@ export function ProfilePage() {
   return (
     <div className="max-w-2xl">
       <PageHeader
-        title="Profil"
-        description={`Účet vytvořen ${formatDate(user.created_at)}`}
+        title={t('profile.title')}
+        description={t('profile.created', { date: formatDate(user.created_at) })}
         actions={<Badge variant="secondary">{roleLabel(user.role)}</Badge>}
       />
 
       <Card>
         <CardHeader>
-          <CardTitle>Osobní údaje</CardTitle>
-          <CardDescription>Změna zobrazovaného jména, e-mailu a loginu. Přihlásit se můžete e-mailem i loginem.</CardDescription>
+          <CardTitle>{t('profile.personal.title')}</CardTitle>
+          <CardDescription>{t('profile.personal.description')}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleProfileSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="display_name">Jméno</Label>
+              <Label htmlFor="display_name">{t('profile.personal.name')}</Label>
               <Input
                 id="display_name"
                 required
@@ -102,7 +102,7 @@ export function ProfilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
+              <Label htmlFor="email">{t('profile.personal.email')}</Label>
               <Input
                 id="email"
                 type="email"
@@ -112,7 +112,7 @@ export function ProfilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="login">Login</Label>
+              <Label htmlFor="login">{t('profile.personal.login')}</Label>
               <Input
                 id="login"
                 autoComplete="username"
@@ -125,7 +125,7 @@ export function ProfilePage() {
               <p className="text-xs text-muted-foreground">{loginHint()}</p>
             </div>
             <Button type="submit" disabled={updateProfile.isPending}>
-              {updateProfile.isPending ? 'Ukládám…' : 'Uložit změny'}
+              {updateProfile.isPending ? t('common.saving') : t('profile.personal.submit')}
             </Button>
           </form>
         </CardContent>
@@ -134,9 +134,9 @@ export function ProfilePage() {
       <Card className="mt-6">
         <CardHeader className="flex-row items-center justify-between gap-4">
           <div className="space-y-1.5">
-            <CardTitle>Vzhled</CardTitle>
+            <CardTitle>{t('profile.appearance.title')}</CardTitle>
             <CardDescription>
-              Barevné schéma a světlý, tmavý nebo systémový režim se ukládají automaticky do vašeho profilu.
+              {t('profile.appearance.description')}
             </CardDescription>
           </div>
           <ThemeToggle />
@@ -155,13 +155,13 @@ export function ProfilePage() {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Změna hesla</CardTitle>
-          <CardDescription>Minimálně {MIN_PASSWORD} znaků.</CardDescription>
+          <CardTitle>{t('profile.password.title')}</CardTitle>
+          <CardDescription>{t('profile.password.hint', { min: MIN_PASSWORD })}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handlePasswordSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="new_password">Nové heslo</Label>
+              <Label htmlFor="new_password">{t('profile.password.new')}</Label>
               <Input
                 id="new_password"
                 type="password"
@@ -173,7 +173,7 @@ export function ProfilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="new_password_again">Nové heslo znovu</Label>
+              <Label htmlFor="new_password_again">{t('profile.password.again')}</Label>
               <Input
                 id="new_password_again"
                 type="password"
@@ -187,7 +187,7 @@ export function ProfilePage() {
             {passwordError ? <p className="text-sm text-destructive">{passwordError}</p> : null}
 
             <Button type="submit" disabled={changePassword.isPending}>
-              {changePassword.isPending ? 'Měním heslo…' : 'Změnit heslo'}
+              {changePassword.isPending ? t('profile.password.submitting') : t('profile.password.submit')}
             </Button>
           </form>
         </CardContent>

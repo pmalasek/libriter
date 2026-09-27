@@ -6,6 +6,7 @@ import {
   RotateCcwIcon,
   RotateCwIcon,
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { SKIP_BACK, SKIP_FORWARD, usePlayer } from '@/player/playerContext'
@@ -17,6 +18,7 @@ import { SKIP_BACK, SKIP_FORWARD, usePlayer } from '@/player/playerContext'
  * když si ji ikona neurčí sama.
  */
 export function TransportControls({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
+  const { t } = useTranslation()
   const player = usePlayer()
   const { chapter, playing } = player
   const large = size === 'lg'
@@ -31,8 +33,8 @@ export function TransportControls({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
         size={large ? 'icon-lg' : 'icon'}
         className={button}
         onClick={player.prevChapter}
-        aria-label="Předchozí kapitola"
-        title="Předchozí kapitola"
+        aria-label={t('player.previousChapter')}
+        title={t('player.previousChapter')}
       >
         <ChevronsLeftIcon className={icon} />
       </Button>
@@ -41,8 +43,8 @@ export function TransportControls({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
         size={large ? 'icon-lg' : 'icon'}
         className={button}
         onClick={() => player.skip(-SKIP_BACK)}
-        aria-label={`Zpět o ${SKIP_BACK} sekund`}
-        title={`Zpět o ${SKIP_BACK} s`}
+        aria-label={t('player.skipBack', { count: SKIP_BACK })}
+        title={t('player.skipBackShort', { seconds: SKIP_BACK })}
       >
         <RotateCcwIcon className={icon} />
       </Button>
@@ -51,8 +53,8 @@ export function TransportControls({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
         className={cn('rounded-full', large && 'size-16')}
         onClick={player.toggle}
         disabled={!chapter}
-        aria-label={playing ? 'Pozastavit' : 'Přehrát'}
-        title={playing ? 'Pozastavit' : 'Přehrát'}
+        aria-label={playing ? t('player.pause') : t('player.play')}
+        title={playing ? t('player.pause') : t('player.play')}
       >
         {playing ? (
           <PauseIcon className={large ? 'size-8' : undefined} />
@@ -65,8 +67,8 @@ export function TransportControls({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
         size={large ? 'icon-lg' : 'icon'}
         className={button}
         onClick={() => player.skip(SKIP_FORWARD)}
-        aria-label={`Vpřed o ${SKIP_FORWARD} sekund`}
-        title={`Vpřed o ${SKIP_FORWARD} s`}
+        aria-label={t('player.skipForward', { count: SKIP_FORWARD })}
+        title={t('player.skipForwardShort', { seconds: SKIP_FORWARD })}
       >
         <RotateCwIcon className={icon} />
       </Button>
@@ -75,8 +77,8 @@ export function TransportControls({ size = 'sm' }: { size?: 'sm' | 'lg' }) {
         size={large ? 'icon-lg' : 'icon'}
         className={button}
         onClick={player.nextChapter}
-        aria-label="Další kapitola"
-        title="Další kapitola"
+        aria-label={t('player.nextChapter')}
+        title={t('player.nextChapter')}
       >
         <ChevronsRightIcon className={icon} />
       </Button>

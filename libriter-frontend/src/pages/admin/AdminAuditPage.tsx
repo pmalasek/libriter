@@ -1,5 +1,6 @@
+import { useTranslation } from 'react-i18next'
 import { useAuditLog } from '@/api/adminHooks'
-import { auditActionLabel, type AuditEntry } from '@/api/types'
+import { auditActionLabel, t as translate, type AuditEntry } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingList } from '@/components/LoadingGrid'
@@ -15,6 +16,7 @@ import {
 import { formatDateTime } from '@/lib/format'
 
 export function AdminAuditPage() {
+  const { t } = useTranslation()
   const audit = useAuditLog()
 
   if (audit.isPending) return <LoadingList count={5} />
@@ -24,8 +26,8 @@ export function AdminAuditPage() {
   if (entries.length === 0) {
     return (
       <EmptyState
-        title="Zatím žádné záznamy"
-        description="Sem se zapisují zásahy administrátora – změny rolí, mazání a úpravy nastavení."
+        title={t('admin.audit.emptyTitle')}
+        description={t('admin.audit.emptyDescription')}
       />
     )
   }
@@ -36,11 +38,11 @@ export function AdminAuditPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-40">Čas</TableHead>
-              <TableHead className="w-52">Uživatel</TableHead>
-              <TableHead className="w-52">Akce</TableHead>
-              <TableHead>Cíl</TableHead>
-              <TableHead>Detaily</TableHead>
+              <TableHead className="w-40">{t('admin.audit.time')}</TableHead>
+              <TableHead className="w-52">{t('admin.audit.user')}</TableHead>
+              <TableHead className="w-52">{t('admin.audit.action')}</TableHead>
+              <TableHead>{t('admin.audit.target')}</TableHead>
+              <TableHead>{t('admin.audit.details')}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -70,7 +72,7 @@ export function AdminAuditPage() {
             onClick={() => void audit.fetchNextPage()}
             disabled={audit.isFetchingNextPage}
           >
-            {audit.isFetchingNextPage ? 'Načítám…' : 'Načíst další'}
+            {audit.isFetchingNextPage ? t('common.loading') : t('admin.audit.loadMore')}
           </Button>
         </div>
       ) : null}
@@ -101,7 +103,9 @@ function Details({ details }: { details: Record<string, unknown> }) {
 function formatValue(value: unknown): string {
   if (value === null || value === undefined) return '–'
   if (Array.isArray(value)) return value.join(', ')
-  if (typeof value === 'boolean') return value ? 'ano' : 'ne'
+  if (typeof value === 'boolean') {
+    return value ? translate('admin.audit.yes') : translate('admin.audit.no')
+  }
   if (typeof value === 'object') return JSON.stringify(value)
   return String(value)
 }

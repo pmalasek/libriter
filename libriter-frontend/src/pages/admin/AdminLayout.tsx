@@ -1,27 +1,30 @@
 import { Suspense } from 'react'
+import { useTranslation } from 'react-i18next'
 import { NavLink, Outlet } from 'react-router'
 import { PageHeader } from '@/components/PageHeader'
 import { cn } from '@/lib/utils'
 
 const tabs = [
-  { to: '/admin', label: 'Přehled', end: true },
-  { to: '/admin/users', label: 'Uživatelé' },
-  { to: '/admin/listening', label: 'Poslechy' },
-  { to: '/admin/metadata', label: 'Zdroje metadat' },
-  { to: '/admin/library', label: 'Knihovna' },
-  { to: '/admin/settings', label: 'Registrace' },
-  { to: '/admin/audit', label: 'Audit' },
+  { to: '/admin', labelKey: 'admin.layout.nav.overview' as const, end: true },
+  { to: '/admin/users', labelKey: 'admin.layout.nav.users' as const },
+  { to: '/admin/listening', labelKey: 'admin.layout.nav.listening' as const },
+  { to: '/admin/metadata', labelKey: 'admin.layout.nav.metadata' as const },
+  { to: '/admin/library', labelKey: 'admin.layout.nav.library' as const },
+  { to: '/admin/settings', labelKey: 'admin.layout.nav.registration' as const },
+  { to: '/admin/audit', labelKey: 'admin.layout.nav.audit' as const },
 ]
 
 export function AdminLayout() {
+  const { t } = useTranslation()
+
   return (
     <div>
-      <PageHeader title="Administrace" description="Uživatelé, zdroje metadat a údržba knihovny." />
+      <PageHeader title={t('admin.layout.title')} description={t('admin.layout.description')} />
 
       {/* Na úzkém displeji se lišta posouvá vodorovně, ať se vejdou všechny záložky. */}
       <nav className="-mx-4 mb-6 overflow-x-auto px-4 pb-1">
         <div className="inline-flex min-w-max gap-1 rounded-full bg-foreground/6 p-1 ring-1 ring-inset ring-foreground/5">
-          {tabs.map(({ to, label, end }) => (
+          {tabs.map(({ to, labelKey, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -35,7 +38,7 @@ export function AdminLayout() {
                 )
               }
             >
-              {label}
+              {t(labelKey)}
             </NavLink>
           ))}
         </div>
@@ -45,7 +48,7 @@ export function AdminLayout() {
       <Suspense
         fallback={
           <p role="status" className="py-8 text-center text-muted-foreground">
-            Načítání…
+            {t('admin.layout.loading')}
           </p>
         }
       >

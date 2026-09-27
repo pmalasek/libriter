@@ -1,5 +1,6 @@
 import { DownloadIcon, SearchIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuthorMetadataSearch, useFetchAuthorMetadata } from '@/api/hooks'
 import {
   METADATA_SOURCE_LABELS,
@@ -30,6 +31,7 @@ interface Props {
  * stáhne až při uložení formuláře.
  */
 export function AuthorMetadataImport({ defaultQuery, onApply }: Props) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState(defaultQuery)
   const [results, setResults] = useState<AuthorSearchResult[] | null>(null)
@@ -42,7 +44,7 @@ export function AuthorMetadataImport({ defaultQuery, onApply }: Props) {
     return (
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
         <DownloadIcon />
-        Načíst metadata
+        {t('authors.metadataImport.open')}
       </Button>
     )
   }
@@ -75,7 +77,7 @@ export function AuthorMetadataImport({ defaultQuery, onApply }: Props) {
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Jméno autora"
+          placeholder={t('authors.metadataImport.placeholder')}
           // Enter uvnitř dialogu by jinak odeslal celý formulář autora.
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
@@ -86,22 +88,24 @@ export function AuthorMetadataImport({ defaultQuery, onApply }: Props) {
         />
         <Button type="button" size="sm" onClick={handleSearch} disabled={pending || !query.trim()}>
           <SearchIcon />
-          {search.isPending ? 'Hledám…' : 'Hledat'}
+          {search.isPending ? t('authors.metadataImport.searching') : t('common.search')}
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
-          Zavřít
+          {t('common.close')}
         </Button>
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {results?.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nic nenalezeno.</p>
+        <p className="text-sm text-muted-foreground">{t('authors.metadataImport.noResults')}</p>
       ) : null}
 
       {results?.length ? (
         <>
-          <p className="text-xs text-muted-foreground">Zdroj: {sourceLabel(results[0].source)}</p>
+          <p className="text-xs text-muted-foreground">
+            {t('authors.metadataImport.source', { source: sourceLabel(results[0].source) })}
+          </p>
           <ul className="max-h-48 space-y-1 overflow-y-auto">
             {results.map((result) => (
               <li key={result.url}>
@@ -123,12 +127,11 @@ export function AuthorMetadataImport({ defaultQuery, onApply }: Props) {
       ) : null}
 
       {fetchMetadata.isPending ? (
-        <p className="text-sm text-muted-foreground">Stahuji metadata…</p>
+        <p className="text-sm text-muted-foreground">{t('authors.metadataImport.fetching')}</p>
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        Převezme se jméno, životopis, roky života a fotka. Jméno přepíše zadané; u pseudonymu
-        zůstane pseudonym v podobě ze zdroje. Fotka se stáhne až při uložení.
+        {t('authors.metadataImport.hint')}
       </p>
     </div>
   )

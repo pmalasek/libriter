@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useUpdateUser } from '@/api/adminHooks'
 import { loginHint, LOGIN_PATTERN, type User } from '@/api/types'
@@ -34,6 +35,7 @@ export function EditUserDialog({
 }
 
 function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
+  const { t } = useTranslation()
   const [displayName, setDisplayName] = useState(user.display_name)
   const [email, setEmail] = useState(user.email)
   const [login, setLogin] = useState(user.login)
@@ -52,7 +54,7 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
         onSuccess: (updated) => {
           // Úprava vlastního účtu se musí propsat i do přihlášené session.
           if (updated.id === currentUser?.id) updateUser(updated)
-          toast.success(`Účet ${updated.email} byl uložen.`)
+          toast.success(t('admin.users.edit.saved', { email: updated.email }))
           onDone()
         },
         onError: (err) => setError(err.message),
@@ -63,12 +65,12 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <DialogHeader>
-        <DialogTitle>Upravit uživatele</DialogTitle>
-        <DialogDescription>Uživatel se může přihlásit e-mailem i loginem.</DialogDescription>
+        <DialogTitle>{t('admin.users.edit.title')}</DialogTitle>
+        <DialogDescription>{t('admin.users.edit.description')}</DialogDescription>
       </DialogHeader>
 
       <div className="space-y-2">
-        <Label htmlFor="edit_user_name">Jméno</Label>
+        <Label htmlFor="edit_user_name">{t('admin.users.fields.name')}</Label>
         <Input
           id="edit_user_name"
           required
@@ -78,7 +80,7 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="edit_user_email">E-mail</Label>
+        <Label htmlFor="edit_user_email">{t('admin.users.fields.email')}</Label>
         <Input
           id="edit_user_email"
           type="email"
@@ -89,7 +91,7 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="edit_user_login">Login</Label>
+        <Label htmlFor="edit_user_login">{t('admin.users.fields.login')}</Label>
         <Input
           id="edit_user_login"
           autoComplete="off"
@@ -106,10 +108,10 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone} disabled={update.isPending}>
-          Zrušit
+          {t('common.cancel')}
         </Button>
         <Button type="submit" disabled={update.isPending}>
-          {update.isPending ? 'Ukládám…' : 'Uložit'}
+          {update.isPending ? t('common.saving') : t('common.save')}
         </Button>
       </DialogFooter>
     </form>

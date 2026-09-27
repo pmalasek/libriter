@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useResetUserPassword } from '@/api/adminHooks'
 import type { User } from '@/api/types'
@@ -34,6 +35,7 @@ export function ResetPasswordDialog({
 }
 
 function ResetPasswordForm({ user, onDone }: { user: User; onDone: () => void }) {
+  const { t } = useTranslation()
   const [password, setPassword] = useState('')
   const [passwordAgain, setPasswordAgain] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -45,11 +47,11 @@ function ResetPasswordForm({ user, onDone }: { user: User; onDone: () => void })
     setError(null)
 
     if (password.length < MIN_PASSWORD) {
-      setError(`Heslo musí mít alespoň ${MIN_PASSWORD} znaků.`)
+      setError(t('admin.users.passwordTooShort', { min: MIN_PASSWORD }))
       return
     }
     if (password !== passwordAgain) {
-      setError('Hesla se neshodují.')
+      setError(t('admin.users.resetPassword.mismatch'))
       return
     }
 
@@ -57,7 +59,7 @@ function ResetPasswordForm({ user, onDone }: { user: User; onDone: () => void })
       { userId: user.id, password },
       {
         onSuccess: () => {
-          toast.success(`Heslo účtu ${user.email} bylo změněno.`)
+          toast.success(t('admin.users.resetPassword.changed', { email: user.email }))
           onDone()
         },
         onError: (err) => setError(err.message),
@@ -68,14 +70,14 @@ function ResetPasswordForm({ user, onDone }: { user: User; onDone: () => void })
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <DialogHeader>
-        <DialogTitle>Reset hesla</DialogTitle>
+        <DialogTitle>{t('admin.users.resetPassword.title')}</DialogTitle>
         <DialogDescription>
-          Nové heslo pro účet {user.email}. Předejte ho uživateli bezpečnou cestou.
+          {t('admin.users.resetPassword.description', { email: user.email })}
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-2">
-        <Label htmlFor="reset_password">Nové heslo</Label>
+        <Label htmlFor="reset_password">{t('admin.users.resetPassword.newPassword')}</Label>
         <Input
           id="reset_password"
           type="password"
@@ -88,7 +90,7 @@ function ResetPasswordForm({ user, onDone }: { user: User; onDone: () => void })
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="reset_password_again">Nové heslo znovu</Label>
+        <Label htmlFor="reset_password_again">{t('admin.users.resetPassword.newPasswordAgain')}</Label>
         <Input
           id="reset_password_again"
           type="password"
@@ -103,10 +105,12 @@ function ResetPasswordForm({ user, onDone }: { user: User; onDone: () => void })
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone} disabled={resetPassword.isPending}>
-          Zrušit
+          {t('common.cancel')}
         </Button>
         <Button type="submit" disabled={resetPassword.isPending}>
-          {resetPassword.isPending ? 'Měním heslo…' : 'Změnit heslo'}
+          {resetPassword.isPending
+            ? t('admin.users.resetPassword.submitting')
+            : t('admin.users.resetPassword.submit')}
         </Button>
       </DialogFooter>
     </form>

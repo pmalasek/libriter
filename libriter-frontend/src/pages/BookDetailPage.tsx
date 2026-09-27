@@ -16,6 +16,7 @@ import {
   Trash2Icon,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 import {
@@ -48,6 +49,7 @@ import { sortBooks, useBookListPrefs } from '@/lib/sorting'
 import { usePlayer } from '@/player/playerContext'
 
 export function BookDetailPage() {
+  const { t } = useTranslation()
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const book = useBook(id)
@@ -74,7 +76,7 @@ export function BookDetailPage() {
       { bookId: id, finished },
       {
         onSuccess: () =>
-          toast.success(finished ? 'Kniha je označená jako doposlechnutá.' : 'Označení zrušeno.'),
+          toast.success(finished ? t('books.detail.markedFinished') : t('books.detail.unmarked')),
         onError: (error) => toast.error(error.message),
       },
     )
@@ -86,9 +88,11 @@ export function BookDetailPage() {
         setDeleting(false)
         toast.success(
           deleteFiles
-            ? `Kniha ${result.title} smazána včetně ${result.deleted_files} souborů z disku.`
-            : `Kniha ${result.title} smazána. Soubory na disku zůstaly, ` +
-                'takže ji scanner může načíst znovu.',
+            ? t('books.detail.deletedWithFiles', {
+                title: result.title,
+                count: result.deleted_files,
+              })
+            : t('books.detail.deleted', { title: result.title }),
         )
         navigate('/books')
       },
@@ -153,7 +157,7 @@ export function BookDetailPage() {
       <Button variant="ghost" size="sm" asChild className="mb-4 -ml-2">
         <Link to="/books">
           <ArrowLeftIcon />
-          Zpět na knihy
+          {t('books.detail.back')}
         </Link>
       </Button>
 
@@ -181,11 +185,13 @@ export function BookDetailPage() {
                 <Link to={`/series/${series.data.id}`} className="underline-offset-4 hover:underline">
                   {series.data.title}
                 </Link>
-                {data.series_position != null ? ` · ${data.series_position}. díl` : null}
+                {data.series_position != null
+                  ? ` · ${t('format.seriesPart', { position: data.series_position })}`
+                  : null}
               </p>
             ) : (
               <p className="mb-1.5 text-xs font-semibold tracking-wider text-primary uppercase">
-                Audiokniha
+                {t('books.detail.audiobook')}
               </p>
             )}
 
@@ -233,12 +239,14 @@ export function BookDetailPage() {
               {bookStatus === 'finished' ? (
                 <Badge variant="highlight">
                   <CheckCircle2Icon />
-                  {finishedAt ? `Doposlechnuto ${formatDate(finishedAt)}` : 'Doposlechnuto'}
+                  {finishedAt
+                    ? t('books.detail.finishedOn', { date: formatDate(finishedAt) })
+                    : t('books.detail.finished')}
                 </Badge>
               ) : bookStatus === 'started' ? (
                 <Badge variant="secondary">
                   <HeadphonesIcon />
-                  Rozposlouchané
+                  {t('books.detail.started')}
                 </Badge>
               ) : null}
               {data.internal_rating ? (
@@ -252,28 +260,28 @@ export function BookDetailPage() {
                   v hlavičce by jen odváděly pozornost. */}
               <Popover>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="icon-sm" aria-label="Informace o záznamu">
+                  <Button variant="outline" size="icon-sm" aria-label={t('books.detail.recordInfo')}>
                     <InfoIcon />
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-80 p-3">
                   <dl className="space-y-2.5 text-sm">
                     <div>
-                      <dt className="text-muted-foreground">Kapitoly</dt>
+                      <dt className="text-muted-foreground">{t('books.detail.chapters')}</dt>
                       <dd className="tabular-nums">{chapterCount(data.chapter_count)}</dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">Soubory</dt>
+                      <dt className="text-muted-foreground">{t('books.detail.files')}</dt>
                       {/* Dlouhou cestu je lepší zalomit než oříznout – jinak
                           není poznat, o kterou složku jde. */}
                       <dd className="font-mono text-xs break-all">{data.file_path}</dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">Přidáno</dt>
+                      <dt className="text-muted-foreground">{t('books.detail.added')}</dt>
                       <dd className="tabular-nums">{formatDate(data.created_at)}</dd>
                     </div>
                     <div>
-                      <dt className="text-muted-foreground">Naposledy změněno</dt>
+                      <dt className="text-muted-foreground">{t('books.detail.updated')}</dt>
                       <dd className="tabular-nums">{formatDate(data.updated_at)}</dd>
                     </div>
                   </dl>
@@ -291,22 +299,22 @@ export function BookDetailPage() {
               >
                 {isPlayingBook ? <PauseIcon /> : <PlayIcon />}
                 {isPlayingBook
-                  ? 'Pozastavit'
+                  ? t('books.detail.pause')
                   : isOpenBook
-                    ? 'Přehrát'
+                    ? t('books.detail.play')
                     : resumeAt != null
-                      ? `Pokračovat (${formatClock(resumeAt)})`
-                      : 'Přehrát'}
+                      ? t('books.detail.resume', { time: formatClock(resumeAt) })
+                      : t('books.detail.play')}
               </Button>
               {player.session && !inSession ? (
                 <Button
                   variant="outline"
                   size="lg"
                   onClick={() => player.addToSession({ bookIds: [data.id] })}
-                  title="Zařadit knihu na konec právě otevřeného poslechu"
+                  title={t('books.detail.addToSessionTitle')}
                 >
                   <ListPlusIcon />
-                  Přidat do poslechu
+                  {t('books.detail.addToSession')}
                 </Button>
               ) : null}
               {/* Ruční oprava stavu: kniha slyšená jinde, nebo omylem
@@ -319,7 +327,7 @@ export function BookDetailPage() {
                   disabled={setFinished.isPending}
                 >
                   <RotateCcwIcon />
-                  Zrušit označení
+                  {t('books.detail.unmarkFinished')}
                 </Button>
               ) : (
                 <Button
@@ -329,13 +337,13 @@ export function BookDetailPage() {
                   disabled={setFinished.isPending}
                 >
                   <CheckCircle2Icon />
-                  Označit jako doposlechnuté
+                  {t('books.detail.markFinished')}
                 </Button>
               )}
               {canEdit(user) ? (
                 <Button variant="outline" size="lg" onClick={() => setEditing(true)}>
                   <PencilIcon />
-                  Upravit
+                  {t('common.edit')}
                 </Button>
               ) : null}
               {isAdmin(user) ? (
@@ -346,7 +354,7 @@ export function BookDetailPage() {
                   disabled={deleteBook.isPending}
                 >
                   <Trash2Icon />
-                  Smazat
+                  {t('common.delete')}
                 </Button>
               ) : null}
             </div>
@@ -356,13 +364,13 @@ export function BookDetailPage() {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>O knize</CardTitle>
+          <CardTitle>{t('books.detail.about')}</CardTitle>
         </CardHeader>
         <CardContent>
           {data.description ? (
             <ExpandableText text={data.description} />
           ) : (
-            <p className="text-sm text-muted-foreground">Popis není k dispozici.</p>
+            <p className="text-sm text-muted-foreground">{t('books.detail.noDescription')}</p>
           )}
         </CardContent>
       </Card>
@@ -375,7 +383,7 @@ export function BookDetailPage() {
         <section className="mt-12">
           <h2 className="font-heading mb-5 flex items-center gap-2.5 text-xl font-bold">
             <span className="size-2 rounded-full bg-primary" />
-            Další knihy autora {mainAuthor.name}
+            {t('books.detail.moreByAuthor', { name: mainAuthor.name })}
           </h2>
           <BookGrid books={moreByAuthor} />
         </section>

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
 import { useAuthConfig, useRegister } from '@/api/hooks'
 import { currentLanguage, loginHint, LOGIN_PATTERN, roleLabel } from '@/api/types'
@@ -12,6 +13,7 @@ import { Label } from '@/components/ui/label'
 const MIN_PASSWORD = 8
 
 export function RegisterPage() {
+  const { t } = useTranslation()
   const [displayName, setDisplayName] = useState('')
   const [email, setEmail] = useState('')
   const [login, setLogin] = useState('')
@@ -27,7 +29,7 @@ export function RegisterPage() {
     setLocalError(null)
 
     if (password.length < MIN_PASSWORD) {
-      setLocalError(`Heslo musí mít alespoň ${MIN_PASSWORD} znaků.`)
+      setLocalError(t('auth.register.passwordTooShort', { min: MIN_PASSWORD }))
       return
     }
 
@@ -56,22 +58,26 @@ export function RegisterPage() {
     <AuthShell>
       <Card surface="strong" className="rounded-3xl shadow-glass-lg [--card-spacing:--spacing(6)]">
         <CardHeader>
-          <CardTitle className="text-2xl">Registrace</CardTitle>
+          <CardTitle className="text-2xl">{t('auth.register.title')}</CardTitle>
           <CardDescription>
             {disabled
-              ? 'Nové účty zakládá administrátor.'
-              : `Nový účet získá roli ${defaultRole ? roleLabel(defaultRole).toLowerCase() : 'čtenáře'}.`}
+              ? t('auth.register.disabledDescription')
+              : t('auth.register.defaultRole', {
+                  role: defaultRole
+                    ? roleLabel(defaultRole).toLowerCase()
+                    : t('auth.register.defaultRoleFallback'),
+                })}
           </CardDescription>
         </CardHeader>
         <CardContent>
           {disabled ? (
             <p className="text-sm text-muted-foreground">
-              Registrace nových účtů je vypnutá. Účet vám založí administrátor.
+              {t('auth.register.disabled')}
             </p>
           ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="display_name">Jméno</Label>
+              <Label htmlFor="display_name">{t('auth.register.name')}</Label>
               <Input
                 id="display_name"
                 autoComplete="name"
@@ -81,7 +87,7 @@ export function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="email">E-mail</Label>
+              <Label htmlFor="email">{t('auth.register.email')}</Label>
               <Input
                 id="email"
                 type="email"
@@ -92,7 +98,7 @@ export function RegisterPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="login">Login</Label>
+              <Label htmlFor="login">{t('auth.register.login')}</Label>
               <Input
                 id="login"
                 autoComplete="username"
@@ -105,7 +111,7 @@ export function RegisterPage() {
               <p className="text-xs text-muted-foreground">{loginHint()}</p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Heslo</Label>
+              <Label htmlFor="password">{t('auth.register.password')}</Label>
               <Input
                 id="password"
                 type="password"
@@ -115,21 +121,21 @@ export function RegisterPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">Minimálně {MIN_PASSWORD} znaků.</p>
+              <p className="text-xs text-muted-foreground">{t('auth.register.passwordHint', { min: MIN_PASSWORD })}</p>
             </div>
 
             {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
             <Button type="submit" size="lg" className="w-full" disabled={register.isPending}>
-              {register.isPending ? 'Zakládám účet…' : 'Vytvořit účet'}
+              {register.isPending ? t('auth.register.submitting') : t('auth.register.submit')}
             </Button>
           </form>
           )}
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
-            Už máte účet?{' '}
+            {t('auth.register.haveAccount')}{' '}
             <Link to="/login" className="font-medium text-primary underline-offset-4 hover:underline">
-              Přihlaste se
+              {t('auth.register.loginLink')}
             </Link>
           </p>
         </CardContent>

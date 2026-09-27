@@ -11,7 +11,8 @@ import {
   UsersIcon,
   type LucideIcon,
 } from 'lucide-react'
-import type { LibraryStats, SystemInfo } from '@/api/types'
+import { useTranslation } from 'react-i18next'
+import { currentLanguage, type LibraryStats, type SystemInfo } from '@/api/types'
 import { useLibraryStats, useSystemInfo } from '@/api/adminHooks'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingList } from '@/components/LoadingGrid'
@@ -37,14 +38,36 @@ export function AdminOverviewPage() {
 }
 
 function StatsGrid({ stats }: { stats: LibraryStats }) {
+  const { t } = useTranslation()
+  const locale = currentLanguage()
   const tiles = [
-    { label: 'Knihy', value: stats.books.toLocaleString('cs-CZ'), icon: LibraryIcon },
-    { label: 'Autoři', value: stats.authors.toLocaleString('cs-CZ'), icon: UsersIcon },
-    { label: 'Série', value: stats.series.toLocaleString('cs-CZ'), icon: LayersIcon },
-    { label: 'Uživatelé', value: stats.users.toLocaleString('cs-CZ'), icon: UserRoundIcon },
-    { label: 'Kapitoly', value: stats.chapters.toLocaleString('cs-CZ'), icon: ListMusicIcon },
     {
-      label: 'Celková délka',
+      label: t('admin.overview.stats.books'),
+      value: stats.books.toLocaleString(locale),
+      icon: LibraryIcon,
+    },
+    {
+      label: t('admin.overview.stats.authors'),
+      value: stats.authors.toLocaleString(locale),
+      icon: UsersIcon,
+    },
+    {
+      label: t('admin.overview.stats.series'),
+      value: stats.series.toLocaleString(locale),
+      icon: LayersIcon,
+    },
+    {
+      label: t('admin.overview.stats.users'),
+      value: stats.users.toLocaleString(locale),
+      icon: UserRoundIcon,
+    },
+    {
+      label: t('admin.overview.stats.chapters'),
+      value: stats.chapters.toLocaleString(locale),
+      icon: ListMusicIcon,
+    },
+    {
+      label: t('admin.overview.stats.totalDuration'),
       value: formatDuration(stats.total_duration_seconds),
       icon: ClockIcon,
     },
@@ -53,19 +76,27 @@ function StatsGrid({ stats }: { stats: LibraryStats }) {
   // Co čeká na doplnění – kvůli tomu se na přehled chodí nejčastěji.
   // Nenulová hodnota se zvýrazní oranžově, ať je hned vidět, co řešit.
   const todo = [
-    { label: 'Knihy bez obálky', value: stats.books_without_cover, icon: ImageOffIcon },
-    { label: 'Knihy bez popisu', value: stats.books_without_description, icon: FileTextIcon },
     {
-      label: 'Kapitoly s délkou 1 s',
-      value: stats.placeholder_chapters,
-      icon: TimerOffIcon,
-      hint: `v ${stats.books_with_placeholder_chapters} knihách`,
+      label: t('admin.overview.todo.withoutCover'),
+      value: stats.books_without_cover,
+      icon: ImageOffIcon,
     },
     {
-      label: 'Možné duplikáty',
+      label: t('admin.overview.todo.withoutDescription'),
+      value: stats.books_without_description,
+      icon: FileTextIcon,
+    },
+    {
+      label: t('admin.overview.todo.placeholderChapters'),
+      value: stats.placeholder_chapters,
+      icon: TimerOffIcon,
+      hint: t('admin.overview.todo.inBooks', { count: stats.books_with_placeholder_chapters }),
+    },
+    {
+      label: t('admin.overview.todo.duplicates'),
       value: stats.duplicate_album_books,
       icon: CopyIcon,
-      hint: 'stejný album tag ve dvou adresářích',
+      hint: t('admin.overview.todo.duplicatesHint'),
     },
   ]
 
@@ -81,7 +112,7 @@ function StatsGrid({ stats }: { stats: LibraryStats }) {
           <StatCard
             key={tile.label}
             label={tile.label}
-            value={tile.value.toLocaleString('cs-CZ')}
+            value={tile.value.toLocaleString(locale)}
             hint={tile.hint}
             icon={tile.icon}
             tone={tile.value === 0 ? 'muted' : 'highlight'}
@@ -148,31 +179,37 @@ function SystemInfoCard({
   info: SystemInfo
   placeholderChapters: number
 }) {
+  const { t } = useTranslation()
   const rows: { label: string; value: React.ReactNode }[] = [
-    { label: 'Verze', value: info.version },
+    { label: t('admin.overview.system.version'), value: info.version },
     { label: 'Go', value: `${info.go_version} (${info.os})` },
-    { label: 'Prostředí', value: info.env },
+    { label: t('admin.overview.system.environment'), value: info.env },
     {
-      label: 'Běží od',
+      label: t('admin.overview.system.runningSince'),
       value: `${formatDateTime(info.started_at)} (${formatUptime(info.uptime_seconds)})`,
     },
-    { label: 'Databáze', value: <Path value={info.db_path} /> },
-    { label: 'Audio', value: <Path value={info.audio_root} /> },
-    { label: 'Obálky', value: <Path value={info.cover_root} /> },
-    { label: 'Fotky autorů', value: <Path value={info.author_image_root} /> },
+    { label: t('admin.overview.system.database'), value: <Path value={info.db_path} /> },
+    { label: t('admin.overview.system.audio'), value: <Path value={info.audio_root} /> },
+    { label: t('admin.overview.system.covers'), value: <Path value={info.cover_root} /> },
+    {
+      label: t('admin.overview.system.authorPhotos'),
+      value: <Path value={info.author_image_root} />,
+    },
     {
       label: 'ffprobe',
       value: info.ffprobe_available ? (
         <span className="flex flex-wrap items-center gap-2">
-          <Badge variant="secondary">dostupný</Badge>
+          <Badge variant="secondary">{t('admin.overview.system.ffprobeAvailable')}</Badge>
           <Path value={info.ffprobe_path} />
         </span>
       ) : (
         <span className="flex flex-wrap items-center gap-2">
-          <Badge variant="destructive">chybí</Badge>
+          <Badge variant="destructive">{t('admin.overview.system.ffprobeMissing')}</Badge>
           <span className="text-xs text-muted-foreground">
-            bez něj se délka kapitol ukládá jako 1 s
-            {placeholderChapters > 0 ? ` – takových kapitol je ${placeholderChapters}` : ''}
+            {t('admin.overview.system.ffprobeMissingHint')}
+            {placeholderChapters > 0
+              ? t('admin.overview.system.ffprobeMissingCount', { n: placeholderChapters })
+              : ''}
           </span>
         </span>
       ),
@@ -181,16 +218,19 @@ function SystemInfoCard({
 
   if (info.disk) {
     rows.push({
-      label: 'Volné místo',
-      value: `${formatBytes(info.disk.free_bytes)} z ${formatBytes(info.disk.total_bytes)}`,
+      label: t('admin.overview.system.freeSpace'),
+      value: t('admin.overview.system.freeSpaceValue', {
+        free: formatBytes(info.disk.free_bytes),
+        total: formatBytes(info.disk.total_bytes),
+      }),
     })
   }
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Server</CardTitle>
-        <CardDescription>Kde server bere data a čím disponuje.</CardDescription>
+        <CardTitle>{t('admin.overview.system.title')}</CardTitle>
+        <CardDescription>{t('admin.overview.system.description')}</CardDescription>
       </CardHeader>
       <CardContent>
         <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-[10rem_1fr]">

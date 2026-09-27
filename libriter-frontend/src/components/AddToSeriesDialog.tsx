@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useAssignBooksToSeries, useSeriesList } from '@/api/hooks'
 import type { Book } from '@/api/types'
@@ -95,6 +96,7 @@ function AddToSeriesForm({
   onCancel: () => void
   onDone: () => void
 }) {
+  const { t } = useTranslation()
   const seriesList = useSeriesList()
   const assign = useAssignBooksToSeries()
 
@@ -120,7 +122,7 @@ function AddToSeriesForm({
 
     const title = newTitle.trim()
     if (seriesId === NEW && !title) {
-      toast.error('Zadejte název nové série.')
+      toast.error(t('series.addDialog.titleRequired'))
       return
     }
 
@@ -128,7 +130,7 @@ function AddToSeriesForm({
     for (const book of books) {
       const position = Number(positions[book.id])
       if (!Number.isInteger(position)) {
-        toast.error(`Díl u knihy „${book.title}“ musí být celé číslo.`)
+        toast.error(t('series.addDialog.positionInvalid', { title: book.title }))
         return
       }
       entries.push({ id: book.id, position })
@@ -138,7 +140,12 @@ function AddToSeriesForm({
       { series: seriesId === NEW ? { title } : { id: seriesId }, books: entries },
       {
         onSuccess: (result) => {
-          toast.success(`${bookCount(result.books.length)} zařazeno do série „${result.series.title}“.`)
+          toast.success(
+            t('series.addDialog.assigned', {
+              books: bookCount(result.books.length),
+              title: result.series.title,
+            }),
+          )
           onDone()
         },
         onError: (error) => toast.error(error.message),
@@ -149,21 +156,20 @@ function AddToSeriesForm({
   return (
     <form onSubmit={handleSubmit} className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>Přidat do série</DialogTitle>
+        <DialogTitle>{t('series.addDialog.title')}</DialogTitle>
         <DialogDescription>
-          {bookCount(books.length)} – série může spojovat knihy různých autorů. Každá kniha
-          v sérii potřebuje číslo dílu.
+          {t('series.addDialog.description', { books: bookCount(books.length) })}
         </DialogDescription>
       </DialogHeader>
 
       <div className="space-y-2">
-        <Label htmlFor="series_pick">Série</Label>
+        <Label htmlFor="series_pick">{t('series.addDialog.series')}</Label>
         <Select value={seriesId} onValueChange={pickSeries}>
           <SelectTrigger id="series_pick" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={NEW}>Nová série…</SelectItem>
+            <SelectItem value={NEW}>{t('series.addDialog.newSeries')}</SelectItem>
             {(seriesList.data ?? []).map((series) => (
               <SelectItem key={series.id} value={series.id}>
                 {series.title}
@@ -172,13 +178,13 @@ function AddToSeriesForm({
           </SelectContent>
         </Select>
         {seriesList.isError ? (
-          <p className="text-sm text-destructive">Seznam sérií se nepodařilo načíst.</p>
+          <p className="text-sm text-destructive">{t('series.addDialog.loadFailed')}</p>
         ) : null}
       </div>
 
       {seriesId === NEW ? (
         <div className="space-y-2">
-          <Label htmlFor="series_title">Název nové série</Label>
+          <Label htmlFor="series_title">{t('series.addDialog.newTitle')}</Label>
           <Input
             id="series_title"
             required
@@ -191,12 +197,14 @@ function AddToSeriesForm({
 
       {leaving.length > 0 ? (
         <p className="text-sm text-muted-foreground">
-          Některé knihy se přesunou ze série {leaving.map((t) => `„${t}“`).join(', ')}.
+          {t('series.addDialog.leaving', {
+            series: leaving.map((title) => t('series.addDialog.quoted', { title })).join(', '),
+          })}
         </p>
       ) : null}
 
       <div className="space-y-2">
-        <Label>Díly</Label>
+        <Label>{t('series.addDialog.parts')}</Label>
         <ol className="divide-y rounded-lg border">
           {books.map((book) => (
             <li key={book.id} className="flex items-center gap-3 px-3 py-2">
@@ -210,7 +218,7 @@ function AddToSeriesForm({
                 type="number"
                 step={1}
                 required
-                aria-label={`Díl: ${book.title}`}
+                aria-label={t('series.addDialog.partLabel', { title: book.title })}
                 className="w-20"
                 value={positions[book.id] ?? ''}
                 onChange={(e) => setPositions({ ...positions, [book.id]: e.target.value })}
@@ -222,10 +230,10 @@ function AddToSeriesForm({
 
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onCancel} disabled={assign.isPending}>
-          Zrušit
+          {t('common.cancel')}
         </Button>
         <Button type="submit" disabled={assign.isPending}>
-          {assign.isPending ? 'Ukládám…' : 'Zařadit do série'}
+          {assign.isPending ? t('common.saving') : t('series.addDialog.submit')}
         </Button>
       </DialogFooter>
     </form>

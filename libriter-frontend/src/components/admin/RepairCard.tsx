@@ -1,5 +1,6 @@
 import { TriangleAlertIcon, WrenchIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useApplyRepair, usePlanRepair } from '@/api/adminHooks'
 import type { RepairBook, RepairChapter, RepairMissing, RepairPlan } from '@/api/types'
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
+import { bookCount, chapterCount } from '@/lib/format'
 
 function isEmpty(plan: RepairPlan) {
   return (
@@ -20,6 +22,7 @@ function isEmpty(plan: RepairPlan) {
 }
 
 export function RepairCard() {
+  const { t } = useTranslation()
   const plan = usePlanRepair()
   const apply = useApplyRepair()
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -34,12 +37,17 @@ export function RepairCard() {
     apply.mutate(force, {
       onSuccess: (data) => {
         toast.success(
-          `Opraveno: smazáno ${data.deleted_chapters} kapitol a ${data.deleted_books} knih` +
-            (data.deleted_orphans > 0 ? ` (z toho ${data.deleted_orphans} bez souborů)` : '') +
-            '. Scanner načítá zbytek znovu.',
+          t('admin.repair.applied', {
+            chapters: chapterCount(data.deleted_chapters),
+            books: bookCount(data.deleted_books),
+            orphans:
+              data.deleted_orphans > 0
+                ? t('admin.repair.appliedOrphans', { n: data.deleted_orphans })
+                : '',
+          }),
         )
         if (data.skipped) {
-          toast.warning('Chybějící soubory se kvůli pojistce přeskočily.')
+          toast.warning(t('admin.repair.skipped'))
         }
         setConfirmOpen(false)
         setForce(false)
@@ -55,13 +63,8 @@ export function RepairCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Kontrola kapitol a souborů</CardTitle>
-        <CardDescription>
-          Porovná databázi se soubory na disku v obou směrech: najde knihy, které je potřeba načíst
-          znovu (chybějící kapitoly, kapitoly z cizího adresáře, duplicitní knihy), i záznamy,
-          jejichž soubory už na disku nejsou. Audio soubory nikdy nemaže. Server se kvůli tomu
-          zastavovat nemusí.
-        </CardDescription>
+        <CardTitle>{t('admin.repair.title')}</CardTitle>
+        <CardDescription>{t('admin.repair.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex flex-wrap gap-2">
@@ -73,21 +76,19 @@ export function RepairCard() {
             }}
             disabled={plan.isPending || apply.isPending}
           >
-            {plan.isPending ? 'Kontroluji…' : 'Zkontrolovat knihovnu'}
+            {plan.isPending ? t('admin.repair.checking') : t('admin.repair.check')}
           </Button>
           {result && !empty ? (
             <Button onClick={() => setConfirmOpen(true)} disabled={apply.isPending}>
               <WrenchIcon />
-              Opravit
+              {t('admin.repair.repair')}
             </Button>
           ) : null}
         </div>
 
         {plan.error ? <p className="text-sm text-destructive">{plan.error.message}</p> : null}
         {empty ? (
-          <p className="text-sm text-muted-foreground">
-            Databáze odpovídá souborům na disku.
-          </p>
+          <p className="text-sm text-muted-foreground">{t('admin.repair.consistent')}</p>
         ) : null}
 
         {guard?.tripped ? (
@@ -99,17 +100,10 @@ export function RepairCard() {
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={(open) => !open && setConfirmOpen(false)}
-        title="Opravit knihovnu?"
-        description={
-          <>
-            Kapitoly dotčených knih se smažou a scanner je hned načte znovu. Duplicitní knihy
-            a knihy, jejichž soubory na disku nejsou, se smažou celé – i s obálkou, popisem,
-            hodnocením a s historií poslechu, kterou u nich uživatelé mají. Audio soubory na
-            disku zůstávají.
-          </>
-        }
-        confirmLabel="Opravit"
-        pendingLabel="Opravuji…"
+        title={t('admin.repair.confirmTitle')}
+        description={t('admin.repair.confirmDescription')}
+        confirmLabel={t('admin.repair.repair')}
+        pendingLabel={t('admin.repair.repairing')}
         destructive
         pending={apply.isPending}
         onConfirm={handleApply}
@@ -131,17 +125,19 @@ function GuardWarning({
   force: boolean
   onForceChange: (value: boolean) => void
 }) {
+  const { t } = useTranslation()
+
   return (
     <div className="rounded-lg border border-amber-500/50 bg-amber-500/10 p-3">
       <p className="flex items-start gap-2 text-sm font-medium">
         <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-amber-600" />
-        <span>Pojistka zastavila mazání chybějících souborů</span>
+        <span>{t('admin.repair.guardTitle')}</span>
       </p>
       <p className="mt-1 pl-6 text-sm text-muted-foreground">{reason}</p>
       <div className="mt-3 flex items-center gap-2 pl-6">
         <Switch id="repair_force_missing" checked={force} onCheckedChange={onForceChange} />
         <Label htmlFor="repair_force_missing" className="text-sm font-normal">
-          Disk je připojený, vím co dělám – smazat i tak
+          {t('admin.repair.guardForce')}
         </Label>
       </div>
     </div>
@@ -149,37 +145,39 @@ function GuardWarning({
 }
 
 function PlanPreview({ plan }: { plan: RepairPlan }) {
+  const { t } = useTranslation()
+
   return (
     <div className="space-y-4">
       {plan.rescan.length > 0 ? (
         <BookList
-          title={`Knihy k opětovnému načtení (${plan.rescan.length})`}
+          title={t('admin.repair.rescan', { n: plan.rescan.length })}
           books={plan.rescan}
         />
       ) : null}
       {plan.duplicates.length > 0 ? (
         <BookList
-          title={`Duplikáty ke smazání (${plan.duplicates.length})`}
+          title={t('admin.repair.duplicates', { n: plan.duplicates.length })}
           books={plan.duplicates}
           destructive
         />
       ) : null}
       {plan.orphans.length > 0 ? (
         <MissingList
-          title={`Knihy bez souborů na disku – smažou se celé (${plan.orphans.length})`}
+          title={t('admin.repair.orphans', { n: plan.orphans.length })}
           books={plan.orphans}
           destructive
         />
       ) : null}
       {plan.missing.length > 0 ? (
         <MissingList
-          title={`Knihy s chybějícími kapitolami (${plan.missing.length})`}
+          title={t('admin.repair.missing', { n: plan.missing.length })}
           books={plan.missing}
         />
       ) : null}
       {plan.unresolvable.length > 0 ? (
         <ChapterList
-          title={`Kapitoly s nepoužitelnou cestou – jen hlášení (${plan.unresolvable.length})`}
+          title={t('admin.repair.unresolvable', { n: plan.unresolvable.length })}
           chapters={plan.unresolvable}
         />
       ) : null}
@@ -221,6 +219,8 @@ function MissingList({
   books: RepairMissing[]
   destructive?: boolean
 }) {
+  const { t } = useTranslation()
+
   return (
     <div>
       <p className={`mb-2 text-sm font-medium ${destructive ? 'text-destructive' : ''}`}>{title}</p>
@@ -230,7 +230,10 @@ function MissingList({
             <p className="truncate text-sm">
               {book.title}{' '}
               <span className="text-muted-foreground">
-                — chybí {book.chapters.length} z {book.total}
+                {t('admin.repair.missingOf', {
+                  missing: book.chapters.length,
+                  total: book.total,
+                })}
               </span>
             </p>
             <p className="truncate font-mono text-xs text-muted-foreground">{book.file_path}</p>

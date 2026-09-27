@@ -1,1 +1,51 @@
-export default {}
+export default {
+  list: {
+    title: 'Authors',
+    total_one: '{{count}} total',
+    total_other: '{{count}} total',
+    searchPlaceholder: 'Search by name…',
+    noResults: 'Nothing found',
+    noResultsHint: 'Try a different search term.',
+    empty: 'No authors yet',
+    emptyHint: 'Authors are created automatically when the scanner loads audio files.',
+  },
+  detail: {
+    back: 'Back to authors',
+    eyebrow: 'Author',
+    noBooks: 'This author has no books',
+  },
+  image: {
+    alt: 'Photo of {{name}}',
+  },
+  editDialog: {
+    title: 'Edit author',
+    description: 'The name is stored in parts – sorting and search use the last name.',
+    saved: 'The author has been saved.',
+    savedWithImage: 'The author has been saved, including the photo.',
+    imageDownloadFailed: 'Author saved, but the photo could not be downloaded: {{error}}',
+    imageDeleted: 'The photo has been deleted.',
+    metadataPseudonym:
+      'Metadata loaded. The name “{{pseudonym}}” is a pen name – the source lists the author as “{{name}}”.',
+    metadataNameKept: 'Metadata loaded. The name was kept – the source lists the author as “{{name}}”.',
+    metadataLoaded: 'Metadata loaded – review it and save.',
+    pendingImage: 'The new photo will be downloaded on save.',
+    deleteImage: 'Delete photo',
+    noImage: 'No photo. “Load metadata” can add one.',
+    firstName: 'First name',
+    middleName: 'Middle name',
+    lastName: 'Last name',
+    lastNameHint: 'A single-word name (e.g. Homer) goes here.',
+    birthYear: 'Year of birth',
+    deathYear: 'Year of death',
+    bio: 'Biography',
+  },
+  metadataImport: {
+    open: 'Load metadata',
+    placeholder: 'Author name',
+    searching: 'Searching…',
+    noResults: 'Nothing found.',
+    source: 'Source: {{source}}',
+    fetching: 'Downloading metadata…',
+    hint: 'Name, biography, life years and photo are taken over. The name replaces the one entered; for a pen name, the pen name stays in the form used by the source. The photo is downloaded on save.',
+  },
+}

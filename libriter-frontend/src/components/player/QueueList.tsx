@@ -1,6 +1,7 @@
 import { useQueries } from '@tanstack/react-query'
 import { AudioLinesIcon, ChevronDownIcon, PauseIcon, PlayIcon } from 'lucide-react'
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { chaptersQuery, useBooks } from '@/api/hooks'
 import type { Book, Chapter } from '@/api/types'
 import { BookCover } from '@/components/BookCover'
@@ -75,6 +76,7 @@ function QueueBook({
   autoScroll: boolean
   onPlay: (chapterId: string) => void
 }) {
+  const { t } = useTranslation()
   const player = usePlayer()
   const isCurrent = player.book?.id === book?.id
   // Odrolovat jen jednou za zobrazení seznamu. Panel se při každém otevření
@@ -99,7 +101,7 @@ function QueueBook({
   }
 
   if (!book) {
-    return <p className="px-3 py-2.5 text-sm text-muted-foreground">Kniha už není v knihovně.</p>
+    return <p className="px-3 py-2.5 text-sm text-muted-foreground">{t('player.bookMissing')}</p>
   }
 
   return (
@@ -122,7 +124,7 @@ function QueueBook({
               {isCurrent ? (
                 <Badge variant="brand">
                   <AudioLinesIcon />
-                  Hraje
+                  {t('player.playingBadge')}
                 </Badge>
               ) : null}
             </span>
@@ -147,7 +149,7 @@ function QueueBook({
             <Skeleton className="h-8 w-full" />
           </div>
         ) : chapters.length === 0 ? (
-          <p className="px-3 py-2 text-sm text-muted-foreground">Kniha nemá načtené kapitoly.</p>
+          <p className="px-3 py-2 text-sm text-muted-foreground">{t('player.noChaptersLoaded')}</p>
         ) : (
           <ol className="pb-1 pl-3">
             {chapters.map((chapter, index) => {

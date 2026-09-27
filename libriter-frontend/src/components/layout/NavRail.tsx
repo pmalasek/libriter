@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Link, NavLink } from 'react-router'
 import { cn } from '@/lib/utils'
 import { LogoMark } from './Logo'
@@ -13,29 +14,30 @@ import { useNavItems } from './navItems'
  * a sklo dává smysl.
  */
 export function NavRail() {
+  const { t } = useTranslation()
   const items = useNavItems()
 
   return (
     <nav
-      aria-label="Hlavní navigace"
+      aria-label={t('layout.nav.main')}
       className="glass-strong inset-shadow-glass fixed inset-y-3 left-3 z-40 hidden w-16 flex-col items-center gap-1 rounded-3xl p-2 shadow-glass-lg ring-1 ring-glass-edge md:flex"
     >
       <Link
         to="/"
-        aria-label="Libriter – domů"
+        aria-label={t('layout.homeLink')}
         title="Libriter"
         className="mb-3 rounded-2xl outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         <LogoMark />
       </Link>
 
-      {items.map(({ to, label, icon: Icon, end }) => (
+      {items.map(({ to, labelKey, icon: Icon, end }) => (
         <NavLink
           key={to}
           to={to}
           end={end}
-          title={label}
-          aria-label={label}
+          title={t(labelKey)}
+          aria-label={t(labelKey)}
           className={({ isActive }) =>
             cn(
               'flex size-11 shrink-0 items-center justify-center rounded-2xl outline-none transition-[background-color,box-shadow,color] duration-200 focus-visible:ring-3 focus-visible:ring-ring/50',

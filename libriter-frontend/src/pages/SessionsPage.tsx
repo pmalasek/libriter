@@ -1,5 +1,6 @@
 import { CheckCircle2Icon, HeadphonesIcon, PauseIcon, PlayIcon, Trash2Icon } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useBooks, useSeriesById, useSessions } from '@/api/hooks'
 import type { Book, PlaySession } from '@/api/types'
@@ -37,6 +38,7 @@ import {
  * kde rozečtené, a dá se to uklidit.
  */
 export function SessionsPage() {
+  const { t } = useTranslation()
   const sessions = useSessions()
   const books = useBooks()
   const { map: seriesById } = useSeriesById()
@@ -59,7 +61,7 @@ export function SessionsPage() {
   if (sessions.isPending) {
     return (
       <>
-        <PageHeader title="Právě posloucháno" />
+        <PageHeader title={t('sessions.title')} />
         <LoadingGrid count={3} view="list" />
       </>
     )
@@ -68,7 +70,7 @@ export function SessionsPage() {
   if (sessions.isError) {
     return (
       <>
-        <PageHeader title="Právě posloucháno" />
+        <PageHeader title={t('sessions.title')} />
         <ErrorState error={sessions.error} onRetry={() => void sessions.refetch()} />
       </>
     )
@@ -79,19 +81,19 @@ export function SessionsPage() {
   return (
     <>
       <PageHeader
-        title="Právě posloucháno"
+        title={t('sessions.title')}
         description={
           open.length > 0
-            ? `${open.length} rozposlouchaných · pokračujte tam, kde jste skončili`
-            : 'Zatím nic rozposlouchaného'
+            ? t('sessions.inProgress', { count: open.length })
+            : t('sessions.nothingInProgress')
         }
       />
 
       {open.length === 0 && finished.length === 0 ? (
         <EmptyState
           icon={HeadphonesIcon}
-          title="Zatím nic neposloucháte"
-          description="Spusťte knihu tlačítkem Přehrát v jejím detailu, celou sérii u série, nebo si vyberte víc knih naráz v seznamu knih."
+          title={t('sessions.emptyTitle')}
+          description={t('sessions.emptyDescription')}
         />
       ) : null}
 
@@ -110,7 +112,7 @@ export function SessionsPage() {
 
       {finished.length > 0 ? (
         <>
-          <h2 className="mt-10 mb-3 font-heading text-lg font-semibold">Doposlechnuté</h2>
+          <h2 className="mt-10 mb-3 font-heading text-lg font-semibold">{t('sessions.finished')}</h2>
           <div className="space-y-3">
             {finished.map((session) => (
               <SessionCard
@@ -129,22 +131,22 @@ export function SessionsPage() {
       <AlertDialog open={toRemove !== null} onOpenChange={(next) => !next && setToRemove(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Odebrat poslech?</AlertDialogTitle>
+            <AlertDialogTitle>{t('sessions.remove.title')}</AlertDialogTitle>
             <AlertDialogDescription>
               {toRemove
-                ? `„${title(toRemove)}“ zmizí ze seznamu včetně uložené pozice. Knihy v knihovně zůstanou.`
+                ? t('sessions.remove.description', { title: title(toRemove) })
                 : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Zrušit</AlertDialogCancel>
+            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
             <AlertDialogAction
               onClick={() => {
                 if (toRemove) player.removeSession(toRemove.id)
                 setToRemove(null)
               }}
             >
-              Odebrat
+              {t('sessions.remove.action')}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -166,6 +168,7 @@ function SessionCard({
   bookById: Map<string, Book>
   onRemove: () => void
 }) {
+  const { t } = useTranslation()
   const player = usePlayer()
   const progress = sessionProgress(session)
   const currentBook = progress.bookId ? bookById.get(progress.bookId) : undefined
@@ -198,25 +201,27 @@ function SessionCard({
             {session.finished_at ? (
               <Badge variant="outline">
                 <CheckCircle2Icon />
-                Doposlechnuto
+                {t('sessions.finishedBadge')}
               </Badge>
             ) : null}
           </div>
 
           <p className="mt-1 truncate text-sm text-muted-foreground">
-            {progress.bookCount > 1 ? `Kniha ${progress.bookNumber} z ${progress.bookCount}` : null}
+            {progress.bookCount > 1
+              ? t('sessions.bookOf', { number: progress.bookNumber, count: progress.bookCount })
+              : null}
             {progress.bookCount > 1 && currentBook ? ' · ' : null}
             {currentBook ? (
               <Link to={`/books/${currentBook.id}`} className="hover:underline">
                 {currentBook.title}
               </Link>
             ) : (
-              'Kniha už není v knihovně'
+              t('sessions.bookMissing')
             )}
             {progress.positionSeconds > 0 ? ` · ${formatClock(progress.positionSeconds)}` : null}
           </p>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Naposledy {formatDateTime(session.updated_at)}
+            {t('sessions.lastPlayed', { date: formatDateTime(session.updated_at) })}
           </p>
         </div>
 
@@ -224,15 +229,15 @@ function SessionCard({
           <Button
             onClick={() => (isOpen ? player.toggle() : player.switchSession(session.id))}
             disabled={player.loading}
-            aria-label={isPlaying ? 'Pozastavit' : isOpen ? 'Přehrát' : 'Pokračovat'}
+            aria-label={isPlaying ? t('player.pause') : isOpen ? t('player.play') : t('player.resume')}
           >
             {isPlaying ? <PauseIcon /> : <PlayIcon />}
             {/* Na úzké kartě mluví ikona sama za sebe. */}
             <span className="hidden @sm:inline">
-              {isPlaying ? 'Pozastavit' : isOpen ? 'Přehrát' : 'Pokračovat'}
+              {isPlaying ? t('player.pause') : isOpen ? t('player.play') : t('player.resume')}
             </span>
           </Button>
-          <Button variant="ghost" size="icon" onClick={onRemove} aria-label={`Odebrat poslech ${title}`}>
+          <Button variant="ghost" size="icon" onClick={onRemove} aria-label={t('sessions.remove.labelNamed', { title })}>
             <Trash2Icon />
           </Button>
         </div>

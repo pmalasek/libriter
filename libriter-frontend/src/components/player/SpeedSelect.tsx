@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import { currentLanguage } from '@/api/types'
 import {
   Select,
   SelectContent,
@@ -15,6 +17,7 @@ export function SpeedSelect({
   className?: string
   size?: 'sm' | 'default'
 }) {
+  const { t } = useTranslation()
   const player = usePlayer()
 
   return (
@@ -22,15 +25,15 @@ export function SpeedSelect({
       <SelectTrigger
         size={size}
         className={className}
-        aria-label="Rychlost přehrávání"
-        title="Rychlost přehrávání"
+        aria-label={t('player.speed')}
+        title={t('player.speed')}
       >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
         {SPEEDS.map((value) => (
           <SelectItem key={value} value={String(value)}>
-            {value.toLocaleString('cs-CZ')}×
+            {value.toLocaleString(currentLanguage())}×
           </SelectItem>
         ))}
       </SelectContent>

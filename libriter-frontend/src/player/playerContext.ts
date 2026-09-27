@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react'
-import type { Book, Chapter, PlaySession } from '@/api/types'
+import { t, type Book, type Chapter, type PlaySession } from '@/api/types'
 
 /** Klíč, pod kterým si prohlížeč pamatuje naposledy otevřený poslech. */
 export const STORAGE_KEY = 'libriter.player.session'
@@ -87,10 +87,10 @@ export function playerSubtitle(player: PlayerValue): string {
   const itemIndex = session.items.findIndex((item) => item.book_id === book?.id)
 
   return (
-    (chapter ? chapter.title : loading ? 'Načítání kapitoly…' : '—') +
+    (chapter ? chapter.title : loading ? t('player.chapterLoading') : '—') +
     (chapterIndex >= 0 && chapters.length > 1 ? ` · ${chapterIndex + 1}/${chapters.length}` : '') +
     (session.items.length > 1 && itemIndex >= 0
-      ? ` · kniha ${itemIndex + 1}/${session.items.length}`
+      ? ` · ${t('player.bookPosition', { current: itemIndex + 1, total: session.items.length })}`
       : '')
   )
 }

@@ -1,5 +1,6 @@
 import { MergeIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useApplyMerge, usePlanMerge } from '@/api/adminHooks'
 import type { MergeBook, MergeGroup } from '@/api/types'
@@ -7,9 +8,10 @@ import { ConfirmDialog } from '@/components/admin/ConfirmDialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { chapterCount } from '@/lib/format'
+import { bookCount, chapterCount } from '@/lib/format'
 
 export function MergeCard() {
+  const { t } = useTranslation()
   const plan = usePlanMerge()
   const apply = useApplyMerge()
   // Slučuje se po skupinách: shoda názvu a umístění nepozná knihu rozdělenou
@@ -27,10 +29,13 @@ export function MergeCard() {
     apply.mutate([target], {
       onSuccess: (data) => {
         if (data.merged_books === 0) {
-          toast.warning('Kniha se mezitím změnila. Spusťte kontrolu znovu.')
+          toast.warning(t('admin.merge.changed'))
         } else {
           toast.success(
-            `Sloučeno ${data.merged_books} knih, přesunuto ${data.moved_chapters} kapitol.`,
+            t('admin.merge.merged', {
+              books: bookCount(data.merged_books),
+              chapters: chapterCount(data.moved_chapters),
+            }),
           )
         }
         setConfirming(null)
@@ -46,14 +51,8 @@ export function MergeCard() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Sloučení rozdělených knih</CardTitle>
-        <CardDescription>
-          Najde knihy, které scanner založil vícekrát, přestože jde o jednu knihu: leží na stejném
-          místě v knihovně a mají stejný název. Stává se to, když část souborů nese jiný album tag
-          (typicky rozbitou diakritiku). Kapitoly, poslech i hodnocení se přesunou do nejstarší
-          z knih, soubory na disku zůstanou beze změny. Knihy s odlišným názvem je potřeba nejdřív
-          pojmenovat stejně.
-        </CardDescription>
+        <CardTitle>{t('admin.merge.title')}</CardTitle>
+        <CardDescription>{t('admin.merge.description')}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <Button
@@ -61,16 +60,15 @@ export function MergeCard() {
           onClick={() => plan.mutate()}
           disabled={plan.isPending || apply.isPending}
         >
-          {plan.isPending ? 'Kontroluji…' : 'Zkontrolovat knihy'}
+          {plan.isPending ? t('admin.merge.checking') : t('admin.merge.check')}
         </Button>
 
         {plan.error ? <p className="text-sm text-destructive">{plan.error.message}</p> : null}
-        {empty ? <p className="text-sm text-muted-foreground">Žádné rozdělené knihy.</p> : null}
+        {empty ? <p className="text-sm text-muted-foreground">{t('admin.merge.empty')}</p> : null}
         {groups && groups.length > 0 ? (
           <>
             <p className="text-sm text-muted-foreground">
-              Zkontrolujte každou skupinu zvlášť – stejný název mohou mít i dvě různé knihy, kterým
-              ho dal import metadat.
+              {t('admin.merge.hint')}
             </p>
             <div className="space-y-3">
               {groups.map((group) => (
@@ -89,17 +87,14 @@ export function MergeCard() {
       <ConfirmDialog
         open={confirming !== null}
         onOpenChange={(open) => !open && setConfirming(null)}
-        title={confirming ? `Sloučit „${confirming.target.title}“?` : 'Sloučit knihy?'}
-        description={
-          <>
-            Kapitoly a uživatelská data se přesunou do nejstarší knihy ze skupiny, ostatní záznamy
-            zaniknou i s album tagem, podle kterého je scanner rozdělil. Když se kapitoly sloučené
-            knihy někdy smažou opravou kapitol, soubory s odlišným tagem se oddělí znovu – trvale to
-            spraví až přepsání tagů v souborech.
-          </>
+        title={
+          confirming
+            ? t('admin.merge.confirmTitle', { title: confirming.target.title })
+            : t('admin.merge.confirmTitleGeneric')
         }
-        confirmLabel="Sloučit"
-        pendingLabel="Slučuji…"
+        description={t('admin.merge.confirmDescription')}
+        confirmLabel={t('admin.merge.confirm')}
+        pendingLabel={t('admin.merge.merging')}
         destructive
         pending={apply.isPending}
         onConfirm={handleApply}
@@ -117,6 +112,8 @@ function GroupPreview({
   disabled: boolean
   onMerge: () => void
 }) {
+  const { t } = useTranslation()
+
   return (
     <div className="rounded-lg border">
       <BookRow book={group.target} target />
@@ -126,7 +123,7 @@ function GroupPreview({
       <div className="px-3 py-2">
         <Button size="sm" onClick={onMerge} disabled={disabled}>
           <MergeIcon />
-          Sloučit tuto skupinu
+          {t('admin.merge.mergeGroup')}
         </Button>
       </div>
     </div>
@@ -134,18 +131,20 @@ function GroupPreview({
 }
 
 function BookRow({ book, target = false }: { book: MergeBook; target?: boolean }) {
+  const { t } = useTranslation()
+
   return (
     <div className="border-b px-3 py-2 last:border-b-0">
       <div className="flex flex-wrap items-center gap-2">
         <Badge variant={target ? 'highlight' : 'secondary'}>
-          {target ? 'zůstane' : 'sloučí se'}
+          {target ? t('admin.merge.keeps') : t('admin.merge.mergesIn')}
         </Badge>
         <p className="truncate text-sm font-medium">{book.title}</p>
         <span className="text-xs text-muted-foreground">{chapterCount(book.chapter_count)}</span>
       </div>
       <p className="mt-1 truncate font-mono text-xs text-muted-foreground">{book.file_path}</p>
       <p className="truncate font-mono text-xs text-muted-foreground">
-        album tag: {book.album_tag || '—'}
+        {t('admin.merge.albumTag', { tag: book.album_tag || '—' })}
       </p>
     </div>
   )

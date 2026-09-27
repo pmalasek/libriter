@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { NowPlayingPanel } from '@/components/player/NowPlayingPanel'
 import { usePlayer } from '@/player/playerContext'
 
@@ -7,13 +8,14 @@ import { usePlayer } from '@/player/playerContext'
  * Na užších obrazovkách ho nahrazuje kapsle (PlayerCapsule).
  */
 export function NowPlayingColumn() {
+  const { t } = useTranslation()
   const player = usePlayer()
 
   if (!player.session) return null
 
   return (
     <aside
-      aria-label="Právě hraje"
+      aria-label={t('layout.nowPlaying')}
       className="glass-strong inset-shadow-glass fixed inset-y-3 right-3 z-40 hidden w-[21.25rem] flex-col overflow-hidden rounded-3xl shadow-glass-lg ring-1 ring-glass-edge xl:flex"
     >
       <NowPlayingPanel />

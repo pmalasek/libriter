@@ -7,13 +7,15 @@ import {
   UsersIcon,
   type LucideIcon,
 } from 'lucide-react'
+import type { ParseKeys } from 'i18next'
 import { useSessions } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
 import { isAdmin } from '@/auth/permissions'
 
 export interface NavItem {
   to: string
-  label: string
+  /** Klíč popisku v katalogu překladů; přeloží se až při vykreslení. */
+  labelKey: ParseKeys
   icon: LucideIcon
   /** Odkaz svítí jen na přesné adrese – jinak by ho podbarvily i detaily. */
   end?: boolean
@@ -24,14 +26,14 @@ export interface NavItem {
   primary?: boolean
 }
 
-const HOME: NavItem = { to: '/', label: 'Domů', icon: HomeIcon, end: true, primary: true }
-const SESSIONS: NavItem = { to: '/sessions', label: 'Právě posloucháno', icon: HeadphonesIcon }
+const HOME: NavItem = { to: '/', labelKey: 'layout.nav.home', icon: HomeIcon, end: true, primary: true }
+const SESSIONS: NavItem = { to: '/sessions', labelKey: 'layout.nav.sessions', icon: HeadphonesIcon }
 const LIBRARY: NavItem[] = [
-  { to: '/books', label: 'Knihy', icon: LibraryIcon, end: true, primary: true },
-  { to: '/authors', label: 'Autoři', icon: UsersIcon, primary: true },
-  { to: '/series', label: 'Série', icon: LayersIcon, primary: true },
+  { to: '/books', labelKey: 'layout.nav.books', icon: LibraryIcon, end: true, primary: true },
+  { to: '/authors', labelKey: 'layout.nav.authors', icon: UsersIcon, primary: true },
+  { to: '/series', labelKey: 'layout.nav.series', icon: LayersIcon, primary: true },
 ]
-const ADMIN: NavItem = { to: '/admin', label: 'Administrace', icon: SettingsIcon }
+const ADMIN: NavItem = { to: '/admin', labelKey: 'layout.nav.admin', icon: SettingsIcon }
 
 /**
  * Položky navigace pro rail i spodní lištu – aby pravidla viditelnosti

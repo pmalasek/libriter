@@ -1,4 +1,5 @@
 import { HeadphonesIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useListeningOverview } from '@/api/adminHooks'
 import { EmptyState } from '@/components/EmptyState'
@@ -21,6 +22,7 @@ import { formatDateTime, formatDuration } from '@/lib/format'
  * u sluchátek.
  */
 export function AdminListeningPage() {
+  const { t } = useTranslation()
   const overview = useListeningOverview()
 
   if (overview.isPending) return <LoadingList count={4} />
@@ -28,7 +30,7 @@ export function AdminListeningPage() {
     return <ErrorState error={overview.error} onRetry={() => void overview.refetch()} />
   }
   if (overview.data.length === 0) {
-    return <EmptyState title="Žádní uživatelé" icon={HeadphonesIcon} />
+    return <EmptyState title={t('admin.listening.empty')} icon={HeadphonesIcon} />
   }
 
   return (
@@ -36,13 +38,13 @@ export function AdminListeningPage() {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Uživatel</TableHead>
-            <TableHead className="w-32 text-right">Rozposlouchané</TableHead>
-            <TableHead className="w-32 text-right">Doposlechnuté</TableHead>
-            <TableHead className="w-32 text-right">Slyšené knihy</TableHead>
-            <TableHead className="w-32 text-right">Odposloucháno</TableHead>
-            <TableHead className="w-40">Naposledy</TableHead>
-            <TableHead className="w-16 text-right">Detail</TableHead>
+            <TableHead>{t('admin.listening.user')}</TableHead>
+            <TableHead className="w-32 text-right">{t('admin.listening.inProgress')}</TableHead>
+            <TableHead className="w-32 text-right">{t('admin.listening.finished')}</TableHead>
+            <TableHead className="w-32 text-right">{t('admin.listening.booksHeard')}</TableHead>
+            <TableHead className="w-32 text-right">{t('admin.listening.listened')}</TableHead>
+            <TableHead className="w-40">{t('admin.listening.lastListened')}</TableHead>
+            <TableHead className="w-16 text-right">{t('admin.listening.detail')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -72,7 +74,7 @@ export function AdminListeningPage() {
                 <Button asChild variant="ghost" size="icon">
                   <Link
                     to={`/admin/listening/${row.user_id}`}
-                    aria-label={`Poslechy uživatele ${row.email}`}
+                    aria-label={t('admin.listening.listeningOf', { email: row.email })}
                   >
                     <HeadphonesIcon />
                   </Link>

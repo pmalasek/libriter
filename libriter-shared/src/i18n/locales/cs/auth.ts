@@ -1,1 +1,38 @@
-export default {}
+export default {
+  shell: {
+    headline: 'Vaše audioknihy. Na jednom místě.',
+    features: {
+      library: 'Celá sbírka audioknih na jednom místě',
+      authors: 'Autoři s fotkou a životopisem',
+      series: 'Série srovnané podle dílů',
+    },
+    tagline: 'Osobní správce a přehrávač audioknih.',
+  },
+  login: {
+    title: 'Přihlášení',
+    description: 'Zadejte své přihlašovací údaje.',
+    identifier: 'E-mail nebo login',
+    password: 'Heslo',
+    submitting: 'Přihlašuji…',
+    submit: 'Přihlásit se',
+    noAccount: 'Nemáte účet?',
+    registerLink: 'Zaregistrujte se',
+  },
+  register: {
+    title: 'Registrace',
+    disabledDescription: 'Nové účty zakládá administrátor.',
+    defaultRole: 'Nový účet získá roli {{role}}.',
+    defaultRoleFallback: 'čtenáře',
+    disabled: 'Registrace nových účtů je vypnutá. Účet vám založí administrátor.',
+    name: 'Jméno',
+    email: 'E-mail',
+    login: 'Login',
+    password: 'Heslo',
+    passwordTooShort: 'Heslo musí mít alespoň {{min}} znaků.',
+    passwordHint: 'Minimálně {{min}} znaků.',
+    submitting: 'Zakládám účet…',
+    submit: 'Vytvořit účet',
+    haveAccount: 'Už máte účet?',
+    loginLink: 'Přihlaste se',
+  },
+}

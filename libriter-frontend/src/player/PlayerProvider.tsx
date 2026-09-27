@@ -3,14 +3,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { API_PREFIX, ApiError, apiFetch } from '@/api/client'
 import { chaptersQuery, queryKeys, useBooks } from '@/api/hooks'
-import type {
-  BookProgress,
-  Chapter,
-  CreateSessionRequest,
-  PlaySession,
-  SessionItemsRequest,
-  SessionPositionRequest,
-  StreamToken,
+import {
+  t,
+  type BookProgress,
+  type Chapter,
+  type CreateSessionRequest,
+  type PlaySession,
+  type SessionItemsRequest,
+  type SessionPositionRequest,
+  type StreamToken,
 } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { coverUrl } from '@/components/BookCover'
@@ -228,7 +229,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
 
         const next = list.find((c) => c.id === input.chapterId) ?? list[0]
         if (!next) {
-          toast.error('Kniha nemá žádné kapitoly k přehrání.')
+          toast.error(t('player.toast.noChapters'))
           return
         }
 
@@ -258,7 +259,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
           }
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Kapitolu se nepodařilo načíst.')
+        toast.error(error instanceof Error ? error.message : t('player.toast.chapterLoadFailed'))
       } finally {
         setLoading(false)
       }
@@ -283,7 +284,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
 
       const bookId = options.bookId ?? currentBookId(next)
       if (!bookId) {
-        toast.error('Poslech nemá žádné knihy.')
+        toast.error(t('player.toast.sessionEmpty'))
         return
       }
       const item = sessionItem(next, bookId)
@@ -304,7 +305,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
     },
-    onError: (error: Error) => toast.error(`Poslech se nepodařilo spustit: ${error.message}`),
+    onError: (error: Error) => toast.error(t('player.toast.startFailed', { error: error.message })),
   })
 
   const start = useCallback(
@@ -354,9 +355,9 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
     onSuccess: (updated) => {
       cacheSession(updated)
       void queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
-      toast.success('Přidáno do poslechu.')
+      toast.success(t('player.toast.added'))
     },
-    onError: (error: Error) => toast.error(`Do poslechu se nepodařilo přidat: ${error.message}`),
+    onError: (error: Error) => toast.error(t('player.toast.addFailed', { error: error.message })),
   })
 
   const addToSession = useCallback(
@@ -377,7 +378,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
       // Pozice mohla mezitím povyrůst na jiném zařízení, proto čerstvě ze serveru.
       apiFetch<PlaySession>(`/sessions/${sessionId}`)
         .then((next) => openSession(next, { autoplay: true }))
-        .catch((error: Error) => toast.error(`Poslech se nepodařilo otevřít: ${error.message}`))
+        .catch((error: Error) => toast.error(t('player.toast.openFailed', { error: error.message })))
     },
     [openSession, savePosition],
   )
@@ -416,7 +417,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
           queryClient.removeQueries({ queryKey: queryKeys.session(sessionId) })
           void queryClient.invalidateQueries({ queryKey: queryKeys.sessions })
         })
-        .catch((error: Error) => toast.error(`Poslech se nepodařilo smazat: ${error.message}`))
+        .catch((error: Error) => toast.error(t('player.toast.deleteFailed', { error: error.message })))
     },
     [close, queryClient],
   )
@@ -425,7 +426,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
     const audio = audioRef.current
     if (!audio || !trackRef.current) return
     if (audio.paused) {
-      void audio.play().catch(() => toast.error('Přehrávání se nepodařilo spustit.'))
+      void audio.play().catch(() => toast.error(t('player.toast.playFailed')))
     } else {
       audio.pause()
     }

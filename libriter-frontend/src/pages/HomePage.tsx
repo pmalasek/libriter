@@ -1,5 +1,6 @@
 import { HeadphonesIcon, LibraryIcon, PauseIcon, PlayIcon } from 'lucide-react'
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { useBookProgress, useBooks, useSeriesById, useSeriesList, useSessions } from '@/api/hooks'
 import type { Book, PlaySession } from '@/api/types'
@@ -26,6 +27,7 @@ const SHELF_SIZE = 12
  * posloucháno, tady je jen ten nejbližší.
  */
 export function HomePage() {
+  const { t } = useTranslation()
   const { user } = useAuth()
   const sessions = useSessions()
   const books = useBooks()
@@ -115,7 +117,9 @@ export function HomePage() {
     )
   }
 
-  const greeting = user?.display_name ? `Vítejte zpět, ${user.display_name}` : 'Vítejte zpět'
+  const greeting = user?.display_name
+    ? t('layout.home.greeting', { name: user.display_name })
+    : t('layout.home.greetingAnonymous')
 
   return (
     <>
@@ -131,7 +135,7 @@ export function HomePage() {
       )}
 
       {continues.length > 0 ? (
-        <Shelf title="Rozposlouchané" to="/sessions">
+        <Shelf title={t('layout.home.shelves.continuing')} to="/sessions">
           {continues.map((book) => (
             <ShelfItem key={book.id}>
               <BookCard book={book} size="small" status={progress.status(book.id)} />
@@ -141,7 +145,7 @@ export function HomePage() {
       ) : null}
 
       {newest.length > 0 ? (
-        <Shelf title="Nově přidané" to="/books">
+        <Shelf title={t('layout.home.shelves.newest')} to="/books">
           {newest.map((book) => (
             <ShelfItem key={book.id}>
               <BookCard book={book} size="small" status={progress.status(book.id)} />
@@ -151,7 +155,7 @@ export function HomePage() {
       ) : null}
 
       {series.length > 0 ? (
-        <Shelf title="Série" to="/series">
+        <Shelf title={t('layout.home.shelves.series')} to="/series">
           {series.map((item) => (
             <div key={item.id} className="w-44 shrink-0 snap-start">
               <Link to={`/series/${item.id}`} className="group block">
@@ -170,7 +174,7 @@ export function HomePage() {
       ) : null}
 
       {finished.length > 0 ? (
-        <Shelf title="Doposlechnuté">
+        <Shelf title={t('layout.home.shelves.finished')}>
           {finished.map((book) => (
             <ShelfItem key={book.id}>
               <BookCard book={book} size="small" status="finished" />
@@ -182,8 +186,8 @@ export function HomePage() {
       {(books.data ?? []).length === 0 ? (
         <EmptyState
           icon={LibraryIcon}
-          title="Knihovna je zatím prázdná"
-          description="Jakmile server načte audio soubory, objeví se knihy tady i v seznamu knih."
+          title={t('layout.home.emptyTitle')}
+          description={t('layout.home.emptyDescription')}
         />
       ) : null}
     </>
@@ -202,6 +206,7 @@ function ContinueHero({
   books: Book[]
   bookById: Map<string, Book>
 }) {
+  const { t } = useTranslation()
   const player = usePlayer()
   const state = sessionProgress(session)
   const currentBook = state.bookId ? bookById.get(state.bookId) : undefined
@@ -243,7 +248,7 @@ function ContinueHero({
 
         <div className="min-w-56 flex-1">
           <p className="mb-1.5 text-xs font-semibold tracking-wider text-primary uppercase">
-            Pokračovat v poslechu
+            {t('layout.home.continueEyebrow')}
           </p>
           <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance md:text-4xl">
             {title}
@@ -253,7 +258,7 @@ function ContinueHero({
             <Badge variant="secondary">{sessionKindLabel(session)}</Badge>
             {state.bookCount > 1 ? (
               <Badge variant="outline">
-                Kniha {state.bookNumber} z {state.bookCount}
+                {t('sessions.bookOf', { number: state.bookNumber, count: state.bookCount })}
               </Badge>
             ) : null}
             {state.positionSeconds > 0 ? (
@@ -277,12 +282,12 @@ function ContinueHero({
               disabled={player.loading}
             >
               {isPlaying ? <PauseIcon /> : <PlayIcon />}
-              {isPlaying ? 'Pozastavit' : isOpen ? 'Přehrát' : 'Pokračovat'}
+              {isPlaying ? t('player.pause') : isOpen ? t('player.play') : t('player.resume')}
             </Button>
             <Button variant="outline" size="lg" asChild>
               <Link to="/sessions">
                 <HeadphonesIcon />
-                Všechny poslechy
+                {t('layout.home.allSessions')}
               </Link>
             </Button>
           </div>
@@ -302,6 +307,7 @@ function StartHero({
   book: Book | undefined
   count: number
 }) {
+  const { t } = useTranslation()
   const player = usePlayer()
 
   return (
@@ -330,25 +336,25 @@ function StartHero({
             {greeting}
           </p>
           <h1 className="font-heading text-3xl font-semibold tracking-tight text-balance md:text-4xl">
-            Začněte poslouchat
+            {t('layout.home.startTitle')}
           </h1>
           <p className="mt-3 text-muted-foreground">
             {count > 0
-              ? `V knihovně čeká ${bookCount(count)}. Vyberte si, nebo rovnou pusťte poslední přírůstek.`
-              : 'Jakmile server načte audio soubory, objeví se knihy tady i v seznamu knih.'}
+              ? t('layout.home.startDescription', { books: bookCount(count) })
+              : t('layout.home.emptyDescription')}
           </p>
 
           <div className="mt-5 flex flex-wrap items-center gap-2">
             {book ? (
               <Button size="lg" onClick={() => player.playBook(book.id)} disabled={player.loading}>
                 <PlayIcon />
-                Přehrát {book.title}
+                {t('layout.home.playBook', { title: book.title })}
               </Button>
             ) : null}
             <Button variant="outline" size="lg" asChild>
               <Link to="/books">
                 <LibraryIcon />
-                Do knihovny
+                {t('layout.home.toLibrary')}
               </Link>
             </Button>
           </div>

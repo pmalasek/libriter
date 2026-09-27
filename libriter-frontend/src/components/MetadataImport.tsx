@@ -1,5 +1,6 @@
 import { DownloadIcon, SearchIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useFetchMetadata, useMetadataSearch } from '@/api/hooks'
 import { METADATA_SOURCE_LABELS, type BookMetadata, type MetadataSearchResult } from '@/api/types'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ interface Props {
  * „Zrušit“ je pořád plnohodnotná cesta zpět.
  */
 export function MetadataImport({ defaultTitle, defaultAuthor, onApply }: Props) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [title, setTitle] = useState(defaultTitle)
   const [author, setAuthor] = useState(defaultAuthor)
@@ -38,7 +40,7 @@ export function MetadataImport({ defaultTitle, defaultAuthor, onApply }: Props) 
     return (
       <Button type="button" variant="outline" size="sm" onClick={() => setOpen(true)}>
         <DownloadIcon />
-        Načíst metadata
+        {t('books.metadataImport.open')}
       </Button>
     )
   }
@@ -82,8 +84,8 @@ export function MetadataImport({ defaultTitle, defaultAuthor, onApply }: Props) 
           className="min-w-40 flex-2"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          placeholder="Název"
-          aria-label="Název knihy"
+          placeholder={t('books.metadataImport.titlePlaceholder')}
+          aria-label={t('books.metadataImport.titleLabel')}
           // Enter uvnitř dialogu by jinak odeslal celý formulář knihy.
           onKeyDown={handleKeyDown}
         />
@@ -91,29 +93,29 @@ export function MetadataImport({ defaultTitle, defaultAuthor, onApply }: Props) 
           className="min-w-32 flex-1"
           value={author}
           onChange={(e) => setAuthor(e.target.value)}
-          placeholder="Autor"
-          aria-label="Autor"
+          placeholder={t('books.metadataImport.authorPlaceholder')}
+          aria-label={t('books.metadataImport.authorPlaceholder')}
           onKeyDown={handleKeyDown}
         />
         <Button type="button" size="sm" onClick={handleSearch} disabled={pending || !title.trim()}>
           <SearchIcon />
-          {search.isPending ? 'Hledám…' : 'Hledat'}
+          {search.isPending ? t('books.metadataImport.searching') : t('common.search')}
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={() => setOpen(false)}>
-          Zavřít
+          {t('common.close')}
         </Button>
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
 
       {results?.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Nic nenalezeno.</p>
+        <p className="text-sm text-muted-foreground">{t('books.metadataImport.noResults')}</p>
       ) : null}
 
       {results?.length ? (
         <>
           <p className="text-xs text-muted-foreground">
-            Zdroj: {sourceLabel(results[0].source)}
+            {t('books.metadataImport.source', { source: sourceLabel(results[0].source) })}
           </p>
           <ul className="max-h-48 space-y-1 overflow-y-auto">
             {results.map((result) => (
@@ -137,13 +139,11 @@ export function MetadataImport({ defaultTitle, defaultAuthor, onApply }: Props) 
       ) : null}
 
       {fetchMetadata.isPending ? (
-        <p className="text-sm text-muted-foreground">Stahuji metadata…</p>
+        <p className="text-sm text-muted-foreground">{t('books.metadataImport.fetching')}</p>
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        Hledá se podle názvu, autor v druhém poli výběr zpřesní. Převezme se název, autoři,
-        série, popis a rok prvního vydání (u překladů rok originálu). Obálka ani hodnocení
-        zdroje se nepřebírají.
+        {t('books.metadataImport.hint')}
       </p>
     </div>
   )

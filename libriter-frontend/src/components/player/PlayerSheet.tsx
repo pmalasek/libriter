@@ -1,4 +1,5 @@
 import { ChevronDownIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { NowPlayingPanel } from './NowPlayingPanel'
 
@@ -16,6 +17,8 @@ export function PlayerSheet({
   open: boolean
   onOpenChange: (open: boolean) => void
 }) {
+  const { t } = useTranslation()
+
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
@@ -28,7 +31,7 @@ export function PlayerSheet({
         className="gap-0 rounded-none px-0 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] data-[side=bottom]:h-[100svh]"
       >
         <SheetHeader className="sr-only p-0">
-          <SheetTitle>Přehrávač</SheetTitle>
+          <SheetTitle>{t('player.region')}</SheetTitle>
         </SheetHeader>
 
         {/* Šipka dolů panel zase sbalí zpátky do kapsle. */}
@@ -36,7 +39,7 @@ export function PlayerSheet({
           type="button"
           onClick={() => onOpenChange(false)}
           className="flex w-full shrink-0 items-center justify-center py-1 text-muted-foreground transition-colors hover:text-foreground"
-          aria-label="Sbalit přehrávač"
+          aria-label={t('player.collapse')}
         >
           <ChevronDownIcon className="size-5" />
         </button>

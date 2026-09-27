@@ -1,5 +1,6 @@
 import { ArrowLeftIcon, PencilIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { useAuthor, useBooks, useSeriesTitle } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
@@ -16,6 +17,7 @@ import { bookCount } from '@/lib/format'
 import { sortBooks } from '@/lib/sorting'
 
 export function AuthorDetailPage() {
+  const { t } = useTranslation()
   const { id = '' } = useParams()
   const author = useAuthor(id)
   const books = useBooks()
@@ -40,7 +42,7 @@ export function AuthorDetailPage() {
       <Button variant="ghost" size="sm" asChild className="mb-4 -ml-2">
         <Link to="/authors">
           <ArrowLeftIcon />
-          Zpět na autory
+          {t('authors.detail.back')}
         </Link>
       </Button>
 
@@ -55,7 +57,7 @@ export function AuthorDetailPage() {
           <div className="min-w-0 flex-1">
             <PageHeader
               className="mb-0"
-              eyebrow="Autor"
+              eyebrow={t('authors.detail.eyebrow')}
               title={author.data.name}
               description={[lifeYears(author.data), bookCount(authorBooks.length)]
                 .filter(Boolean)
@@ -64,7 +66,7 @@ export function AuthorDetailPage() {
                 canEdit(user) ? (
                   <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
                     <PencilIcon />
-                    Upravit
+                    {t('common.edit')}
                   </Button>
                 ) : null
               }
@@ -77,7 +79,7 @@ export function AuthorDetailPage() {
         </div>
       </section>
 
-      <BookGrid books={authorBooks} emptyTitle="U tohoto autora nejsou žádné knihy" />
+      <BookGrid books={authorBooks} emptyTitle={t('authors.detail.noBooks')} />
 
       <AuthorEditDialog author={author.data} open={editing} onOpenChange={setEditing} />
     </>

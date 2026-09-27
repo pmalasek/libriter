@@ -1,5 +1,6 @@
 import { ArrowLeftIcon, CheckCircle2Icon, HeadphonesIcon } from 'lucide-react'
 import { useMemo } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { useListeningUser } from '@/api/adminHooks'
 import { useBooks, useSeriesById } from '@/api/hooks'
@@ -55,6 +56,7 @@ function duration(seconds: number): string {
  * kolik času u nich strávil. Čte se jen – admin cizí poslech nemění.
  */
 export function AdminListeningUserPage() {
+  const { t } = useTranslation()
   const { userId = '' } = useParams()
   const detail = useListeningUser(userId)
   const books = useBooks()
@@ -96,7 +98,7 @@ export function AdminListeningUserPage() {
     <Button variant="ghost" size="sm" asChild className="mb-4 -ml-2">
       <Link to="/admin/listening">
         <ArrowLeftIcon />
-        Zpět na poslechy
+        {t('admin.listening.back')}
       </Link>
     </Button>
   )
@@ -133,32 +135,32 @@ export function AdminListeningUserPage() {
       </div>
 
       <SessionSection
-        title="Rozposlouchané"
-        empty="Nic rozposlouchaného."
+        title={t('admin.listening.inProgress')}
+        empty={t('admin.listening.noneInProgress')}
         sessions={open}
         bookById={bookById}
         seriesById={seriesById}
       />
       <SessionSection
-        title="Doposlechnuté poslechy"
-        empty="Zatím nic doposlechnutého."
+        title={t('admin.listening.finishedSessions')}
+        empty={t('admin.listening.noneFinished')}
         sessions={finished}
         bookById={bookById}
         seriesById={seriesById}
       />
 
-      <h3 className="font-heading mt-8 mb-3 text-lg font-semibold">Knihy</h3>
+      <h3 className="font-heading mt-8 mb-3 text-lg font-semibold">{t('admin.listening.books')}</h3>
       {bookRows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Tenhle účet zatím nic neposlouchal.</p>
+        <p className="text-sm text-muted-foreground">{t('admin.listening.noBooks')}</p>
       ) : (
         <div className="rounded-xl border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Kniha</TableHead>
-                <TableHead className="w-40">Stav</TableHead>
-                <TableHead className="w-32 text-right">Odposloucháno</TableHead>
-                <TableHead className="w-40">Naposledy</TableHead>
+                <TableHead>{t('admin.listening.book')}</TableHead>
+                <TableHead className="w-40">{t('admin.listening.status')}</TableHead>
+                <TableHead className="w-32 text-right">{t('admin.listening.listened')}</TableHead>
+                <TableHead className="w-40">{t('admin.listening.lastListened')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -183,15 +185,17 @@ export function AdminListeningUserPage() {
                     {row.finishedAt ? (
                       <Badge variant="highlight">
                         <CheckCircle2Icon />
-                        Doposlechnuto
+                        {t('admin.listening.finishedBadge')}
                       </Badge>
                     ) : row.tracked ? (
                       <Badge variant="secondary">
                         <HeadphonesIcon />
-                        Rozposlouchané
+                        {t('admin.listening.inProgress')}
                       </Badge>
                     ) : (
-                      <span className="text-sm text-muted-foreground">Jen v deníku</span>
+                      <span className="text-sm text-muted-foreground">
+                        {t('admin.listening.journalOnly')}
+                      </span>
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{duration(row.seconds)}</TableCell>
@@ -205,17 +209,19 @@ export function AdminListeningUserPage() {
         </div>
       )}
 
-      <h3 className="font-heading mt-8 mb-3 text-lg font-semibold">Poslední dny</h3>
+      <h3 className="font-heading mt-8 mb-3 text-lg font-semibold">
+        {t('admin.listening.recentDays')}
+      </h3>
       {dayRows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Za posledních 90 dní žádný poslech.</p>
+        <p className="text-sm text-muted-foreground">{t('admin.listening.noRecentDays')}</p>
       ) : (
         <div className="rounded-xl border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-44">Den</TableHead>
-                <TableHead className="w-32 text-right">Celkem</TableHead>
-                <TableHead>Knihy</TableHead>
+                <TableHead className="w-44">{t('admin.listening.day')}</TableHead>
+                <TableHead className="w-32 text-right">{t('admin.listening.total')}</TableHead>
+                <TableHead>{t('admin.listening.books')}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -226,7 +232,8 @@ export function AdminListeningUserPage() {
                   <TableCell className="text-sm text-muted-foreground">
                     {row.books
                       .map((entry) => {
-                        const title = bookById.get(entry.bookId)?.title ?? 'Smazaná kniha'
+                        const title =
+                          bookById.get(entry.bookId)?.title ?? t('admin.listening.deletedBook')
                         return `${title} (${duration(entry.seconds)})`
                       })
                       .join(', ')}
@@ -242,8 +249,9 @@ export function AdminListeningUserPage() {
 }
 
 function BookTitle({ book }: { book: Book | undefined }) {
+  const { t } = useTranslation()
   if (!book) {
-    return <span className="text-sm text-muted-foreground">Kniha už není v knihovně</span>
+    return <span className="text-sm text-muted-foreground">{t('admin.listening.bookMissing')}</span>
   }
   return (
     <Link

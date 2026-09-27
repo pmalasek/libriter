@@ -1,5 +1,6 @@
 import { UserRoundIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { API_PREFIX } from '@/api/client'
 import type { Author } from '@/api/types'
 import { cn } from '@/lib/utils'
@@ -22,6 +23,7 @@ const box =
  * Používat s key={author.id}, aby se stav při přechodu mezi autory resetoval.
  */
 export function AuthorImage({ author, className }: { author: Author; className?: string }) {
+  const { t } = useTranslation()
   const [failed, setFailed] = useState(false)
 
   if (!author.image_path || failed) {
@@ -39,7 +41,7 @@ export function AuthorImage({ author, className }: { author: Author; className?:
     <div className={cn(box, className)}>
       <img
         src={imageUrl(author)}
-        alt={`Fotografie autora ${author.name}`}
+        alt={t('authors.image.alt', { name: author.name })}
         loading="lazy"
         decoding="async"
         onError={() => setFailed(true)}

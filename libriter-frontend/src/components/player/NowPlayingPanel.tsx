@@ -1,4 +1,5 @@
 import { XIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { BookCover, coverUrl } from '@/components/BookCover'
 import { Button } from '@/components/ui/button'
@@ -25,6 +26,7 @@ export function NowPlayingPanel({
   onNavigate?: () => void
   className?: string
 }) {
+  const { t } = useTranslation()
   const player = usePlayer()
   const book = player.book
   const subtitle = playerSubtitle(player)
@@ -68,7 +70,7 @@ export function NowPlayingPanel({
                 {book.title}
               </Link>
             ) : (
-              'Načítání…'
+              t('player.loading')
             )}
           </p>
           {book ? (
@@ -100,8 +102,8 @@ export function NowPlayingPanel({
                 onNavigate?.()
                 player.close()
               }}
-              aria-label="Zavřít přehrávač"
-              title="Zavřít přehrávač (poslech zůstane uložený)"
+              aria-label={t('player.close')}
+              title={t('player.closeHint')}
             >
               <XIcon />
             </Button>
@@ -114,7 +116,7 @@ export function NowPlayingPanel({
           na očích i u knihy s třiceti kapitolami. */}
       <div className="hairline-t mt-4 flex min-h-0 flex-1 flex-col px-5 pt-3">
         <p className="mb-2 shrink-0 px-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          Obsah poslechu
+          {t('player.queueTitle')}
         </p>
         <div className="min-h-0 flex-1 overflow-y-auto pb-5">
           <QueueList />

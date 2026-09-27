@@ -1,5 +1,6 @@
 import { XIcon } from 'lucide-react'
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
   useAuthors,
@@ -86,6 +87,7 @@ function BookEditForm({
   onDone: () => void
   onSaveAndNext?: () => void
 }) {
+  const { t } = useTranslation()
   const initialDuration = splitDuration(book.duration_seconds)
 
   const [title, setTitle] = useState(book.title)
@@ -200,13 +202,13 @@ function BookEditForm({
     const finish = andNext && onSaveAndNext ? onSaveAndNext : onDone
 
     if (authors.length === 0 && newAuthors.length === 0) {
-      toast.error('Kniha musí mít alespoň jednoho autora.')
+      toast.error(t('books.authorsField.required'))
       return
     }
 
     const seriesTitle = newSeriesTitle.trim()
     if (seriesId === NEW && !seriesTitle) {
-      toast.error('Zadejte název nové série.')
+      toast.error(t('books.editDialog.seriesTitleRequired'))
       return
     }
 
@@ -215,7 +217,7 @@ function BookEditForm({
     const position = Number(seriesPosition)
     const positionMissing = seriesPosition.trim() === '' || !Number.isInteger(position)
     if (seriesId !== NONE && positionMissing) {
-      toast.error('U knihy v sérii vyplňte díl (celé číslo, může být i nula nebo záporné).')
+      toast.error(t('books.editDialog.positionRequired'))
       return
     }
 
@@ -223,11 +225,11 @@ function BookEditForm({
     const patch = buildPatch(seriesId === NONE || seriesId === NEW ? null : seriesId, authorIDs)
 
     if (patch.duration_seconds !== undefined && patch.duration_seconds <= 0) {
-      toast.error('Délka musí být kladná.')
+      toast.error(t('books.editDialog.durationInvalid'))
       return
     }
     if (patch.published_year != null && !Number.isInteger(patch.published_year)) {
-      toast.error('Rok vydání musí být celé číslo.')
+      toast.error(t('books.editDialog.yearInvalid'))
       return
     }
 
@@ -252,7 +254,7 @@ function BookEditForm({
         }
         patch.author_ids = ids
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Autora se nepodařilo založit.')
+        toast.error(error instanceof Error ? error.message : t('books.editDialog.createAuthorFailed'))
         return
       }
     }
@@ -263,7 +265,7 @@ function BookEditForm({
         patch.series_id = created.id
         patch.series_position = position
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Sérii se nepodařilo založit.')
+        toast.error(error instanceof Error ? error.message : t('books.editDialog.createSeriesFailed'))
         return
       }
     }
@@ -275,7 +277,7 @@ function BookEditForm({
 
     patchBook.mutate(patch, {
       onSuccess: () => {
-        toast.success('Kniha byla uložena.')
+        toast.success(t('books.editDialog.saved'))
         finish()
       },
       onError: (error) => toast.error(error.message),
@@ -298,9 +300,9 @@ function BookEditForm({
   return (
     <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="grid gap-4">
       <DialogHeader>
-        <DialogTitle>Upravit knihu</DialogTitle>
+        <DialogTitle>{t('books.editDialog.title')}</DialogTitle>
         <DialogDescription>
-          Obálku a cestu k audio souborům spravuje scanner, tady se měnit nedají.
+          {t('books.editDialog.description')}
         </DialogDescription>
       </DialogHeader>
 
@@ -314,13 +316,15 @@ function BookEditForm({
           if (meta.year) setPublishedYear(String(meta.year))
           if (meta.series) applySeries(meta.series, meta.series_position)
           toast.success(
-            `Metadata z ${METADATA_SOURCE_LABELS[meta.source] ?? meta.source} načtena – zkontroluj je a ulož.`,
+            t('books.editDialog.metadataLoaded', {
+              source: METADATA_SOURCE_LABELS[meta.source] ?? meta.source,
+            }),
           )
         }}
       />
 
       <div className="space-y-2">
-        <Label htmlFor="book_title">Název</Label>
+        <Label htmlFor="book_title">{t('books.editDialog.titleLabel')}</Label>
         <Input
           id="book_title"
           required
@@ -338,7 +342,7 @@ function BookEditForm({
       {newAuthors.length > 0 ? (
         <div className="space-y-2 rounded-lg border border-dashed p-3">
           <p className="text-sm text-muted-foreground">
-            Autoři ze zdroje metadat, které knihovna nezná – založí se při uložení knihy:
+            {t('books.editDialog.newAuthors')}
           </p>
           <ul className="flex flex-wrap gap-2">
             {newAuthors.map((author) => (
@@ -349,12 +353,12 @@ function BookEditForm({
                 {author.name}
                 <button
                   type="button"
-                  title={`Nezakládat ${author.name}`}
+                  title={t('books.editDialog.skipAuthor', { name: author.name })}
                   onClick={() => setNewAuthors(newAuthors.filter((a) => a.name !== author.name))}
                   className="inline-flex size-5 items-center justify-center rounded-full transition-colors hover:bg-foreground/10 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
                 >
                   <XIcon className="size-3" />
-                  <span className="sr-only">Nezakládat {author.name}</span>
+                  <span className="sr-only">{t('books.editDialog.skipAuthor', { name: author.name })}</span>
                 </button>
               </li>
             ))}
@@ -364,14 +368,14 @@ function BookEditForm({
 
       <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
         <div className="space-y-2">
-          <Label htmlFor="book_series">Série</Label>
+          <Label htmlFor="book_series">{t('books.editDialog.series')}</Label>
           <Select value={seriesId} onValueChange={setSeriesId}>
             <SelectTrigger id="book_series" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NONE}>Žádná</SelectItem>
-              <SelectItem value={NEW}>Nová série…</SelectItem>
+              <SelectItem value={NONE}>{t('books.editDialog.noSeries')}</SelectItem>
+              <SelectItem value={NEW}>{t('books.editDialog.newSeries')}</SelectItem>
               {(seriesList.data ?? []).map((series) => (
                 <SelectItem key={series.id} value={series.id}>
                   {series.title}
@@ -381,7 +385,7 @@ function BookEditForm({
           </Select>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="book_series_position">Díl</Label>
+          <Label htmlFor="book_series_position">{t('books.editDialog.position')}</Label>
           <Input
             id="book_series_position"
             type="number"
@@ -395,19 +399,19 @@ function BookEditForm({
 
       {seriesId === NEW ? (
         <div className="space-y-2">
-          <Label htmlFor="book_new_series">Název nové série</Label>
+          <Label htmlFor="book_new_series">{t('books.editDialog.newSeriesTitle')}</Label>
           <Input
             id="book_new_series"
             required
             value={newSeriesTitle}
             onChange={(e) => setNewSeriesTitle(e.target.value)}
           />
-          <p className="text-xs text-muted-foreground">Série se založí až při uložení knihy.</p>
+          <p className="text-xs text-muted-foreground">{t('books.editDialog.newSeriesHint')}</p>
         </div>
       ) : null}
 
       <div className="space-y-2">
-        <Label htmlFor="book_narrator">Vypravěč</Label>
+        <Label htmlFor="book_narrator">{t('books.editDialog.narrator')}</Label>
         <Input
           id="book_narrator"
           value={narrator}
@@ -417,7 +421,7 @@ function BookEditForm({
 
       <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
         <div className="space-y-2">
-          <Label htmlFor="book_hours">Délka</Label>
+          <Label htmlFor="book_hours">{t('books.editDialog.duration')}</Label>
           <div className="flex items-center gap-2">
             <Input
               id="book_hours"
@@ -426,27 +430,27 @@ function BookEditForm({
               value={hours}
               onChange={(e) => setHours(e.target.value)}
             />
-            <span className="text-sm text-muted-foreground">h</span>
+            <span className="text-sm text-muted-foreground">{t('books.editDialog.hoursUnit')}</span>
             <Input
               type="number"
               min={0}
               max={59}
               value={minutes}
               onChange={(e) => setMinutes(e.target.value)}
-              aria-label="Minuty"
+              aria-label={t('books.editDialog.minutes')}
             />
-            <span className="text-sm text-muted-foreground">min</span>
+            <span className="text-sm text-muted-foreground">{t('books.editDialog.minutesUnit')}</span>
           </div>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="book_language">Jazyk</Label>
+          <Label htmlFor="book_language">{t('books.editDialog.language')}</Label>
           <LanguageSelect id="book_language" value={language} onChange={setLanguage} />
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="book_published_year">Rok prvního vydání</Label>
+          <Label htmlFor="book_published_year">{t('books.editDialog.publishedYear')}</Label>
           <Input
             id="book_published_year"
             type="number"
@@ -457,13 +461,13 @@ function BookEditForm({
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="book_rating">Hodnocení</Label>
+          <Label htmlFor="book_rating">{t('books.editDialog.rating')}</Label>
           <Select value={rating} onValueChange={setRating}>
             <SelectTrigger id="book_rating" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={NONE}>Žádné</SelectItem>
+              <SelectItem value={NONE}>{t('books.editDialog.noRating')}</SelectItem>
               {[1, 2, 3, 4, 5].map((value) => (
                 <SelectItem key={value} value={String(value)}>
                   {value}/5
@@ -475,7 +479,7 @@ function BookEditForm({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="book_description">Popis</Label>
+        <Label htmlFor="book_description">{t('books.editDialog.descriptionLabel')}</Label>
         <Textarea
           id="book_description"
           rows={6}
@@ -486,7 +490,7 @@ function BookEditForm({
 
       <DialogFooter>
         <Button type="button" variant="ghost" onClick={onDone} disabled={saving}>
-          Zrušit
+          {t('common.cancel')}
         </Button>
         {onSaveAndNext ? (
           <Button
@@ -496,14 +500,14 @@ function BookEditForm({
             onClick={() => void save(true)}
             disabled={saving || (authors.length === 0 && newAuthors.length === 0)}
           >
-            Uložit a další
+            {t('books.editDialog.saveAndNext')}
             <kbd className="ml-1 hidden rounded border px-1 font-mono text-[10px] text-muted-foreground sm:inline">
               Ctrl+↵
             </kbd>
           </Button>
         ) : null}
         <Button type="submit" disabled={saving || (authors.length === 0 && newAuthors.length === 0)}>
-          {saving ? 'Ukládám…' : 'Uložit'}
+          {saving ? t('common.saving') : t('common.save')}
         </Button>
       </DialogFooter>
     </form>

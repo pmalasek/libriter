@@ -1,5 +1,6 @@
 import { UserPlusIcon } from 'lucide-react'
 import { useState } from 'react'
+import { Trans, useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { useAdminUsers, useDeleteUser } from '@/api/adminHooks'
 import type { User } from '@/api/types'
@@ -15,6 +16,7 @@ import { LoadingList } from '@/components/LoadingGrid'
 import { Button } from '@/components/ui/button'
 
 export function AdminUsersPage() {
+  const { t } = useTranslation()
   const { user: currentUser } = useAuth()
   const users = useAdminUsers()
   const deleteUser = useDeleteUser()
@@ -29,7 +31,7 @@ export function AdminUsersPage() {
 
     deleteUser.mutate(deleteTarget.id, {
       onSuccess: () => {
-        toast.success(`Účet ${deleteTarget.email} byl smazán.`)
+        toast.success(t('admin.users.deleted', { email: deleteTarget.email }))
         setDeleteTarget(null)
       },
       onError: (error) => {
@@ -44,13 +46,13 @@ export function AdminUsersPage() {
       <div className="flex justify-end">
         <Button onClick={() => setCreateOpen(true)}>
           <UserPlusIcon />
-          Nový uživatel
+          {t('admin.users.newUser')}
         </Button>
       </div>
 
       {users.isPending ? <LoadingList count={4} /> : null}
       {users.error ? <ErrorState error={users.error} onRetry={() => void users.refetch()} /> : null}
-      {users.data?.length === 0 ? <EmptyState title="Žádní uživatelé" /> : null}
+      {users.data?.length === 0 ? <EmptyState title={t('admin.users.empty')} /> : null}
       {users.data && users.data.length > 0 ? (
         <UserTable
           users={users.data}
@@ -67,15 +69,16 @@ export function AdminUsersPage() {
       <ConfirmDialog
         open={deleteTarget !== null}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
-        title="Smazat účet?"
+        title={t('admin.users.deleteTitle')}
         description={
-          <>
-            Účet <strong>{deleteTarget?.email}</strong> se smaže i s jeho pozicemi v přehrávání
-            a záložkami. Knihy v knihovně to nijak nezmění.
-          </>
+          <Trans
+            i18nKey="admin.users.deleteDescription"
+            values={{ email: deleteTarget?.email }}
+            components={{ strong: <strong /> }}
+          />
         }
-        confirmLabel="Smazat"
-        pendingLabel="Mažu…"
+        confirmLabel={t('common.delete')}
+        pendingLabel={t('admin.users.deleting')}
         destructive
         pending={deleteUser.isPending}
         onConfirm={handleDelete}

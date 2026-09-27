@@ -17,6 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon } from 'lucide-react'
 import { useId, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { collator, type Chapter } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { cn } from 'cn'
@@ -35,6 +36,7 @@ export function ChapterOrderEditor({
   onSave,
   onCancel,
 }: ChapterOrderEditorProps) {
+  const { t } = useTranslation()
   const [order, setOrder] = useState<Chapter[]>(chapters)
   const [baseline, setBaseline] = useState(chapters)
 
@@ -76,10 +78,10 @@ export function ChapterOrderEditor({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" size="sm" onClick={() => sortBy('file_name')}>
-          Seřadit podle názvu souboru
+          {t('books.chapterOrder.sortByFile')}
         </Button>
         <Button variant="outline" size="sm" onClick={() => sortBy('title')}>
-          Seřadit podle názvu kapitoly
+          {t('books.chapterOrder.sortByTitle')}
         </Button>
       </div>
 
@@ -109,12 +111,12 @@ export function ChapterOrderEditor({
 
       <div className="flex items-center gap-3">
         <Button disabled={!dirty || saving} onClick={() => onSave(order.map((c) => c.id))}>
-          {saving ? 'Ukládám…' : 'Uložit pořadí'}
+          {saving ? t('common.saving') : t('books.chapterOrder.save')}
         </Button>
         <Button variant="ghost" disabled={saving} onClick={onCancel}>
-          Zrušit
+          {t('common.cancel')}
         </Button>
-        {dirty ? <p className="text-sm text-muted-foreground">Máte neuložené změny.</p> : null}
+        {dirty ? <p className="text-sm text-muted-foreground">{t('books.chapterOrder.unsaved')}</p> : null}
       </div>
     </div>
   )
@@ -128,6 +130,7 @@ interface SortableRowProps {
 }
 
 function SortableRow({ chapter, index, count, onMove }: SortableRowProps) {
+  const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: chapter.id,
   })
@@ -146,7 +149,7 @@ function SortableRow({ chapter, index, count, onMove }: SortableRowProps) {
         variant="ghost"
         size="icon-sm"
         className="cursor-grab touch-none text-muted-foreground"
-        aria-label={`Přetáhnout kapitolu ${chapter.title}`}
+        aria-label={t('books.chapterOrder.drag', { title: chapter.title })}
         {...attributes}
         {...listeners}
       >
@@ -168,7 +171,7 @@ function SortableRow({ chapter, index, count, onMove }: SortableRowProps) {
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={`Posunout ${chapter.title} nahoru`}
+          aria-label={t('books.chapterOrder.moveUp', { title: chapter.title })}
           disabled={index === 0}
           onClick={() => onMove(index, -1)}
         >
@@ -177,7 +180,7 @@ function SortableRow({ chapter, index, count, onMove }: SortableRowProps) {
         <Button
           variant="ghost"
           size="icon-sm"
-          aria-label={`Posunout ${chapter.title} dolů`}
+          aria-label={t('books.chapterOrder.moveDown', { title: chapter.title })}
           disabled={index === count - 1}
           onClick={() => onMove(index, 1)}
         >

@@ -1,1 +1,38 @@
-export default {}
+export default {
+  shell: {
+    headline: 'Your audiobooks. All in one place.',
+    features: {
+      library: 'Your whole audiobook collection in one place',
+      authors: 'Authors with photos and biographies',
+      series: 'Series ordered by part',
+    },
+    tagline: 'A personal audiobook manager and player.',
+  },
+  login: {
+    title: 'Sign in',
+    description: 'Enter your sign-in details.',
+    identifier: 'Email or login',
+    password: 'Password',
+    submitting: 'Signing in…',
+    submit: 'Sign in',
+    noAccount: 'Don’t have an account?',
+    registerLink: 'Sign up',
+  },
+  register: {
+    title: 'Sign up',
+    disabledDescription: 'New accounts are created by an administrator.',
+    defaultRole: 'New accounts get the {{role}} role.',
+    defaultRoleFallback: 'reader',
+    disabled: 'Registration of new accounts is disabled. An administrator will create an account for you.',
+    name: 'Name',
+    email: 'Email',
+    login: 'Login',
+    password: 'Password',
+    passwordTooShort: 'The password must have at least {{min}} characters.',
+    passwordHint: 'At least {{min}} characters.',
+    submitting: 'Creating account…',
+    submit: 'Create account',
+    haveAccount: 'Already have an account?',
+    loginLink: 'Sign in',
+  },
+}
