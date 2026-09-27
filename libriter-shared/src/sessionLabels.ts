@@ -1,3 +1,4 @@
+import { t } from './i18n'
 import type { Book, PlaySession, Series } from './types'
 
 /**
@@ -16,18 +17,16 @@ export function sessionTitle(
 
   if (session.kind === 'series') {
     const series = session.source_id ? seriesById.get(session.source_id) : undefined
-    return series ? series.title : 'Série'
+    return series ? series.title : t('labels.sessionKind.series')
   }
 
   const bookId = session.current_book_id ?? session.items[0]?.book_id
-  return (bookId && bookById.get(bookId)?.title) || 'Poslech'
+  return (bookId && bookById.get(bookId)?.title) || t('labels.sessionFallbackTitle')
 }
 
 /** Slovní označení druhu poslechu pro štítek. */
 export function sessionKindLabel(session: PlaySession): string {
-  if (session.kind === 'series') return 'Série'
-  if (session.kind === 'list') return 'Seznam'
-  return 'Kniha'
+  return t(`labels.sessionKind.${session.kind}`)
 }
 
 /** Knihy poslechu v pořadí přehrávání; smazané z knihovny se vynechají. */

@@ -13,6 +13,7 @@ import { SyncBadge } from '@/components/SyncBadge'
 import { Toaster } from '@/components/Toast'
 import { useSyncInvalidation } from '@/data/hooks'
 import { PrefsProvider } from '@/data/listPrefs'
+import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { ModeProvider } from '@/data/ModeProvider'
 import { openDb } from '@/db/schema'
 import { PlayerProvider } from '@/player/PlayerProvider'
@@ -58,17 +59,19 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <ThemeProvider>
-            <ModeProvider>
-              <PrefsProvider>
-                <PlayerProvider>
-                  <AuthGate />
-                  <SyncBadge />
-                  <Toaster />
-                </PlayerProvider>
-              </PrefsProvider>
-            </ModeProvider>
-          </ThemeProvider>
+          <LanguageProvider>
+            <ThemeProvider>
+              <ModeProvider>
+                <PrefsProvider>
+                  <PlayerProvider>
+                    <AuthGate />
+                    <SyncBadge />
+                    <Toaster />
+                  </PlayerProvider>
+                </PrefsProvider>
+              </ModeProvider>
+            </ThemeProvider>
+          </LanguageProvider>
         </AuthProvider>
       </QueryClientProvider>
     </SafeAreaProvider>

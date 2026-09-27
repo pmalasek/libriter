@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useChangePassword, useUpdateProfile } from '@/api/hooks'
-import { LOGIN_HINT, LOGIN_PATTERN, ROLE_LABELS } from '@/api/types'
+import { loginHint, LOGIN_PATTERN, roleLabel } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { PageHeader } from '@/components/PageHeader'
+import { useTranslation } from 'react-i18next'
+import { LanguageToggle } from '@/components/layout/LanguageToggle'
 import { ThemeToggle } from '@/components/layout/ThemeToggle'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -15,6 +17,7 @@ import { formatDate } from '@/lib/format'
 const MIN_PASSWORD = 8
 
 export function ProfilePage() {
+  const { t } = useTranslation()
   const { user, updateUser } = useAuth()
 
   // ProfilePage se renderuje jen přihlášenému uživateli, takže stačí inicializace.
@@ -79,7 +82,7 @@ export function ProfilePage() {
       <PageHeader
         title="Profil"
         description={`Účet vytvořen ${formatDate(user.created_at)}`}
-        actions={<Badge variant="secondary">{ROLE_LABELS[user.role] ?? user.role}</Badge>}
+        actions={<Badge variant="secondary">{roleLabel(user.role)}</Badge>}
       />
 
       <Card>
@@ -119,7 +122,7 @@ export function ProfilePage() {
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">{LOGIN_HINT}</p>
+              <p className="text-xs text-muted-foreground">{loginHint()}</p>
             </div>
             <Button type="submit" disabled={updateProfile.isPending}>
               {updateProfile.isPending ? 'Ukládám…' : 'Uložit změny'}
@@ -137,6 +140,16 @@ export function ProfilePage() {
             </CardDescription>
           </div>
           <ThemeToggle />
+        </CardHeader>
+      </Card>
+
+      <Card className="mt-6">
+        <CardHeader className="flex-row items-center justify-between gap-4">
+          <div className="space-y-1.5">
+            <CardTitle>{t('language.title')}</CardTitle>
+            <CardDescription>{t('language.description')}</CardDescription>
+          </div>
+          <LanguageToggle />
         </CardHeader>
       </Card>
 

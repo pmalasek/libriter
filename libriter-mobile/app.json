@@ -45,7 +45,8 @@
           "backgroundColor": "#0F1417"
         }
       ],
-      "./plugins/withIosSceneLifecycle"
+      "./plugins/withIosSceneLifecycle",
+      "expo-localization"
     ],
     "experiments": {
       "typedRoutes": true

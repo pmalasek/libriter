@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Headphones, Library, ListPlus, SquareCheckBig, X } from 'lucide-react-native'
-import { authorNames, bookCount, BOOK_SORT_OPTIONS, seriesLabel, sortBooks, type Book } from 'libriter-shared'
+import { authorNames, bookCount, bookSortOptions, seriesLabel, sortBooks, type Book } from 'libriter-shared'
 
 import { BookCard, BookRow, BookRowHeader } from '@/components/BookCard'
 import { EmptyState, ErrorState } from '@/components/EmptyState'
@@ -102,7 +102,7 @@ export default function BooksScreen() {
           <SearchInput value={query} onChangeText={setQuery} placeholder="Hledat podle názvu nebo autora…" />
           <View style={styles.controls}>
             <SortControl
-              options={BOOK_SORT_OPTIONS}
+              options={bookSortOptions()}
               value={prefs.sortKey}
               onChange={prefs.setSortKey}
               dir={prefs.sortDir}

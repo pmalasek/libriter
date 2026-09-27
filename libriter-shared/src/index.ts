@@ -2,6 +2,7 @@
 // jednotlivé soubory – tak se dá uvnitř přerovnat, aniž by se to dotklo webu
 // nebo mobilu.
 
+export * from './i18n'
 export * from './types'
 export * from './client'
 export * from './session'

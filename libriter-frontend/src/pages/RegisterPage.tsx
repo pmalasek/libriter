@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { useAuthConfig, useRegister } from '@/api/hooks'
-import { LOGIN_HINT, LOGIN_PATTERN, ROLE_LABELS } from '@/api/types'
+import { currentLanguage, loginHint, LOGIN_PATTERN, roleLabel } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { AuthShell } from '@/components/layout/AuthShell'
 import { Button } from '@/components/ui/button'
@@ -32,7 +32,13 @@ export function RegisterPage() {
     }
 
     register.mutate(
-      { display_name: displayName.trim(), email: email.trim(), login: login.trim(), password },
+      {
+        display_name: displayName.trim(),
+        email: email.trim(),
+        login: login.trim(),
+        password,
+        ui_language: currentLanguage(),
+      },
       {
         onSuccess: (response) => {
           signIn(response)
@@ -54,7 +60,7 @@ export function RegisterPage() {
           <CardDescription>
             {disabled
               ? 'Nové účty zakládá administrátor.'
-              : `Nový účet získá roli ${defaultRole ? ROLE_LABELS[defaultRole].toLowerCase() : 'čtenáře'}.`}
+              : `Nový účet získá roli ${defaultRole ? roleLabel(defaultRole).toLowerCase() : 'čtenáře'}.`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -96,7 +102,7 @@ export function RegisterPage() {
                 value={login}
                 onChange={(e) => setLogin(e.target.value)}
               />
-              <p className="text-xs text-muted-foreground">{LOGIN_HINT}</p>
+              <p className="text-xs text-muted-foreground">{loginHint()}</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="password">Heslo</Label>

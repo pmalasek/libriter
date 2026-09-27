@@ -2,7 +2,7 @@ import { HeadphonesIcon, KeyRoundIcon, PencilIcon, Trash2Icon } from 'lucide-rea
 import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { useSetUserRole } from '@/api/adminHooks'
-import { ROLE_LABELS, type Role, type User } from '@/api/types'
+import { roleLabel, type Role, type User } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
@@ -38,7 +38,7 @@ export function UserTable({
     setRole.mutate(
       { userId: user.id, role },
       {
-        onSuccess: () => toast.success(`${user.email} má nově roli ${ROLE_LABELS[role]}.`),
+        onSuccess: () => toast.success(`${user.email} má nově roli ${roleLabel(role)}.`),
         onError: (error) => toast.error(error.message),
       },
     )
@@ -85,7 +85,7 @@ export function UserTable({
                     <SelectContent>
                       {ROLES.map((role) => (
                         <SelectItem key={role} value={role}>
-                          {ROLE_LABELS[role]}
+                          {roleLabel(role)}
                         </SelectItem>
                       ))}
                     </SelectContent>

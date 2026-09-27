@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useRegistrationSettings, useSaveRegistrationSettings } from '@/api/adminHooks'
-import { ROLE_LABELS, type RegistrationSettings } from '@/api/types'
+import { roleLabel, type RegistrationSettings } from '@/api/types'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingList } from '@/components/LoadingGrid'
 import { Button } from '@/components/ui/button'
@@ -82,7 +82,7 @@ function RegistrationForm({ settings }: { settings: RegistrationSettings }) {
               <SelectContent>
                 {DEFAULT_ROLES.map((role) => (
                   <SelectItem key={role} value={role}>
-                    {ROLE_LABELS[role]}
+                    {roleLabel(role)}
                   </SelectItem>
                 ))}
               </SelectContent>

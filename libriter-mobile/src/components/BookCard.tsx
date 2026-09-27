@@ -2,7 +2,7 @@ import { memo } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Check, CheckCircle2, Headphones } from 'lucide-react-native'
-import { authorNames, BOOK_STATUS_LABELS, formatDuration, type Book, type BookStatus } from 'libriter-shared'
+import { authorNames, bookStatusLabel, formatDuration, type Book, type BookStatus } from 'libriter-shared'
 
 import { radius, spacing, useTheme } from '@/theme'
 import { BookCover } from './BookCover'
@@ -44,7 +44,7 @@ export function BookStatusMark({ status, size = 24 }: { status: BookStatus; size
   const Icon = finished ? CheckCircle2 : Headphones
   return (
     <View
-      accessibilityLabel={BOOK_STATUS_LABELS[status]}
+      accessibilityLabel={bookStatusLabel(status)}
       style={[
         styles.mark,
         { width: size, height: size, borderRadius: size / 2, backgroundColor: finished ? colors.primary : colors.glassStrong },

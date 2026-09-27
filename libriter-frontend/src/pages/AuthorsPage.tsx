@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input'
 import { bookCount, foldName } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
-  AUTHOR_SORT_OPTIONS,
+  authorSortOptions,
   catalogName,
   sortAuthors,
   useAuthorListPrefs,
@@ -104,7 +104,7 @@ export function AuthorsPage() {
               onChange={(e) => setQuery(e.target.value)}
             />
             <SortControl
-              options={AUTHOR_SORT_OPTIONS}
+              options={authorSortOptions()}
               value={prefs.sortKey}
               onChange={prefs.setSortKey}
               dir={prefs.sortDir}

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useUpdateUser } from '@/api/adminHooks'
-import { LOGIN_HINT, LOGIN_PATTERN, type User } from '@/api/types'
+import { loginHint, LOGIN_PATTERN, type User } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { Button } from '@/components/ui/button'
 import {
@@ -99,7 +99,7 @@ function EditUserForm({ user, onDone }: { user: User; onDone: () => void }) {
           value={login}
           onChange={(e) => setLogin(e.target.value)}
         />
-        <p className="text-xs text-muted-foreground">{LOGIN_HINT}</p>
+        <p className="text-xs text-muted-foreground">{loginHint()}</p>
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

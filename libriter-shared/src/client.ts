@@ -1,3 +1,5 @@
+import { i18n, t } from './i18n'
+
 export const API_PREFIX = '/api/v1'
 
 /**
@@ -20,15 +22,30 @@ export function apiUrl(path: string): string {
   return baseUrl + API_PREFIX + path
 }
 
-/** Chyba z API včetně HTTP statusu; message je česká zpráva z backendu. */
+/**
+ * Chyba z API včetně HTTP statusu. `message` je zpráva v jazyce rozhraní –
+ * přeložená podle stabilního `code` z backendu; když překlad chybí, zůstane
+ * zpráva serveru (česky).
+ */
 export class ApiError extends Error {
   readonly status: number
+  /** Stabilní kód chyby z backendu („user.not_found“); chybí u chyb sítě. */
+  readonly code?: string
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message)
     this.name = 'ApiError'
     this.status = status
+    this.code = code
   }
+}
+
+/** Zpráva k chybě v jazyce rozhraní podle kódu; undefined, když kód neznáme. */
+export function apiErrorText(code: string | undefined): string | undefined {
+  if (!code || !/^[a-z_]+\.[a-z_]+$/.test(code)) return undefined
+  const key = `errors.${code}`
+  if (!i18n.exists(key)) return undefined
+  return t(key as 'errors.common.internal')
 }
 
 type UnauthorizedHandler = () => void
@@ -66,11 +83,11 @@ interface RequestOptions {
 }
 
 /**
- * Chyby přicházejí ve dvou formátech: handlery posílají JSON {"error": "..."},
- * ale middleware používá http.Error, takže 401/403 jsou text/plain s JSON-like tělem.
- * Proto čteme text a JSON parsujeme až dodatečně.
+ * Chyby z API jsou JSON {"error": "...", "code": "..."}. Tělo se čte jako
+ * text a JSON se parsuje až dodatečně – před API může stát proxy, která
+ * vrátí text nebo HTML.
  */
-async function parseErrorMessage(res: Response): Promise<string> {
+async function parseError(res: Response): Promise<ApiError> {
   let body = ''
   try {
     body = (await res.text()).trim()
@@ -78,20 +95,24 @@ async function parseErrorMessage(res: Response): Promise<string> {
     body = ''
   }
 
+  let message = ''
+  let code: string | undefined
   if (body) {
     try {
       const parsed: unknown = JSON.parse(body)
-      if (parsed && typeof parsed === 'object' && 'error' in parsed) {
-        const msg = (parsed as { error?: unknown }).error
-        if (typeof msg === 'string' && msg) return msg
+      if (parsed && typeof parsed === 'object') {
+        const { error, code: c } = parsed as { error?: unknown; code?: unknown }
+        if (typeof error === 'string') message = error
+        if (typeof c === 'string' && c) code = c
       }
     } catch {
       // není JSON – použijeme surový text
+      if (!body.startsWith('<')) message = body
     }
-    if (!body.startsWith('<')) return body
   }
 
-  return `Chyba serveru (${res.status})`
+  const text = apiErrorText(code) || message || t('errors.server', { status: res.status })
+  return new ApiError(res.status, text, code)
 }
 
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -112,14 +133,14 @@ export async function apiFetch<T>(path: string, options: RequestOptions = {}): P
       keepalive,
     })
   } catch {
-    throw new ApiError(0, 'Server je nedostupný')
+    throw new ApiError(0, t('errors.network'))
   }
 
   if (!res.ok) {
     // Odhlašujeme jen když jsme token skutečně poslali – 401 z loginu
     // znamená špatné heslo, ne vypršelou session.
     if (res.status === 401 && token) onUnauthorized?.()
-    throw new ApiError(res.status, await parseErrorMessage(res))
+    throw await parseError(res)
   }
 
   if (res.status === 204) return undefined as T

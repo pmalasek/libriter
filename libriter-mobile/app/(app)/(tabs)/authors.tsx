@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { Users } from 'lucide-react-native'
 import {
-  AUTHOR_SORT_OPTIONS,
+  authorSortOptions,
   bookCount,
   catalogName,
   foldName,
@@ -88,7 +88,7 @@ export default function AuthorsScreen() {
           <SearchInput value={query} onChangeText={setQuery} placeholder="Hledat podle jména…" />
           <View style={styles.controls}>
             <SortControl
-              options={AUTHOR_SORT_OPTIONS}
+              options={authorSortOptions()}
               value={prefs.sortKey}
               onChange={prefs.setSortKey}
               dir={prefs.sortDir}

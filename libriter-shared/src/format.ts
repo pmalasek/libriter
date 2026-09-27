@@ -1,3 +1,4 @@
+import { currentLanguage, t } from './i18n'
 import type { Author, Language } from './types'
 
 /** Písmena, která nejsou jen základ + diakritika, takže je NFD nerozloží. */
@@ -34,15 +35,33 @@ export function sameName(a: string, b: string): boolean {
   return foldName(a) === foldName(b)
 }
 
+const displayNames = new Map<string, Intl.DisplayNames | null>()
+
+/** Názvy jazyků v jazyce rozhraní; null, když je prostředí neumí. */
+function languageDisplayNames(locale: string): Intl.DisplayNames | null {
+  if (!displayNames.has(locale)) {
+    let names: Intl.DisplayNames | null = null
+    try {
+      names = new Intl.DisplayNames([locale], { type: 'language', fallback: 'none' })
+    } catch {
+      names = null
+    }
+    displayNames.set(locale, names)
+  }
+  return displayNames.get(locale) ?? null
+}
+
 /**
- * Český název jazyka pro zobrazení („Němčina“). V textu se píše malým
- * písmenem, samostatně stojící popisek velkým. Kód mimo číselník (nebo
- * číselník ještě nenačtený) se ukáže jako kód velkými písmeny.
+ * Název jazyka knihy v jazyce rozhraní („Němčina“, „German“), s velkým
+ * počátečním písmenem pro samostatný popisek. Když ho Intl nezná, použije se
+ * český název z číselníku; kód mimo číselník se ukáže velkými písmeny.
  */
 export function languageLabel(code: string, languages: Language[] | undefined): string {
-  const language = languages?.find((l) => l.code === code)
-  if (!language) return code.toUpperCase()
-  return language.name_cs.charAt(0).toLocaleUpperCase('cs') + language.name_cs.slice(1)
+  const locale = currentLanguage()
+  const name =
+    languageDisplayNames(locale)?.of(code) ?? languages?.find((l) => l.code === code)?.name_cs
+  if (!name) return code.toUpperCase()
+  return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1)
 }
 
 /**
@@ -54,12 +73,14 @@ export function seriesLabel(
   title: string | null | undefined,
   position: number | null | undefined,
 ): string {
-  return [title, position != null ? `${position}. díl` : null].filter(Boolean).join(' · ')
+  return [title, position != null ? t('format.seriesPart', { position }) : null]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /** Délka v sekundách → "3:07 h" / "48 min" / "45 s". */
 export function formatDuration(seconds: number): string {
-  if (!Number.isFinite(seconds) || seconds <= 0) return 'neznámá délka'
+  if (!Number.isFinite(seconds) || seconds <= 0) return t('format.unknownDuration')
 
   const total = Math.round(seconds)
   const hours = Math.floor(total / 3600)
@@ -98,32 +119,37 @@ export function joinDuration(hours: number, minutes: number): number {
   return Math.max(0, Math.trunc(hours)) * 3600 + Math.max(0, Math.trunc(minutes)) * 60
 }
 
-const dateFormatter = new Intl.DateTimeFormat('cs-CZ', {
-  day: 'numeric',
-  month: 'long',
-  year: 'numeric',
-})
+const formatters = new Map<string, Intl.DateTimeFormat>()
+
+/** DateTimeFormat pro jazyk rozhraní; vytváří se jednou na jazyk a variantu. */
+function dateFormatter(variant: 'date' | 'dateTime'): Intl.DateTimeFormat {
+  const locale = currentLanguage()
+  const key = `${locale}:${variant}`
+  let formatter = formatters.get(key)
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(
+      locale,
+      variant === 'date'
+        ? { day: 'numeric', month: 'long', year: 'numeric' }
+        : { day: 'numeric', month: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' },
+    )
+    formatters.set(key, formatter)
+  }
+  return formatter
+}
 
 export function formatDate(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return '–'
-  return dateFormatter.format(date)
+  return dateFormatter('date').format(date)
 }
-
-const dateTimeFormatter = new Intl.DateTimeFormat('cs-CZ', {
-  day: 'numeric',
-  month: 'numeric',
-  year: 'numeric',
-  hour: '2-digit',
-  minute: '2-digit',
-})
 
 /** Datum a čas – v administraci je potřeba i minuta (běhy scanneru, audit). */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '–'
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return '–'
-  return dateTimeFormatter.format(date)
+  return dateFormatter('dateTime').format(date)
 }
 
 const BYTE_UNITS = ['B', 'kB', 'MB', 'GB', 'TB', 'PB']
@@ -139,7 +165,7 @@ export function formatBytes(bytes: number): string {
     unit += 1
   }
   const decimals = unit === 0 || value >= 100 ? 0 : 1
-  return `${value.toLocaleString('cs-CZ', { maximumFractionDigits: decimals })} ${BYTE_UNITS[unit]}`
+  return `${value.toLocaleString(currentLanguage(), { maximumFractionDigits: decimals })} ${BYTE_UNITS[unit]}`
 }
 
 /** Doba běhu serveru na čitelný tvar. */
@@ -164,30 +190,26 @@ export function initials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-/** Skloňování pro počty knih. */
+/** Počet knih se správným tvarem podle jazyka („3 knihy“, „3 books“). */
 export function bookCount(count: number): string {
-  if (count === 1) return '1 kniha'
-  if (count >= 2 && count <= 4) return `${count} knihy`
-  return `${count} knih`
+  return t('format.books', { count })
 }
 
-/** Skloňování pro počty kapitol. */
+/** Počet kapitol se správným tvarem podle jazyka. */
 export function chapterCount(count: number): string {
-  if (count === 1) return '1 kapitola'
-  if (count >= 2 && count <= 4) return `${count} kapitoly`
-  return `${count} kapitol`
+  return t('format.chapters', { count })
 }
 
 /** Autoři série; delší seznam se zkrátí, ať se popisek vejde na řádek. */
 export function authorsLabel(authors: Author[]): string {
   if (authors.length <= 2) return authors.map((author) => author.name).join(', ')
   const [first, second] = authors
-  return `${first.name}, ${second.name} a další ${authors.length - 2}`
+  return t('format.authorsMore', { first: first.name, second: second.name, count: authors.length - 2 })
 }
 
 /** Jména autorů knihy oddělená čárkou. */
 export function authorNames(authors: Author[] | undefined): string {
-  if (!authors || authors.length === 0) return 'Neznámý autor'
+  if (!authors || authors.length === 0) return t('format.unknownAuthor')
   return authors.map((author) => author.name).join(', ')
 }
 

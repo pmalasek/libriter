@@ -1,6 +1,6 @@
 import { CheckCircle2Icon, CheckIcon, HeadphonesIcon } from 'lucide-react'
 import { Link } from 'react-router'
-import { BOOK_STATUS_LABELS, type Book, type BookStatus } from '@/api/types'
+import { bookStatusLabel, type Book, type BookStatus } from '@/api/types'
 import { BookCover } from '@/components/BookCover'
 import { authorNames, formatDate, formatDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
@@ -40,8 +40,8 @@ function BookStatusMark({ status, className }: { status: BookStatus; className?:
   const Icon = status === 'finished' ? CheckCircle2Icon : HeadphonesIcon
   return (
     <span
-      title={BOOK_STATUS_LABELS[status]}
-      aria-label={BOOK_STATUS_LABELS[status]}
+      title={bookStatusLabel(status)}
+      aria-label={bookStatusLabel(status)}
       role="img"
       className={cn(
         'flex size-6 items-center justify-center rounded-full shadow-sm backdrop-blur-sm',

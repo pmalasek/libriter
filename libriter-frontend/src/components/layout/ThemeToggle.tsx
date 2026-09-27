@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { COLOR_SCHEMES, useColorScheme } from '@/theme/colorScheme'
+import { COLOR_SCHEMES, colorSchemeLabel, useColorScheme } from '@/theme/colorScheme'
 
 export function ThemeToggle({ className }: { className?: string }) {
   const { theme } = useTheme()
@@ -41,10 +41,10 @@ export function ThemeToggle({ className }: { className?: string }) {
         <DropdownMenuSeparator />
         <DropdownMenuLabel>Barevné schéma</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={colorScheme} onValueChange={setColorScheme} aria-label="Barevné schéma">
-          {COLOR_SCHEMES.map(({ value, label, color }) => (
+          {COLOR_SCHEMES.map(({ value, color }) => (
             <DropdownMenuRadioItem key={value} value={value} disabled={isSaving}>
               <span aria-hidden="true" className="size-4 shrink-0 rounded-full border border-foreground/15" style={{ backgroundColor: color }} />
-              {label}
+              {colorSchemeLabel(value)}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

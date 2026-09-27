@@ -1,7 +1,25 @@
+import { currentLanguage, t } from './i18n'
 import type { Author, Book } from './types'
 
-/** České řazení bez ohledu na velikost písmen; čísla v názvech jdou přirozeně (díl 2 před dílem 10). */
-export const collator = new Intl.Collator('cs', { sensitivity: 'base', numeric: true })
+const collators = new Map<string, Intl.Collator>()
+
+/**
+ * Řazení podle jazyka rozhraní bez ohledu na velikost písmen; čísla v názvech
+ * jdou přirozeně (díl 2 před dílem 10).
+ */
+export function collator(): Intl.Collator {
+  const locale = currentLanguage()
+  let c = collators.get(locale)
+  if (!c) {
+    c = new Intl.Collator(locale, { sensitivity: 'base', numeric: true })
+    collators.set(locale, c)
+  }
+  return c
+}
+
+function compareText(a: string, b: string): number {
+  return collator().compare(a, b)
+}
 
 export type SortDir = 'asc' | 'desc'
 export const SORT_DIRS = ['asc', 'desc'] as const
@@ -11,10 +29,8 @@ export const SORT_DIRS = ['asc', 'desc'] as const
 export type ViewMode = 'tiles' | 'small' | 'list'
 export const VIEW_MODES = ['tiles', 'small', 'list'] as const
 
-export const VIEW_MODE_LABELS: Record<ViewMode, string> = {
-  tiles: 'Dlaždice',
-  small: 'Malé dlaždice',
-  list: 'Seznam',
+export function viewModeLabel(mode: ViewMode): string {
+  return t(`labels.viewMode.${mode}`)
 }
 
 // --- autoři ---
@@ -22,9 +38,9 @@ export const VIEW_MODE_LABELS: Record<ViewMode, string> = {
 /** Katalogové řazení: příjmení, křestní jméno, prostřední jméno. */
 export function compareAuthorNames(a: Author, b: Author): number {
   return (
-    collator.compare(a.last_name, b.last_name) ||
-    collator.compare(a.first_name, b.first_name) ||
-    collator.compare(a.middle_name, b.middle_name)
+    compareText(a.last_name, b.last_name) ||
+    compareText(a.first_name, b.first_name) ||
+    compareText(a.middle_name, b.middle_name)
   )
 }
 
@@ -38,11 +54,9 @@ export function catalogName(author: Author): string {
 export type AuthorSortKey = 'last_name' | 'first_name' | 'books'
 export const AUTHOR_SORT_KEYS = ['last_name', 'first_name', 'books'] as const
 
-export const AUTHOR_SORT_OPTIONS: { value: AuthorSortKey; label: string }[] = [
-  { value: 'last_name', label: 'Příjmení' },
-  { value: 'first_name', label: 'Křestní jméno' },
-  { value: 'books', label: 'Počet knih' },
-]
+export function authorSortOptions(): { value: AuthorSortKey; label: string }[] {
+  return AUTHOR_SORT_KEYS.map((value) => ({ value, label: t(`labels.authorSort.${value}`) }))
+}
 
 /** Přirozený směr po změně klíče (nejvíc knih první). */
 export const AUTHOR_DEFAULT_DIR: Record<AuthorSortKey, SortDir> = {
@@ -64,7 +78,7 @@ export function sortAuthors(
         return compareAuthorNames(a, b)
       case 'first_name':
         return (
-          collator.compare(a.first_name || a.last_name, b.first_name || b.last_name) ||
+          compareText(a.first_name || a.last_name, b.first_name || b.last_name) ||
           compareAuthorNames(a, b)
         )
       case 'books':
@@ -80,12 +94,9 @@ export function sortAuthors(
 export type BookSortKey = 'title' | 'author' | 'published' | 'added'
 export const BOOK_SORT_KEYS = ['title', 'author', 'published', 'added'] as const
 
-export const BOOK_SORT_OPTIONS: { value: BookSortKey; label: string }[] = [
-  { value: 'title', label: 'Série a název' },
-  { value: 'author', label: 'Autor' },
-  { value: 'published', label: 'První vydání' },
-  { value: 'added', label: 'Datum přidání' },
-]
+export function bookSortOptions(): { value: BookSortKey; label: string }[] {
+  return BOOK_SORT_KEYS.map((value) => ({ value, label: t(`labels.bookSort.${value}`) }))
+}
 
 /** Přirozený směr po změně klíče (nejnovější první u data přidání). */
 export const BOOK_DEFAULT_DIR: Record<BookSortKey, SortDir> = {
@@ -102,7 +113,7 @@ export const BOOK_DEFAULT_DIR: Record<BookSortKey, SortDir> = {
 export type SeriesTitle = (seriesId: string) => string | undefined
 
 function compareByTitle(a: Book, b: Book): number {
-  return collator.compare(a.title, b.title)
+  return compareText(a.title, b.title)
 }
 
 /**
@@ -117,7 +128,7 @@ function compareBySeries(a: Book, b: Book, seriesTitle?: SeriesTitle): number {
     return ap - bp || compareByTitle(a, b)
   }
   return (
-    collator.compare(sortName(a, seriesTitle), sortName(b, seriesTitle)) || compareByTitle(a, b)
+    compareText(sortName(a, seriesTitle), sortName(b, seriesTitle)) || compareByTitle(a, b)
   )
 }
 

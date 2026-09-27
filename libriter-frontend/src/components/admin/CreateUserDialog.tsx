@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { useCreateUser } from '@/api/adminHooks'
-import { LOGIN_HINT, LOGIN_PATTERN, ROLE_LABELS, type Role } from '@/api/types'
+import { loginHint, LOGIN_PATTERN, roleLabel, type Role } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -107,7 +107,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
           value={login}
           onChange={(e) => setLogin(e.target.value)}
         />
-        <p className="text-xs text-muted-foreground">{LOGIN_HINT}</p>
+        <p className="text-xs text-muted-foreground">{loginHint()}</p>
       </div>
 
       <div className="space-y-2">
@@ -132,7 +132,7 @@ function CreateUserForm({ onDone }: { onDone: () => void }) {
           <SelectContent>
             {ROLES.map((item) => (
               <SelectItem key={item} value={item}>
-                {ROLE_LABELS[item]}
+                {roleLabel(item)}
               </SelectItem>
             ))}
           </SelectContent>

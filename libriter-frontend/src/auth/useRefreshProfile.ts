@@ -21,7 +21,8 @@ export function useRefreshProfile() {
       data.display_name === user.display_name &&
       data.email === user.email &&
       data.color_scheme === user.color_scheme &&
-      data.theme_mode === user.theme_mode
+      data.theme_mode === user.theme_mode &&
+      data.ui_language === user.ui_language
     ) {
       return
     }

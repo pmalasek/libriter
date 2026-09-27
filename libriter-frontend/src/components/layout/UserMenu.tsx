@@ -1,6 +1,6 @@
 import { LogOutIcon, UserIcon } from 'lucide-react'
 import { useNavigate } from 'react-router'
-import { ROLE_LABELS } from '@/api/types'
+import { roleLabel } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -41,7 +41,7 @@ export function UserMenu({ showName = false, className }: { showName?: boolean; 
             <span className="min-w-0 text-left">
               <span className="block truncate text-sm font-medium">{user.display_name}</span>
               <span className="block truncate text-xs font-normal text-muted-foreground">
-                {ROLE_LABELS[user.role] ?? user.role}
+                {roleLabel(user.role)}
               </span>
             </span>
           </Button>
@@ -58,7 +58,7 @@ export function UserMenu({ showName = false, className }: { showName?: boolean; 
           <div className="truncate font-medium">{user.display_name}</div>
           <div className="truncate text-xs font-normal text-muted-foreground">{user.email}</div>
           <div className="mt-1 text-xs font-normal text-muted-foreground">
-            {ROLE_LABELS[user.role] ?? user.role}
+            {roleLabel(user.role)}
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />

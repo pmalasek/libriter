@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Modal, Pressable, StyleSheet, View } from 'react-native'
 import { ArrowDownNarrowWide, ArrowUpNarrowWide, ChevronDown, Grid3x3, LayoutGrid, List } from 'lucide-react-native'
-import { VIEW_MODE_LABELS, VIEW_MODES, type SortDir, type ViewMode } from 'libriter-shared'
+import { viewModeLabel, VIEW_MODES, type SortDir, type ViewMode } from 'libriter-shared'
 
 import { fonts, radius, spacing, useTheme } from '@/theme'
 import { Body, Muted } from './ui/Text'
@@ -21,7 +21,7 @@ export function ViewModeToggle({ value, onChange }: { value: ViewMode; onChange:
             key={mode}
             onPress={() => onChange(mode)}
             accessibilityRole="button"
-            accessibilityLabel={VIEW_MODE_LABELS[mode]}
+            accessibilityLabel={viewModeLabel(mode)}
             accessibilityState={{ selected: active }}
             style={[styles.pillItem, active && { backgroundColor: colors.card }]}
           >

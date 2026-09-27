@@ -7,7 +7,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { VIEW_MODE_LABELS, VIEW_MODES, type SortDir, type ViewMode } from '@/lib/sorting'
+import { viewModeLabel, VIEW_MODES, type SortDir, type ViewMode } from '@/lib/sorting'
 import { cn } from '@/lib/utils'
 
 const VIEW_ICONS: Record<ViewMode, React.ComponentType<{ className?: string }>> = {
@@ -36,8 +36,8 @@ export function ViewModeToggle({
             variant="ghost"
             size="icon-sm"
             aria-pressed={active}
-            aria-label={VIEW_MODE_LABELS[mode]}
-            title={VIEW_MODE_LABELS[mode]}
+            aria-label={viewModeLabel(mode)}
+            title={viewModeLabel(mode)}
             onClick={() => onChange(mode)}
             className={cn(
               'rounded-full hover:bg-transparent',

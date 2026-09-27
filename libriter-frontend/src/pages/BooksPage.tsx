@@ -12,7 +12,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { authorNames, bookCount } from '@/lib/format'
-import { BOOK_SORT_OPTIONS, sortBooks, useBookListPrefs } from '@/lib/sorting'
+import { bookSortOptions, sortBooks, useBookListPrefs } from '@/lib/sorting'
 import { usePlayer } from '@/player/playerContext'
 
 export function BooksPage() {
@@ -102,7 +102,7 @@ export function BooksPage() {
               onChange={(e) => setQuery(e.target.value)}
             />
             <SortControl
-              options={BOOK_SORT_OPTIONS}
+              options={bookSortOptions()}
               value={prefs.sortKey}
               onChange={prefs.setSortKey}
               dir={prefs.sortDir}

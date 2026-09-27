@@ -1,5 +1,5 @@
 import { useAuditLog } from '@/api/adminHooks'
-import { AUDIT_ACTION_LABELS, type AuditEntry } from '@/api/types'
+import { auditActionLabel, type AuditEntry } from '@/api/types'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingList } from '@/components/LoadingGrid'
@@ -51,7 +51,7 @@ export function AdminAuditPage() {
                 </TableCell>
                 <TableCell className="break-all text-sm">{entry.actor_email || '–'}</TableCell>
                 <TableCell className="text-sm">
-                  {AUDIT_ACTION_LABELS[entry.action] ?? entry.action}
+                  {auditActionLabel(entry.action)}
                 </TableCell>
                 <TableCell className="break-all text-sm">{targetLabel(entry)}</TableCell>
                 <TableCell>

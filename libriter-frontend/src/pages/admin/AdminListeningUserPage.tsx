@@ -4,7 +4,7 @@ import { Link, useParams } from 'react-router'
 import { useListeningUser } from '@/api/adminHooks'
 import { useBooks, useSeriesById } from '@/api/hooks'
 import {
-  ROLE_LABELS,
+  roleLabel,
   type Book,
   type ListeningDay,
   type PlaySession,
@@ -129,7 +129,7 @@ export function AdminListeningUserPage() {
           <h2 className="font-heading text-xl font-bold">{user.display_name}</h2>
           <p className="break-all text-sm text-muted-foreground">{user.email}</p>
         </div>
-        <Badge variant="secondary">{ROLE_LABELS[user.role]}</Badge>
+        <Badge variant="secondary">{roleLabel(user.role)}</Badge>
       </div>
 
       <SessionSection

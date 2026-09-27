@@ -11,6 +11,7 @@ export type SettingKey =
   | 'last_library_sync'
   | 'color_scheme'
   | 'theme_mode'
+  | 'ui_language'
   | 'books.view'
   | 'books.sort'
   | 'books.sortDir'

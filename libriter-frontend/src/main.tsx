@@ -4,6 +4,7 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router'
 import { ApiError } from '@/api/client'
 import { AuthProvider } from '@/auth/AuthContext'
+import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { Toaster } from '@/components/ui/sonner'
 import { PlayerProvider } from '@/player/PlayerProvider'
 import { ThemeProvider } from '@/theme/ThemeProvider'
@@ -32,13 +33,15 @@ createRoot(rootElement).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <ThemeProvider>
-            {/* Přehrávač stojí nad routerem, aby poslech přežil změnu stránky. */}
-            <PlayerProvider>
-              <App />
-              <Toaster />
-            </PlayerProvider>
-          </ThemeProvider>
+          <LanguageProvider>
+            <ThemeProvider>
+              {/* Přehrávač stojí nad routerem, aby poslech přežil změnu stránky. */}
+              <PlayerProvider>
+                <App />
+                <Toaster />
+              </PlayerProvider>
+            </ThemeProvider>
+          </LanguageProvider>
         </AuthProvider>
       </BrowserRouter>
     </QueryClientProvider>

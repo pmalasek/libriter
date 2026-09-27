@@ -3,7 +3,7 @@ import { parseScheme, type ColorScheme } from 'libriter-shared'
 
 // Seznam schémat a jejich rozpoznání se sdílí s mobilní aplikací
 // (libriter-shared/src/appearance.ts).
-export { COLOR_SCHEMES, parseScheme } from 'libriter-shared'
+export { COLOR_SCHEMES, colorSchemeLabel, parseScheme } from 'libriter-shared'
 
 export const STORAGE_KEY = 'libriter.color-scheme'
 

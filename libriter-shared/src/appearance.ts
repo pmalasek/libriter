@@ -1,3 +1,4 @@
+import { t } from './i18n'
 import type { ColorScheme, ThemeMode } from './types'
 
 /**
@@ -5,17 +6,21 @@ import type { ColorScheme, ThemeMode } from './types'
  * pro přepínač; skutečná paleta se odvozuje z odstínu (viz schemeHues).
  */
 export const COLOR_SCHEMES = [
-  { value: 'teal', label: 'Tyrkysová', color: 'oklch(0.52 0.1 195)' },
-  { value: 'blue', label: 'Modrá', color: 'oklch(0.52 0.14 255)' },
-  { value: 'violet', label: 'Fialová', color: 'oklch(0.52 0.14 300)' },
-  { value: 'green', label: 'Zelená', color: 'oklch(0.52 0.14 150)' },
+  { value: 'teal', color: 'oklch(0.52 0.1 195)' },
+  { value: 'blue', color: 'oklch(0.52 0.14 255)' },
+  { value: 'violet', color: 'oklch(0.52 0.14 300)' },
+  { value: 'green', color: 'oklch(0.52 0.14 150)' },
 ] as const
 
-export const THEME_MODES = [
-  { value: 'light', label: 'Světlý' },
-  { value: 'dark', label: 'Tmavý' },
-  { value: 'system', label: 'Systém' },
-] as const
+export const THEME_MODES = [{ value: 'light' }, { value: 'dark' }, { value: 'system' }] as const
+
+export function colorSchemeLabel(scheme: ColorScheme): string {
+  return t(`labels.colorScheme.${scheme}`)
+}
+
+export function themeModeLabel(mode: ThemeMode): string {
+  return t(`labels.themeMode.${mode}`)
+}
 
 /**
  * Odstíny schémat v OKLCH. Web je má v CSS (`--scheme-hue`,

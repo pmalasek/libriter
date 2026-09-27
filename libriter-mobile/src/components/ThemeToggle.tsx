@@ -1,6 +1,13 @@
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Monitor, Moon, Sun } from 'lucide-react-native'
-import { COLOR_SCHEMES, THEME_MODES, type ColorScheme, type ThemeMode } from 'libriter-shared'
+import {
+  COLOR_SCHEMES,
+  colorSchemeLabel,
+  THEME_MODES,
+  themeModeLabel,
+  type ColorScheme,
+  type ThemeMode,
+} from 'libriter-shared'
 
 import { palette, radius, spacing, useTheme } from '@/theme'
 import { Body, Muted } from './ui/Text'
@@ -32,7 +39,7 @@ export function ThemeToggle() {
               >
                 <Icon color={active ? colors.primary : colors.mutedForeground} size={16} />
                 <Body size={13} medium style={{ color: active ? colors.primary : colors.mutedForeground }}>
-                  {option.label}
+                  {themeModeLabel(option.value)}
                 </Body>
               </Pressable>
             )
@@ -57,7 +64,7 @@ export function ThemeToggle() {
               >
                 <View style={[styles.dot, { backgroundColor: swatch, borderColor: colors.glassEdge }]} />
                 <Body size={13} medium style={active ? { color: colors.primary } : undefined}>
-                  {option.label}
+                  {colorSchemeLabel(option.value)}
                 </Body>
               </Pressable>
             )

@@ -1,4 +1,5 @@
 import { Alert, Pressable, StyleSheet, View } from 'react-native'
+import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
 import { Download, Headphones, LogOut, Settings, type LucideProps } from 'lucide-react-native'
 import type { ComponentType } from 'react'
@@ -6,6 +7,7 @@ import type { ComponentType } from 'react'
 import { useAuth } from '@/auth/AuthProvider'
 import { PageHeader } from '@/components/PageHeader'
 import { Screen } from '@/components/Screen'
+import { LanguagePicker } from '@/components/LanguagePicker'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Body, Muted } from '@/components/ui/Text'
 import { countPending } from '@/db/events'
@@ -17,6 +19,7 @@ import { radius, spacing, useTheme } from '@/theme'
  * hlavní taby – Právě posloucháno, Stažené, Nastavení, vzhled a odhlášení.
  */
 export default function MoreScreen() {
+  const { t } = useTranslation()
   const { colors } = useTheme()
   const { user, signOut } = useAuth()
   const sessions = useSessions()
@@ -53,6 +56,13 @@ export default function MoreScreen() {
           Vzhled
         </Muted>
         <ThemeToggle />
+      </View>
+
+      <View style={[styles.group, { backgroundColor: colors.card, borderColor: colors.border, padding: spacing.md, marginTop: spacing.md }]}>
+        <Muted size={13} style={{ marginBottom: spacing.sm + 4 }}>
+          {t('language.label')}
+        </Muted>
+        <LanguagePicker />
       </View>
     </Screen>
   )

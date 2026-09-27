@@ -17,13 +17,10 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon } from 'lucide-react'
 import { useId, useState } from 'react'
-import type { Chapter } from '@/api/types'
+import { collator, type Chapter } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { cn } from 'cn'
 import { formatClock } from '@/lib/format'
-
-/** Řazení názvů tak, jak je čte člověk: „2“ před „10“, diakritika nerozhoduje. */
-const collator = new Intl.Collator('cs', { numeric: true, sensitivity: 'base' })
 
 interface ChapterOrderEditorProps {
   chapters: Chapter[]
@@ -72,7 +69,7 @@ export function ChapterOrderEditor({
   }
 
   function sortBy(key: 'file_name' | 'title') {
-    setOrder([...order].sort((a, b) => collator.compare(a[key], b[key])))
+    setOrder([...order].sort((a, b) => collator().compare(a[key], b[key])))
   }
 
   return (

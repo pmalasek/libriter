@@ -1,3 +1,5 @@
+import { t, type UILanguage } from './i18n'
+
 // Typy zrcadlí JSON modely backendu (libriter-backend/internal/model/model.go).
 // Pole s `omitempty` na Go straně jsou zde volitelná.
 
@@ -12,6 +14,8 @@ export interface UserAppearance {
 
 export interface User extends UserAppearance {
   id: string
+  /** Jazyk rozhraní z profilu. */
+  ui_language: UILanguage
   display_name: string
   email: string
   /** Volitelné přihlašovací jméno; prázdný řetězec = uživatel login nemá. */
@@ -26,8 +30,9 @@ export interface User extends UserAppearance {
  * (internal/service/login.go). Hodí se do atributu `pattern` u inputu.
  */
 export const LOGIN_PATTERN = '[A-Za-z0-9._\\-]{3,32}'
-export const LOGIN_HINT =
-  'Nepovinné. 3–32 znaků: písmena bez diakritiky, číslice, tečka, podtržítko a pomlčka.'
+export function loginHint(): string {
+  return t('labels.loginHint')
+}
 
 export interface Author {
   id: string
@@ -230,11 +235,9 @@ export interface BookProgress {
 /** Stav knihy pro zobrazení – odvozený z BookProgress. */
 export type BookStatus = 'finished' | 'started' | 'none'
 
-/** Čitelné názvy stavů knihy. */
-export const BOOK_STATUS_LABELS: Record<BookStatus, string> = {
-  finished: 'Doposlechnuto',
-  started: 'Rozposlouchané',
-  none: 'Neposlechnuto',
+/** Čitelný název stavu knihy. */
+export function bookStatusLabel(status: BookStatus): string {
+  return t(`labels.bookStatus.${status}`)
 }
 
 /** POST /sessions/{id}/items – přidání knih a sérií na konec poslechu. */
@@ -282,6 +285,8 @@ export interface RegisterRequest {
   email: string
   login?: string
   password: string
+  /** Jazyk rozhraní, ve kterém se uživatel registroval. */
+  ui_language?: UILanguage
 }
 
 /** Prázdný login uživateli login odebere. */
@@ -448,10 +453,8 @@ export const METADATA_SOURCE_LABELS: Record<string, string> = {
   googlebooks: 'Google Books',
 }
 
-export const ROLE_LABELS: Record<Role, string> = {
-  admin: 'Administrátor',
-  editor: 'Editor',
-  reader: 'Čtenář',
+export function roleLabel(role: Role): string {
+  return t(`labels.role.${role}`)
 }
 
 // --- administrace ---
@@ -724,20 +727,26 @@ export interface AuditPage {
   next_before: number | null
 }
 
-/** Čitelné názvy akcí v auditu. */
-export const AUDIT_ACTION_LABELS: Record<string, string> = {
-  'user.create': 'Založení účtu',
-  'user.role_change': 'Změna role',
-  'user.delete': 'Smazání účtu',
-  'user.password_reset': 'Reset hesla',
-  'settings.metadata_update': 'Změna zdrojů metadat',
-  'settings.registration_update': 'Změna nastavení registrace',
-  'book.delete': 'Smazání knihy',
-  'author.delete': 'Smazání autora',
-  'series.delete': 'Smazání série',
-  'scanner.rescan': 'Spuštění kontroly knihovny',
-  'library.repair_apply': 'Oprava kapitol',
-  'library.merge_books': 'Sloučení rozdělených knih',
+const AUDIT_ACTIONS = [
+  'user.create',
+  'user.role_change',
+  'user.delete',
+  'user.password_reset',
+  'settings.metadata_update',
+  'settings.registration_update',
+  'book.delete',
+  'author.delete',
+  'series.delete',
+  'scanner.rescan',
+  'library.repair_apply',
+  'library.merge_books',
+] as const
+
+/** Čitelný název akce v auditu; neznámá akce se ukáže, jak přišla. */
+export function auditActionLabel(action: string): string {
+  return (AUDIT_ACTIONS as readonly string[]).includes(action)
+    ? t(`labels.auditAction.${action as (typeof AUDIT_ACTIONS)[number]}`)
+    : action
 }
 
 /** Řádek přehledu poslechů v administraci (GET /admin/listening). */
