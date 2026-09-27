@@ -36,3 +36,4 @@ libriter-mobile/dist/
 # Výstup `expo prebuild` – generuje se ze konfigurace, do gitu nepatří
 libriter-mobile/ios/
 libriter-mobile/android/
+src_books/
