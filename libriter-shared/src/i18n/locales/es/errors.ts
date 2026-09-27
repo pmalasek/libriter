@@ -66,6 +66,10 @@ export default {
   image: {
     not_found: 'Imagen no encontrada',
     download_failed: 'No se ha podido descargar la imagen',
+    unsupported: 'El archivo no es una imagen compatible (JPEG, PNG, WebP, GIF, BMP)',
+    too_large: 'La imagen es demasiado grande (máx. 20 MB)',
+    empty: 'El archivo subido está vacío',
+    save_failed: 'No se ha podido guardar la imagen',
   },
   session: {
     not_found: 'Sesión de escucha no encontrada',

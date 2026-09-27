@@ -105,6 +105,41 @@ func (h *BookHandler) SetCover(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, book)
 }
 
+// POST /api/v1/books/{id}/cover  (editor+)
+//
+// Tělo je samotný obrázek (JPEG, PNG, WebP, GIF, BMP); typ se pozná podle
+// obsahu. Dosavadní obálku nahradí.
+func (h *BookHandler) UploadCover(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	if h.covers == nil {
+		writeError(w, http.StatusNotFound, "metadata.no_providers", "zdroje metadat nejsou zapnuté")
+		return
+	}
+
+	data, ok := readImageBody(w, r)
+	if !ok {
+		return
+	}
+
+	book, err := h.covers.SetFromUpload(r.Context(), id, data)
+	switch {
+	case errors.Is(err, service.ErrNotImage):
+		writeError(w, http.StatusBadRequest, "image.unsupported", "soubor není podporovaný obrázek")
+		return
+	case errors.Is(err, service.ErrNotFound):
+		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
+		return
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "image.save_failed", "obálku se nepodařilo uložit")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, book)
+}
+
 // GET|HEAD /api/v1/books/{id}/cover
 //
 // Veřejný endpoint - <img> v prohlížeči neumí poslat hlavičku Authorization.

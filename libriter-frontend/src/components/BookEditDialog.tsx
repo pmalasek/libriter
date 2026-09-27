@@ -10,6 +10,7 @@ import {
   usePatchBook,
   useSeriesList,
   useSetBookCover,
+  useUploadBookCover,
 } from '@/api/hooks'
 import {
   METADATA_SOURCE_LABELS,
@@ -19,6 +20,8 @@ import {
   type BookPatchRequest,
 } from '@/api/types'
 import { BookAuthorsField } from '@/components/BookAuthorsField'
+import { BookCover } from '@/components/BookCover'
+import { ImageUploadButton } from '@/components/ImageUploadButton'
 import { LanguageSelect } from '@/components/LanguageSelect'
 import { MetadataImport } from '@/components/MetadataImport'
 import { Button } from '@/components/ui/button'
@@ -121,9 +124,26 @@ function BookEditForm({
   const createSeries = useCreateSeries()
   const patchBook = usePatchBook(book.id)
   const setCover = useSetBookCover(book.id)
+  const uploadCover = useUploadBookCover(book.id)
 
   const saving =
-    patchBook.isPending || setCover.isPending || createSeries.isPending || createAuthor.isPending
+    patchBook.isPending ||
+    setCover.isPending ||
+    uploadCover.isPending ||
+    createSeries.isPending ||
+    createAuthor.isPending
+
+  // Vlastní obálka se nahraje hned a obálku ze zdroje už při uložení
+  // nepřepíše – přepínač se vypne.
+  function handleUploadCover(file: File) {
+    uploadCover.mutate(file, {
+      onSuccess: () => {
+        setUseSourceCover(false)
+        toast.success(t('books.editDialog.coverUploaded'))
+      },
+      onError: (error) => toast.error(error.message),
+    })
+  }
 
   /**
    * Autoři ze zdroje metadat nahradí dosavadní seznam – zdroj ví, kdo knihu
@@ -361,6 +381,26 @@ function BookEditForm({
           )
         }}
       />
+
+      <div className="flex items-center gap-3">
+        <div className="w-16 shrink-0">
+          <BookCover key={`${book.id}:${book.updated_at}`} book={book} lift={false} />
+        </div>
+        <div className="min-w-0 space-y-1 text-sm">
+          {!book.cover_path ? (
+            <p className="text-muted-foreground">{t('books.editDialog.noCover')}</p>
+          ) : null}
+          <ImageUploadButton
+            label={
+              uploadCover.isPending
+                ? t('books.editDialog.uploadingCover')
+                : t('books.editDialog.uploadCover')
+            }
+            disabled={uploadCover.isPending}
+            onFile={handleUploadCover}
+          />
+        </div>
+      </div>
 
       {sourceCover ? (
         <div className="flex items-center gap-3 rounded-lg border p-3">

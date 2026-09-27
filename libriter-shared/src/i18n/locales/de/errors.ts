@@ -66,6 +66,10 @@ export default {
   image: {
     not_found: 'Bild nicht gefunden',
     download_failed: 'Bild konnte nicht heruntergeladen werden',
+    unsupported: 'Die Datei ist kein unterstütztes Bild (JPEG, PNG, WebP, GIF, BMP)',
+    too_large: 'Das Bild ist zu groß (max. 20 MB)',
+    empty: 'Die hochgeladene Datei ist leer',
+    save_failed: 'Bild konnte nicht gespeichert werden',
   },
   session: {
     not_found: 'Hörsitzung nicht gefunden',

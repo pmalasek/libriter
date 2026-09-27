@@ -16,7 +16,11 @@ import (
 // zdroji metadat.
 var ErrCoverNotAllowed = errors.New("adresa obálky nepatří povolenému zdroji")
 
-// BookCoverService stahuje obálky knih ze zdrojů metadat do COVER_ROOT.
+// ErrNotImage znamená, že nahraný soubor není podporovaný obrázek.
+var ErrNotImage = errors.New("soubor není podporovaný obrázek")
+
+// BookCoverService ukládá obálky knih do COVER_ROOT – stažené ze zdrojů
+// metadat nebo nahrané uživatelem.
 //
 // Adresu určuje klient, proto se stahuje jen z hostitelů, které některý
 // zapnutý zdroj prohlásí za své (metadata.CoverProvider) – jinak by šlo
@@ -44,11 +48,7 @@ func (s *BookCoverService) SetFromURL(ctx context.Context, bookID uuid.UUID, cov
 		return nil, ErrCoverNotAllowed
 	}
 
-	book, err := s.store.GetBook(ctx, bookID)
-	if errors.Is(err, storage.ErrNotFound) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
+	if _, err := s.getBook(ctx, bookID); err != nil {
 		return nil, err
 	}
 
@@ -56,9 +56,40 @@ func (s *BookCoverService) SetFromURL(ctx context.Context, bookID uuid.UUID, cov
 	if err != nil {
 		return nil, err
 	}
+	return s.save(ctx, bookID, data, ext)
+}
+
+// SetFromUpload uloží obrázek nahraný uživatelem jako obálku knihy. Typ se
+// určí podle obsahu, ne podle hlaviček klienta.
+func (s *BookCoverService) SetFromUpload(ctx context.Context, bookID uuid.UUID, data []byte) (*model.Book, error) {
+	ext := imagestore.SniffExt(data)
+	if ext == "" {
+		return nil, ErrNotImage
+	}
+	if _, err := s.getBook(ctx, bookID); err != nil {
+		return nil, err
+	}
+	return s.save(ctx, bookID, data, ext)
+}
+
+func (s *BookCoverService) getBook(ctx context.Context, bookID uuid.UUID) (*model.Book, error) {
+	book, err := s.store.GetBook(ctx, bookID)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	return book, err
+}
+
+// save zapíše obálku na disk a do databáze. Dosavadní obálku nahradí.
+func (s *BookCoverService) save(ctx context.Context, bookID uuid.UUID, data []byte, ext string) (*model.Book, error) {
+	book, err := s.getBook(ctx, bookID)
+	if err != nil {
+		return nil, err
+	}
 
 	// Jméno souboru je stejné jako u obálek, které ukládá scanner
 	// (<book_id>.<ext>), takže se obálka z adresáře a ze zdroje nemíchají.
+	// Cache prohlížeče obchází ?v=<updated_at>, které se zápisem změní.
 	fileName, err := imagestore.Write(s.root, bookID.String(), data, ext)
 	if err != nil {
 		return nil, err

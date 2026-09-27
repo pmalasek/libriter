@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
 import { bookStatus, progressMap, queryKeys } from 'libriter-shared'
-import { apiFetch, asList } from './client'
+import { apiFetch, apiUpload, asList } from './client'
 import type {
   AuthConfig,
   Author,
@@ -312,6 +312,18 @@ export function useSetBookCover(bookId: string) {
   })
 }
 
+/** Nahrání vlastní obálky (soubor s obrázkem); nahradí dosavadní obálku. */
+export function useUploadBookCover(bookId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => apiUpload<Book>(`/books/${bookId}/cover`, file, { method: 'POST' }),
+    onSuccess: (book) => {
+      queryClient.setQueryData(queryKeys.book(bookId), book)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+    },
+  })
+}
+
 /**
  * Smazání knihy (admin). `deleteFiles` rozhoduje, jestli se smažou i audio
  * soubory na disku – bez nich scanner knihu při dalším průchodu založí znovu.
@@ -415,6 +427,16 @@ export function useSetAuthorImage(authorId: string) {
   return useMutation({
     mutationFn: (url: string) =>
       apiFetch<Author>(`/authors/${authorId}/image`, { method: 'PUT', json: { url } }),
+    onSuccess: (author) => refreshAuthor(queryClient, authorId, author),
+  })
+}
+
+/** Nahrání vlastní fotky autora (soubor s obrázkem); nahradí dosavadní. */
+export function useUploadAuthorImage(authorId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) =>
+      apiUpload<Author>(`/authors/${authorId}/image`, file, { method: 'POST' }),
     onSuccess: (author) => refreshAuthor(queryClient, authorId, author),
   })
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"libriter/internal/imagestore"
 	"libriter/internal/metadata"
@@ -25,7 +26,8 @@ type ChainSource interface {
 	Chain() *metadata.Chain
 }
 
-// AuthorImageService stahuje fotky autorů z povolených zdrojů na disk.
+// AuthorImageService ukládá fotky autorů na disk – stažené z povolených
+// zdrojů nebo nahrané uživatelem.
 //
 // Adresu určuje klient, proto se stahuje jen z hostitelů, které některý
 // zapnutý zdroj metadat prohlásí za svoje – jinak by šlo server přimět
@@ -54,11 +56,7 @@ func (s *AuthorImageService) SetFromURL(ctx context.Context, authorID uuid.UUID,
 		return nil, ErrImageNotAllowed
 	}
 
-	author, err := s.store.GetAuthor(ctx, authorID)
-	if errors.Is(err, storage.ErrNotFound) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
+	if _, err := s.getAuthor(ctx, authorID); err != nil {
 		return nil, err
 	}
 
@@ -66,13 +64,46 @@ func (s *AuthorImageService) SetFromURL(ctx context.Context, authorID uuid.UUID,
 	if err != nil {
 		return nil, err
 	}
+	return s.save(ctx, authorID, data, ext)
+}
 
-	fileName, err := imagestore.Write(s.root, authorID.String(), data, ext)
+// SetFromUpload uloží obrázek nahraný uživatelem jako fotku autora. Typ se
+// určí podle obsahu, ne podle hlaviček klienta.
+func (s *AuthorImageService) SetFromUpload(ctx context.Context, authorID uuid.UUID, data []byte) (*model.Author, error) {
+	ext := imagestore.SniffExt(data)
+	if ext == "" {
+		return nil, ErrNotImage
+	}
+	if _, err := s.getAuthor(ctx, authorID); err != nil {
+		return nil, err
+	}
+	return s.save(ctx, authorID, data, ext)
+}
+
+func (s *AuthorImageService) getAuthor(ctx context.Context, authorID uuid.UUID) (*model.Author, error) {
+	author, err := s.store.GetAuthor(ctx, authorID)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	return author, err
+}
+
+// save zapíše fotku na disk a do databáze. Dosavadní fotku nahradí.
+func (s *AuthorImageService) save(ctx context.Context, authorID uuid.UUID, data []byte, ext string) (*model.Author, error) {
+	author, err := s.getAuthor(ctx, authorID)
 	if err != nil {
 		return nil, err
 	}
 
-	// Starý soubor s jinou příponou by jinak zůstal ležet na disku.
+	// Frontend obchází cache prohlížeče přes ?v=<image_path>, takže každá
+	// nová fotka musí mít nové jméno – jinak by se ukazovala ta stará.
+	name := fmt.Sprintf("%s-%d", authorID, time.Now().UnixNano())
+	fileName, err := imagestore.Write(s.root, name, data, ext)
+	if err != nil {
+		return nil, err
+	}
+
+	// Starý soubor by jinak zůstal ležet na disku.
 	if author.ImagePath != nil && *author.ImagePath != fileName {
 		_ = imagestore.Remove(s.root, *author.ImagePath)
 	}

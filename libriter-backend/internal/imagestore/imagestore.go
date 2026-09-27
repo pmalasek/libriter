@@ -8,6 +8,7 @@ package imagestore
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,6 +64,12 @@ func ExtForContentType(contentType string) string {
 // IsImageContentType říká, jestli MIME typ patří podporovanému obrázku.
 func IsImageContentType(contentType string) bool {
 	return ExtForContentType(contentType) != ""
+}
+
+// SniffExt určí příponu podle obsahu souboru, ne podle toho, co tvrdí
+// klient. Prázdný řetězec = data nejsou podporovaný obrázek.
+func SniffExt(data []byte) string {
+	return ExtForContentType(http.DetectContentType(data))
 }
 
 // Write uloží data pod názvem <name><ext> do root a vrátí název souboru.

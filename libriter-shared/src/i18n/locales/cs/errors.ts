@@ -66,6 +66,10 @@ export default {
   image: {
     not_found: 'Obrázek nenalezen',
     download_failed: 'Obrázek se nepodařilo stáhnout',
+    unsupported: 'Soubor není podporovaný obrázek (JPEG, PNG, WebP, GIF, BMP)',
+    too_large: 'Obrázek je příliš velký (nejvýš 20 MB)',
+    empty: 'Nahraný soubor je prázdný',
+    save_failed: 'Obrázek se nepodařilo uložit',
   },
   session: {
     not_found: 'Poslech nenalezen',

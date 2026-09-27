@@ -232,6 +232,41 @@ func (h *AuthorHandler) SetImage(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, author)
 }
 
+// POST /api/v1/authors/{id}/image  (editor+)
+//
+// Tělo je samotný obrázek (JPEG, PNG, WebP, GIF, BMP); typ se pozná podle
+// obsahu. Dosavadní fotku nahradí.
+func (h *AuthorHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	if h.images == nil {
+		writeError(w, http.StatusNotFound, "metadata.no_providers", "zdroje metadat nejsou zapnuté")
+		return
+	}
+
+	data, ok := readImageBody(w, r)
+	if !ok {
+		return
+	}
+
+	author, err := h.images.SetFromUpload(r.Context(), id, data)
+	switch {
+	case errors.Is(err, service.ErrNotImage):
+		writeError(w, http.StatusBadRequest, "image.unsupported", "soubor není podporovaný obrázek")
+		return
+	case errors.Is(err, service.ErrNotFound):
+		writeError(w, http.StatusNotFound, "author.not_found", "autor nenalezen")
+		return
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "image.save_failed", "obrázek se nepodařilo uložit")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, author)
+}
+
 // DELETE /api/v1/authors/{id}/image  (editor+)
 func (h *AuthorHandler) DeleteImage(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUID(w, r, "id")

@@ -66,6 +66,10 @@ export default {
   image: {
     not_found: 'Image not found',
     download_failed: 'Could not download the image',
+    unsupported: 'The file is not a supported image (JPEG, PNG, WebP, GIF, BMP)',
+    too_large: 'The image is too large (20 MB max)',
+    empty: 'The uploaded file is empty',
+    save_failed: 'Could not save the image',
   },
   session: {
     not_found: 'Listening not found',

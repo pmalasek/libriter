@@ -3,10 +3,16 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
-import { useDeleteAuthorImage, useSetAuthorImage, useUpdateAuthor } from '@/api/hooks'
+import {
+  useDeleteAuthorImage,
+  useSetAuthorImage,
+  useUpdateAuthor,
+  useUploadAuthorImage,
+} from '@/api/hooks'
 import type { Author } from '@/api/types'
 import { AuthorImage } from '@/components/AuthorImage'
 import { AuthorMetadataImport } from '@/components/AuthorMetadataImport'
+import { ImageUploadButton } from '@/components/ImageUploadButton'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -70,6 +76,7 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
   const updateAuthor = useUpdateAuthor(author.id)
   const setImage = useSetAuthorImage(author.id)
   const deleteImage = useDeleteAuthorImage(author.id)
+  const uploadImage = useUploadAuthorImage(author.id)
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
@@ -131,7 +138,19 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
     })
   }
 
-  const pending = updateAuthor.isPending || setImage.isPending
+  // Vlastní fotka se nahraje hned – má přednost i před fotkou ze zdroje,
+  // která by se jinak stáhla při uložení.
+  function handleUploadImage(file: File) {
+    uploadImage.mutate(file, {
+      onSuccess: () => {
+        setPendingImageURL(null)
+        toast.success(t('authors.editDialog.imageUploaded'))
+      },
+      onError: (error) => toast.error(error.message),
+    })
+  }
+
+  const pending = updateAuthor.isPending || setImage.isPending || uploadImage.isPending
 
   return (
     <form onSubmit={handleSubmit} className="grid gap-4">
@@ -187,24 +206,40 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
       />
 
       <div className="flex items-center gap-3">
-        <AuthorImage key={author.id} author={author} className="size-16 shrink-0" />
-        <div className="min-w-0 text-sm">
+        <AuthorImage
+          key={`${author.id}:${author.image_path ?? ''}`}
+          author={author}
+          className="size-16 shrink-0"
+        />
+        <div className="min-w-0 space-y-1 text-sm">
           {pendingImageURL ? (
             <p className="text-muted-foreground">{t('authors.editDialog.pendingImage')}</p>
-          ) : author.image_path ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleDeleteImage}
-              disabled={deleteImage.isPending}
-            >
-              <Trash2Icon />
-              {t('authors.editDialog.deleteImage')}
-            </Button>
-          ) : (
+          ) : !author.image_path ? (
             <p className="text-muted-foreground">{t('authors.editDialog.noImage')}</p>
-          )}
+          ) : null}
+          <div className="flex flex-wrap gap-1">
+            <ImageUploadButton
+              label={
+                uploadImage.isPending
+                  ? t('authors.editDialog.uploadingImage')
+                  : t('authors.editDialog.uploadImage')
+              }
+              disabled={uploadImage.isPending}
+              onFile={handleUploadImage}
+            />
+            {author.image_path && !pendingImageURL ? (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleDeleteImage}
+                disabled={deleteImage.isPending}
+              >
+                <Trash2Icon />
+                {t('authors.editDialog.deleteImage')}
+              </Button>
+            ) : null}
+          </div>
         </div>
       </div>
 

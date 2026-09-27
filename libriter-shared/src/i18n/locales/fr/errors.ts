@@ -66,6 +66,10 @@ export default {
   image: {
     not_found: 'Image introuvable',
     download_failed: 'Impossible de télécharger l’image',
+    unsupported: 'Le fichier n’est pas une image prise en charge (JPEG, PNG, WebP, GIF, BMP)',
+    too_large: 'L’image est trop volumineuse (20 Mo max.)',
+    empty: 'Le fichier importé est vide',
+    save_failed: 'Impossible d’enregistrer l’image',
   },
   session: {
     not_found: 'Session d’écoute introuvable',

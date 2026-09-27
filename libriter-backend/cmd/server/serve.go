@@ -206,10 +206,12 @@ func runServe() error {
 				r.Put("/books/{id}", bookH.Update)
 				r.Patch("/books/{id}", bookH.Patch) // částečná aktualizace (webové rozhraní)
 				r.Put("/books/{id}/chapters/order", bookH.ReorderChapters)
-				r.Put("/books/{id}/cover", bookH.SetCover) // stáhne obálku ze zdroje
+				r.Put("/books/{id}/cover", bookH.SetCover)     // stáhne obálku ze zdroje
+				r.Post("/books/{id}/cover", bookH.UploadCover) // nahraný soubor
 				r.Post("/authors", authorH.Create)
 				r.Put("/authors/{id}", authorH.Update)
-				r.Put("/authors/{id}/image", authorH.SetImage) // stáhne fotku ze zdroje
+				r.Put("/authors/{id}/image", authorH.SetImage)     // stáhne fotku ze zdroje
+				r.Post("/authors/{id}/image", authorH.UploadImage) // nahraný soubor
 				r.Delete("/authors/{id}/image", authorH.DeleteImage)
 				r.Post("/series", seriesH.Create)
 				r.Put("/series/{id}", seriesH.Update)
