@@ -724,6 +724,9 @@ export interface SystemInfo {
   author_image_root: string
   ffprobe_available: boolean
   ffprobe_path: string
+  /** ffmpeg převádí kapitoly do úsporné varianty pro stahování do mobilu. */
+  ffmpeg_available: boolean
+  ffmpeg_path: string
   /** null na systémech, kde volné místo nejde zjistit. */
   disk: DiskUsage | null
 }

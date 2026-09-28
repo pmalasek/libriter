@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -169,5 +170,69 @@ func TestAudioStreamRejectsPathsOutsideLibrary(t *testing.T) {
 	rec := env.do(t, http.MethodGet, "/chapters/"+uuid.New().String()+"/audio?t="+streamToken, "", nil)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("neznámá kapitola: %d", rec.Code)
+	}
+}
+
+func TestAudioStreamCompactVariant(t *testing.T) {
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg není nainstalovaný")
+	}
+	env := newAdminTestEnv(t)
+	token, _ := env.login(t, "kompakt@example.com", model.RoleReader)
+	_, chapterIDs := seedBook(t, env, "Maly princ", nil, nil, 2)
+
+	// Skutečné MP3 (dvě sekundy tónu) – převod potřebuje platný vstup.
+	rel := "knihovna/Maly princ/01.mp3"
+	abs := filepath.Join(env.audioRoot, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(abs), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gen := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=2",
+		"-ac", "2", "-b:a", "256k", abs)
+	if out, err := gen.CombinedOutput(); err != nil {
+		t.Fatalf("příprava MP3: %v %s", err, out)
+	}
+	// Druhá kapitola není platné audio.
+	writeChapterFile(t, env, "knihovna/Maly princ/02.mp3", "tohle neni mp3")
+
+	streamToken := env.streamToken(t, token)
+	path := "/chapters/" + chapterIDs[0].String() + "/audio?variant=compact&t=" + streamToken
+
+	rec := env.do(t, http.MethodGet, path, "", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("compact: %d %s", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "audio/ogg" {
+		t.Errorf("Content-Type: %q", ct)
+	}
+	if v := rec.Header().Get("X-Libriter-Variant"); v != "compact" {
+		t.Errorf("X-Libriter-Variant: %q", v)
+	}
+	if ar := rec.Header().Get("Accept-Ranges"); ar != "none" {
+		t.Errorf("Accept-Ranges: %q", ar)
+	}
+	if body := rec.Body.Bytes(); len(body) < 4 || string(body[:4]) != "OggS" {
+		t.Errorf("tělo není Ogg (%d B)", len(body))
+	}
+
+	// HEAD ffmpeg nespouští, jen ohlásí variantu.
+	if rec := env.do(t, http.MethodHead, path, "", nil); rec.Code != http.StatusOK || rec.Body.Len() != 0 {
+		t.Errorf("HEAD: %d, %d B", rec.Code, rec.Body.Len())
+	}
+
+	// Nepřevoditelný soubor skončí řádnou chybou, ne prázdnou dvoustovkou.
+	bad := "/chapters/" + chapterIDs[1].String() + "/audio?variant=compact&t=" + streamToken
+	if rec := env.do(t, http.MethodGet, bad, "", nil); rec.Code != http.StatusInternalServerError {
+		t.Errorf("neplatné audio: %d, chtěno 500", rec.Code)
+	}
+
+	// Bez parametru zůstává originál s Range.
+	orig := env.do(t, http.MethodGet, "/chapters/"+chapterIDs[0].String()+"/audio?t="+streamToken, "", nil)
+	if v := orig.Header().Get("X-Libriter-Variant"); v != "original" {
+		t.Errorf("originál X-Libriter-Variant: %q", v)
+	}
+	if ar := orig.Header().Get("Accept-Ranges"); ar != "bytes" {
+		t.Errorf("originál Accept-Ranges: %q", ar)
 	}
 }

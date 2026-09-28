@@ -37,6 +37,10 @@ type SystemInfo struct {
 
 	FfprobeAvailable bool   `json:"ffprobe_available"`
 	FfprobePath      string `json:"ffprobe_path"`
+	// ffmpeg převádí kapitoly do úsporné varianty pro stahování do mobilu;
+	// bez něj mobil dostane originál.
+	FfmpegAvailable bool   `json:"ffmpeg_available"`
+	FfmpegPath      string `json:"ffmpeg_path"`
 
 	// Disk je nil, pokud systém zjištění místa nepodporuje.
 	Disk *DiskUsage `json:"disk"`
@@ -55,6 +59,7 @@ func NewSystem(store *storage.Store, cfg *config.Config, startedAt time.Time) *S
 
 func (s *SystemService) Info() SystemInfo {
 	ffprobePath, ffprobeErr := exec.LookPath("ffprobe")
+	ffmpegPath, ffmpegErr := exec.LookPath("ffmpeg")
 
 	info := SystemInfo{
 		Version:          version.String(),
@@ -69,6 +74,8 @@ func (s *SystemService) Info() SystemInfo {
 		AuthorImageRoot:  absPath(s.cfg.Storage.AuthorImageRoot),
 		FfprobeAvailable: ffprobeErr == nil,
 		FfprobePath:      ffprobePath,
+		FfmpegAvailable:  ffmpegErr == nil,
+		FfmpegPath:       ffmpegPath,
 	}
 
 	info.Disk = diskUsage(info.AudioRoot)

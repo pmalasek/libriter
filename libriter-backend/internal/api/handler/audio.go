@@ -1,10 +1,16 @@
 package handler
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
+	"strings"
 	"time"
 
 	"libriter/internal/audiostore"
@@ -17,13 +23,36 @@ type AudioHandler struct {
 	auth     *service.AuthService
 	// audioRoot je kořen knihovny; cesta z databáze se skládá až pod ním.
 	audioRoot string
+	// ffmpeg je cesta k binárce pro úspornou variantu; prázdná, když chybí.
+	ffmpeg string
+	// transcodes drží počet běžících převodů – každý vytíží jedno jádro.
+	transcodes chan struct{}
 }
 
 func NewAudio(chapters *service.BookService, auth *service.AuthService, audioRoot string) *AudioHandler {
-	return &AudioHandler{chapters: chapters, auth: auth, audioRoot: audioRoot}
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		slog.Warn("ffmpeg nenalezen – úsporná varianta audia se posílá jako originál")
+		ffmpeg = ""
+	}
+	return &AudioHandler{
+		chapters:   chapters,
+		auth:       auth,
+		audioRoot:  audioRoot,
+		ffmpeg:     ffmpeg,
+		transcodes: make(chan struct{}, runtime.NumCPU()),
+	}
 }
 
-// GET|HEAD /api/v1/chapters/{id}/audio?t=<stream token>
+// Varianty audia v parametru ?variant= a hlavičce X-Libriter-Variant.
+const (
+	variantOriginal = "original"
+	// variantCompact je Opus 48 kbps mono v kontejneru Ogg – pro stahování
+	// do telefonu. Pro mluvené slovo zní stejně a je zhruba pětkrát menší.
+	variantCompact = "compact"
+)
+
+// GET|HEAD /api/v1/chapters/{id}/audio?t=<stream token>[&variant=compact]
 //
 // Mimo skupinu s Authenticate: prvek <audio> neumí poslat hlavičku
 // Authorization, takže se token předává v adrese. Není to přihlašovací token,
@@ -97,6 +126,12 @@ func (h *AudioHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if r.URL.Query().Get("variant") == variantCompact && h.ffmpeg != "" {
+		h.streamCompact(w, r, abs)
+		return
+	}
+
+	w.Header().Set("X-Libriter-Variant", variantOriginal)
 	w.Header().Set("Content-Type", audiostore.ContentType(abs))
 	// Soubory knihovny se nemění, ale adresa nese token s omezenou platností –
 	// proto jen soukromá cache prohlížeče, ne sdílená proxy.
@@ -105,4 +140,91 @@ func (h *AudioHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	// ServeContent sám obslouží Range, If-Range i částečné odpovědi 206,
 	// bez kterých by přetáčení stahovalo soubor pokaždé od začátku.
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
+}
+
+// streamCompact převádí kapitolu za běhu do Opusu a posílá ji rovnou klientovi.
+//
+// Výsledek se neukládá: do telefonu se kniha stahuje jednou a druhá kopie
+// knihovny na disku by nic neušetřila. Cena za to je, že odpověď nezná
+// délku ani neumí Range – varianta proto slouží ke stahování, ne ke
+// streamování s přetáčením.
+func (h *AudioHandler) streamCompact(w http.ResponseWriter, r *http.Request, abs string) {
+	w.Header().Set("X-Libriter-Variant", variantCompact)
+	w.Header().Set("Content-Type", "audio/ogg")
+	w.Header().Set("Accept-Ranges", "none")
+	w.Header().Set("Cache-Control", "private, no-store")
+	if r.Method == http.MethodHead {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Na volné jádro se čeká; odpojení klienta čekání ukončí.
+	select {
+	case h.transcodes <- struct{}{}:
+		defer func() { <-h.transcodes }()
+	case <-r.Context().Done():
+		return
+	}
+
+	cmd := exec.CommandContext(r.Context(), h.ffmpeg,
+		"-nostdin", "-v", "error",
+		"-i", abs,
+		"-vn", "-map_metadata", "-1",
+		"-ac", "1", "-c:a", "libopus", "-b:a", "48k", "-application", "voip",
+		// Úroveň 5 kóduje zhruba dvakrát rychleji než výchozí 10 a u řeči
+		// rozdíl neslyšet; rychlost kódování tu přímo určuje rychlost stahování.
+		"-compression_level", "5",
+		"-f", "ogg", "pipe:1",
+	)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "audio.transcode_failed", "převod audia se nepodařilo spustit")
+		return
+	}
+	if err := cmd.Start(); err != nil {
+		slog.Error("převod audia: start ffmpeg", "err", err)
+		writeError(w, http.StatusInternalServerError, "audio.transcode_failed", "převod audia se nepodařilo spustit")
+		return
+	}
+
+	// Dokud nepřišel první bajt, jde chyba ještě poslat jako řádná odpověď.
+	out := bufio.NewReaderSize(stdout, 64*1024)
+	if _, err := out.Peek(1); err != nil {
+		_ = cmd.Wait()
+		slog.Error("převod audia selhal", "file", abs, "stderr", strings.TrimSpace(stderr.String()))
+		writeError(w, http.StatusInternalServerError, "audio.transcode_failed", "audio se nepodařilo převést")
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	_, copyErr := io.Copy(flushWriter{w: w, rc: http.NewResponseController(w)}, out)
+	waitErr := cmd.Wait()
+	if r.Context().Err() != nil {
+		return // klient odešel, ffmpeg ukončil kontext
+	}
+	if copyErr != nil || waitErr != nil {
+		slog.Error("převod audia přerušen", "file", abs, "copy_err", copyErr, "wait_err", waitErr,
+			"stderr", strings.TrimSpace(stderr.String()))
+		// Hlavička 200 už odešla. Utržené spojení klient pozná jako chybu;
+		// řádně ukončená odpověď by vypadala jako celý soubor.
+		panic(http.ErrAbortHandler)
+	}
+}
+
+// flushWriter posílá každý blok hned, ať klient vidí průběh a spojení
+// nestojí, dokud se nenaplní buffer serveru. Flush jde přes
+// ResponseController, protože logovací middleware writer obaluje.
+type flushWriter struct {
+	w  http.ResponseWriter
+	rc *http.ResponseController
+}
+
+func (f flushWriter) Write(p []byte) (int, error) {
+	n, err := f.w.Write(p)
+	if err == nil {
+		err = f.rc.Flush()
+	}
+	return n, err
 }
