@@ -1,0 +1,38 @@
+<!--
+  Kresba symbolu Libriter (sluchátka, play, otevřená kniha) bez podkladu,
+  překreslená podle _image/libriter-logo-dark.png. Plátno 1024 odpovídá ploše
+  ikony; varianty v této složce ji jen skládají s pozadím a zmenšují.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="play" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8AF0FF"/>
+      <stop offset="1" stop-color="#2BBDF2"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#8CF3F7"/>
+      <stop offset="1" stop-color="#4FD8F2"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Sluchátka -->
+  <path d="M190 470 C190 262 332 140 512 140 C692 140 834 262 834 470"
+        fill="none" stroke="#fff" stroke-width="50" stroke-linecap="round"/>
+  <rect x="134" y="372" width="112" height="222" rx="46" fill="#fff"/>
+  <rect x="778" y="372" width="112" height="222" rx="46" fill="#fff"/>
+  <rect x="274" y="396" width="40" height="186" rx="20" fill="#fff"/>
+  <rect x="710" y="396" width="40" height="186" rx="20" fill="#fff"/>
+
+  <!-- Play -->
+  <path d="M446 352 L446 562 L622 457 Z" fill="url(#play)"
+        stroke="url(#play)" stroke-width="44" stroke-linejoin="round"/>
+
+  <!-- Kniha: bílá horní strana a tyrkysový okraj pod ní, zrcadlově -->
+  <g id="half">
+    <path d="M166 700 C166 660 206 624 272 624 C380 624 470 676 512 766
+             C462 718 380 698 284 698 C236 698 196 700 166 700 Z" fill="#fff"/>
+    <path d="M140 738 C290 732 430 778 502 872
+             C418 800 290 782 140 784 Z" fill="url(#page)"/>
+  </g>
+  <use href="#half" transform="translate(1024 0) scale(-1 1)"/>
+</svg>

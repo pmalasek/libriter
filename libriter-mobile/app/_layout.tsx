@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
-import { ActivityIndicator, LogBox, View } from 'react-native'
+import { LogBox, useColorScheme, View } from 'react-native'
 import { Stack, useRouter, useSegments } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useFonts } from 'expo-font'
+import * as SplashScreen from 'expo-splash-screen'
 import { BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold } from '@expo-google-fonts/bricolage-grotesque'
 import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold } from '@expo-google-fonts/geist'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
@@ -19,12 +20,17 @@ import { openDb } from '@/db/schema'
 import { PlayerProvider } from '@/player/PlayerProvider'
 import { registerBackgroundSync, unregisterBackgroundSync } from '@/sync/backgroundSync'
 import { syncEngine } from '@/sync/syncEngine'
-import { ThemeProvider, useTheme } from '@/theme'
+import { palette, ThemeProvider, useTheme } from '@/theme'
 
 // react-native-track-player hlásí při startu čtyři varování o metodách
 // časovače spánku, které v nativním modulu na iOSu nejsou. Aplikace je
 // nepoužívá (časovač je vlastní, v JS) a banner jen překrývá obsah.
 LogBox.ignoreLogs([/method signature for the JS method/])
+
+// Nativní splash zůstane, dokud nestojí databáze, fonty a přihlášení –
+// uživatel tak nevidí mezikrok s prázdnou obrazovkou ani spinner.
+void SplashScreen.preventAutoHideAsync()
+SplashScreen.setOptions({ fade: true, duration: 250 })
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -41,7 +47,7 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const [dbReady, setDbReady] = useState(false)
-  const [fontsReady] = useFonts({
+  const [fontsLoaded, fontsError] = useFonts({
     BricolageGrotesque_600SemiBold,
     BricolageGrotesque_700Bold,
     Geist_400Regular,
@@ -49,9 +55,18 @@ export default function RootLayout() {
     Geist_600SemiBold,
   })
 
+  // Chybějící font není důvod aplikaci nepustit – vezme se systémový.
+  const fontsReady = fontsLoaded || fontsError != null
+
   // Databáze musí stát dřív, než si o ni řekne první obrazovka.
   useEffect(() => {
-    void openDb().then(() => setDbReady(true))
+    openDb()
+      .then(() => setDbReady(true))
+      .catch((error: unknown) => {
+        // Bez databáze aplikace nepoběží, ale splash nesmí viset navždy.
+        console.error('openDb failed', error)
+        void SplashScreen.hideAsync()
+      })
   }, [])
 
   if (!dbReady || !fontsReady) return <Splash />
@@ -114,6 +129,10 @@ function AuthGate() {
     change.catch(() => undefined)
   }, [loading, signedIn])
 
+  useEffect(() => {
+    if (!loading) void SplashScreen.hideAsync()
+  }, [loading])
+
   if (loading) return <Splash />
 
   return (
@@ -127,10 +146,12 @@ function AuthGate() {
   )
 }
 
+/**
+ * Podklad pod nativním splashem, než se aplikace rozběhne. Sám nic neukazuje –
+ * jen drží stejnou barvu jako splash z app.json, aby při jeho zmizení nic
+ * neblikalo. Téma ještě není načtené, proto se řídí režimem systému.
+ */
 function Splash() {
-  return (
-    <View style={{ flex: 1, backgroundColor: '#0F1417', justifyContent: 'center' }}>
-      <ActivityIndicator color="#3FB8AF" />
-    </View>
-  )
+  const mode = useColorScheme() === 'dark' ? 'dark' : 'light'
+  return <View style={{ flex: 1, backgroundColor: palette('teal', mode).background }} />
 }

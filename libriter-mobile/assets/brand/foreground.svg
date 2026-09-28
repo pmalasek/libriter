@@ -1,0 +1,8 @@
+<!--
+  Popředí adaptivní ikony Androidu. Launcher z plátna 108 dp ukáže jen střed
+  a bezpečný je kruh 66 dp, proto je kresba zmenšená na 62 %. Stejný obrázek
+  slouží i jako monochromatická ikona – Android z ní bere jen průhlednost.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1024 1024">
+  <image href="glyphs.svg" xlink:href="glyphs.svg" x="195" y="195" width="634" height="634"/>
+</svg>

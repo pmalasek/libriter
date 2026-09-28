@@ -7,9 +7,11 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "primaryColor": "#007A7B",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "cz.libriter.app",
+      "buildNumber": "1",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
@@ -18,8 +20,9 @@
     },
     "android": {
       "package": "cz.libriter.app",
+      "versionCode": 1,
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
+        "backgroundColor": "#07304D",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -40,9 +43,13 @@
         "expo-splash-screen",
         {
           "image": "./assets/splash-icon.png",
-          "imageWidth": 180,
+          "imageWidth": 160,
           "resizeMode": "contain",
-          "backgroundColor": "#0F1417"
+          "backgroundColor": "#F6FBFD",
+          "dark": {
+            "image": "./assets/splash-icon.png",
+            "backgroundColor": "#050F15"
+          }
         }
       ],
       "./plugins/withIosSceneLifecycle",
