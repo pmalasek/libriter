@@ -286,7 +286,10 @@ sudo -u libriter LIBRITER_ENV_FILE=/etc/libriter/libriter.env libriter user list
 | `just mobile-start` | Metro bundler mobilní aplikace (dev build) |
 | `just mobile-ios` | Sestaví a spustí aplikaci na připojeném iPhonu |
 | `just mobile-android` | Totéž pro Android |
-| `just mobile-apk` | Release APK k ruční instalaci |
+| `just mobile-apk` | Release APK k ruční instalaci → `libriter-mobile/dist/` |
+| `just mobile-aab` | Release AAB pro Google Play → `libriter-mobile/dist/` |
+| `just mobile-ipa` | Release IPA pro TestFlight / App Store (jen macOS, placený Apple účet) |
+| `just mobile-keystore` | Jednorázově vytvoří podepisovací klíč pro Android release |
 | `just setup` | Nainstaluje vývojové nástroje (viz Požadavky) |
 | `just doctor` | Zkontroluje, co z nástrojů je a co chybí |
 | `just deploy` | Nový release: verze, `.deb` a GitHub release (viz níže) |

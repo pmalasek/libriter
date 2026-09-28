@@ -220,11 +220,36 @@ nepatří:
 npx expo prebuild                 # vygeneruje ios/ i android/
 ```
 
-**iOS / TestFlight** – v Xcode otevřít `ios/Libriter.xcworkspace`,
-nastavit tým a podepsání, `Product → Archive`, pak `Distribute App →
-App Store Connect`.
+Produkční buildy se sestavují lokálně a končí v `libriter-mobile/dist/`:
 
-**Android / APK** – `just mobile-apk` spustí prebuild a `gradlew
-assembleRelease`; výsledek je v
-`android/app/build/outputs/apk/release/app-release.apk`. Pro instalaci mimo
-Play Store je potřeba podepisovací klíč v `android/app/build.gradle`.
+```bash
+just mobile-keystore   # jednou: podepisovací klíč pro Android
+just mobile-apk        # → dist/libriter.apk – instalace mimo Google Play
+just mobile-aab        # → dist/libriter.aab – nahrání do Google Play Console
+just mobile-ipa        # → dist/Libriter.ipa – TestFlight / App Store (jen macOS)
+```
+
+Před každým vydáním do obchodu je potřeba v `app.json` zvýšit
+`ios.buildNumber` a `android.versionCode` (a u nové verze i `version`) – obchody
+nepřijmou build se stejným číslem.
+
+**Android** – šablona Expa podepisuje release build debug klíčem. Plugin
+[`plugins/withAndroidReleaseSigning.js`](plugins/withAndroidReleaseSigning.js)
+ho nahrazuje vlastním klíčem, pokud jsou v `~/.gradle/gradle.properties`
+nastavené `LIBRITER_UPLOAD_*`; jinak build zůstane podepsaný debug klíčem
+a recept na to upozorní. `just mobile-keystore` klíč vytvoří
+v `~/.config/libriter/android-upload.jks` a hesla zapíše do
+`gradle.properties`. **Klíč zálohuj** – bez něj už nejde vydat aktualizaci
+aplikace, která je v Google Play nebo nainstalovaná z APK.
+
+**iOS** – `just mobile-ipa` spustí `xcodebuild archive` a `-exportArchive`
+s automatickým podepisováním. Potřebuje **placený** Apple Developer účet
+přihlášený v Xcode a Team ID v `app.json` (`ios.appleTeamId`) nebo
+v proměnné `LIBRITER_APPLE_TEAM`. Výchozí `method` je `app-store-connect`;
+`just mobile-ipa release-testing` vytvoří ad hoc IPA pro zařízení
+registrovaná v Apple Developer účtu. Hotové IPA se do App Store Connect
+nahraje aplikací Transporter nebo `xcrun altool --upload-app`.
+
+Alternativou bez lokálních nástrojů je EAS Build (`eas build --profile
+production`, profily jsou v `eas.json`) – sestavuje v cloudu Expa a klíče
+spravuje sám.

@@ -109,16 +109,105 @@ mobile-android: mobile-deps
     fi
     npx expo run:android --device
 
-# Podepsané APK k ruční instalaci (android/app/build/outputs/apk/release/)
+# Release APK k ruční instalaci → libriter-mobile/dist/libriter.apk
+mobile-apk: (mobile-android-release "assembleRelease" "apk/release/app-release.apk" "libriter.apk")
+
+# Release AAB pro Google Play → libriter-mobile/dist/libriter.aab
+mobile-aab: (mobile-android-release "bundleRelease" "bundle/release/app-release.aab" "libriter.aab")
+
+# Podepisuje klíčem z ~/.gradle/gradle.properties (just mobile-keystore, čte
+# ho plugins/withAndroidReleaseSigning.js); bez něj debug klíčem.
 [working-directory('libriter-mobile')]
-mobile-apk: mobile-deps
+[private]
+mobile-android-release task artifact out: mobile-deps
     #!/usr/bin/env bash
     set -euo pipefail
     if [ -r "$HOME/.config/libriter/android-env.sh" ]; then
         . "$HOME/.config/libriter/android-env.sh"
     fi
+    if ! grep -qs '^LIBRITER_UPLOAD_STORE_FILE=' "$HOME/.gradle/gradle.properties"; then
+        echo "⚠ Release klíč nenastavený (just mobile-keystore) – podepisuji debug klíčem, do Google Play to neprojde." >&2
+    fi
     npx expo prebuild --platform android
-    cd android && ./gradlew assembleRelease
+    (cd android && ./gradlew {{task}})
+    mkdir -p dist
+    cp "android/app/build/outputs/{{artifact}}" "dist/{{out}}"
+    echo "→ {{mobile_dir}}/dist/{{out}}"
+
+# Stačí jednou. Klíč zálohuj – bez něj už nejde vydat aktualizaci aplikace
+# v Google Play.
+#
+# Vytvoří podepisovací klíč pro release build Androidu
+mobile-keystore:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -r "$HOME/.config/libriter/android-env.sh" ]; then
+        . "$HOME/.config/libriter/android-env.sh"
+    fi
+    ks="$HOME/.config/libriter/android-upload.jks"
+    props="$HOME/.gradle/gradle.properties"
+    if [ -e "$ks" ]; then
+        echo "Klíč už existuje: $ks – nový by znemožnil aktualizace už vydané aplikace." >&2
+        exit 1
+    fi
+    read -rsp "Heslo ke klíči (aspoň 6 znaků): " pw; echo
+    read -rsp "Heslo znovu: " pw2; echo
+    [ "$pw" = "$pw2" ] || { echo "Hesla se neshodují." >&2; exit 1; }
+    [ "${#pw}" -ge 6 ] || { echo "Heslo je kratší než 6 znaků." >&2; exit 1; }
+    mkdir -p "$(dirname "$ks")" "$(dirname "$props")"
+    KS_PASS="$pw" keytool -genkeypair -storetype PKCS12 -keystore "$ks" \
+        -alias libriter -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Libriter" \
+        -storepass:env KS_PASS -keypass:env KS_PASS
+    chmod 600 "$ks"
+    touch "$props" && chmod 600 "$props"
+    sed -i.bak '/^LIBRITER_UPLOAD_/d' "$props" && rm -f "$props.bak"
+    {
+        echo "LIBRITER_UPLOAD_STORE_FILE=$ks"
+        echo "LIBRITER_UPLOAD_STORE_PASSWORD=$pw"
+        echo "LIBRITER_UPLOAD_KEY_ALIAS=libriter"
+        echo "LIBRITER_UPLOAD_KEY_PASSWORD=$pw"
+    } >> "$props"
+    echo "✓ Klíč: $ks, hesla v $props"
+
+# Jen macOS; potřebuje placený Apple Developer účet a ios.appleTeamId
+# v app.json (nebo LIBRITER_APPLE_TEAM). method: app-store-connect (TestFlight
+# a App Store) nebo release-testing (ad hoc na registrovaná zařízení).
+#
+# Release IPA → libriter-mobile/dist/Libriter.ipa
+[working-directory('libriter-mobile')]
+mobile-ipa method="app-store-connect": mobile-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    team="${LIBRITER_APPLE_TEAM:-$(node -p "require('./app.json').expo.ios.appleTeamId ?? ''")}"
+    if [ -z "$team" ]; then
+        echo "Chybí Apple Team ID: doplň ios.appleTeamId do app.json nebo nastav LIBRITER_APPLE_TEAM." >&2
+        exit 1
+    fi
+    npx expo prebuild --platform ios
+    {{just_executable()}} mobile-node-env mobile-pods
+    out="$PWD/dist"
+    archive="$PWD/ios/build/Libriter.xcarchive"
+    mkdir -p "$out"
+    xcodebuild -workspace ios/Libriter.xcworkspace -scheme Libriter \
+        -configuration Release -destination 'generic/platform=iOS' \
+        -archivePath "$archive" -allowProvisioningUpdates \
+        DEVELOPMENT_TEAM="$team" CODE_SIGN_STYLE=Automatic archive
+    tmp="$(mktemp -d)"
+    opts="$tmp/ExportOptions.plist"
+    cat > "$opts" <<EOF
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0"><dict>
+      <key>method</key><string>{{method}}</string>
+      <key>teamID</key><string>$team</string>
+      <key>signingStyle</key><string>automatic</string>
+      <key>destination</key><string>export</string>
+    </dict></plist>
+    EOF
+    xcodebuild -exportArchive -archivePath "$archive" -exportPath "$out" \
+        -exportOptionsPlist "$opts" -allowProvisioningUpdates
+    rm -rf "$tmp"
+    echo "→ {{mobile_dir}}/dist/Libriter.ipa"
 
 # Nový release: zvýší verzi (patch/minor/major), sestaví .deb a vystaví ho na GitHubu
 deploy:

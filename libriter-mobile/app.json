@@ -53,6 +53,7 @@
         }
       ],
       "./plugins/withIosSceneLifecycle",
+      "./plugins/withAndroidReleaseSigning",
       "expo-localization",
       "expo-background-task"
     ],
