@@ -302,6 +302,15 @@ Cesta do TestFlightu:
    přidat hned, bez schvalování od Apple; aplikace se pak instaluje přes
    aplikaci TestFlight na iPhonu.
 
+**Lokální certifikát Apple Distribution je nutný.** Bez něj Xcode podepisuje
+certifikátem spravovaným v cloudu Apple a ten zapíše jméno s diakritikou
+(„MALÁSEK“) do podpisu v jiném tvaru Unicode, než má certifikát. App Store
+Connect pak IPA odmítne s „Invalid Signature … (90035)“ u každého frameworku.
+Certifikát se založí v Xcode → Settings → Accounts → Manage Certificates →
+**+** → Apple Distribution; tamtéž (pravým tlačítkem → Export) se zálohuje
+do `.p12` pro další Mac. `just mobile-ipa` podpis exportovaného IPA ověřuje
+a s rozbitým skončí dřív, než se nahraje.
+
 Každé další vydání je už jen `just mobile-testflight` a volba verze.
 
 `app.json` má v `infoPlist` `ITSAppUsesNonExemptEncryption: false` –

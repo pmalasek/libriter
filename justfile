@@ -303,6 +303,19 @@ mobile-ios-release method destination: mobile-deps
     xcodebuild -exportArchive -archivePath "$archive" -exportPath "$tmp" \
         -exportOptionsPlist "$opts" -allowProvisioningUpdates
     if [ -f "$tmp/Libriter.ipa" ]; then
+        # Cloudový distribuční certifikát (bez lokálního klíče) zapíše jméno
+        # s diakritikou do podpisu v jiném tvaru Unicode, než má certifikát,
+        # a App Store Connect pak IPA odmítne („Invalid Signature“, 90035).
+        # Lokálně to poznat jde: podpis nesplní vlastní designated requirement
+        # (kontroluje se jen s -v).
+        unzip -q "$tmp/Libriter.ipa" -d "$tmp/check"
+        if ! codesign --verify --deep --strict -v "$tmp/check/Payload/Libriter.app" 2>"$tmp/codesign.log"; then
+            cat "$tmp/codesign.log" >&2
+            echo "✗ IPA má neplatný podpis a App Store Connect ho odmítne. Nejčastější příčina: chybí lokální" >&2
+            echo "  certifikát Apple Distribution – Xcode → Settings → Accounts → Manage Certificates → + → Apple Distribution." >&2
+            rm -rf "$tmp"
+            exit 1
+        fi
         mv "$tmp/Libriter.ipa" "$out/"
     fi
     rm -rf "$tmp"
