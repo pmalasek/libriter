@@ -21,7 +21,7 @@
       }
     },
     "android": {
-      "package": "cz.libriter.app",
+      "package": "com.libriter.app",
       "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#07304D",
