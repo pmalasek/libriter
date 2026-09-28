@@ -50,9 +50,15 @@ async function setup(): Promise<void> {
       Capability.JumpForward,
       Capability.JumpBackward,
     ],
-    // Na zamčené obrazovce se vejdou jen tři; u audioknihy jsou užitečnější
-    // skoky o pár vteřin než přeskakování celých kapitol.
-    compactCapabilities: [Capability.JumpBackward, Capability.Play, Capability.JumpForward],
+    // V notifikaci a na zamčené obrazovce jsou u audioknihy užitečnější skoky
+    // o pár vteřin než přeskakování celých kapitol.
+    notificationCapabilities: [
+      Capability.JumpBackward,
+      Capability.Play,
+      Capability.Pause,
+      Capability.SeekTo,
+      Capability.JumpForward,
+    ],
     forwardJumpInterval: SKIP_FORWARD,
     backwardJumpInterval: SKIP_BACK,
     // Průběh se hlásí po sekundě: z něj se počítají odposlouchané sekundy

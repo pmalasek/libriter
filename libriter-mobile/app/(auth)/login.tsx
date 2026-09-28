@@ -69,7 +69,17 @@ export default function LoginScreen() {
             />
           </Field>
           <Field label={t('mobile.login.password')}>
-            <TextInput style={input} value={password} onChangeText={setPassword} secureTextEntry textContentType="password" onSubmitEditing={() => void submit()} />
+            <TextInput
+              style={input}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="password"
+              autoComplete="password"
+              onSubmitEditing={() => void submit()}
+            />
           </Field>
 
           {error !== '' ? (
