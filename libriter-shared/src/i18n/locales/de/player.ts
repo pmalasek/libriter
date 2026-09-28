@@ -39,4 +39,11 @@ export default {
     deleteFailed: 'Die Hörsitzung konnte nicht gelöscht werden: {{error}}',
     playFailed: 'Die Wiedergabe konnte nicht gestartet werden.',
   },
+  continueSeries: {
+    title: 'Reihe fortsetzen',
+    question: 'Mit dem nächsten Buch „{{title}}“ fortfahren?',
+    countdown: 'Startet in {{seconds}} s.',
+    yes: 'Fortfahren',
+    no: 'Nein',
+  },
 }

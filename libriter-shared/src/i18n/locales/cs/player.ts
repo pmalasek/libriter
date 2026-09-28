@@ -43,4 +43,11 @@ export default {
     deleteFailed: 'Poslech se nepodařilo smazat: {{error}}',
     playFailed: 'Přehrávání se nepodařilo spustit.',
   },
+  continueSeries: {
+    title: 'Pokračovat v sérii',
+    question: 'Pokračovat další knihou „{{title}}“?',
+    countdown: 'Spustí se za {{seconds}} s.',
+    yes: 'Pokračovat',
+    no: 'Ne',
+  },
 }

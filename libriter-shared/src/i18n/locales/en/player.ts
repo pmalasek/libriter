@@ -39,4 +39,11 @@ export default {
     deleteFailed: 'Could not delete the listening: {{error}}',
     playFailed: 'Could not start playback.',
   },
+  continueSeries: {
+    title: 'Continue the series',
+    question: 'Continue with the next book, “{{title}}”?',
+    countdown: 'Starting in {{seconds}} s.',
+    yes: 'Continue',
+    no: 'No',
+  },
 }

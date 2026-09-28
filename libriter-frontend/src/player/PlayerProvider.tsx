@@ -5,6 +5,7 @@ import { API_PREFIX, ApiError, apiFetch } from '@/api/client'
 import { chaptersQuery, queryKeys, useBooks } from '@/api/hooks'
 import {
   t,
+  type Book,
   type BookProgress,
   type Chapter,
   type CreateSessionRequest,
@@ -15,10 +16,12 @@ import {
 } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { coverUrl } from '@/components/BookCover'
+import { ContinueSeriesDialog } from '@/components/player/ContinueSeriesDialog'
 import { authorsLabel } from '@/lib/format'
 import {
   currentBookId,
   MAX_TIMEUPDATE_GAP_SECONDS,
+  nextInSeries,
   PlayerContext,
   REMOTE_SYNC_INTERVAL_MS,
   SAVE_INTERVAL_MS,
@@ -96,6 +99,8 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
   // Stažení posuvníku na nulu je ztlumení, i když ho přežilo načtení stránky –
   // ikona pak sedí a jedno kliknutí zvuk vrátí.
   const [muted, setMuted] = useState(() => volume === 0)
+  // Další díl série nabízený po doposlechnutí knihy, která poslech uzavřela.
+  const [seriesOffer, setSeriesOffer] = useState<Book | null>(null)
 
   // Zvuk musí přežít překreslení, proto element i vše, co se čte v jeho
   // událostech, drží ref – z posluchače by uzávěr viděl starý stav.
@@ -221,6 +226,8 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
 
   const load = useCallback(
     async (input: { bookId: string; chapterId?: string; position: number; autoplay: boolean }) => {
+      // Cokoli nového v přehrávači nabídku dalšího dílu přebíjí.
+      setSeriesOffer(null)
       setLoading(true)
       try {
         const list = await queryClient.fetchQuery(chaptersQuery(input.bookId))
@@ -589,6 +596,13 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
       if (lastChapter || !hasNext) {
         savePosition({ bookFinished: lastChapter, finished: !hasNext, force: true })
       }
+      // Kniha ze série uzavřela poslech: nabídne se její další díl.
+      if (lastChapter && !hasNext && openTrack) {
+        const library = queryClient.getQueryData<Book[]>(queryKeys.books) ?? []
+        const finished = library.find((b) => b.id === openTrack.bookId)
+        const next = finished ? nextInSeries(library, finished) : undefined
+        if (next) setSeriesOffer(next)
+      }
 
       step(1)
     }
@@ -823,5 +837,17 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
     close,
   }
 
-  return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
+  return (
+    <PlayerContext.Provider value={value}>
+      {children}
+      <ContinueSeriesDialog
+        book={seriesOffer}
+        onContinue={(next) => {
+          setSeriesOffer(null)
+          playBook(next.id)
+        }}
+        onDismiss={() => setSeriesOffer(null)}
+      />
+    </PlayerContext.Provider>
+  )
 }

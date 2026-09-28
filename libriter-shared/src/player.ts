@@ -1,4 +1,4 @@
-import type { PlaySession } from './types'
+import type { Book, PlaySession } from './types'
 
 /** Nabídka rychlostí přehrávání; musí se vejít do rozsahu, který hlídá server. */
 export const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2] as const
@@ -37,4 +37,23 @@ export function currentBookId(session: PlaySession): string | undefined {
     return session.current_book_id
   }
   return session.items[0]?.book_id
+}
+
+/** Za kolik sekund se po doposlechnutí sám spustí další díl série. */
+export const CONTINUE_SERIES_SECONDS = 10
+
+/**
+ * Další díl série po dané knize: ten s nejbližším vyšším pořadím. Kniha bez
+ * pořadí (nebo mimo sérii) žádné pokračování nemá.
+ */
+export function nextInSeries(books: Book[], current: Book): Book | undefined {
+  const position = current.series_position
+  if (!current.series_id || position == null) return undefined
+  let next: Book | undefined
+  for (const book of books) {
+    if (book.series_id !== current.series_id || book.series_position == null) continue
+    if (book.series_position <= position) continue
+    if (!next || book.series_position < next.series_position!) next = book
+  }
+  return next
 }

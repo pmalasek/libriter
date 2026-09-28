@@ -41,4 +41,11 @@ export default {
     deleteFailed: 'No se ha podido eliminar la sesión de escucha: {{error}}',
     playFailed: 'No se ha podido iniciar la reproducción.',
   },
+  continueSeries: {
+    title: 'Continuar la serie',
+    question: '¿Continuar con el siguiente libro, «{{title}}»?',
+    countdown: 'Empieza en {{seconds}} s.',
+    yes: 'Continuar',
+    no: 'No',
+  },
 }

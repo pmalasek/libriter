@@ -19,6 +19,7 @@ import {
   currentBookId,
   formatBytes,
   MAX_TIMEUPDATE_GAP_SECONDS,
+  nextInSeries,
   queryKeys,
   SAVE_INTERVAL_MS,
   sessionItem,
@@ -30,6 +31,7 @@ import {
 
 import { fetchStreamToken } from '@/api/stream'
 import { useAuth } from '@/auth/AuthProvider'
+import { ContinueSeriesModal } from '@/components/ContinueSeriesModal'
 import { toast } from '@/components/Toast'
 import { getMode } from '@/data/mode'
 import { withSource } from '@/data/sources'
@@ -121,6 +123,13 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const pendingDeleteRef = useRef(new Set<string>())
   /** Knihy, na které už se dotaz položil; konec knihy hlásí dvě události. */
   const promptedRef = useRef(new Set<string>())
+  /** Další díl série nabízený po doposlechnutí knihy, která poslech uzavřela. */
+  const [seriesOffer, setSeriesOffer] = useState<Book | null>(null)
+  /**
+   * Nabídka dalšího dílu se právě chystá nebo je otevřená. Dotaz na smazání
+   * staženého souboru mezitím čeká, aby se přes sebe nepřekryly dva dialogy.
+   */
+  const offeringRef = useRef(false)
 
   sessionRef.current = session
   bookRef.current = book
@@ -362,11 +371,11 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   )
 
   const playBook = useCallback(
-    async (bookId: string, chapterId?: string) => {
+    async (bookId: string, chapterId?: string, check: 'ask' | 'silent' = 'ask') => {
       try {
         // Dotaz na nestaženou knihu padne dřív, než se založí poslech –
         // po „Zrušit“ by jinak v seznamu zůstal prázdný.
-        if (!(await confirmPlayable(bookId, true))) return
+        if (!(await confirmPlayable(bookId, check === 'ask'))) return
         // Otevřený poslech s touhle knihou se jen přepne – zakládat nový by
         // zahodil pozici, kterou přehrávač drží.
         const open = sessionRef.current
@@ -472,7 +481,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
    * přijde se zamčeným telefonem; dotaz pak počká na návrat do aplikace.
    */
   const askDeleteFinished = useCallback(async () => {
-    if (AppState.currentState !== 'active') return
+    if (AppState.currentState !== 'active' || offeringRef.current) return
     for (const bookId of [...pendingDeleteRef.current]) {
       pendingDeleteRef.current.delete(bookId)
       if (promptedRef.current.has(bookId)) continue
@@ -481,6 +490,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
       const download = await getDownload(bookId)
       if (download?.state !== 'complete') continue
       const title = (await withSource((s) => s.book(bookId)).catch(() => null))?.title ?? ''
+      // Nabídka dalšího dílu mohla naskočit během čekání na databázi.
+      if (offeringRef.current) {
+        promptedRef.current.delete(bookId)
+        pendingDeleteRef.current.add(bookId)
+        return
+      }
       Alert.alert(
         t('mobile.player.finished.title'),
         t('mobile.player.finished.question', { title, size: formatBytes(download.bytesDone) }),
@@ -643,8 +658,18 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
           await openSession(open, nextItem.book_id, undefined, true, 'silent')
           return
         }
+        // Kniha ze série: v popředí se nabídne další díl, na zamčeném telefonu
+        // se rovnou pustí – 10s odpočet by uspaná aplikace nemusela doběhnout.
+        const active = AppState.currentState === 'active'
+        if (active && current?.series_id) offeringRef.current = true
         await store({ bookFinished: true, finished: true, force: true })
+        const next = current?.series_id
+          ? nextInSeries(await withSource((s) => s.books()).catch(() => []), current)
+          : undefined
+        if (next && active) setSeriesOffer(next)
+        else offeringRef.current = false
         if (current) bookFinished(current.id)
+        if (next && !active) await playBook(next.id, undefined, 'silent')
       }
     },
   )
@@ -734,7 +759,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     ],
   )
 
-  return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
+  const resolveOffer = useCallback(
+    (next?: Book) => {
+      offeringRef.current = false
+      setSeriesOffer(null)
+      if (next) void playBook(next.id)
+      // Dotaz na smazání doposlechnuté knihy čekal, až nabídka zmizí.
+      void askDeleteFinished()
+    },
+    [askDeleteFinished, playBook],
+  )
+
+  return (
+    <PlayerContext.Provider value={value}>
+      {children}
+      <ContinueSeriesModal book={seriesOffer} onContinue={resolveOffer} onDismiss={() => resolveOffer()} />
+    </PlayerContext.Provider>
+  )
 }
 
 /**

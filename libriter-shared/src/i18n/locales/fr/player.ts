@@ -41,4 +41,11 @@ export default {
     deleteFailed: 'Impossible de supprimer la session d’écoute : {{error}}',
     playFailed: 'Impossible de lancer la lecture.',
   },
+  continueSeries: {
+    title: 'Continuer la série',
+    question: 'Continuer avec le livre suivant « {{title}} » ?',
+    countdown: 'Démarrage dans {{seconds}} s.',
+    yes: 'Continuer',
+    no: 'Non',
+  },
 }

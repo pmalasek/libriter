@@ -20,8 +20,10 @@ export {
   SAVE_INTERVAL_MS,
   REMOTE_SYNC_INTERVAL_MS,
   MAX_TIMEUPDATE_GAP_SECONDS,
+  CONTINUE_SERIES_SECONDS,
   sessionItem,
   currentBookId,
+  nextInSeries,
 } from 'libriter-shared'
 
 export interface PlayerValue {
