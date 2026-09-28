@@ -113,7 +113,7 @@ mobile-android: mobile-deps
 mobile-apk: (mobile-android-release "assembleRelease" "apk/release/app-release.apk" "libriter.apk")
 
 # Release AAB pro Google Play → libriter-mobile/dist/libriter.aab
-mobile-aab: (mobile-android-release "bundleRelease" "bundle/release/app-release.aab" "libriter.aab")
+mobile-aab: mobile-version (mobile-android-release "bundleRelease" "bundle/release/app-release.aab" "libriter.aab")
 
 # Podepisuje klíčem z ~/.gradle/gradle.properties (just mobile-keystore, čte
 # ho plugins/withAndroidReleaseSigning.js); bez něj debug klíčem.
@@ -135,7 +135,8 @@ mobile-android-release task artifact out: mobile-deps
     echo "→ {{mobile_dir}}/dist/{{out}}"
 
 # Stačí jednou. Klíč zálohuj – bez něj už nejde vydat aktualizaci aplikace
-# v Google Play.
+# v Google Play. Na dalším stroji ho nevytvářej znovu, ale naimportuj
+# (just mobile-keystore-import).
 #
 # Vytvoří podepisovací klíč pro release build Androidu
 mobile-keystore:
@@ -145,37 +146,131 @@ mobile-keystore:
         . "$HOME/.config/libriter/android-env.sh"
     fi
     ks="$HOME/.config/libriter/android-upload.jks"
-    props="$HOME/.gradle/gradle.properties"
     if [ -e "$ks" ]; then
         echo "Klíč už existuje: $ks – nový by znemožnil aktualizace už vydané aplikace." >&2
         exit 1
     fi
+    echo "Máš-li už klíč z jiného stroje, přenes ho: just mobile-keystore-import <soubor.jks>"
+    read -rp "Opravdu vytvořit NOVÝ klíč? [a/N] " yn
+    [[ "$yn" =~ ^[aAyY]$ ]] || exit 1
     read -rsp "Heslo ke klíči (aspoň 6 znaků): " pw; echo
     read -rsp "Heslo znovu: " pw2; echo
     [ "$pw" = "$pw2" ] || { echo "Hesla se neshodují." >&2; exit 1; }
     [ "${#pw}" -ge 6 ] || { echo "Heslo je kratší než 6 znaků." >&2; exit 1; }
-    mkdir -p "$(dirname "$ks")" "$(dirname "$props")"
+    mkdir -p "$(dirname "$ks")"
     KS_PASS="$pw" keytool -genkeypair -storetype PKCS12 -keystore "$ks" \
         -alias libriter -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Libriter" \
         -storepass:env KS_PASS -keypass:env KS_PASS
     chmod 600 "$ks"
+    KS_PASS="$pw" KEY_PASS="$pw" {{just_executable()}} mobile-keystore-props libriter
+    echo "✓ Klíč: $ks"
+
+# Hesla jsou v $KS_PASS a $KEY_PASS, ne v argumentech (ty vidí `ps`).
+#
+# Zapíše LIBRITER_UPLOAD_* do ~/.gradle/gradle.properties
+[private]
+mobile-keystore-props alias:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    props="$HOME/.gradle/gradle.properties"
+    mkdir -p "$(dirname "$props")"
     touch "$props" && chmod 600 "$props"
     sed -i.bak '/^LIBRITER_UPLOAD_/d' "$props" && rm -f "$props.bak"
     {
-        echo "LIBRITER_UPLOAD_STORE_FILE=$ks"
-        echo "LIBRITER_UPLOAD_STORE_PASSWORD=$pw"
-        echo "LIBRITER_UPLOAD_KEY_ALIAS=libriter"
-        echo "LIBRITER_UPLOAD_KEY_PASSWORD=$pw"
+        echo "LIBRITER_UPLOAD_STORE_FILE=$HOME/.config/libriter/android-upload.jks"
+        echo "LIBRITER_UPLOAD_STORE_PASSWORD=$KS_PASS"
+        echo "LIBRITER_UPLOAD_KEY_ALIAS={{alias}}"
+        echo "LIBRITER_UPLOAD_KEY_PASSWORD=$KEY_PASS"
     } >> "$props"
-    echo "✓ Klíč: $ks, hesla v $props"
+    echo "✓ Hesla v $props"
+
+# Klíč z jiného stroje nebo ze zálohy: ověří heslo, zkopíruje ho do
+# ~/.config/libriter/android-upload.jks a zapíše gradle.properties. alias je
+# potřeba jen u úložiště s víc klíči.
+#
+# Naimportuje existující podepisovací klíč pro release build Androidu
+mobile-keystore-import file alias="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -r "$HOME/.config/libriter/android-env.sh" ]; then
+        . "$HOME/.config/libriter/android-env.sh"
+    fi
+    src={{quote(file)}}
+    case "$src" in /*) ;; *) src={{quote(invocation_directory())}}/"$src" ;; esac
+    [ -r "$src" ] || { echo "Soubor nejde přečíst: $src" >&2; exit 1; }
+    ks="$HOME/.config/libriter/android-upload.jks"
+    if [ -e "$ks" ] && ! cmp -s "$src" "$ks"; then
+        echo "Na $ks už je jiný klíč. Pokud ho opravdu chceš nahradit, nejdřív ho zazálohuj a smaž." >&2
+        exit 1
+    fi
+    # anglický výstup keytoolu, ať jde parsovat
+    kt() { keytool -J-Duser.language=en "$@"; }
+    read -rsp "Heslo k úložišti klíčů: " pw; echo
+    export KS_PASS="$pw"
+    entries="$(kt -list -keystore "$src" -storepass:env KS_PASS 2>&1)" \
+        || { echo "Úložiště nejde otevřít (špatné heslo?): $entries" >&2; exit 1; }
+    alias={{quote(alias)}}
+    if [ -z "$alias" ]; then
+        aliases="$(printf '%s\n' "$entries" | grep 'PrivateKeyEntry' | cut -d, -f1)"
+        if [ "$(printf '%s\n' "$aliases" | grep -c .)" -ne 1 ]; then
+            echo "Úložiště nemá právě jeden klíč, zadej alias: just mobile-keystore-import <soubor> <alias>" >&2
+            printf '%s\n' "$aliases" >&2
+            exit 1
+        fi
+        alias="$aliases"
+    fi
+    # certreq potřebuje privátní klíč, takže ověří i heslo ke klíči
+    key_ok() { KEY_PASS="$1" kt -certreq -keystore "$src" -alias "$alias" \
+        -storepass:env KS_PASS -keypass:env KEY_PASS -file /dev/null >/dev/null 2>&1; }
+    export KEY_PASS="$pw"
+    if ! key_ok "$KEY_PASS"; then
+        read -rsp "Heslo ke klíči '$alias' (liší se od hesla úložiště): " KEY_PASS; echo
+        key_ok "$KEY_PASS" || { echo "Heslo ke klíči nesedí." >&2; exit 1; }
+    fi
+    mkdir -p "$(dirname "$ks")"
+    [ "$src" -ef "$ks" ] || cp "$src" "$ks"
+    chmod 600 "$ks"
+    {{just_executable()}} mobile-keystore-props "$alias"
+    echo "✓ Klíč '$alias': $ks"
 
 # Jen macOS; potřebuje placený Apple Developer účet a ios.appleTeamId
 # v app.json (nebo LIBRITER_APPLE_TEAM). method: app-store-connect (TestFlight
 # a App Store) nebo release-testing (ad hoc na registrovaná zařízení).
 #
 # Release IPA → libriter-mobile/dist/Libriter.ipa
+mobile-ipa method="app-store-connect": mobile-version (mobile-ios-release method "export")
+
+# Nahrává účtem přihlášeným v Xcode. Aplikace musí v App Store Connect už
+# existovat.
+#
+# Sestaví release a nahraje ho do App Store Connect (TestFlight)
+mobile-testflight: mobile-version (mobile-ios-release "app-store-connect" "upload")
+
+# Jedno číslo buildu i verze pro obě platformy; na Linuxu jen Android. Jedno
+# volání just, aby se `npm ci` (mobile-deps) pustilo jen jednou.
+#
+# Zvýší verzi a sestaví AAB i IPA → libriter-mobile/dist/
+mobile-release: mobile-version
+    #!/usr/bin/env bash
+    set -euo pipefail
+    recipes=(mobile-android-release bundleRelease bundle/release/app-release.aab libriter.aab)
+    if [ "$(uname)" = Darwin ]; then
+        recipes+=(mobile-ios-release app-store-connect export)
+    else
+        echo "iOS jde sestavit jen na macOS – vzniká jen AAB."
+    fi
+    {{just_executable()}} "${recipes[@]}"
+    ls -lh {{mobile_dir}}/dist/libriter.aab {{mobile_dir}}/dist/Libriter.ipa 2>/dev/null
+
+# Zeptá se na zvýšení verze (patch/minor/major) a zvýší číslo buildu v app.json
+[private]
+mobile-version:
+    node _scripts/mobile-version.mjs
+
+# destination: export (IPA do dist/) nebo upload (rovnou do App Store Connect)
 [working-directory('libriter-mobile')]
-mobile-ipa method="app-store-connect": mobile-deps
+[private]
+mobile-ios-release method destination: mobile-deps
     #!/usr/bin/env bash
     set -euo pipefail
     team="${LIBRITER_APPLE_TEAM:-$(node -p "require('./app.json').expo.ios.appleTeamId ?? ''")}"
@@ -201,13 +296,21 @@ mobile-ipa method="app-store-connect": mobile-deps
       <key>method</key><string>{{method}}</string>
       <key>teamID</key><string>$team</string>
       <key>signingStyle</key><string>automatic</string>
-      <key>destination</key><string>export</string>
+      <key>destination</key><string>{{destination}}</string>
     </dict></plist>
     EOF
-    xcodebuild -exportArchive -archivePath "$archive" -exportPath "$out" \
+    # export do $tmp: vedle IPA tam xcodebuild dává i logy a plisty
+    xcodebuild -exportArchive -archivePath "$archive" -exportPath "$tmp" \
         -exportOptionsPlist "$opts" -allowProvisioningUpdates
+    if [ -f "$tmp/Libriter.ipa" ]; then
+        mv "$tmp/Libriter.ipa" "$out/"
+    fi
     rm -rf "$tmp"
-    echo "→ {{mobile_dir}}/dist/Libriter.ipa"
+    if [ "{{destination}}" = upload ]; then
+        echo "✓ Nahráno do App Store Connect – v TestFlightu se build objeví po zpracování (obvykle 10–30 min)."
+    else
+        echo "→ {{mobile_dir}}/dist/Libriter.ipa"
+    fi
 
 # Nový release: zvýší verzi (patch/minor/major), sestaví .deb a vystaví ho na GitHubu
 deploy:

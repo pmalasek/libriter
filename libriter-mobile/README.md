@@ -224,14 +224,37 @@ Produkční buildy se sestavují lokálně a končí v `libriter-mobile/dist/`:
 
 ```bash
 just mobile-keystore   # jednou: podepisovací klíč pro Android
+just mobile-keystore-import <soubor.jks>   # …nebo existující klíč na dalším stroji
+just mobile-release    # verze + dist/libriter.aab + dist/Libriter.ipa naráz
 just mobile-apk        # → dist/libriter.apk – instalace mimo Google Play
 just mobile-aab        # → dist/libriter.aab – nahrání do Google Play Console
 just mobile-ipa        # → dist/Libriter.ipa – TestFlight / App Store (jen macOS)
+just mobile-testflight # sestaví a rovnou nahraje do App Store Connect
 ```
 
-Před každým vydáním do obchodu je potřeba v `app.json` zvýšit
-`ios.buildNumber` a `android.versionCode` (a u nové verze i `version`) – obchody
-nepřijmou build se stejným číslem.
+`mobile-release`, `mobile-aab`, `mobile-ipa` a `mobile-testflight` se před
+buildem zeptají na verzi a zapíšou ji do `app.json`
+([`_scripts/mobile-version.mjs`](../_scripts/mobile-version.mjs)):
+
+```
+Mobilní aplikace: verze 1.0.0, build 1
+  0) nic neměnit (druhá platforma téhož vydání) → 1.0.0 (build 1)
+  1) jen build  → 1.0.0 (build 2)
+  2) patch      → 1.0.1 (build 2)
+  3) minor      → 1.1.0 (build 2)
+  4) major      → 2.0.0 (build 2)
+Volba [1]:
+```
+
+Obchody nepřijmou build se stejným číslem, jaké už mají. iOS
+(`ios.buildNumber`) i Android (`android.versionCode`) proto sdílejí jedno číslo
+buildu, které se zvyšuje při každé volbě kromě `0`. Vydání pro obě platformy
+je nejjednodušší přes `just mobile-release` – jedna otázka, pak oba buildy
+(na Linuxu jen AAB). Při samostatných receptech se verze zvolí u první
+platformy a u druhé `0`. Stejně tak `0`, když build spadl a pouští se znovu.
+V CI jde volbu předat proměnnou `LIBRITER_BUMP=build|patch|minor|major|none`.
+Změněný `app.json` je potřeba commitnout. `mobile-apk` k ruční instalaci verzi
+nemění.
 
 **Android** – šablona Expa podepisuje release build debug klíčem. Plugin
 [`plugins/withAndroidReleaseSigning.js`](plugins/withAndroidReleaseSigning.js)
@@ -242,13 +265,51 @@ v `~/.config/libriter/android-upload.jks` a hesla zapíše do
 `gradle.properties`. **Klíč zálohuj** – bez něj už nejde vydat aktualizaci
 aplikace, která je v Google Play nebo nainstalovaná z APK.
 
+Na **dalším stroji** klíč nevytvářej znovu – byl by jiný a telefon by
+aktualizaci odmítl. Zkopíruj `.jks` (ze zálohy nebo ze stroje, kde vznikl)
+a naimportuj ho:
+
+```bash
+just mobile-keystore-import ~/Downloads/android-upload.jks
+```
+
+Recept se zeptá na heslo, ověří ho (i heslo ke klíči, pokud je jiné), klíč
+zkopíruje do `~/.config/libriter/` a zapíše `gradle.properties`. Funguje i pro
+klíč vytvořený jinde (Android Studio, EAS): u úložiště s víc klíči je potřeba
+přidat alias, `just mobile-keystore-import <soubor> <alias>`.
+
 **iOS** – `just mobile-ipa` spustí `xcodebuild archive` a `-exportArchive`
 s automatickým podepisováním. Potřebuje **placený** Apple Developer účet
-přihlášený v Xcode a Team ID v `app.json` (`ios.appleTeamId`) nebo
-v proměnné `LIBRITER_APPLE_TEAM`. Výchozí `method` je `app-store-connect`;
-`just mobile-ipa release-testing` vytvoří ad hoc IPA pro zařízení
-registrovaná v Apple Developer účtu. Hotové IPA se do App Store Connect
-nahraje aplikací Transporter nebo `xcrun altool --upload-app`.
+přihlášený v Xcode (Settings → Accounts) a Team ID v `app.json`
+(`ios.appleTeamId`, případně proměnná `LIBRITER_APPLE_TEAM`). Výchozí `method`
+je `app-store-connect`; `just mobile-ipa release-testing` vytvoří ad hoc IPA
+pro zařízení registrovaná v Apple Developer účtu.
+
+Cesta do TestFlightu:
+
+1. **První build** – `just mobile-ipa`. Díky `-allowProvisioningUpdates` Xcode
+   při prvním běhu sám zaregistruje App ID `cz.libriter.app`, vytvoří
+   certifikát „Apple Distribution“ a App Store provisioning profil.
+2. **Aplikace v App Store Connect** – appstoreconnect.apple.com → Apps → **+**
+   → New App: platforma iOS, bundle ID `cz.libriter.app` (po kroku 1 je
+   v nabídce), SKU libovolné (`libriter`). Název musí být v App Store
+   unikátní; na název pod ikonou v telefonu nemá vliv.
+3. **Nahrání** – `just mobile-testflight` sestaví release a nahraje ho rovnou
+   do App Store Connect účtem přihlášeným v Xcode. Druhá možnost je přetáhnout
+   `dist/Libriter.ipa` z kroku 1 do aplikace **Transporter** (Mac App Store).
+4. **TestFlight** – po zpracování (obvykle 10–30 min) se build objeví
+   v záložce TestFlight. Interní testery (členy týmu v App Store Connect) jde
+   přidat hned, bez schvalování od Apple; aplikace se pak instaluje přes
+   aplikaci TestFlight na iPhonu.
+
+Každé další vydání je už jen `just mobile-testflight` a volba verze.
+
+`app.json` má v `infoPlist` `ITSAppUsesNonExemptEncryption: false` –
+prohlášení pro Apple, že aplikace nepoužívá jiné šifrování než to, které je
+součástí systému (HTTPS). Díky němu App Store Connect u každého buildu
+nevyžaduje dotazník o exportu šifrování. Kdyby aplikace někdy začala šifrovat
+sama (vlastní kryptografie, šifrovaný přenos mimo HTTPS), je potřeba hodnotu
+přehodnotit.
 
 Alternativou bez lokálních nástrojů je EAS Build (`eas build --profile
 production`, profily jsou v `eas.json`) – sestavuje v cloudu Expa a klíče
