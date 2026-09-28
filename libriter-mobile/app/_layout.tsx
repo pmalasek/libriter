@@ -17,6 +17,7 @@ import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { ModeProvider } from '@/data/ModeProvider'
 import { openDb } from '@/db/schema'
 import { PlayerProvider } from '@/player/PlayerProvider'
+import { registerBackgroundSync, unregisterBackgroundSync } from '@/sync/backgroundSync'
 import { syncEngine } from '@/sync/syncEngine'
 import { ThemeProvider, useTheme } from '@/theme'
 
@@ -103,6 +104,15 @@ function AuthGate() {
     syncEngine.start({ onUnauthorized: () => void signOut() })
     return () => syncEngine.stop()
   }, [session, signOut])
+
+  // Úkol na pozadí patří k přihlášení, ne k životu obrazovky: zrušit ho jen
+  // po odhlášení, ne při každém odmountování.
+  const signedIn = Boolean(session)
+  useEffect(() => {
+    if (loading) return
+    const change = signedIn ? registerBackgroundSync() : unregisterBackgroundSync()
+    change.catch(() => undefined)
+  }, [loading, signedIn])
 
   if (loading) return <Splash />
 

@@ -34,6 +34,7 @@ import { withSource } from '@/data/sources'
 import { bookChapterFiles, getDownload } from '@/db/downloads'
 import { downloadManager } from '@/downloads/downloadManager'
 import { getSessionMirror } from '@/db/library'
+import { syncEngine } from '@/sync/syncEngine'
 import { resetFingerprint, savePosition } from './positionSaver'
 import { addSessionItems, deleteSession, startSession } from './sessions'
 import { ensurePlayer } from './setup'
@@ -573,6 +574,9 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     })
     return () => subscription.remove()
   }, [askDeleteFinished, store])
+
+  // Návrat sítě: uložit pozici teď, ať server dostane aktuální, ne až 10 s starou.
+  useEffect(() => syncEngine.onReconnect(() => store({ force: true })), [store])
 
   const value = useMemo<PlayerValue>(
     () => ({

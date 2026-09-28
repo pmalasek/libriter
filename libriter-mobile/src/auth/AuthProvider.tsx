@@ -14,7 +14,7 @@ import {
   type User,
 } from 'libriter-shared'
 
-import { clearSession, loadSession, saveSession } from './storage'
+import { clearSession, loadSession, refreshSessionStorage, saveSession } from './storage'
 import { getSetting, setSetting } from '@/db/settings'
 
 interface AuthValue {
@@ -73,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setServerUrl(url ?? '')
       setSession(stored)
       setLoading(false)
+      if (stored) void refreshSessionStorage(stored)
     })()
     return () => {
       cancelled = true

@@ -46,7 +46,8 @@
         }
       ],
       "./plugins/withIosSceneLifecycle",
-      "expo-localization"
+      "expo-localization",
+      "expo-background-task"
     ],
     "experiments": {
       "typedRoutes": true

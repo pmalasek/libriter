@@ -10,4 +10,8 @@ import { PlaybackService } from './src/player/service'
 
 TrackPlayer.registerPlaybackService(() => PlaybackService)
 
+// Úkol synchronizace na pozadí musí být definovaný ze stejného důvodu –
+// systém ho může spustit bez jediné obrazovky.
+require('./src/sync/backgroundSync')
+
 require('expo-router/entry')

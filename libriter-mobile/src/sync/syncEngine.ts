@@ -88,6 +88,8 @@ class SyncEngine {
   private reachable = true
   /** Voláno, když server odmítne token – aplikace na to odhlásí uživatele. */
   private onUnauthorized: (() => void) | null = null
+  /** Co se má stihnout při návratu sítě ještě před odesláním fronty. */
+  private reconnectHooks = new Set<() => Promise<void>>()
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener)
@@ -113,7 +115,7 @@ class SyncEngine {
       const returned = reachable && !this.reachable
       this.reachable = reachable
       // Zajímá nás přechod do stavu „je signál“; opakované hlášení téhož ne.
-      if (returned) void this.syncNow()
+      if (returned) void this.reconnected()
       else if (!reachable) this.setState({ kind: 'offline', pending: this.state.pending })
     })
 
@@ -132,6 +134,48 @@ class SyncEngine {
     if (this.retry) clearTimeout(this.retry)
     this.debounce = null
     this.retry = null
+  }
+
+  /**
+   * Zaregistruje krok, který proběhne při návratu sítě před odesláním fronty –
+   * přehrávač tak stihne uložit aktuální pozici, ne až tu z posledního tiku.
+   */
+  onReconnect(hook: () => Promise<void>): () => void {
+    this.reconnectHooks.add(hook)
+    return () => {
+      this.reconnectHooks.delete(hook)
+    }
+  }
+
+  private async reconnected(): Promise<void> {
+    // Selhání hooku nesmí zablokovat odeslání toho, co už ve frontě je.
+    await Promise.allSettled([...this.reconnectHooks].map((hook) => hook()))
+    await this.syncNow()
+  }
+
+  /**
+   * Jen odeslání fronty, bez stahování knihovny – pro běh na pozadí, kde
+   * systém dá pár vteřin a stahovat celé zrcadlo by bylo zbytečně drahé.
+   */
+  async pushPending(): Promise<void> {
+    if (this.running) {
+      this.again = true
+      return
+    }
+    if ((await countPending()) === 0 && (await listLocalOnlySessions()).length === 0) return
+
+    this.running = true
+    try {
+      this.setState({ kind: 'syncing', pending: await countPending() })
+      await this.resolveLocalSessions()
+      await this.flushPending()
+      this.attempt = 0
+      this.setState({ kind: 'idle', pending: await countPending(), lastSyncAt: new Date().toISOString() })
+    } catch (error: unknown) {
+      await this.handleFailure(error)
+    } finally {
+      this.running = false
+    }
   }
 
   /** Přehrávač po každém uložení pozice; dávka se pošle až se ustálí. */
