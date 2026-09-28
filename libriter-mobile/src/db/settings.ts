@@ -7,6 +7,7 @@ export type SettingKey =
   | 'device_id'
   | 'server_url'
   | 'wifi_only'
+  | 'compact_downloads'
   | 'offline_mode'
   | 'last_library_sync'
   | 'color_scheme'
@@ -58,6 +59,21 @@ export async function wifiOnly(): Promise<boolean> {
 
 export async function setWifiOnly(value: boolean): Promise<void> {
   await setSetting('wifi_only', value ? 'true' : 'false')
+}
+
+/**
+ * Stahovat knihy v úsporné variantě (Opus 48 kbps mono)? Dokud to uživatel
+ * nenastaví sám, řídí se offline režimem – kdo si knihovnu bere s sebou,
+ * ocení menší soubory nejvíc.
+ */
+export async function compactDownloads(): Promise<boolean> {
+  const stored = await getSetting('compact_downloads')
+  if (stored !== null) return stored === 'true'
+  return offlineMode()
+}
+
+export async function setCompactDownloads(value: boolean): Promise<void> {
+  await setSetting('compact_downloads', value ? 'true' : 'false')
 }
 
 /**

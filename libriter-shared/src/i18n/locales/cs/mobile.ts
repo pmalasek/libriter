@@ -254,6 +254,8 @@ export default {
     downloads: 'Stahování',
     wifiOnly: 'Stahovat jen na Wi-Fi',
     wifiOnlyHint: 'Kniha zabere stovky megabajtů; na datech se to pozná.',
+    compactDownloads: 'Úsporné stahování',
+    compactDownloadsHint: 'Opus 48 kbps mono – zhruba 5× menší soubory, pro mluvené slovo bez rozdílu. Už stažené knihy se nemění.',
     storageUsed: 'Zabráno v telefonu',
     sync: 'Synchronizace',
     pending: 'Čeká na odeslání',

@@ -1,10 +1,11 @@
+import { Platform } from 'react-native'
 import NetInfo from '@react-native-community/netinfo'
 import * as FileSystem from 'expo-file-system/legacy'
 import { apiUrl, t, type Chapter } from 'libriter-shared'
 
 import { listChapters, replaceChapters, setChapterSize, upsertAuthors, upsertBooks } from '@/db/library'
 import { isOffline, serverSource } from '@/data/sources'
-import { wifiOnly } from '@/db/settings'
+import { compactDownloads, wifiOnly } from '@/db/settings'
 import { fetchStreamToken } from '@/api/stream'
 import {
   bookChapterFiles,
@@ -32,6 +33,23 @@ const PARALLEL = 2
 /** Kolik hlaviček se zjišťuje naráz. HEAD je levný, na rozdíl od stahování. */
 const MEASURE_PARALLEL = 6
 
+/**
+ * Úsporná varianta: server kapitolu převede za běhu do Opusu 48 kbps mono
+ * (Ogg). Jen Android – iOS Ogg nepřehraje, dostane originál.
+ */
+export async function compactEnabled(): Promise<boolean> {
+  return Platform.OS === 'android' && (await compactDownloads())
+}
+
+/**
+ * Odhad velikosti kapitoly v úsporné variantě: 48 kbit/s = 6000 B/s plus
+ * pár procent na kontejner. Server ji předem nezná (převádí za běhu), takže
+ * ukazatel průběhu počítá s odhadem a po každé kapitole ho srovná.
+ */
+export function compactSizeEstimate(durationSeconds: number): number {
+  return Math.round(durationSeconds * 6000 * 1.02)
+}
+
 /** Kořen stažených souborů; `<documentDirectory>libriter/<bookId>/`. */
 export function bookDirectory(bookId: string): string {
   return `${FileSystem.documentDirectory}libriter/${bookId}/`
@@ -49,6 +67,8 @@ class DownloadManager {
   private cancelled = new Set<string>()
   /** Knihy pozastavené uživatelem; přerušená úloha se pak nehlásí jako chyba. */
   private paused = new Set<string>()
+  /** Knihy, které se stahují v úsporné variantě (zvoleno při startu knihy). */
+  private compact = new Set<string>()
   /** Kdy naposledy dostaly obrazovky nová čísla; viz `emitThrottled`. */
   private lastEmit = 0
   /** Token do adresy audia; platí 24 h, tak se drží i s časem vypršení. */
@@ -86,7 +106,15 @@ class DownloadManager {
       // od začátku, i když z ní na disku leží devadesát procent.
       for (const [chapterId, task] of running) {
         const state = await task.pauseAsync()
-        await markChapterFile(chapterId, { resumeData: state.resumeData ?? null })
+        if (this.compact.has(bookId)) {
+          // Převod za běhu neumí Range – rozdělaný soubor se nedá navázat,
+          // po obnovení se kapitola stáhne znovu.
+          const file = await chapterFile(chapterId)
+          if (file?.path) await FileSystem.deleteAsync(file.path, { idempotent: true })
+          await markChapterFile(chapterId, { resumeData: null })
+        } else {
+          await markChapterFile(chapterId, { resumeData: state.resumeData ?? null })
+        }
       }
       this.running.delete(bookId)
     }
@@ -131,18 +159,24 @@ class DownloadManager {
       return
     }
 
+    const compact = await compactEnabled()
+    if (compact) this.compact.add(bookId)
+    else this.compact.delete(bookId)
+
     // Celková velikost se zjistí dřív, než se stáhne první bajt – jinak by
     // ukazatel cíl dopočítával za pochodu a do té doby ukazoval nesmysl.
-    const measured = await this.measure(chapters)
+    // Úsporná varianta se neměří: velikost vzniká až převodem, bere se odhad.
+    const measured = compact ? chapters : await this.measure(chapters)
 
     // Ukazatel se při každém (i opakovaném) startu přepočítá z toho, co
     // doopravdy leží na disku. Po pauze nebo chybě se tak nesčítá se zbytky
     // z minulého pokusu a nevznikne „26 MB z 10 MB“.
     const files = await bookChapterFiles(bookId)
-    const total = measured.reduce(
-      (sum, chapter) => sum + (chapter.size_bytes || (files.get(chapter.id)?.sizeBytes ?? 0)),
-      0,
-    )
+    const total = measured.reduce((sum, chapter) => {
+      const onPhone = files.get(chapter.id)?.sizeBytes
+      if (compact) return sum + (onPhone ?? compactSizeEstimate(chapter.duration_seconds))
+      return sum + (chapter.size_bytes || (onPhone ?? 0))
+    }, 0)
     const onDisk = measured.reduce((sum, chapter) => sum + (files.get(chapter.id)?.sizeBytes ?? 0), 0)
     await setDownloadState(bookId, 'downloading')
     await updateDownloadProgress(bookId, { bytesTotal: total, bytesDone: onDisk })
@@ -157,7 +191,7 @@ class DownloadManager {
         for (;;) {
           const chapter = pending.shift()
           if (!chapter || this.cancelled.has(bookId) || this.paused.has(bookId)) return
-          await this.downloadChapter(bookId, chapter)
+          await this.downloadChapter(bookId, chapter, compact)
           await this.emit()
         }
       })
@@ -178,13 +212,16 @@ class DownloadManager {
     await this.emit()
   }
 
-  private async downloadChapter(bookId: string, chapter: Chapter): Promise<void> {
+  private async downloadChapter(bookId: string, chapter: Chapter, compact: boolean): Promise<void> {
     const existing = await chapterFile(chapter.id)
     if (existing?.state === 'done') return
 
     const extension = chapter.file_name.split('.').pop() ?? 'mp3'
-    const target = `${bookDirectory(bookId)}${chapter.id}.${extension}`
-    const url = `${apiUrl(`/chapters/${chapter.id}/audio`)}?t=${await this.streamToken()}`
+    let target = `${bookDirectory(bookId)}${chapter.id}.${compact ? 'ogg' : extension}`
+    const variant = compact ? '&variant=compact' : ''
+    const url = `${apiUrl(`/chapters/${chapter.id}/audio`)}?t=${await this.streamToken()}${variant}`
+    // Rozdělaný soubor jde navázat jen u originálu; převod za běhu Range neumí.
+    const resumeData = compact ? undefined : (existing?.resumeData ?? undefined)
 
     await markChapterFile(chapter.id, { bookId, path: target, state: 'pending' })
 
@@ -211,14 +248,14 @@ class DownloadManager {
       target,
       {},
       (progress) => report(progress.totalBytesWritten),
-      existing?.resumeData ?? undefined,
+      resumeData,
     )
     const tasks = this.running.get(bookId) ?? new Map<string, FileSystem.DownloadResumable>()
     this.running.set(bookId, tasks)
     tasks.set(chapter.id, task)
 
     try {
-      let result = existing?.resumeData ? await task.resumeAsync() : await task.downloadAsync()
+      let result = resumeData ? await task.resumeAsync() : await task.downloadAsync()
 
       // Nejčastější příčina neúspěchu je token, který mezitím vypršel –
       // stahování dlouhé knihy klidně přesáhne jeho 24 hodin.
@@ -229,7 +266,7 @@ class DownloadManager {
         // které se za něj stihly započítat.
         rewind()
         const retry = FileSystem.createDownloadResumable(
-          `${apiUrl(`/chapters/${chapter.id}/audio`)}?t=${await this.streamToken()}`,
+          `${apiUrl(`/chapters/${chapter.id}/audio`)}?t=${await this.streamToken()}${variant}`,
           target,
           {},
           (progress) => report(progress.totalBytesWritten),
@@ -243,10 +280,24 @@ class DownloadManager {
         throw new Error(t('mobile.downloads.errors.httpError', { position: chapter.position, status: result?.status ?? 0 }))
       }
 
+      // Server bez ffmpegu pošle místo úsporné varianty originál; soubor pak
+      // dostane správnou příponu a kontroluje se jako originál.
+      const converted = compact && header(result.headers, 'x-libriter-variant') === 'compact'
+      if (compact && !converted) {
+        const renamed = `${bookDirectory(bookId)}${chapter.id}.${extension}`
+        await FileSystem.moveAsync({ from: target, to: renamed })
+        target = renamed
+      }
+
       const info = await FileSystem.getInfoAsync(target)
       const size = info.exists ? info.size : 0
-      // Useknutý soubor by se poznal až při přehrávání, uprostřed věty.
-      if (chapter.size_bytes > 0 && size !== chapter.size_bytes) {
+      if (converted && size === 0) {
+        rewind()
+        throw new Error(t('mobile.downloads.errors.incompleteFile', { position: chapter.position }))
+      }
+      // Useknutý soubor by se poznal až při přehrávání, uprostřed věty. Převod
+      // za běhu velikost předem nezná; useknutí tam hlásí utržené spojení.
+      if (!converted && chapter.size_bytes > 0 && size !== chapter.size_bytes) {
         await FileSystem.deleteAsync(target, { idempotent: true })
         rewind()
         throw new Error(t('mobile.downloads.errors.incompleteFile', { position: chapter.position }))
@@ -255,7 +306,10 @@ class DownloadManager {
       await markChapterFile(chapter.id, { bookId, path: target, state: 'done', sizeBytes: size, resumeData: null })
       // Kapitolu, kterou se nepodařilo změřit předem, cíl zatím nezahrnuje;
       // teď je velikost známá, tak se doplní. Jednou, ne při každém bloku.
-      if (chapter.size_bytes === 0) await updateDownloadProgress(bookId, { bytesDeltaTotal: size })
+      //
+      // V úsporném režimu se cíl počítal z odhadu; srovná se o skutečnost.
+      if (compact) await updateDownloadProgress(bookId, { bytesDeltaTotal: size - compactSizeEstimate(chapter.duration_seconds) })
+      else if (chapter.size_bytes === 0) await updateDownloadProgress(bookId, { bytesDeltaTotal: size })
       report(size)
     } finally {
       tasks.delete(chapter.id)
@@ -384,6 +438,12 @@ async function headSize(url: string): Promise<number> {
   } catch {
     return 0
   }
+}
+
+/** Hlavička odpovědi bez ohledu na velikost písmen (platformy se liší). */
+function header(headers: Record<string, string>, name: string): string | undefined {
+  const key = Object.keys(headers).find((item) => item.toLowerCase() === name)
+  return key ? headers[key] : undefined
 }
 
 function message(error: unknown): string {

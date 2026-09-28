@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import {
@@ -52,7 +52,7 @@ import {
   useSessions,
   useSetBookFinished,
 } from '@/data/hooks'
-import { downloadManager } from '@/downloads/downloadManager'
+import { compactEnabled, compactSizeEstimate, downloadManager } from '@/downloads/downloadManager'
 import { usePlayer } from '@/player/PlayerProvider'
 import { fonts, radius, spacing, useTheme } from '@/theme'
 
@@ -77,7 +77,19 @@ export default function BookScreen() {
   const status = progress.status(id)
   const finishedAt = progress.map.get(id)?.finished_at
   const download = useMemo(() => (downloads.data ?? []).find((row) => row.bookId === id), [downloads.data, id])
-  const size = useMemo(() => (chapters.data ?? []).reduce((sum, chapter) => sum + chapter.size_bytes, 0), [chapters.data])
+  const [compact, setCompact] = useState(false)
+  useEffect(() => {
+    void compactEnabled().then(setCompact)
+  }, [])
+  // Kolik kniha v telefonu zabere – v úsporné variantě odhad z délky.
+  const size = useMemo(
+    () =>
+      (chapters.data ?? []).reduce(
+        (sum, chapter) => sum + (compact ? compactSizeEstimate(chapter.duration_seconds) : chapter.size_bytes),
+        0,
+      ),
+    [chapters.data, compact],
+  )
 
   // Rozposlouchaná pozice knihy – z libovolného poslechu, který ji obsahuje.
   const started = useMemo(

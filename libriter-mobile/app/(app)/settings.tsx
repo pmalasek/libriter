@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { StyleSheet, Switch, View } from 'react-native'
+import { Platform, StyleSheet, Switch, View } from 'react-native'
 import { useTranslation } from 'react-i18next'
 import { currentLanguage, formatBytes } from 'libriter-shared'
 
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { Body, Muted, SectionTitle } from '@/components/ui/Text'
 import { useMode } from '@/data/ModeProvider'
 import { countPending } from '@/db/events'
-import { getSetting, setWifiOnly, wifiOnly } from '@/db/settings'
+import { compactDownloads, getSetting, setCompactDownloads, setWifiOnly, wifiOnly } from '@/db/settings'
 import { downloadedBytes } from '@/downloads/downloadManager'
 import { syncEngine } from '@/sync/syncEngine'
 import { radius, spacing, useTheme } from '@/theme'
@@ -21,20 +21,24 @@ export default function SettingsScreen() {
   const { user, serverUrl } = useAuth()
   const { mode, setMode } = useMode()
   const [onlyWifi, setOnlyWifi] = useState(true)
+  const [compact, setCompact] = useState(false)
   const [used, setUsed] = useState(0)
   const [pending, setPending] = useState(0)
   const [lastSync, setLastSync] = useState<string | null>(null)
 
   const reload = async () => {
     setOnlyWifi(await wifiOnly())
+    setCompact(await compactDownloads())
     setUsed(await downloadedBytes())
     setPending(await countPending())
     setLastSync(await getSetting('last_library_sync'))
   }
 
+  // Úsporné stahování se bez vlastní volby řídí offline režimem, proto se
+  // po jeho přepnutí načítá znovu.
   useEffect(() => {
     void reload()
-  }, [])
+  }, [mode])
 
   return (
     <Screen>
@@ -71,6 +75,18 @@ export default function SettingsScreen() {
             void setWifiOnly(value)
           }}
         />
+        {/* iOS neumí přehrát Ogg; tam se stahuje originál. */}
+        {Platform.OS === 'android' ? (
+          <SwitchRow
+            label={t('mobile.settings.compactDownloads')}
+            hint={t('mobile.settings.compactDownloadsHint')}
+            value={compact}
+            onChange={(value) => {
+              setCompact(value)
+              void setCompactDownloads(value)
+            }}
+          />
+        ) : null}
         <Row label={t('mobile.settings.storageUsed')} value={formatBytes(used)} />
       </Section>
 

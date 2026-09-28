@@ -247,6 +247,8 @@ export default {
     downloads: 'Downloads',
     wifiOnly: 'Nur über WLAN herunterladen',
     wifiOnlyHint: 'Ein Buch benötigt Hunderte Megabyte; das macht sich beim mobilen Datenvolumen bemerkbar.',
+    compactDownloads: 'Platzsparende Downloads',
+    compactDownloadsHint: 'Opus 48 kbps mono – etwa 5× kleinere Dateien, bei gesprochenem Wort kein hörbarer Unterschied. Bereits heruntergeladene Bücher bleiben unverändert.',
     storageUsed: 'Auf dem Telefon belegt',
     sync: 'Synchronisierung',
     pending: 'Wartet auf Übertragung',
