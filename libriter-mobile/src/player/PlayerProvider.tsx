@@ -8,13 +8,15 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { AppState } from 'react-native'
+import { Alert, AppState, type AlertButton } from 'react-native'
+import NetInfo from '@react-native-community/netinfo'
 import { useQueryClient } from '@tanstack/react-query'
 import TrackPlayer, { Event, State, useTrackPlayerEvents, type Track } from 'react-native-track-player'
 import {
   ApiError,
   apiUrl,
   currentBookId,
+  formatBytes,
   MAX_TIMEUPDATE_GAP_SECONDS,
   queryKeys,
   SAVE_INTERVAL_MS,
@@ -27,8 +29,10 @@ import {
 
 import { fetchStreamToken } from '@/api/stream'
 import { toast } from '@/components/Toast'
+import { getMode } from '@/data/mode'
 import { withSource } from '@/data/sources'
-import { bookChapterFiles } from '@/db/downloads'
+import { bookChapterFiles, getDownload } from '@/db/downloads'
+import { downloadManager } from '@/downloads/downloadManager'
 import { getSessionMirror } from '@/db/library'
 import { resetFingerprint, savePosition } from './positionSaver'
 import { addSessionItems, deleteSession, startSession } from './sessions'
@@ -108,6 +112,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const lastPositionRef = useRef(0)
   /** Mezi nastavením fronty a doskočením na pozici se nesmí ukládat. */
   const seekingRef = useRef(false)
+  /** Doposlechnuté stažené knihy, u kterých se čeká na dotaz na smazání. */
+  const pendingDeleteRef = useRef(new Set<string>())
+  /** Knihy, na které už se dotaz položil; konec knihy hlásí dvě události. */
+  const promptedRef = useRef(new Set<string>())
 
   sessionRef.current = session
   bookRef.current = book
@@ -164,6 +172,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     }) => {
       setLoading(true)
       seekingRef.current = true
+      promptedRef.current.delete(input.bookId)
       try {
         await ensurePlayer()
 
@@ -232,11 +241,23 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [],
   )
 
-  /** Otevře poslech na jeho rozehrané knize. */
+  /**
+   * Otevře poslech na jeho rozehrané knize. `check` říká, jak naložit
+   * s nestaženou knihou bez sítě nebo v offline režimu: `ask` se zeptá,
+   * `silent` (automatický přechod na další knihu, uživatel se nedívá) ji
+   * bez sítě vynechá, `skip` – volající už se zeptal.
+   */
   const openSession = useCallback(
-    async (target: PlaySession, bookId?: string, chapterId?: string, fromStart = false) => {
+    async (
+      target: PlaySession,
+      bookId?: string,
+      chapterId?: string,
+      fromStart = false,
+      check: 'ask' | 'silent' | 'skip' = 'ask',
+    ) => {
       const id = bookId ?? currentBookId(target)
       if (!id) return
+      if (check !== 'skip' && !(await confirmPlayable(id, check === 'ask'))) return
       const item = sessionItem(target, id)
       await load({
         session: target,
@@ -252,19 +273,22 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   const playBook = useCallback(
     async (bookId: string, chapterId?: string) => {
       try {
+        // Dotaz na nestaženou knihu padne dřív, než se založí poslech –
+        // po „Zrušit“ by jinak v seznamu zůstal prázdný.
+        if (!(await confirmPlayable(bookId, true))) return
         // Otevřený poslech s touhle knihou se jen přepne – zakládat nový by
         // zahodil pozici, kterou přehrávač drží.
         const open = sessionRef.current
         if (open && open.items.some((item) => item.book_id === bookId)) {
           await store({ force: true })
-          await openSession(open, bookId, chapterId, Boolean(chapterId))
+          await openSession(open, bookId, chapterId, Boolean(chapterId), 'skip')
           return
         }
         const target = await startSession({ kind: 'book', book_id: bookId })
         invalidateSessions()
         // Kliknutí na konkrétní kapitolu ji spustí od začátku; „Přehrát“
         // u knihy pokračuje tam, kde poslech skončil.
-        await openSession(target, bookId, chapterId, Boolean(chapterId))
+        await openSession(target, bookId, chapterId, Boolean(chapterId), 'skip')
       } catch (error: unknown) {
         toast.error(describe(error, t('mobile.player.errors.createFailed')))
       }
@@ -351,6 +375,50 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     setChapters([])
     setPlaying(false)
   }, [store])
+
+  /**
+   * Zeptá se na smazání doposlechnutých stažených knih. Konec knihy často
+   * přijde se zamčeným telefonem; dotaz pak počká na návrat do aplikace.
+   */
+  const askDeleteFinished = useCallback(async () => {
+    if (AppState.currentState !== 'active') return
+    for (const bookId of [...pendingDeleteRef.current]) {
+      pendingDeleteRef.current.delete(bookId)
+      if (promptedRef.current.has(bookId)) continue
+      promptedRef.current.add(bookId)
+
+      const download = await getDownload(bookId)
+      if (download?.state !== 'complete') continue
+      const title = (await withSource((s) => s.book(bookId)).catch(() => null))?.title ?? ''
+      Alert.alert(
+        t('mobile.player.finished.title'),
+        t('mobile.player.finished.question', { title, size: formatBytes(download.bytesDone) }),
+        [
+          { text: t('mobile.player.finished.keep'), style: 'cancel' },
+          {
+            text: t('mobile.player.finished.delete'),
+            style: 'destructive',
+            onPress: () =>
+              void (async () => {
+                // Fronta přehrávače ukazuje na mazané soubory, dokud je kniha
+                // otevřená (poslech jí skončil); zavřít ji musí dřív.
+                if (bookRef.current?.id === bookId) await close()
+                await downloadManager.remove(bookId)
+                toast.success(t('mobile.player.finished.deleted'))
+              })().catch((error: unknown) => toast.error(describe(error, t('mobile.player.errors.deleteFailed')))),
+          },
+        ],
+      )
+    }
+  }, [close])
+
+  const bookFinished = useCallback(
+    (bookId: string) => {
+      pendingDeleteRef.current.add(bookId)
+      void askDeleteFinished()
+    },
+    [askDeleteFinished],
+  )
 
   const removeSession = useCallback(
     async (sessionId: string) => {
@@ -456,6 +524,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // se příznak sveze k nesprávné.
         if (previous && list[list.length - 1]?.id === previous.id && next === undefined) {
           await store({ bookFinished: true, force: true })
+          if (bookRef.current) bookFinished(bookRef.current.id)
         }
         if (!next) return
 
@@ -479,10 +548,12 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const nextItem = index >= 0 && open ? open.items[index + 1] : undefined
         if (open && nextItem) {
           await store({ bookFinished: true, force: true })
-          await openSession(open, nextItem.book_id, undefined, true)
+          if (current) bookFinished(current.id)
+          await openSession(open, nextItem.book_id, undefined, true, 'silent')
           return
         }
         await store({ bookFinished: true, finished: true, force: true })
+        if (current) bookFinished(current.id)
       }
     },
   )
@@ -498,9 +569,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (status) => {
       if (status !== 'active') void store({ force: true })
+      else void askDeleteFinished()
     })
     return () => subscription.remove()
-  }, [store])
+  }, [askDeleteFinished, store])
 
   const value = useMemo<PlayerValue>(
     () => ({
@@ -558,6 +630,56 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   )
 
   return <PlayerContext.Provider value={value}>{children}</PlayerContext.Provider>
+}
+
+/**
+ * Smí se kniha pustit? V offline režimu nebo bez sítě musí být stažená celá;
+ * jinak se nabídne stažení, případně (je-li síť) přehrání ze serveru.
+ * `interactive: false` je automatický přechod na další knihu – nikdo se
+ * nedívá, takže se bez sítě jen oznámí, že kniha chybí.
+ */
+async function confirmPlayable(bookId: string, interactive: boolean): Promise<boolean> {
+  const connected = (await NetInfo.fetch()).isConnected !== false
+  if (getMode() !== 'offline' && connected) return true
+
+  const [chapters, files] = await Promise.all([withSource((s) => s.chapters(bookId)), bookChapterFiles(bookId)])
+  // Kniha bez kapitol se nechá projít – load() ohlásí vlastní chybu.
+  if (chapters.every((item) => files.has(item.id))) return true
+  if (connected && !interactive) return true
+
+  const title = (await withSource((s) => s.book(bookId)).catch(() => null))?.title ?? ''
+  if (!interactive) {
+    toast.error(t('mobile.player.offline.nextUnavailable', { title }))
+    return false
+  }
+
+  const download = await getDownload(bookId)
+  const inProgress = download?.state === 'queued' || download?.state === 'downloading'
+  const message = [
+    t(connected ? 'mobile.player.offline.text' : 'mobile.player.offline.textNoNetwork', { title }),
+    inProgress ? t('mobile.player.offline.downloading') : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+
+  return new Promise<boolean>((resolve) => {
+    const buttons: AlertButton[] = [{ text: t('mobile.player.offline.cancel'), style: 'cancel', onPress: () => resolve(false) }]
+    // Bez sítě by stahování jen čekalo ve frontě; nabízí se, jen když poběží.
+    if (connected && !inProgress) {
+      buttons.push({
+        text: t('mobile.player.offline.download'),
+        onPress: () => {
+          resolve(false)
+          downloadManager
+            .enqueue(bookId)
+            .then(() => toast.success(t('mobile.player.offline.downloadStarted')))
+            .catch((error: unknown) => toast.error(error instanceof Error ? error.message : String(error)))
+        },
+      })
+    }
+    if (connected) buttons.push({ text: t('mobile.player.offline.playOnline'), onPress: () => resolve(true) })
+    Alert.alert(t('mobile.player.offline.title'), message, buttons, { cancelable: true, onDismiss: () => resolve(false) })
+  })
 }
 
 /** Token do adresy audia; bez spojení se vrátí null a hraje se z disku. */
