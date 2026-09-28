@@ -17,7 +17,14 @@ import {
 } from 'libriter-shared'
 
 import { getMode } from '@/data/mode'
-import { countPending, deleteEvents, markAttempt, rewriteSessionId, takePending } from '@/db/events'
+import {
+  countPending,
+  deleteEvents,
+  deleteEventsForSession,
+  markAttempt,
+  rewriteSessionId,
+  takePending,
+} from '@/db/events'
 import {
   bookUpdatedAt,
   deleteMissingAuthors,
@@ -75,6 +82,25 @@ const BATCH_SIZE = 200
 /** Zpoždění po vložení události – ať se deset sekund poslechu pošle jednou dávkou. */
 const DEBOUNCE_MS = 2_000
 
+/**
+ * Nejdelší čekání na jeden požadavek. apiFetch sám limit nemá a zaseknutý
+ * požadavek by držel `running` navždy – žádné další kolo by se nerozjelo
+ * a fronta by se neodeslala až do restartu aplikace.
+ */
+const REQUEST_TIMEOUT_MS = 30_000
+
+/** apiFetch s časovým limitem; přerušení skončí jako chyba sítě (status 0). */
+async function syncFetch<T>(path: string, options: Parameters<typeof apiFetch>[1] = {}): Promise<T> {
+  // AbortSignal.timeout v Hermesu není, proto ručně.
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
+  try {
+    return await apiFetch<T>(path, { ...options, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 class SyncEngine {
   private state: SyncState = { kind: 'idle', pending: 0, lastSyncAt: null }
   private listeners = new Set<Listener>()
@@ -90,6 +116,13 @@ class SyncEngine {
   private onUnauthorized: (() => void) | null = null
   /** Co se má stihnout při návratu sítě ještě před odesláním fronty. */
   private reconnectHooks = new Set<() => Promise<void>>()
+  /**
+   * Offline založené session vyměněné za serverové (lokální ID → serverové).
+   * Přehrávač může pod starým ID zapsat ještě pár pozic, než se o výměně
+   * dozví; ty se před každým odesláním přepíšou.
+   */
+  private resolved = new Map<string, string>()
+  private resolvedHooks = new Set<(localId: string, session: PlaySession) => void>()
 
   subscribe(listener: Listener): () => void {
     this.listeners.add(listener)
@@ -145,6 +178,19 @@ class SyncEngine {
     return () => {
       this.reconnectHooks.delete(hook)
     }
+  }
+
+  /** Dá vědět, že offline session dostala serverové ID. */
+  onSessionResolved(hook: (localId: string, session: PlaySession) => void): () => void {
+    this.resolvedHooks.add(hook)
+    return () => {
+      this.resolvedHooks.delete(hook)
+    }
+  }
+
+  /** Serverové ID pro session založenou offline, jinak ID beze změny. */
+  resolvedId(id: string): string {
+    return this.resolved.get(id) ?? id
   }
 
   private async reconnected(): Promise<void> {
@@ -273,16 +319,36 @@ class SyncEngine {
         continue
       }
 
-      const created = await apiFetch<PlaySession>('/sessions', { method: 'POST', json: request })
+      let created: PlaySession
+      try {
+        created = await syncFetch<PlaySession>('/sessions', { method: 'POST', json: request })
+      } catch (error: unknown) {
+        // Kniha nebo série na serveru mezitím zmizela: tahle session se už
+        // založit nedá a nesmí kvůli ní stát celá fronta. Síť, 401 a chyby
+        // serveru jdou dál do handleFailure.
+        if (error instanceof ApiError && error.status >= 400 && error.status < 500 && error.status !== 401) {
+          console.warn('sync: offline session nejde založit, zahazuji ji', local.id, error.status, error.message)
+          await deleteEventsForSession(local.id)
+          await deleteSessionMirror(local.id)
+          continue
+        }
+        throw error
+      }
 
+      this.resolved.set(local.id, created.id)
       await rewriteSessionId(local.id, created.id)
       await deleteSessionMirror(local.id)
       await saveSessionMirror(created)
+      for (const hook of this.resolvedHooks) hook(local.id, created)
     }
   }
 
   private async flushPending(): Promise<void> {
     const device = await deviceId()
+
+    for (const [localId, serverId] of this.resolved) {
+      await rewriteSessionId(localId, serverId)
+    }
 
     for (;;) {
       const batch = await takePending(Math.min(BATCH_SIZE, SYNC_BATCH_LIMIT))
@@ -291,7 +357,7 @@ class SyncEngine {
       const ids = batch.map((event) => event.id)
       await markAttempt(ids)
 
-      const response = await apiFetch<SyncResponse>('/sessions/sync', {
+      const response = await syncFetch<SyncResponse>('/sessions/sync', {
         method: 'POST',
         json: {
           device_id: device,
@@ -302,7 +368,11 @@ class SyncEngine {
       // Server odpověděl, takže o každé vrácené události je rozhodnuto –
       // ani „rejected“ se opakováním nezlepší. Zůstat ve frontě by znamenalo
       // posílat ji donekonečna.
-      const handled = asList(response.results).map((result) => result.id)
+      const results = asList(response.results)
+      for (const result of results) {
+        if (result.status === 'rejected') console.warn('sync: server odmítl událost', result.id, result.error)
+      }
+      const handled = results.map((result) => result.id)
       await deleteEvents(handled)
 
       for (const session of asList(response.sessions)) {
@@ -319,17 +389,17 @@ class SyncEngine {
   }
 
   private async pullSessions(): Promise<void> {
-    const sessions = asList(await apiFetch<PlaySession[] | null>('/sessions'))
+    const sessions = asList(await syncFetch<PlaySession[] | null>('/sessions'))
     await replaceSessions(sessions)
   }
 
   private async pullLibrary(): Promise<void> {
     const [books, authors, series, progress, languages] = await Promise.all([
-      apiFetch<Book[] | null>('/books').then(asList),
-      apiFetch<Author[] | null>('/authors').then(asList),
-      apiFetch<Series[] | null>('/series').then(asList),
-      apiFetch<BookProgress[] | null>('/books/progress').then(asList),
-      apiFetch<Language[] | null>('/languages').then(asList),
+      syncFetch<Book[] | null>('/books').then(asList),
+      syncFetch<Author[] | null>('/authors').then(asList),
+      syncFetch<Series[] | null>('/series').then(asList),
+      syncFetch<BookProgress[] | null>('/books/progress').then(asList),
+      syncFetch<Language[] | null>('/languages').then(asList),
     ])
 
     // Kapitoly stojí jeden požadavek na knihu, proto se tahají jen tam, kde
@@ -362,7 +432,7 @@ class SyncEngine {
       if (total > 5) {
         this.setState({ kind: 'syncing', pending: this.state.pending, progress: { done: index, total } })
       }
-      const chapters = asList(await apiFetch<Chapter[] | null>(`/books/${bookId}/chapters`))
+      const chapters = asList(await syncFetch<Chapter[] | null>(`/books/${bookId}/chapters`))
       await replaceChapters(bookId, chapters)
     }
   }

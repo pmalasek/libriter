@@ -26,14 +26,20 @@ export function ensurePlayer(): Promise<void> {
 }
 
 async function setup(): Promise<void> {
-  await TrackPlayer.setupPlayer({
-    autoHandleInterruptions: true,
-    // Mluvené slovo, ne hudba: systém podle toho volí míru zpracování zvuku
-    // a na Androidu i to, jak se chová při hlášení navigace.
-    androidAudioContentType: AndroidAudioContentType.Speech,
-    iosCategory: IOSCategory.Playback,
-    iosCategoryMode: IOSCategoryMode.SpokenAudio,
-  })
+  try {
+    await TrackPlayer.setupPlayer({
+      autoHandleInterruptions: true,
+      // Mluvené slovo, ne hudba: systém podle toho volí míru zpracování zvuku
+      // a na Androidu i to, jak se chová při hlášení navigace.
+      androidAudioContentType: AndroidAudioContentType.Speech,
+      iosCategory: IOSCategory.Playback,
+      iosCategoryMode: IOSCategoryMode.SpokenAudio,
+    })
+  } catch (error: unknown) {
+    // Android zrušil Activity, ale přehrávací služba hraje dál: nový JS
+    // kontext nastavuje přehrávač podruhé. Běžící přehrávač je v pořádku.
+    if ((error as { code?: unknown } | null)?.code !== 'player_already_initialized') throw error
+  }
 
   await TrackPlayer.updateOptions({
     android: {

@@ -97,6 +97,12 @@ export async function rewriteSessionId(localId: string, serverId: string): Promi
   await db.runAsync('UPDATE pending_events SET session_id = ? WHERE session_id = ?', serverId, localId)
 }
 
+/** Zahodí čekající události jedné session – když ji server už nepřijme. */
+export async function deleteEventsForSession(sessionId: string): Promise<void> {
+  const db = await openDb()
+  await db.runAsync('DELETE FROM pending_events WHERE session_id = ?', sessionId)
+}
+
 function toEvent(row: PendingRow): PendingEvent {
   return {
     id: row.id,

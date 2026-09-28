@@ -14,6 +14,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import TrackPlayer, { Event, State, useTrackPlayerEvents, type Track } from 'react-native-track-player'
 import {
   ApiError,
+  apiFetch,
   apiUrl,
   currentBookId,
   formatBytes,
@@ -28,6 +29,7 @@ import {
 } from 'libriter-shared'
 
 import { fetchStreamToken } from '@/api/stream'
+import { useAuth } from '@/auth/AuthProvider'
 import { toast } from '@/components/Toast'
 import { getMode } from '@/data/mode'
 import { withSource } from '@/data/sources'
@@ -90,6 +92,8 @@ export function usePlayer(): PlayerValue {
 
 export function PlayerProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient()
+  // Obnova stavu čte ze serveru, takže musí počkat na načtený token.
+  const signedIn = Boolean(useAuth().session)
   const [session, setSession] = useState<PlaySession | null>(null)
   const [book, setBook] = useState<Book | null>(null)
   const [chapters, setChapters] = useState<Chapter[]>([])
@@ -163,6 +167,33 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
    * zvuku se volí podle toho, co je stažené: lokální soubor vyhrává nad
    * streamem, takže rozehraná kniha přežije i vypnutou síť.
    */
+  /** Promítne načtený poslech do stavu – po load() i po obnově. */
+  const apply = useCallback(
+    (loaded: {
+      session: PlaySession
+      book: Book
+      chapters: Chapter[]
+      index: number
+      position: number
+      speed: number
+      offline: boolean
+    }) => {
+      speedRef.current = loaded.speed
+      setSpeedState(loaded.speed)
+      setSession(loaded.session)
+      setBook(loaded.book)
+      setChapters(loaded.chapters)
+      setChapter(loaded.chapters[loaded.index])
+      setPosition(loaded.position)
+      setDuration(loaded.chapters[loaded.index].duration_seconds)
+      setOffline(loaded.offline)
+      lastPositionRef.current = loaded.position
+      listenedRef.current = 0
+      resetFingerprint()
+    },
+    [],
+  )
+
   const load = useCallback(
     async (input: {
       session: PlaySession
@@ -201,6 +232,10 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
             album: nextBook.title,
             duration: item.duration_seconds,
             artwork: apiUrl(`/books/${nextBook.id}/cover`),
+            // Podle nich se stav obnoví, když React naběhne znovu a přehrávací
+            // služba mezitím hraje dál (viz restore níže).
+            sessionId: input.session.id,
+            bookId: nextBook.id,
           }
         })
 
@@ -217,19 +252,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const target = Math.min(Math.max(0, input.positionSeconds), limit || input.positionSeconds)
         if (target > 0) await TrackPlayer.seekTo(target)
         speedRef.current = input.session.playback_speed || speedRef.current
-        setSpeedState(speedRef.current)
         await TrackPlayer.setRate(speedRef.current)
 
-        setSession(input.session)
-        setBook(nextBook)
-        setChapters(nextChapters)
-        setChapter(nextChapters[index])
-        setPosition(target)
-        setDuration(nextChapters[index].duration_seconds)
-        setOffline(files.has(nextChapters[index].id))
-        lastPositionRef.current = target
-        listenedRef.current = 0
-        resetFingerprint()
+        apply({
+          session: input.session,
+          book: nextBook,
+          chapters: nextChapters,
+          index,
+          position: target,
+          speed: speedRef.current,
+          offline: files.has(nextChapters[index].id),
+        })
 
         if (input.autoplay) await TrackPlayer.play()
       } catch (error: unknown) {
@@ -239,8 +272,65 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         setLoading(false)
       }
     },
-    [],
+    [apply],
   )
+
+  /**
+   * Obnova po novém startu Reactu. Android umí zrušit Activity, zatímco
+   * přehrávací služba hraje dál; klepnutí na notifikaci pak spustí React
+   * znovu a přehrávač by se tvářil prázdný. Stav se proto vyčte z běžícího
+   * přehrávače – bez setQueue a seekTo, aby přehrávání nezaškobrtlo.
+   */
+  useEffect(() => {
+    if (!signedIn) return
+    let cancelled = false
+    void (async () => {
+      try {
+        await ensurePlayer()
+        const track = await TrackPlayer.getActiveTrack()
+        const storedSessionId = typeof track?.sessionId === 'string' ? track.sessionId : null
+        const bookId = typeof track?.bookId === 'string' ? track.bookId : null
+        if (!track || !storedSessionId || !bookId || sessionRef.current) return
+
+        const sessionId = syncEngine.resolvedId(storedSessionId)
+        const [restored, nextBook, nextChapters, files, index, progress, playback, rate] = await Promise.all([
+          getSessionMirror(sessionId).then(
+            (mirror) => mirror ?? apiFetch<PlaySession>(`/sessions/${sessionId}`),
+          ),
+          withSource((source) => source.book(bookId)),
+          withSource((source) => source.chapters(bookId)),
+          bookChapterFiles(bookId),
+          TrackPlayer.getActiveTrackIndex(),
+          TrackPlayer.getProgress(),
+          TrackPlayer.getPlaybackState(),
+          TrackPlayer.getRate(),
+        ])
+        // Uživatel mezitím mohl pustit něco jiného; to má přednost.
+        if (cancelled || sessionRef.current || !nextBook || index == null) return
+        const chapterIndex = nextChapters.findIndex((item) => item.id === track.id)
+        if (chapterIndex < 0) return
+
+        apply({
+          session: restored,
+          book: nextBook,
+          chapters: nextChapters,
+          index: chapterIndex,
+          position: progress.position,
+          speed: rate,
+          offline: files.has(track.id),
+        })
+        const isPlaying = playback.state === State.Playing
+        playingRef.current = isPlaying
+        setPlaying(isPlaying)
+      } catch (error: unknown) {
+        // Bez obnovy se nic nerozbije – jen se ukáže prázdný přehrávač.
+        console.warn('přehrávač: obnova stavu selhala', error)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [apply, signedIn])
 
   /**
    * Otevře poslech na jeho rozehrané knize. `check` říká, jak naložit
@@ -577,6 +667,17 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
 
   // Návrat sítě: uložit pozici teď, ať server dostane aktuální, ne až 10 s starou.
   useEffect(() => syncEngine.onReconnect(() => store({ force: true })), [store])
+
+  // Poslech založený bez sítě dostal serverové ID; další pozice patří pod něj.
+  useEffect(
+    () =>
+      syncEngine.onSessionResolved((localId, fresh) => {
+        if (sessionRef.current?.id !== localId) return
+        sessionRef.current = fresh
+        setSession(fresh)
+      }),
+    [],
+  )
 
   const value = useMemo<PlayerValue>(
     () => ({
