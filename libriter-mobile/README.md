@@ -118,6 +118,40 @@ just mobile-start     # Metro pro už nainstalovaný dev build
 
 Kontrola typů: `just typecheck` (projede shared, web i mobil).
 
+### Podepisování pro iPhone
+
+První `just mobile-ios` na novém Macu skončí na
+
+```
+CommandError: No code signing certificates are available to use.
+```
+
+Mac nemá žádný podpisový certifikát (`security find-identity -v -p
+codesigning` hlásí `0 valid identities found`) a projekt nemá nastavený
+Apple tým. Jednorázové nastavení:
+
+1. **Apple ID v Xcode** – Xcode → Settings → Accounts → **+** → Apple ID.
+   Stačí bezplatné Apple ID, placený Developer Program není potřeba.
+2. **Tým pro projekt** – `open ios/Libriter.xcworkspace`, target
+   **Libriter** → **Signing & Capabilities** → zapnout *Automatically manage
+   signing* a vybrat Team. Xcode sám vytvoří certifikát „Apple Development“
+   a provisioning profil.
+   - S bezplatným účtem může být `cz.libriter.app` už zabrané. Pokud to Xcode
+     nahlásí, změň `bundleIdentifier` na něco unikátního (např.
+     `cz.libriter.app.<jméno>`).
+3. **iPhone** – Nastavení → Soukromí a zabezpečení → **Režim pro vývojáře**
+   zapnout (telefon se restartuje). Po první instalaci s bezplatným účtem
+   ještě Nastavení → Obecné → Správa VPN a zařízení → důvěřovat svému
+   vývojářskému profilu.
+4. Znovu `just mobile-ios`.
+
+Tým vybraný v Xcode žije jen v `ios/`, který je generovaný – `expo prebuild`
+nebo `rm -rf ios` ho zahodí. Natrvalo patří do `app.json` jako
+`ios.appleTeamId` (desetiznakové ID týmu z Xcode → Settings → Accounts).
+
+Aplikace podepsaná bezplatným účtem po 7 dnech přestane jít spustit; stačí ji
+znovu nahrát přes `just mobile-ios`.
+
 ## Vlastní config plugin: UIScene
 
 Nejnovější iOS SDK aplikaci bez scénového životního cyklu při startu vůbec
@@ -186,7 +220,7 @@ nepatří:
 npx expo prebuild                 # vygeneruje ios/ i android/
 ```
 
-**iOS / TestFlight** – v Xcode otevřít `ios/libritermobile.xcworkspace`,
+**iOS / TestFlight** – v Xcode otevřít `ios/Libriter.xcworkspace`,
 nastavit tým a podepsání, `Product → Archive`, pak `Distribute App →
 App Store Connect`.
 

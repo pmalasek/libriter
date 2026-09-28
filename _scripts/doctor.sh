@@ -56,15 +56,15 @@ check 0 "frontend node_modules" $s "nainstalováno" "cd libriter-frontend && npm
 
 # -----------------------------------------------------------------------------
 echo; echo "${C_BOLD}Android${C_OFF}"
-jdk_label="JDK $JAVA_WANT-$JAVA_MAX"
+jdk_label="JDK ${JAVA_WANT}-${JAVA_MAX}"
 if [[ -n "${JAVA_HOME:-}" && -x "$JAVA_HOME/bin/java" ]]; then
   jv="$("$JAVA_HOME/bin/java" -version 2>&1 | head -n1 | sed -E 's/.*"([0-9]+)(\.[0-9]+)*.*/\1/')"
   (( ${jv:-0} >= JAVA_WANT && ${jv:-0} <= JAVA_MAX )) && s=0 || s=1
-  check 1 "$jdk_label (JAVA_HOME)" $s "JDK $jv · $JAVA_HOME" "JAVA_HOME míří na JDK ${jv:-?}, Gradle potřebuje $JAVA_WANT–$JAVA_MAX; just setup"
+  check 1 "$jdk_label (JAVA_HOME)" $s "JDK $jv · $JAVA_HOME" "JAVA_HOME míří na JDK ${jv:-?}, Gradle potřebuje ${JAVA_WANT}–${JAVA_MAX}; just setup"
 elif have java; then
   jv="$(java_major)"
   (( ${jv:-0} >= JAVA_WANT && ${jv:-0} <= JAVA_MAX )) && s=0 || s=1
-  check 1 "$jdk_label" $s "java $jv (JAVA_HOME nenastaveno)" "java ${jv:-?} v PATH, JAVA_HOME nenastaveno nebo mimo rozsah $JAVA_WANT–$JAVA_MAX; just setup"
+  check 1 "$jdk_label" $s "java $jv (JAVA_HOME nenastaveno)" "java ${jv:-?} v PATH, JAVA_HOME nenastaveno nebo mimo rozsah ${JAVA_WANT}–${JAVA_MAX}; just setup"
 else
   check 1 "$jdk_label" 1 "" "just setup"
 fi

@@ -488,6 +488,9 @@ npm install          # v kořeni – web, mobil i shared jsou npm workspaces
 just mobile-ios      # nebo just mobile-android
 ```
 
+Build na iPhone potřebuje jednorázově nastavit podepisování v Xcode (Apple ID
+a tým) – postup je v [libriter-mobile/README.md](libriter-mobile/README.md#podepisování-pro-iphone).
+
 ---
 
 ## Příkazová řádka

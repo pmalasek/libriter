@@ -132,7 +132,7 @@ fi
 # -----------------------------------------------------------------------------
 #  4. Android: JDK 17–24
 # -----------------------------------------------------------------------------
-info "Android: JDK $JAVA_WANT–$JAVA_MAX"
+info "Android: JDK ${JAVA_WANT}–${JAVA_MAX}"
 if JDK_HOME="$(find_java_home)"; then
   ok "JDK $(jdk_major_at "$JDK_HOME") v $JDK_HOME"
 else
@@ -157,9 +157,9 @@ else
       ;;
   esac
   if ! JDK_HOME="$(find_java_home)"; then
-    warn "Repozitáře distribuce nemají JDK $JAVA_WANT–$JAVA_MAX (novější Gradle neumí); stahuji Temurin $JAVA_PREFERRED."
-    install_temurin_jdk "$JAVA_PREFERRED" || die "Stažení Temurin JDK $JAVA_PREFERRED selhalo; nainstaluj JDK $JAVA_WANT–$JAVA_MAX ručně a spusť setup znovu."
-    JDK_HOME="$(find_java_home)" || die "JDK $JAVA_WANT–$JAVA_MAX se nepodařilo najít po instalaci."
+    warn "Repozitáře distribuce nemají JDK ${JAVA_WANT}–${JAVA_MAX} (novější Gradle neumí); stahuji Temurin ${JAVA_PREFERRED}."
+    install_temurin_jdk "${JAVA_PREFERRED}" || die "Stažení Temurin JDK ${JAVA_PREFERRED} selhalo; nainstaluj JDK ${JAVA_WANT}–${JAVA_MAX} ručně a spusť setup znovu."
+    JDK_HOME="$(find_java_home)" || die "JDK ${JAVA_WANT}–${JAVA_MAX} se nepodařilo najít po instalaci."
   fi
   ok "JDK $(jdk_major_at "$JDK_HOME") v $JDK_HOME"
 fi
