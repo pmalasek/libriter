@@ -293,9 +293,6 @@ export default {
   sync: {
     syncing: 'Synchronisation…',
     downloadingLibrary: 'Téléchargement de la bibliothèque {{done}}/{{total}}…',
-    offlinePending_one: 'Hors ligne – {{count}} entrée en attente d’envoi',
-    offlinePending_other: 'Hors ligne – {{count}} entrées en attente d’envoi',
-    offlinePending_many: 'Hors ligne – {{count}} entrées en attente d’envoi',
     backoffPending_one: 'Le serveur ne répond pas – {{count}} entrée en attente',
     backoffPending_other: 'Le serveur ne répond pas – {{count}} entrées en attente',
     backoffPending_many: 'Le serveur ne répond pas – {{count}} entrées en attente',

@@ -73,7 +73,9 @@ function describe(state: SyncState): string | null {
         ? t('mobile.sync.downloadingLibrary', { done: state.progress.done, total: state.progress.total })
         : t('mobile.sync.syncing')
     case 'offline':
-      return state.pending > 0 ? t('mobile.sync.offlinePending', { count: state.pending }) : null
+      // Bez signálu je čekání ve frontě normální stav, ne zpráva; fronta se
+      // odešle sama po návratu sítě. Počet je vidět v nastavení.
+      return null
     case 'backoff':
       return state.pending > 0
         ? t('mobile.sync.backoffPending', { count: state.pending })

@@ -289,8 +289,6 @@ export default {
   sync: {
     syncing: 'Synchronisierung läuft…',
     downloadingLibrary: 'Bibliothek wird heruntergeladen {{done}}/{{total}}…',
-    offlinePending_one: 'Offline – {{count}} Eintrag wartet auf Übertragung',
-    offlinePending_other: 'Offline – {{count}} Einträge warten auf Übertragung',
     backoffPending_one: 'Server antwortet nicht – {{count}} Eintrag wartet',
     backoffPending_other: 'Server antwortet nicht – {{count}} Einträge warten',
     backoff: 'Server antwortet nicht, erneuter Versuch folgt',

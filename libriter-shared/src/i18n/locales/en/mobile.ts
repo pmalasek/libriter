@@ -290,8 +290,6 @@ export default {
   sync: {
     syncing: 'Syncing…',
     downloadingLibrary: 'Downloading library {{done}}/{{total}}…',
-    offlinePending_one: 'Offline – {{count}} record waiting to be sent',
-    offlinePending_other: 'Offline – {{count}} records waiting to be sent',
     backoffPending_one: 'Server not responding – {{count}} record waiting',
     backoffPending_other: 'Server not responding – {{count}} records waiting',
     backoff: 'Server not responding, will try again',

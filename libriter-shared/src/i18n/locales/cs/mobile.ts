@@ -298,10 +298,6 @@ export default {
   sync: {
     syncing: 'Synchronizuji…',
     downloadingLibrary: 'Stahuji knihovnu {{done}}/{{total}}…',
-    offlinePending_one: 'Offline – {{count}} záznam čeká na odeslání',
-    offlinePending_few: 'Offline – {{count}} záznamy čeká na odeslání',
-    offlinePending_many: 'Offline – {{count}} záznamy čeká na odeslání',
-    offlinePending_other: 'Offline – {{count}} záznamů čeká na odeslání',
     backoffPending_one: 'Server neodpovídá – {{count}} záznam čeká',
     backoffPending_few: 'Server neodpovídá – {{count}} záznamy čeká',
     backoffPending_many: 'Server neodpovídá – {{count}} záznamy čeká',

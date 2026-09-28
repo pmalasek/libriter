@@ -293,9 +293,6 @@ export default {
   sync: {
     syncing: 'Sincronizando…',
     downloadingLibrary: 'Descargando biblioteca {{done}}/{{total}}…',
-    offlinePending_one: 'Sin conexión: {{count}} registro pendiente de envío',
-    offlinePending_other: 'Sin conexión: {{count}} registros pendientes de envío',
-    offlinePending_many: 'Sin conexión: {{count}} registros pendientes de envío',
     backoffPending_one: 'El servidor no responde: {{count}} registro pendiente',
     backoffPending_other: 'El servidor no responde: {{count}} registros pendientes',
     backoffPending_many: 'El servidor no responde: {{count}} registros pendientes',
