@@ -34,20 +34,25 @@ const PARALLEL = 2
 const MEASURE_PARALLEL = 6
 
 /**
- * Úsporná varianta: server kapitolu převede za běhu do Opusu 48 kbps mono
- * (Ogg). Jen Android – iOS Ogg nepřehraje, dostane originál.
+ * Úsporná varianta: server kapitolu převede za běhu. Android dostane Opus
+ * 48 kbps mono v Oggu, iOS (který Ogg nepřehraje) AAC 64 kbps mono v M4A.
  */
+const COMPACT =
+  Platform.OS === 'ios'
+    ? { variant: 'compact-aac', extension: 'm4a', bytesPerSecond: 8000 }
+    : { variant: 'compact', extension: 'ogg', bytesPerSecond: 6000 }
+
 export async function compactEnabled(): Promise<boolean> {
-  return Platform.OS === 'android' && (await compactDownloads())
+  return compactDownloads()
 }
 
 /**
- * Odhad velikosti kapitoly v úsporné variantě: 48 kbit/s = 6000 B/s plus
+ * Odhad velikosti kapitoly v úsporné variantě: datový tok varianty plus
  * pár procent na kontejner. Server ji předem nezná (převádí za běhu), takže
  * ukazatel průběhu počítá s odhadem a po každé kapitole ho srovná.
  */
 export function compactSizeEstimate(durationSeconds: number): number {
-  return Math.round(durationSeconds * 6000 * 1.02)
+  return Math.round(durationSeconds * COMPACT.bytesPerSecond * 1.02)
 }
 
 /** Kořen stažených souborů; `<documentDirectory>libriter/<bookId>/`. */
@@ -217,8 +222,8 @@ class DownloadManager {
     if (existing?.state === 'done') return
 
     const extension = chapter.file_name.split('.').pop() ?? 'mp3'
-    let target = `${bookDirectory(bookId)}${chapter.id}.${compact ? 'ogg' : extension}`
-    const variant = compact ? '&variant=compact' : ''
+    let target = `${bookDirectory(bookId)}${chapter.id}.${compact ? COMPACT.extension : extension}`
+    const variant = compact ? `&variant=${COMPACT.variant}` : ''
     const url = `${apiUrl(`/chapters/${chapter.id}/audio`)}?t=${await this.streamToken()}${variant}`
     // Rozdělaný soubor jde navázat jen u originálu; převod za běhu Range neumí.
     const resumeData = compact ? undefined : (existing?.resumeData ?? undefined)
@@ -282,7 +287,7 @@ class DownloadManager {
 
       // Server bez ffmpegu pošle místo úsporné varianty originál; soubor pak
       // dostane správnou příponu a kontroluje se jako originál.
-      const converted = compact && header(result.headers, 'x-libriter-variant') === 'compact'
+      const converted = compact && header(result.headers, 'x-libriter-variant') === COMPACT.variant
       if (compact && !converted) {
         const renamed = `${bookDirectory(bookId)}${chapter.id}.${extension}`
         await FileSystem.moveAsync({ from: target, to: renamed })

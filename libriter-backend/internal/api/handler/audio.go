@@ -50,9 +50,46 @@ const (
 	// variantCompact je Opus 48 kbps mono v kontejneru Ogg – pro stahování
 	// do telefonu. Pro mluvené slovo zní stejně a je zhruba pětkrát menší.
 	variantCompact = "compact"
+	// variantCompactAAC je AAC 64 kbps mono ve fragmentovaném MP4 – úsporná
+	// varianta pro iOS, který Ogg nepřehraje.
+	variantCompactAAC = "compact-aac"
 )
 
-// GET|HEAD /api/v1/chapters/{id}/audio?t=<stream token>[&variant=compact]
+// transcodeProfile popisuje, jak ffmpeg kapitolu převede: kodek, kontejner
+// a hlavičky odpovědi. Vše ostatní je u variant společné.
+type transcodeProfile struct {
+	variant     string
+	contentType string
+	args        []string
+}
+
+var transcodeProfiles = map[string]transcodeProfile{
+	variantCompact: {
+		variant:     variantCompact,
+		contentType: "audio/ogg",
+		args: []string{
+			"-ac", "1", "-c:a", "libopus", "-b:a", "48k", "-application", "voip",
+			// Úroveň 5 kóduje zhruba dvakrát rychleji než výchozí 10 a u řeči
+			// rozdíl neslyšet; rychlost kódování tu přímo určuje rychlost stahování.
+			"-compression_level", "5",
+			"-f", "ogg",
+		},
+	},
+	variantCompactAAC: {
+		variant:     variantCompactAAC,
+		contentType: "audio/mp4",
+		args: []string{
+			"-ac", "1", "-c:a", "aac", "-b:a", "64k",
+			// Výstup jde do roury, kam se moov na konec dopsat nedá – proto
+			// fragmentovaný MP4. Fragment po 10 s: frag_keyframe by u audia
+			// dělil po každém rámci a režie by soubor zbytečně nafoukla.
+			"-f", "mp4", "-movflags", "+empty_moov+default_base_moof",
+			"-frag_duration", "10000000",
+		},
+	},
+}
+
+// GET|HEAD /api/v1/chapters/{id}/audio?t=<stream token>[&variant=compact|compact-aac]
 //
 // Mimo skupinu s Authenticate: prvek <audio> neumí poslat hlavičku
 // Authorization, takže se token předává v adrese. Není to přihlašovací token,
@@ -126,8 +163,8 @@ func (h *AudioHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if r.URL.Query().Get("variant") == variantCompact && h.ffmpeg != "" {
-		h.streamCompact(w, r, abs)
+	if profile, ok := transcodeProfiles[r.URL.Query().Get("variant")]; ok && h.ffmpeg != "" {
+		h.streamTranscoded(w, r, abs, profile)
 		return
 	}
 
@@ -142,15 +179,16 @@ func (h *AudioHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, info.Name(), info.ModTime(), file)
 }
 
-// streamCompact převádí kapitolu za běhu do Opusu a posílá ji rovnou klientovi.
+// streamTranscoded převádí kapitolu za běhu do úsporné varianty a posílá ji
+// rovnou klientovi.
 //
 // Výsledek se neukládá: do telefonu se kniha stahuje jednou a druhá kopie
 // knihovny na disku by nic neušetřila. Cena za to je, že odpověď nezná
 // délku ani neumí Range – varianta proto slouží ke stahování, ne ke
 // streamování s přetáčením.
-func (h *AudioHandler) streamCompact(w http.ResponseWriter, r *http.Request, abs string) {
-	w.Header().Set("X-Libriter-Variant", variantCompact)
-	w.Header().Set("Content-Type", "audio/ogg")
+func (h *AudioHandler) streamTranscoded(w http.ResponseWriter, r *http.Request, abs string, profile transcodeProfile) {
+	w.Header().Set("X-Libriter-Variant", profile.variant)
+	w.Header().Set("Content-Type", profile.contentType)
 	w.Header().Set("Accept-Ranges", "none")
 	w.Header().Set("Cache-Control", "private, no-store")
 	if r.Method == http.MethodHead {
@@ -166,16 +204,10 @@ func (h *AudioHandler) streamCompact(w http.ResponseWriter, r *http.Request, abs
 		return
 	}
 
-	cmd := exec.CommandContext(r.Context(), h.ffmpeg,
-		"-nostdin", "-v", "error",
-		"-i", abs,
-		"-vn", "-map_metadata", "-1",
-		"-ac", "1", "-c:a", "libopus", "-b:a", "48k", "-application", "voip",
-		// Úroveň 5 kóduje zhruba dvakrát rychleji než výchozí 10 a u řeči
-		// rozdíl neslyšet; rychlost kódování tu přímo určuje rychlost stahování.
-		"-compression_level", "5",
-		"-f", "ogg", "pipe:1",
-	)
+	args := []string{"-nostdin", "-v", "error", "-i", abs, "-vn", "-map_metadata", "-1"}
+	args = append(args, profile.args...)
+	args = append(args, "pipe:1")
+	cmd := exec.CommandContext(r.Context(), h.ffmpeg, args...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdout, err := cmd.StdoutPipe()

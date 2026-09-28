@@ -250,6 +250,7 @@ export default {
     wifiOnlyHint: 'A book takes hundreds of megabytes; you will notice it on mobile data.',
     compactDownloads: 'Compact downloads',
     compactDownloadsHint: 'Opus 48 kbps mono – files about 5× smaller, no difference for spoken word. Books already downloaded stay as they are.',
+    compactDownloadsHintIos: 'AAC 64 kbps mono – about half the size of typical MP3s, no difference for spoken word. Books already downloaded stay as they are.',
     storageUsed: 'Used on phone',
     sync: 'Sync',
     pending: 'Waiting to be sent',

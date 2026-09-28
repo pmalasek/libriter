@@ -235,4 +235,19 @@ func TestAudioStreamCompactVariant(t *testing.T) {
 	if ar := orig.Header().Get("Accept-Ranges"); ar != "bytes" {
 		t.Errorf("originál Accept-Ranges: %q", ar)
 	}
+
+	// Varianta pro iOS: AAC ve fragmentovaném MP4.
+	aac := env.do(t, http.MethodGet, "/chapters/"+chapterIDs[0].String()+"/audio?variant=compact-aac&t="+streamToken, "", nil)
+	if aac.Code != http.StatusOK {
+		t.Fatalf("compact-aac: %d %s", aac.Code, aac.Body.String())
+	}
+	if ct := aac.Header().Get("Content-Type"); ct != "audio/mp4" {
+		t.Errorf("compact-aac Content-Type: %q", ct)
+	}
+	if v := aac.Header().Get("X-Libriter-Variant"); v != "compact-aac" {
+		t.Errorf("compact-aac X-Libriter-Variant: %q", v)
+	}
+	if body := aac.Body.Bytes(); len(body) < 8 || string(body[4:8]) != "ftyp" {
+		t.Errorf("tělo není MP4 (%d B)", len(body))
+	}
 }

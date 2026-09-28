@@ -62,7 +62,8 @@ export async function setWifiOnly(value: boolean): Promise<void> {
 }
 
 /**
- * Stahovat knihy v úsporné variantě (Opus 48 kbps mono)? Dokud to uživatel
+ * Stahovat knihy v úsporné variantě (Android Opus 48 kbps, iOS AAC 64 kbps,
+ * obojí mono)? Dokud to uživatel
  * nenastaví sám, řídí se offline režimem – kdo si knihovnu bere s sebou,
  * ocení menší soubory nejvíc.
  */

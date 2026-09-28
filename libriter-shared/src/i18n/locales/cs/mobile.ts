@@ -256,6 +256,7 @@ export default {
     wifiOnlyHint: 'Kniha zabere stovky megabajtů; na datech se to pozná.',
     compactDownloads: 'Úsporné stahování',
     compactDownloadsHint: 'Opus 48 kbps mono – zhruba 5× menší soubory, pro mluvené slovo bez rozdílu. Už stažené knihy se nemění.',
+    compactDownloadsHintIos: 'AAC 64 kbps mono – zhruba poloviční velikost oproti běžným MP3, pro mluvené slovo bez rozdílu. Už stažené knihy se nemění.',
     storageUsed: 'Zabráno v telefonu',
     sync: 'Synchronizace',
     pending: 'Čeká na odeslání',

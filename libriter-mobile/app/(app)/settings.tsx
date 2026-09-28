@@ -75,18 +75,16 @@ export default function SettingsScreen() {
             void setWifiOnly(value)
           }}
         />
-        {/* iOS neumí přehrát Ogg; tam se stahuje originál. */}
-        {Platform.OS === 'android' ? (
-          <SwitchRow
-            label={t('mobile.settings.compactDownloads')}
-            hint={t('mobile.settings.compactDownloadsHint')}
-            value={compact}
-            onChange={(value) => {
-              setCompact(value)
-              void setCompactDownloads(value)
-            }}
-          />
-        ) : null}
+        <SwitchRow
+          label={t('mobile.settings.compactDownloads')}
+          // Formát se liší: iOS neumí Ogg, dostává AAC (viz downloadManager).
+          hint={t(Platform.OS === 'ios' ? 'mobile.settings.compactDownloadsHintIos' : 'mobile.settings.compactDownloadsHint')}
+          value={compact}
+          onChange={(value) => {
+            setCompact(value)
+            void setCompactDownloads(value)
+          }}
+        />
         <Row label={t('mobile.settings.storageUsed')} value={formatBytes(used)} />
       </Section>
 

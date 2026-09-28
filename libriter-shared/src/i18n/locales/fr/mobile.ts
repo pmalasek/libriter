@@ -252,6 +252,7 @@ export default {
     wifiOnlyHint: 'Un livre occupe des centaines de mégaoctets ; cela se ressent sur la consommation de données mobiles.',
     compactDownloads: 'Téléchargements compacts',
     compactDownloadsHint: 'Opus 48 kbps mono – fichiers environ 5× plus petits, sans différence pour la voix parlée. Les livres déjà téléchargés restent inchangés.',
+    compactDownloadsHintIos: 'AAC 64 kbps mono – environ deux fois plus petit qu’un MP3 courant, sans différence pour la voix parlée. Les livres déjà téléchargés restent inchangés.',
     storageUsed: 'Espace utilisé sur le téléphone',
     sync: 'Synchronisation',
     pending: 'En attente d’envoi',
