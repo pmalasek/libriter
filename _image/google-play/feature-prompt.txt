@@ -1,0 +1,9 @@
+Generated with the built-in image_gen tool.
+Brand reference: libriter-mobile/assets/icon.png
+Final export: libriter-feature-cs.jpg, 1024 × 500, opaque JPEG.
+
+Use case: ads-marketing
+Create a polished Google Play feature graphic for Libriter, a personal audiobook library and player.
+Canvas: exactly 1024 x 500 pixels, opaque RGB, landscape.
+Input image is brand reference only: existing Libriter icon with white headphones over an open book and cyan play symbol; preserve the recognizable design language and turquoise/navy palette.
+Composition: refined spacious editorial advertising banner. Left half: large crisp white brand name "Libriter", with smaller Czech copy beneath on two lines: "Vaše audioknihy." and "Všude s vámi." Right half: beautiful sculptural illustration of an open ivory book with white over-ear headphones hovering around it, inspired by the brand icon, subtle luminous cyan sound ribbons flowing from pages. Keep all important elements comfortably inset, around 70px from edges. Background deep midnight navy #07304D with sophisticated soft teal illumination toward the illustration, understated tonal flowing sound waves, restrained detail. Typography rounded modern grotesk inspired by Bricolage Grotesque, perfectly legible with correct Czech diacritics. Premium calm literary atmosphere, tactile paper, soft studio lighting, exceptional clean art direction, balanced negative space. No phone mockups, no fabricated UI, no badges, no extra text, no Google Play logo, no watermark. The only text is exactly "Libriter" and "Vaše audioknihy." and "Všude s vámi."
