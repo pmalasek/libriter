@@ -1,4 +1,11 @@
-import { HeadphonesIcon, LibraryIcon, PauseIcon, PlayIcon } from 'lucide-react'
+import {
+  ExternalLinkIcon,
+  HeadphonesIcon,
+  LibraryIcon,
+  PauseIcon,
+  PlayIcon,
+  SmartphoneIcon,
+} from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
@@ -20,6 +27,9 @@ import { sessionBooks, sessionKindLabel, sessionProgress, sessionTitle } from '@
 
 /** Kolik položek se vejde do police, než začne být rolování únavné. */
 const SHELF_SIZE = 12
+
+/** Uzavřené testování mobilní aplikace na Google Play. */
+const ANDROID_TESTING_URL = 'https://play.google.com/apps/testing/com.libriter.app'
 
 /**
  * První pohled po otevření aplikace: čím se dá pokračovat a co v knihovně
@@ -133,6 +143,8 @@ export function HomePage() {
       ) : (
         <StartHero greeting={greeting} book={newest[0]} count={(books.data ?? []).length} />
       )}
+
+      <AndroidTestingLink />
 
       {continues.length > 0 ? (
         <Shelf title={t('layout.home.shelves.continuing')} to="/sessions">
@@ -361,5 +373,32 @@ function StartHero({
         </div>
       </div>
     </section>
+  )
+}
+
+/** Pozvánka do testování aplikace pro Android. */
+function AndroidTestingLink() {
+  const { t } = useTranslation()
+
+  return (
+    <a
+      href={ANDROID_TESTING_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="glass group mt-4 flex items-center gap-4 rounded-2xl p-4 shadow-glass ring-1 ring-glass-edge transition-colors hover:ring-primary/50"
+    >
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <SmartphoneIcon className="size-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-heading font-semibold tracking-tight transition-colors group-hover:text-primary">
+          {t('layout.home.androidTesting')}
+        </span>
+        <span className="block text-sm text-muted-foreground">
+          {t('layout.home.androidTestingDescription')}
+        </span>
+      </span>
+      <ExternalLinkIcon className="size-4 shrink-0 text-muted-foreground" />
+    </a>
   )
 }

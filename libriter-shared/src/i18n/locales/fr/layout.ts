@@ -60,5 +60,7 @@ export default {
     startDescription: '{{books}} vous attendent dans la bibliothèque. Choisissez-en un ou lancez directement le dernier ajout.',
     playBook: 'Lire {{title}}',
     toLibrary: 'Aller à la bibliothèque',
+    androidTesting: 'Version de test pour Android',
+    androidTestingDescription: 'Essayez l’application mobile Libriter sur Google Play.',
   },
 }

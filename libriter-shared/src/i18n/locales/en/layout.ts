@@ -60,5 +60,7 @@ export default {
     startDescription: '{{books}} waiting in the library. Pick one, or play the latest addition right away.',
     playBook: 'Play {{title}}',
     toLibrary: 'Go to library',
+    androidTesting: 'Android test version',
+    androidTestingDescription: 'Try the Libriter mobile app on Google Play.',
   },
 }

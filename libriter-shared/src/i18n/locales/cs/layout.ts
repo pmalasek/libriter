@@ -60,5 +60,7 @@ export default {
     startDescription: 'V knihovně čeká {{books}}. Vyberte si, nebo rovnou pusťte poslední přírůstek.',
     playBook: 'Přehrát {{title}}',
     toLibrary: 'Do knihovny',
+    androidTesting: 'Testovací verze pro Android',
+    androidTestingDescription: 'Vyzkoušejte mobilní aplikaci Libriter na Google Play.',
   },
 }
