@@ -273,6 +273,8 @@ export default {
     emptyDescription: 'Le bouton Télécharger se trouve sur la fiche du livre.',
     unknownBook: 'Livre inconnu',
     remove: 'Supprimer du téléphone',
+    open: 'Ouvrir les téléchargements',
+    finished: '{{title}} est téléchargé, vous pouvez l’écouter.',
     state: {
       complete: 'Sur le téléphone · {{size}}',
       downloading: 'Téléchargement · {{done}} sur {{total}}',

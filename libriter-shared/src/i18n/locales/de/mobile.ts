@@ -269,6 +269,8 @@ export default {
     emptyDescription: 'Die Schaltfläche zum Herunterladen findest du auf der Detailseite des Buches.',
     unknownBook: 'Unbekanntes Buch',
     remove: 'Vom Telefon löschen',
+    open: 'Downloads öffnen',
+    finished: '{{title}} ist heruntergeladen und kann abgespielt werden.',
     state: {
       complete: 'Auf dem Telefon · {{size}}',
       downloading: 'Wird heruntergeladen · {{done}} von {{total}}',

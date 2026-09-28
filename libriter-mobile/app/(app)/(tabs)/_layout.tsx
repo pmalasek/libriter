@@ -5,6 +5,7 @@ import { Tabs } from 'expo-router'
 import { Ellipsis, Home, Layers, Library, Users, type LucideProps } from 'lucide-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { DownloadCapsule } from '@/components/DownloadCapsule'
 import { MiniPlayer } from '@/components/MiniPlayer'
 import { GlassBackground } from '@/components/ui/Blur'
 import { fonts, useTheme } from '@/theme'
@@ -14,7 +15,8 @@ const TAB_BAR_HEIGHT = 58
 
 /**
  * Spodní navigace jako `TabBar` na webu: čtyři hlavní záložky (Domů, Knihy,
- * Autoři, Série) a „Více“ se zbytkem. Nad lištou sedí kapsle přehrávače.
+ * Autoři, Série) a „Více“ se zbytkem. Nad lištou sedí kapsle přehrávače,
+ * během stahování nad ní ještě kapsle s průběhem.
  */
 export default function TabsLayout() {
   const { t } = useTranslation()
@@ -70,6 +72,7 @@ export default function TabsLayout() {
       </Tabs>
 
       <View style={{ position: 'absolute', left: 0, right: 0, bottom: barHeight }} pointerEvents="box-none">
+        <DownloadCapsule />
         <MiniPlayer />
       </View>
     </View>

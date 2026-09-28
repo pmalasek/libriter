@@ -278,6 +278,8 @@ export default {
     emptyDescription: 'V detailu knihy najdete tlačítko Stáhnout.',
     unknownBook: 'Neznámá kniha',
     remove: 'Smazat z telefonu',
+    open: 'Otevřít stahování',
+    finished: 'Kniha {{title}} je stažená, můžete poslouchat.',
     state: {
       complete: 'V telefonu · {{size}}',
       downloading: 'Stahuji · {{done}} z {{total}}',

@@ -273,6 +273,8 @@ export default {
     emptyDescription: 'Encontrarás el botón Descargar en la ficha del libro.',
     unknownBook: 'Libro desconocido',
     remove: 'Eliminar del teléfono',
+    open: 'Abrir descargas',
+    finished: '{{title}} está descargado y listo para escuchar.',
     state: {
       complete: 'En el teléfono · {{size}}',
       downloading: 'Descargando · {{done}} de {{total}}',

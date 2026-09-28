@@ -270,6 +270,8 @@ export default {
     emptyDescription: 'You will find the Download button on the book detail page.',
     unknownBook: 'Unknown book',
     remove: 'Delete from phone',
+    open: 'Open downloads',
+    finished: '{{title}} is downloaded and ready to play.',
     state: {
       complete: 'On phone · {{size}}',
       downloading: 'Downloading · {{done}} of {{total}}',
