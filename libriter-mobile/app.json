@@ -2,7 +2,7 @@
   "expo": {
     "name": "Libriter",
     "slug": "libriter-mobile",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "scheme": "libriter",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -12,7 +12,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "cz.libriter.app",
       "appleTeamId": "QL5UHGHK98",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "com.libriter.app",
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#07304D",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -39,7 +39,12 @@
     "plugins": [
       "expo-router",
       "expo-sqlite",
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": "Libriter uses Face ID to unlock your saved sign-in details."
+        }
+      ],
       "expo-image",
       [
         "expo-splash-screen",

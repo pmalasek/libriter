@@ -33,6 +33,13 @@ export default {
     submit: 'Anmelden',
     failed: 'Anmeldung fehlgeschlagen',
     footer: 'Die App dient nur als Player. Verwalte deine Bibliothek über die Weboberfläche.',
+    showPassword: 'Passwort anzeigen',
+    hidePassword: 'Passwort verbergen',
+    remember: 'Anmeldedaten speichern',
+    rememberHint: 'Geschützt durch Face ID oder Fingerabdruck, nur auf diesem Gerät gespeichert.',
+    fillSaved: 'Gespeicherte Daten einfügen',
+    forgetSaved: 'Gespeicherte Daten vergessen',
+    biometricPrompt: 'Gespeicherte Anmeldedaten entsperren',
   },
   home: {
     greeting: 'Willkommen zurück',

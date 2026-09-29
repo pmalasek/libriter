@@ -34,6 +34,13 @@ export default {
     submit: 'Iniciar sesión',
     failed: 'Error al iniciar sesión',
     footer: 'La aplicación es solo un reproductor. Gestiona tu biblioteca desde la interfaz web.',
+    showPassword: 'Mostrar contraseña',
+    hidePassword: 'Ocultar contraseña',
+    remember: 'Guardar datos de acceso',
+    rememberHint: 'Protegidos con Face ID o huella dactilar, guardados solo en este dispositivo.',
+    fillSaved: 'Rellenar datos guardados',
+    forgetSaved: 'Olvidar datos guardados',
+    biometricPrompt: 'Desbloquea tus datos de acceso guardados',
   },
   home: {
     greeting: 'Te damos la bienvenida de nuevo',

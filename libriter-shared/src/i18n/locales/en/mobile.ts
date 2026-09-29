@@ -33,6 +33,13 @@ export default {
     submit: 'Sign in',
     failed: 'Sign-in failed',
     footer: 'The app is only a player. Manage your library in the web interface.',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
+    remember: 'Save sign-in details',
+    rememberHint: 'Protected by Face ID or fingerprint, stored only on this device.',
+    fillSaved: 'Fill in saved details',
+    forgetSaved: 'Forget saved details',
+    biometricPrompt: 'Unlock your saved sign-in details',
   },
   home: {
     greeting: 'Welcome back',
