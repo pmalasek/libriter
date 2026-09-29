@@ -12,7 +12,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "cz.libriter.app",
       "appleTeamId": "QL5UHGHK98",
-      "buildNumber": "5",
+      "buildNumber": "6",
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "com.libriter.app",
-      "versionCode": 5,
+      "versionCode": 6,
       "adaptiveIcon": {
         "backgroundColor": "#07304D",
         "foregroundImage": "./assets/android-icon-foreground.png",
