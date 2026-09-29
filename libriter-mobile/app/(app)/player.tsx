@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next'
 import { formatClock, SKIP_BACK, SKIP_FORWARD, SPEEDS } from 'libriter-shared'
 
 import { BookCover } from '@/components/BookCover'
+import { SeekBar } from '@/components/SeekBar'
 import { SleepTimerSheet, useSleepTimer } from '@/components/SleepTimer'
 import { Body, Heading, Muted } from '@/components/ui/Text'
 import { usePlayer } from '@/player/PlayerProvider'
@@ -35,8 +36,6 @@ export default function PlayerScreen() {
   }
 
   const chapterIndex = player.chapters.findIndex((item) => item.id === player.chapter?.id)
-  const remaining = Math.max(0, player.duration - player.position)
-  const ratio = player.duration > 0 ? player.position / player.duration : 0
   const itemIndex = player.session?.items.findIndex((item) => item.book_id === player.book?.id) ?? -1
 
   return (
@@ -91,15 +90,11 @@ export default function PlayerScreen() {
         </Muted>
       </View>
 
-      <View style={styles.progress}>
-        <View style={[styles.track, { backgroundColor: colors.border }]}>
-          <View style={[styles.fill, { backgroundColor: colors.primary, width: `${Math.min(100, ratio * 100)}%` }]} />
-        </View>
-        <View style={styles.times}>
-          <Muted size={12}>{formatClock(player.position)}</Muted>
-          <Muted size={12}>−{formatClock(remaining)}</Muted>
-        </View>
-      </View>
+      <SeekBar
+        position={player.position}
+        duration={player.duration}
+        onSeek={(seconds) => void player.seek(Math.min(seconds, Math.max(0, player.duration - 1)))}
+      />
 
       <View style={styles.controls}>
         <Pressable hitSlop={10} onPress={() => void player.prevChapter()} accessibilityLabel={t('mobile.player.prevChapter')}>
@@ -163,10 +158,6 @@ const styles = StyleSheet.create({
   coverWrap: { alignItems: 'center', marginVertical: spacing.lg },
   coverShadow: { shadowColor: '#000', shadowOpacity: 0.25, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 8 },
   texts: { gap: spacing.xs, alignItems: 'center' },
-  progress: { marginTop: spacing.lg, gap: spacing.xs },
-  track: { height: 4, borderRadius: 2, overflow: 'hidden' },
-  fill: { height: 4 },
-  times: { flexDirection: 'row', justifyContent: 'space-between' },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: spacing.lg },
   skip: { alignItems: 'center', justifyContent: 'center' },
   skipLabel: { position: 'absolute', top: 11 },

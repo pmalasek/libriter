@@ -184,6 +184,7 @@ export default {
     nextChapter: 'Nächstes Kapitel',
     skipBack: '{{seconds}} s zurück',
     skipForward: '{{seconds}} s vor',
+    seek: 'Position im Kapitel',
     pause: 'Pause',
     added: 'Zur Hörsitzung hinzugefügt.',
     offline: {

@@ -189,6 +189,7 @@ export default {
     nextChapter: 'Další kapitola',
     skipBack: 'Zpět o {{seconds}} s',
     skipForward: 'Vpřed o {{seconds}} s',
+    seek: 'Pozice v kapitole',
     pause: 'Pauza',
     added: 'Přidáno do poslechu.',
     offline: {

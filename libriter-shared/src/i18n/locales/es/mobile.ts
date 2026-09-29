@@ -186,6 +186,7 @@ export default {
     nextChapter: 'Capítulo siguiente',
     skipBack: 'Retroceder {{seconds}} s',
     skipForward: 'Avanzar {{seconds}} s',
+    seek: 'Posición en el capítulo',
     pause: 'Pausar',
     added: 'Añadido a la sesión de escucha.',
     offline: {
