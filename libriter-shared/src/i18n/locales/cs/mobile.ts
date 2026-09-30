@@ -35,6 +35,13 @@ export default {
     submit: 'Přihlásit se',
     failed: 'Přihlášení se nepodařilo',
     footer: 'Aplikace je jen přehrávač. Knihovnu spravujte ve webovém rozhraní.',
+    showPassword: 'Zobrazit heslo',
+    hidePassword: 'Skrýt heslo',
+    remember: 'Uložit přihlašovací údaje',
+    rememberHint: 'Chráněno Face ID nebo otiskem prstu, uloženo jen v tomto zařízení.',
+    fillSaved: 'Vyplnit uložené údaje',
+    forgetSaved: 'Zapomenout uložené údaje',
+    biometricPrompt: 'Odemkněte uložené přihlašovací údaje',
   },
   home: {
     greeting: 'Vítejte zpět',
@@ -189,6 +196,7 @@ export default {
     nextChapter: 'Další kapitola',
     skipBack: 'Zpět o {{seconds}} s',
     skipForward: 'Vpřed o {{seconds}} s',
+    seek: 'Pozice v kapitole',
     pause: 'Pauza',
     added: 'Přidáno do poslechu.',
     offline: {

@@ -35,7 +35,7 @@ import { ContinueSeriesModal } from '@/components/ContinueSeriesModal'
 import { toast } from '@/components/Toast'
 import { getMode } from '@/data/mode'
 import { withSource } from '@/data/sources'
-import { bookChapterFiles, getDownload } from '@/db/downloads'
+import { bookChapterFiles, getDownload, type ChapterFileRow } from '@/db/downloads'
 import { downloadManager } from '@/downloads/downloadManager'
 import { getSessionMirror } from '@/db/library'
 import { syncEngine } from '@/sync/syncEngine'
@@ -231,22 +231,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const needsStream = nextChapters.some((item) => !files.has(item.id))
         const token = needsStream ? await streamTokenOrNull() : null
 
-        const tracks: Track[] = nextChapters.map((item) => {
-          const file = files.get(item.id)
-          return {
-            id: item.id,
-            url: file ? file.path : `${apiUrl(`/chapters/${item.id}/audio`)}?t=${token ?? ''}`,
-            title: item.title,
-            artist: nextBook.authors.map((author) => author.name).join(', ') || 'Libriter',
-            album: nextBook.title,
-            duration: item.duration_seconds,
-            artwork: apiUrl(`/books/${nextBook.id}/cover`),
-            // Podle nich se stav obnoví, když React naběhne znovu a přehrávací
-            // služba mezitím hraje dál (viz restore níže).
-            sessionId: input.session.id,
-            bookId: nextBook.id,
-          }
-        })
+        const tracks = nextChapters.map((item) => buildTrack(item, nextBook, input.session.id, files, token))
 
         const index = Math.max(
           0,
@@ -283,6 +268,41 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     },
     [apply],
   )
+
+  /** Obnova adres právě běží; souběžné volání by frontu přestavělo dvakrát. */
+  const refreshingRef = useRef(false)
+
+  /**
+   * Přestaví kapitoly za tou hrající s čerstvým tokenem (nebo s lokálním
+   * souborem, pokud se mezitím stáhly). Hrající kapitola zůstane, takže
+   * poslech nezaškobrtne. Bez `force` se sahá jen na zastaralé adresy.
+   */
+  const refreshUpcoming = useCallback(async (force = false) => {
+    const openBook = bookRef.current
+    const openSession = sessionRef.current
+    if (!openBook || !openSession || refreshingRef.current) return
+    refreshingRef.current = true
+    try {
+      const [queue, active] = await Promise.all([TrackPlayer.getQueue(), TrackPlayer.getActiveTrackIndex()])
+      if (active == null) return
+      const start = queue.findIndex((track, index) => index > active && isStale(track, force))
+      if (start < 0) return
+
+      const token = await streamTokenOrNull()
+      if (!token) return
+      const files = await bookChapterFiles(openBook.id)
+      const tail = queue.slice(start).map((track) => chaptersRef.current.find((item) => item.id === track.id))
+      // Fronta mezitím mohla patřit jiné knize; pak se na ni nesahá.
+      if (bookRef.current?.id !== openBook.id || tail.some((item) => !item)) return
+
+      await TrackPlayer.remove(queue.slice(start).map((_, offset) => start + offset))
+      await TrackPlayer.add(tail.map((item) => buildTrack(item!, openBook, openSession.id, files, token)))
+    } catch (error: unknown) {
+      console.warn('přehrávač: obnova adres kapitol selhala', error)
+    } finally {
+      refreshingRef.current = false
+    }
+  }, [])
 
   /**
    * Obnova po novém startu Reactu. Android umí zrušit Activity, zatímco
@@ -331,6 +351,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         const isPlaying = playback.state === State.Playing
         playingRef.current = isPlaying
         setPlaying(isPlaying)
+        // Fronta z dřívějška drží adresy se starým tokenem.
+        void refreshUpcoming()
       } catch (error: unknown) {
         // Bez obnovy se nic nerozbije – jen se ukáže prázdný přehrávač.
         console.warn('přehrávač: obnova stavu selhala', error)
@@ -339,7 +361,7 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [apply, signedIn])
+  }, [apply, refreshUpcoming, signedIn])
 
   /**
    * Otevře poslech na jeho rozehrané knize. `check` říká, jak naložit
@@ -593,10 +615,67 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
     [store],
   )
 
+  /**
+   * Kapitola, u které se už chyba zachraňovala, a kdy. Druhý pokus se nedělá;
+   * hlášení těsně po pokusu je jen ozvěna téže chyby (událost i stav).
+   */
+  const recoveredRef = useRef<{ id: string; at: number } | null>(null)
+  const recoveringRef = useRef(false)
+
+  /**
+   * Kapitolu se nepodařilo načíst – typicky vypršelý token nebo výpadek sítě
+   * přesně při přechodu na další kapitolu. Jednou se zkusí znovu s novým
+   * tokenem, jinak by přehrávání potichu stálo.
+   */
+  const recover = useCallback(
+    async (reason: { code?: string; message?: string }) => {
+      console.warn('přehrávač: chyba přehrávání', reason.code, reason.message)
+      if (recoveringRef.current) return
+      recoveringRef.current = true
+      try {
+        const [track, openBook, openSession] = [await TrackPlayer.getActiveTrack(), bookRef.current, sessionRef.current]
+        const chapterItem = chaptersRef.current.find((item) => item.id === track?.id)
+        const previous = recoveredRef.current
+        if (track && previous && previous.id === track.id && Date.now() - previous.at < 5000) return
+        if (!track || !openBook || !openSession || !chapterItem || previous?.id === track.id) {
+          toast.error(t('mobile.player.errors.playFailed'))
+          return
+        }
+        recoveredRef.current = { id: track.id, at: Date.now() }
+
+        const token = await streamTokenOrNull()
+        const files = await bookChapterFiles(openBook.id)
+        if (!token && !files.has(chapterItem.id)) {
+          toast.error(t('mobile.player.errors.playFailed'))
+          return
+        }
+        // Chyba mohla přijít dřív než přepnutí kapitoly; pozice by pak patřila té předchozí.
+        const position = chapterRef.current?.id === chapterItem.id ? lastPositionRef.current : 0
+        await refreshUpcoming(true)
+        await TrackPlayer.load(buildTrack(chapterItem, openBook, openSession.id, files, token))
+        if (position > 0) await TrackPlayer.seekTo(position)
+        await TrackPlayer.setRate(speedRef.current)
+        await TrackPlayer.play()
+      } catch (error: unknown) {
+        console.warn('přehrávač: záchrana po chybě selhala', error)
+        toast.error(t('mobile.player.errors.playFailed'))
+      } finally {
+        recoveringRef.current = false
+      }
+    },
+    [refreshUpcoming],
+  )
+
   // --- události přehrávače ---
 
   useTrackPlayerEvents(
-    [Event.PlaybackProgressUpdated, Event.PlaybackActiveTrackChanged, Event.PlaybackState, Event.PlaybackQueueEnded],
+    [
+      Event.PlaybackProgressUpdated,
+      Event.PlaybackActiveTrackChanged,
+      Event.PlaybackState,
+      Event.PlaybackQueueEnded,
+      Event.PlaybackError,
+    ],
     async (event) => {
       if (event.type === Event.PlaybackProgressUpdated) {
         const now = event.position
@@ -605,6 +684,8 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         // skok, a ten se nepočítá.
         if (playingRef.current && diff > 0 && diff < MAX_TIMEUPDATE_GAP_SECONDS * speedRef.current) {
           listenedRef.current += diff
+          // Hraje to – případná další chyba téže kapitoly smí dostat nový pokus.
+          recoveredRef.current = null
         }
         lastPositionRef.current = now
         setPosition(now)
@@ -612,12 +693,21 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
         return
       }
 
+      if (event.type === Event.PlaybackError) {
+        await recover(event)
+        return
+      }
+
       if (event.type === Event.PlaybackState) {
         const isPlaying = event.state === State.Playing
         playingRef.current = isPlaying
         setPlaying(isPlaying)
+        // Rozehrání po pauze (i ze zamčené obrazovky nebo sluchátek): fronta
+        // mohla přečkat platnost tokenu, další kapitola by pak nenaběhla.
+        if (isPlaying) void refreshUpcoming()
         // Pauza je přirozený okamžik k zápisu: uživatel odložil telefon.
-        if (!isPlaying) await store()
+        else await store()
+        if (event.state === State.Error) await recover(event.error)
         return
       }
 
@@ -691,7 +781,15 @@ export function PlayerProvider({ children }: { children: ReactNode }) {
   }, [askDeleteFinished, store])
 
   // Návrat sítě: uložit pozici teď, ať server dostane aktuální, ne až 10 s starou.
-  useEffect(() => syncEngine.onReconnect(() => store({ force: true })), [store])
+  // Kapitoly zařazené bez sítě mají adresu bez tokenu; teď ho dostanou.
+  useEffect(
+    () =>
+      syncEngine.onReconnect(async () => {
+        await store({ force: true })
+        await refreshUpcoming()
+      }),
+    [refreshUpcoming, store],
+  )
 
   // Poslech založený bez sítě dostal serverové ID; další pozice patří pod něj.
   useEffect(
@@ -826,6 +924,48 @@ async function confirmPlayable(bookId: string, interactive: boolean): Promise<bo
     if (connected) buttons.push({ text: t('mobile.player.offline.playOnline'), onPress: () => resolve(true) })
     Alert.alert(t('mobile.player.offline.title'), message, buttons, { cancelable: true, onDismiss: () => resolve(false) })
   })
+}
+
+/**
+ * Po kolika hodinách se adresy nadcházejících kapitol přestaví s novým
+ * tokenem. Token platí 24 h; rezerva pokryje i dlouhou kapitolu, která
+ * teprve přijde na řadu.
+ */
+const TOKEN_REFRESH_MS = 12 * 60 * 60 * 1000
+
+/** Položka fronty přehrávače pro jednu kapitolu. */
+function buildTrack(
+  chapter: Chapter,
+  book: Book,
+  sessionId: string,
+  files: Map<string, ChapterFileRow>,
+  token: string | null,
+): Track {
+  const file = files.get(chapter.id)
+  return {
+    id: chapter.id,
+    url: file ? file.path : `${apiUrl(`/chapters/${chapter.id}/audio`)}?t=${token ?? ''}`,
+    title: chapter.title,
+    artist: book.authors.map((author) => author.name).join(', ') || 'Libriter',
+    album: book.title,
+    duration: chapter.duration_seconds,
+    artwork: apiUrl(`/books/${book.id}/cover`),
+    // Podle nich se stav obnoví, když React naběhne znovu a přehrávací
+    // služba mezitím hraje dál (viz restore výše).
+    sessionId,
+    bookId: book.id,
+    // Stáří tokenu v adrese: fronta žije déle než token (pauza přes noc)
+    // a další kapitola by pak ze serveru dostala 401.
+    tokenIssuedAt: file || !token ? undefined : Date.now(),
+  }
+}
+
+/** Streamuje se track ze serveru a potřebuje čerstvý token? */
+function isStale(track: Track, force: boolean): boolean {
+  if (typeof track.url !== 'string' || !/^https?:/.test(track.url)) return false
+  if (force) return true
+  const issued = typeof track.tokenIssuedAt === 'number' ? track.tokenIssuedAt : 0
+  return Date.now() - issued > TOKEN_REFRESH_MS
 }
 
 /** Token do adresy audia; bez spojení se vrátí null a hraje se z disku. */

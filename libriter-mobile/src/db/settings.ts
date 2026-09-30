@@ -13,6 +13,7 @@ export type SettingKey =
   | 'color_scheme'
   | 'theme_mode'
   | 'ui_language'
+  | 'saved_credentials'
   | 'books.view'
   | 'books.sort'
   | 'books.sortDir'

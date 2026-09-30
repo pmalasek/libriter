@@ -34,6 +34,13 @@ export default {
     submit: 'Se connecter',
     failed: 'Échec de la connexion',
     footer: 'L’application sert uniquement de lecteur. Gérez votre bibliothèque depuis l’interface web.',
+    showPassword: 'Afficher le mot de passe',
+    hidePassword: 'Masquer le mot de passe',
+    remember: 'Enregistrer les identifiants',
+    rememberHint: 'Protégés par Face ID ou empreinte digitale, stockés uniquement sur cet appareil.',
+    fillSaved: 'Remplir les identifiants enregistrés',
+    forgetSaved: 'Oublier les identifiants enregistrés',
+    biometricPrompt: 'Déverrouillez vos identifiants enregistrés',
   },
   home: {
     greeting: 'Bon retour',
@@ -186,6 +193,7 @@ export default {
     nextChapter: 'Chapitre suivant',
     skipBack: 'Reculer de {{seconds}} s',
     skipForward: 'Avancer de {{seconds}} s',
+    seek: 'Position dans le chapitre',
     pause: 'Pause',
     added: 'Ajouté à la session d’écoute.',
     offline: {
