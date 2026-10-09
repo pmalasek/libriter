@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -131,7 +132,12 @@ func unique(values []string) []string {
 }
 
 func loadMigrations() ([]migration, error) {
-	entries, err := fs.ReadDir(migrationFS, "migrations")
+	return loadMigrationsFS(migrationFS, "migrations")
+}
+
+// loadMigrationsFS načte soubory NNN_popis.sql z adresáře dir, seřazené podle verze.
+func loadMigrationsFS(fsys fs.FS, dir string) ([]migration, error) {
+	entries, err := fs.ReadDir(fsys, dir)
 	if err != nil {
 		return nil, fmt.Errorf("migrate: čtení migrací: %w", err)
 	}
@@ -147,7 +153,7 @@ func loadMigrations() ([]migration, error) {
 		if err != nil {
 			return nil, fmt.Errorf("migrate: neplatný název migrace %q (očekáván prefix NNN_)", name)
 		}
-		body, err := migrationFS.ReadFile("migrations/" + name)
+		body, err := fs.ReadFile(fsys, path.Join(dir, name))
 		if err != nil {
 			return nil, fmt.Errorf("migrate: čtení %s: %w", name, err)
 		}
@@ -177,6 +183,12 @@ func appliedVersions(ctx context.Context, conn *sql.Conn) (map[int]bool, error) 
 }
 
 func apply(ctx context.Context, conn *sql.Conn, m migration) error {
+	return applyWith(ctx, conn, m,
+		`INSERT INTO schema_migrations (version, name) VALUES (?1, ?2)`, m.version, m.name)
+}
+
+// applyWith spustí migraci a v téže transakci zapíše záznam o ní dotazem record.
+func applyWith(ctx context.Context, conn *sql.Conn, m migration, record string, args ...any) error {
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("migrate %s: begin: %w", m.name, err)
@@ -186,10 +198,86 @@ func apply(ctx context.Context, conn *sql.Conn, m migration) error {
 	if _, err := tx.ExecContext(ctx, m.sql); err != nil {
 		return fmt.Errorf("migrate %s: %w", m.name, err)
 	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO schema_migrations (version, name) VALUES (?1, ?2)`, m.version, m.name,
-	); err != nil {
+	if _, err := tx.ExecContext(ctx, record, args...); err != nil {
 		return fmt.Errorf("migrate %s: záznam verze: %w", m.name, err)
 	}
 	return tx.Commit()
+}
+
+// MigrateModule aplikuje migrace jednoho modulu (produktu). Každý modul má
+// vlastní číselnou řadu od 001 a vlastní záznamy v tabulce module_migrations;
+// základní řada 001–017 v schema_migrations zůstává beze změny.
+//
+// fsys obsahuje soubory NNN_popis.sql přímo v kořeni. Nil nebo prázdný FS
+// znamená, že modul migrace nemá.
+func MigrateModule(ctx context.Context, db *sql.DB, module string, fsys fs.FS) error {
+	if fsys == nil {
+		return nil
+	}
+	migrations, err := loadMigrationsFS(fsys, ".")
+	if err != nil {
+		return fmt.Errorf("migrate %s: %w", module, err)
+	}
+	if len(migrations) == 0 {
+		return nil
+	}
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("migrate %s: spojení: %w", module, err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = off`); err != nil {
+		return fmt.Errorf("migrate %s: vypnutí cizích klíčů: %w", module, err)
+	}
+	defer func() {
+		if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = on`); err != nil {
+			slog.Error("migrace: zapnutí cizích klíčů selhalo", "module", module, "err", err)
+		}
+	}()
+
+	const createTable = `
+		CREATE TABLE IF NOT EXISTS module_migrations (
+			module     TEXT     NOT NULL,
+			version    INTEGER  NOT NULL,
+			name       TEXT     NOT NULL,
+			applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (module, version)
+		)`
+	if _, err := conn.ExecContext(ctx, createTable); err != nil {
+		return fmt.Errorf("migrate %s: module_migrations: %w", module, err)
+	}
+
+	applied := make(map[int]bool)
+	rows, err := conn.QueryContext(ctx, `SELECT version FROM module_migrations WHERE module = ?1`, module)
+	if err != nil {
+		return fmt.Errorf("migrate %s: čtení aplikovaných verzí: %w", module, err)
+	}
+	for rows.Next() {
+		var v int
+		if err := rows.Scan(&v); err != nil {
+			rows.Close()
+			return err
+		}
+		applied[v] = true
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, m := range migrations {
+		if applied[m.version] {
+			continue
+		}
+		if err := applyWith(ctx, conn, m,
+			`INSERT INTO module_migrations (module, version, name) VALUES (?1, ?2, ?3)`,
+			module, m.version, m.name,
+		); err != nil {
+			return fmt.Errorf("modul %s: %w", module, err)
+		}
+		slog.Info("migrace aplikována", "module", module, "version", m.version, "name", m.name)
+	}
+	return checkForeignKeys(ctx, conn)
 }

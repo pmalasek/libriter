@@ -14,6 +14,7 @@ var (
 	parseUUID           = httpx.ParseUUID
 	writeUserInputError = corehandler.WriteUserInputError
 	userLabel           = corehandler.UserLabel
+	actorID             = corehandler.ActorID
 )
 
 const minPasswordLength = corehandler.MinPasswordLength

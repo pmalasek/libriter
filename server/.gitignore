@@ -8,5 +8,5 @@
 tmp/
 
 # Sestavený frontend (vzniká přes `make frontend`, vkompiluje se do binárky)
-/internal/core/web/dist/*
-!/internal/core/web/dist/.gitkeep
+/internal/libriter/web/dist/*
+!/internal/libriter/web/dist/.gitkeep

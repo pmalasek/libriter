@@ -5,11 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 
-	"mediater/internal/core/middleware"
 	"mediater/internal/libriter/metadata"
-	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/scanner"
 	"mediater/internal/libriter/service"
 
@@ -62,71 +59,6 @@ func NewAdmin(
 	}
 }
 
-// Stránkování auditu; strop musí odpovídat stropu v service.AuditService.
-const (
-	auditPageSize    = 50
-	auditMaxPageSize = 200
-)
-
-// actorID vrátí ID přihlášeného administrátora pro zápis do audit logu.
-func actorID(r *http.Request) uuid.UUID {
-	id, _ := middleware.UserIDFromCtx(r.Context())
-	return id
-}
-
-// POST /api/v1/admin/users  (admin)
-//
-// Založí účet s libovolnou rolí. Veřejná registrace roli neurčuje, takže
-// editora i dalšího admina umí vyrobit jen tudy (nebo přes CLI).
-func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		DisplayName string `json:"display_name"`
-		Email       string `json:"email"`
-		Login       string `json:"login"`
-		Password    string `json:"password"`
-		Role        string `json:"role"`
-	}
-	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
-		return
-	}
-
-	req.DisplayName = strings.TrimSpace(req.DisplayName)
-	req.Email = strings.TrimSpace(req.Email)
-	req.Role = strings.ToLower(strings.TrimSpace(req.Role))
-	if req.Role == "" {
-		req.Role = model.RoleReader
-	}
-
-	if req.DisplayName == "" || req.Email == "" || len(req.Password) < minPasswordLength {
-		writeError(w, http.StatusBadRequest, "validation.register_fields", "display_name, email a heslo (min. 8 znaků) jsou povinné")
-		return
-	}
-	if _, ok := model.RoleLevel[req.Role]; !ok {
-		writeError(w, http.StatusBadRequest, "user.unknown_role", "neznámá role")
-		return
-	}
-
-	u, err := h.users.Create(r.Context(), req.DisplayName, req.Email, req.Login, req.Password, req.Role)
-	if writeUserInputError(w, err) {
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při vytváření uživatele")
-		return
-	}
-
-	h.audit.Record(r.Context(), actorID(r), service.AuditEvent{
-		Action:      service.AuditUserCreate,
-		TargetType:  service.AuditTargetUser,
-		TargetID:    u.ID.String(),
-		TargetLabel: u.Email,
-		Details:     map[string]string{"role": u.Role},
-	})
-
-	writeJSON(w, http.StatusCreated, u)
-}
-
 // GET /api/v1/admin/stats  (admin)
 func (h *AdminHandler) Stats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.system.Stats(r.Context())
@@ -140,45 +72,6 @@ func (h *AdminHandler) Stats(w http.ResponseWriter, r *http.Request) {
 // GET /api/v1/admin/system  (admin)
 func (h *AdminHandler) System(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.system.Info())
-}
-
-// GET /api/v1/admin/audit?limit=50&before=<id>  (admin)
-//
-// Stránkuje se kurzorem (id posledního záznamu), ne offsetem – log mezitím
-// roste a offset by záznamy přeskakoval.
-func (h *AdminHandler) Audit(w http.ResponseWriter, r *http.Request) {
-	limit, err := intParam(r, "limit", auditPageSize)
-	if err != nil || limit <= 0 {
-		writeError(w, http.StatusBadRequest, "validation.invalid", "parametr limit musí být kladné číslo")
-		return
-	}
-	// Strop držíme i tady, aby kurzor níž odpovídal skutečné velikosti stránky.
-	if limit > auditMaxPageSize {
-		limit = auditMaxPageSize
-	}
-	before, err := intParam(r, "before", 0)
-	if err != nil || before < 0 {
-		writeError(w, http.StatusBadRequest, "validation.invalid", "parametr before musí být nezáporné číslo")
-		return
-	}
-
-	entries, err := h.audit.List(r.Context(), int(limit), before)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání auditu")
-		return
-	}
-
-	// Kurzor posíláme jen tehdy, když stránka došla plná – jinak jsme na konci.
-	var nextBefore *int64
-	if len(entries) > 0 && len(entries) == int(limit) {
-		last := entries[len(entries)-1].ID
-		nextBefore = &last
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"items":       entries,
-		"next_before": nextBefore,
-	})
 }
 
 // GET /api/v1/admin/listening  (admin)

@@ -148,44 +148,6 @@ func (h *AdminHandler) describeMetadata(settings service.MetadataSettings) metad
 	return out
 }
 
-// GET /api/v1/admin/settings/registration  (admin)
-func (h *AdminHandler) RegistrationSettings(w http.ResponseWriter, r *http.Request) {
-	settings, err := h.settings.Registration(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání nastavení registrace")
-		return
-	}
-	writeJSON(w, http.StatusOK, settings)
-}
-
-// PUT /api/v1/admin/settings/registration  (admin)
-func (h *AdminHandler) SetRegistrationSettings(w http.ResponseWriter, r *http.Request) {
-	var req service.RegistrationSettings
-	if err := readJSON(r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
-		return
-	}
-
-	saved, err := h.settings.SetRegistration(r.Context(), req)
-	if errors.Is(err, service.ErrInvalidSetting) {
-		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
-		return
-	}
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při ukládání nastavení registrace")
-		return
-	}
-
-	h.audit.Record(r.Context(), actorID(r), service.AuditEvent{
-		Action:     service.AuditSettingsRegistration,
-		TargetType: service.AuditTargetSettings,
-		TargetID:   service.SettingRegistration,
-		Details:    saved,
-	})
-
-	writeJSON(w, http.StatusOK, saved)
-}
-
 // GET /api/v1/admin/settings/library  (admin)
 func (h *AdminHandler) LibrarySettings(w http.ResponseWriter, r *http.Request) {
 	settings, err := h.settings.Library(r.Context())

@@ -11,7 +11,6 @@ import (
 	"mediater/internal/core/config"
 	coreservice "mediater/internal/core/service"
 	"mediater/internal/libriter/metadata"
-	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/storage"
 )
 
@@ -20,7 +19,7 @@ const (
 	SettingMetadataProviders = "metadata.providers"
 	SettingLanguageProviders = "metadata.language_providers"
 	SettingGoogleBooksAPIKey = "metadata.googlebooks_api_key"
-	SettingRegistration      = "registration"
+	SettingRegistration      = coreservice.SettingRegistration
 	SettingLibrary           = "library"
 )
 
@@ -89,6 +88,10 @@ type RegistrationSettings = coreservice.RegistrationSettings
 // Čtení nikdy do databáze nezapisuje, takže čerstvá instalace se chová
 // stejně jako dřív.
 type SettingsService struct {
+	// Registrace je nastavení jádra (účet je společný všem produktům);
+	// knižní služba ji jen zpřístupňuje pod původními metodami.
+	*coreservice.RegistrationService
+
 	store *storage.Store
 	// known jsou jména všech zdrojů, které binárka umí (i vypnutých).
 	known []string
@@ -104,10 +107,11 @@ func NewSettings(store *storage.Store, cfg config.MetadataConfig, library config
 		lang = "cs"
 	}
 	return &SettingsService{
-		store:           store,
-		known:           known,
-		envDefaults:     defaultMetadata(cfg, known),
-		libraryDefaults: LibrarySettings{DefaultLanguage: lang},
+		RegistrationService: coreservice.NewRegistration(store.Core()),
+		store:               store,
+		known:               known,
+		envDefaults:         defaultMetadata(cfg, known),
+		libraryDefaults:     LibrarySettings{DefaultLanguage: lang},
 	}
 }
 
@@ -337,44 +341,6 @@ func (s *SettingsService) DefaultLanguage(ctx context.Context) string {
 		return ""
 	}
 	return settings.DefaultLanguage
-}
-
-// Registration vrátí nastavení registrace (výchozí: zapnutá, role reader).
-func (s *SettingsService) Registration(ctx context.Context) (RegistrationSettings, error) {
-	out := RegistrationSettings{Enabled: true, DefaultRole: model.RoleReader}
-
-	raw, err := s.store.GetSetting(ctx, SettingRegistration)
-	if errors.Is(err, storage.ErrNotFound) {
-		return out, nil
-	}
-	if err != nil {
-		return RegistrationSettings{}, err
-	}
-	if err := json.Unmarshal(raw, &out); err != nil {
-		return RegistrationSettings{}, fmt.Errorf("nastavení registrace: %w", err)
-	}
-	if _, ok := model.RoleLevel[out.DefaultRole]; !ok {
-		out.DefaultRole = model.RoleReader
-	}
-	return out, nil
-}
-
-// SetRegistration ověří a uloží nastavení registrace. Roli admin přes
-// registraci rozdávat nelze – ta se přiděluje výhradně ručně.
-func (s *SettingsService) SetRegistration(ctx context.Context, in RegistrationSettings) (RegistrationSettings, error) {
-	in.DefaultRole = strings.ToLower(strings.TrimSpace(in.DefaultRole))
-	if in.DefaultRole != model.RoleReader && in.DefaultRole != model.RoleEditor {
-		return RegistrationSettings{}, fmt.Errorf("%w: výchozí role musí být reader nebo editor", ErrInvalidSetting)
-	}
-
-	value, err := json.Marshal(in)
-	if err != nil {
-		return RegistrationSettings{}, err
-	}
-	if err := s.store.SetSetting(ctx, SettingRegistration, value); err != nil {
-		return RegistrationSettings{}, err
-	}
-	return in, nil
 }
 
 // normalize zahodí zdroje, které binárka nezná (zbyly po downgradu), a doplní

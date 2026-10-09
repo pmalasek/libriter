@@ -1,31 +1,25 @@
-// Package web servíruje sestavené webové rozhraní (SPA) vestavěné do binárky.
+// Package web servíruje sestavená webová rozhraní (SPA) vestavěná do binárky.
+// Každý produkt si embed drží sám a sem předá jen fs.FS.
 package web
 
 import (
-	"embed"
+	"html"
 	"io/fs"
 	"net/http"
 	"path"
 	"strings"
 )
 
-// Prefix all: zahrne i soubory začínající tečkou (.gitkeep), takže embed
-// nikdy není prázdný a `go build` funguje i bez sestaveného frontendu.
-//
-//go:embed all:dist
-var distFS embed.FS
-
-// Handler vrací http.Handler pro SPA: statické soubory + fallback na index.html.
+// New vrací http.Handler pro SPA produktu: statické soubory + fallback na
+// index.html. sub je kořen sestaveného frontendu (obsah adresáře dist).
 // Pokud frontend není sestaven (chybí index.html), vrací stránku s návodem a 503.
-func Handler() http.Handler {
-	sub, err := fs.Sub(distFS, "dist")
-	if err != nil {
-		return notBuilt()
+func New(sub fs.FS, product string) http.Handler {
+	if sub == nil {
+		return notBuilt(product)
 	}
-
 	index, err := fs.ReadFile(sub, "index.html")
 	if err != nil {
-		return notBuilt()
+		return notBuilt(product)
 	}
 
 	files := http.FileServerFS(sub)
@@ -64,16 +58,21 @@ func Handler() http.Handler {
 	})
 }
 
-func notBuilt() http.Handler {
-	const page = `<!doctype html>
+func notBuilt(product string) http.Handler {
+	name := html.EscapeString(product)
+	title := name
+	if title != "" {
+		title = strings.ToUpper(title[:1]) + title[1:]
+	}
+	page := `<!doctype html>
 <html lang="cs">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Libriter – frontend není sestaven</title>
+<title>` + title + ` – frontend není sestaven</title>
 <body style="font-family:system-ui,sans-serif;max-width:40rem;margin:0 auto;padding:2rem;line-height:1.6">
-<h1>Frontend není sestaven</h1>
-<p>Spusťte <code>make frontend</code> (nebo <code>cd libriter-frontend &amp;&amp; npm run build</code>)
-a znovu sestavte server pomocí <code>make backend</code>.</p>
+<h1>` + title + `: frontend není sestaven</h1>
+<p>Spusťte <code>just frontend</code> (nebo <code>npm run build -w ` + name + `-frontend</code>)
+a znovu sestavte server pomocí <code>just backend</code>.</p>
 <p>REST API je dostupné na <code>/api/v1</code>, stav serveru na <code>/health</code>.</p>
 </body>
 </html>`

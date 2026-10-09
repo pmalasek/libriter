@@ -20,9 +20,29 @@ type Config struct {
 	Metadata MetadataConfig
 	Library  LibraryConfig
 
+	// DefaultProduct je produkt, jehož webové rozhraní dostanou hosty, které
+	// nepatří žádnému produktu (localhost, IP adresa). Výchozí „libriter“.
+	DefaultProduct string
+
 	// EnvFile je cesta k načtenému .env (prázdná, pokud se žádný nenašel).
 	EnvFile string
+
+	env dotEnv
 }
+
+// EnvStr vrátí hodnotu proměnné prostředí nebo výchozí hodnotu. Produkty si
+// tudy čtou vlastní konfiguraci, o které jádro neví.
+func (c *Config) EnvStr(key, def string) string { return envStr(key, def) }
+
+// EnvInt vrátí celočíselnou proměnnou prostředí nebo výchozí hodnotu.
+func (c *Config) EnvInt(key string, def int) int { return envInt(key, def) }
+
+// EnvList vrátí seznam oddělený čárkami nebo výchozí hodnotu.
+func (c *Config) EnvList(key string, def []string) []string { return envList(key, def) }
+
+// EnvPath vrátí cestu; relativní cesta zapsaná v .env se vztahuje k adresáři
+// toho .env, stejně jako u AUDIO_ROOT a spol.
+func (c *Config) EnvPath(key, def string) string { return c.env.path(key, def) }
 
 type ServerConfig struct {
 	Port int
@@ -161,7 +181,9 @@ func load() *Config {
 		Library: LibraryConfig{
 			DefaultLanguage: strings.ToLower(strings.TrimSpace(envStr("DEFAULT_BOOK_LANGUAGE", "cs"))),
 		},
-		EnvFile: env.file,
+		DefaultProduct: strings.ToLower(strings.TrimSpace(envStr("DEFAULT_PRODUCT", "libriter"))),
+		EnvFile:        env.file,
+		env:            env,
 	}
 	// Fotky autorů vedle obálek – kdo nastaví jen COVER_ROOT, nechce fotky
 	// autorů jinde než ostatní obrázky.

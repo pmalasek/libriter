@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -18,23 +19,22 @@ import (
 	corehandler "mediater/internal/core/handler"
 	"mediater/internal/core/httpx"
 	"mediater/internal/core/middleware"
+	"mediater/internal/core/product"
+	"mediater/internal/core/service"
+	"mediater/internal/core/storage"
 	"mediater/internal/core/version"
 	"mediater/internal/core/web"
-	"mediater/internal/libriter/handler"
-	"mediater/internal/libriter/importer"
-	"mediater/internal/libriter/metadata"
-	"mediater/internal/libriter/metadata/audible"
-	"mediater/internal/libriter/metadata/cbdb"
-	"mediater/internal/libriter/metadata/databazeknih"
-	"mediater/internal/libriter/metadata/goodreads"
-	"mediater/internal/libriter/metadata/googlebooks"
-	"mediater/internal/libriter/metadata/openlibrary"
-	"mediater/internal/libriter/scanner"
-	"mediater/internal/libriter/service"
-	"mediater/internal/libriter/storage"
+	"mediater/internal/libriter"
 )
 
-// runServe spustí HTTP server, scanner a obsluhu webového rozhraní.
+// products vrací produkty, které binárka obsahuje, v pořadí migrací a
+// registrace rout.
+func products() []product.Product {
+	return []product.Product{libriter.New()}
+}
+
+// runServe spustí HTTP server: jádro (účty, přihlášení, administrace uživatelů)
+// a nad ním všechny produkty.
 func runServe() error {
 	startedAt := time.Now()
 
@@ -46,7 +46,7 @@ func runServe() error {
 		return fmt.Errorf("datové adresáře: %w", err)
 	}
 
-	slog.Info("libriter", "verze", version.String())
+	slog.Info("mediater", "verze", version.String())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -59,231 +59,38 @@ func runServe() error {
 
 	slog.Info("databáze otevřena", "path", cfg.DB.Path)
 
+	prods := products()
+	for _, p := range prods {
+		if err := db.MigrateModule(ctx, sqlDB, p.Name(), p.Migrations()); err != nil {
+			return fmt.Errorf("databáze: %w", err)
+		}
+	}
+
 	// Kontext života aplikace - zruší se při shutdown
 	appCtx, appCancel := context.WithCancel(context.Background())
 	defer appCancel()
 
-	// --- dependency injection ---
-	store := storage.New(sqlDB)
-
-	// --- scanner ---
-	// Spouští se až po načtení nastavení – nové knihy dostávají výchozí jazyk
-	// knihovny a počáteční průchod by je jinak zakládal se záložním.
-	scn := scanner.New(cfg.Storage.AudioRoot, cfg.Storage.CoverRoot, store)
-
-	// Zdroje metadat musí vzniknout dřív než služby, které je používají –
-	// stahování fotek autorů si přes ně ověřuje povolené adresy. Registry
-	// drží aktuální řetězec a mění ho, když admin přenastaví zdroje; hodnoty
-	// z .env jsou jen výchozí, uložené nastavení má přednost.
-	registry := metadata.NewRegistry(providerFactories())
-	settingsSvc := service.NewSettings(store, cfg.Metadata, cfg.Library, registry.KnownNames())
-
-	profiles, googleKey, err := settingsSvc.Profiles(ctx)
-	if err != nil {
-		return fmt.Errorf("nastavení zdrojů metadat: %w", err)
+	// --- jádro ---
+	coreStore := storage.New(sqlDB)
+	authSvc := service.NewAuth(coreStore, cfg.JWT)
+	deps := product.Deps{
+		Ctx:          appCtx,
+		Cfg:          cfg,
+		DB:           sqlDB,
+		Auth:         authSvc,
+		Users:        service.NewUser(coreStore, authSvc),
+		Registration: service.NewRegistration(coreStore),
+		Audit:        service.NewAudit(coreStore),
+		StartedAt:    startedAt,
 	}
-	registry.Rebuild(profiles, metadata.ProviderConfig{GoogleBooksAPIKey: googleKey})
 
-	scn.SetDefaultLanguage(settingsSvc.DefaultLanguage)
-	scn.Start(appCtx)
-
-	authSvc := service.NewAuth(store.Core(), cfg.JWT)
-	userSvc := service.NewUser(store.Core(), authSvc)
-	bookSvc := service.NewBook(store, scn)
-	authorSvc := service.NewAuthor(store)
-	authorImageSvc := service.NewAuthorImage(store, registry, cfg.Storage.AuthorImageRoot)
-	seriesSvc := service.NewSeries(store)
-	auditSvc := service.NewAudit(store.Core())
-	systemSvc := service.NewSystem(store, cfg, startedAt)
-	playSessionSvc := service.NewPlaySession(store)
-	listeningSvc := service.NewListening(store)
-
-	authH := corehandler.NewAuth(authSvc, settingsSvc)
-	userH := corehandler.NewUser(userSvc, auditSvc)
-	bookH := handler.NewBook(bookSvc, cfg.Storage.CoverRoot, auditSvc).
-		WithCovers(service.NewBookCover(store, registry, cfg.Storage.CoverRoot))
-	authorH := handler.NewAuthor(authorSvc, cfg.Storage.AuthorImageRoot, authorImageSvc, auditSvc)
-	seriesH := handler.NewSeries(seriesSvc, auditSvc)
-	metadataH := handler.NewMetadata(registry)
-	adminH := handler.NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc, listeningSvc)
-	sessionH := handler.NewPlaySession(playSessionSvc)
-	audioH := handler.NewAudio(bookSvc, authSvc, cfg.Storage.AudioRoot)
-
-	importSvc, err := importer.New(appCtx, cfg.Storage.ImportRoot,
-		cfg.Storage.MaxUploadMB<<20, scn, store)
-	if err != nil {
-		return fmt.Errorf("import knih (IMPORT_ROOT=%s): %w", cfg.Storage.ImportRoot, err)
+	for _, p := range prods {
+		if err := p.Init(deps); err != nil {
+			return fmt.Errorf("%s: %w", p.Name(), err)
+		}
 	}
-	importH := handler.NewImport(importSvc, auditSvc)
 
-	// --- router ---
-	r := chi.NewRouter()
-	r.Use(chimw.Recoverer)
-	r.Use(chimw.RealIP)
-	r.Use(middleware.Logger)
-
-	r.Get("/health", corehandler.Health)
-
-	r.Route("/api/v1", func(r chi.Router) {
-		// Neznámé API cesty musí vracet JSON, ne index.html z SPA handleru níže.
-		r.NotFound(httpx.NotFoundJSON)
-		r.MethodNotAllowed(httpx.MethodNotAllowedJSON)
-
-		// --- auth (bez přihlášení) ---
-		r.Get("/auth/config", authH.Config) // je registrace zapnutá?
-		r.Post("/auth/register", authH.Register)
-		r.Post("/auth/login", authH.Login)
-
-		// --- obálky (bez přihlášení) ---
-		// <img> neumí poslat hlavičku Authorization; ochranou je neuhodnutelné UUID knihy.
-		r.Get("/books/{id}/cover", bookH.Cover)
-		r.Head("/books/{id}/cover", bookH.Cover)
-		r.Get("/authors/{id}/image", authorH.Image)
-		r.Head("/authors/{id}/image", authorH.Image)
-
-		// --- audio kapitoly (mimo Authenticate) ---
-		// <audio> neumí poslat hlavičku Authorization, takže se ověřuje
-		// krátkodobým tokenem v adrese (?t=). Není to přihlašovací token –
-		// platí jen na streamování a vydává ho /auth/stream-token.
-		r.Get("/chapters/{id}/audio", audioH.Stream)
-		r.Head("/chapters/{id}/audio", audioH.Stream)
-
-		// --- chráněné endpointy ---
-		r.Group(func(r chi.Router) {
-			r.Use(middleware.Authenticate(authSvc))
-
-			// Token pro přehrávač (viz /chapters/{id}/audio výše)
-			r.Get("/auth/stream-token", authH.StreamToken)
-			// Dlouhodobý token pro mobilní aplikaci (offline přehrávač)
-			r.Post("/auth/mobile-token", authH.MobileToken)
-
-			// Uživatelé - vlastní profil
-			r.Get("/users/{id}", userH.Get)
-			r.Put("/users/{id}", userH.Update)
-			r.Put("/users/{id}/password", userH.ChangePassword)
-			r.Put("/users/{id}/appearance", userH.UpdateAppearance)
-			r.Put("/users/{id}/language", userH.UpdateLanguage)
-
-			// Uživatelé - pouze admin
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("admin"))
-				r.Get("/users", userH.List)
-				r.Delete("/users/{id}", userH.Delete)
-				r.Put("/users/{id}/role", userH.SetRole)
-			})
-
-			// Knihy / autoři / série - čtení (reader+)
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("reader"))
-				r.Get("/books", bookH.List)
-				// Stav knih musí být nad /books/{id}, ať se "progress"
-				// nečte jako UUID knihy.
-				r.Get("/books/progress", bookH.ListProgress)
-				r.Get("/books/{id}", bookH.Get)
-				r.Put("/books/{id}/progress", bookH.SetProgress)
-				r.Delete("/books/{id}/progress", bookH.ResetProgress)
-				r.Get("/books/{id}/chapters", bookH.ListChapters)
-				r.Get("/authors", authorH.List)
-				r.Get("/authors/{id}", authorH.Get)
-				r.Get("/series", seriesH.List)
-				r.Get("/languages", bookH.Languages)
-				r.Get("/series/{id}", seriesH.Get)
-
-				// Poslechové session – vlastní data přihlášeného uživatele
-				r.Get("/sessions", sessionH.List)
-				r.Post("/sessions", sessionH.Create)
-				// Dávka pozic z offline zařízení; musí být nad /sessions/{id},
-				// ať se "sync" nečte jako UUID session.
-				r.Post("/sessions/sync", sessionH.Sync)
-				r.Get("/sessions/{id}", sessionH.Get)
-				r.Put("/sessions/{id}/position", sessionH.SavePosition)
-				r.Post("/sessions/{id}/items", sessionH.AddItems)
-				r.Delete("/sessions/{id}", sessionH.Delete)
-			})
-
-			// Knihy / autoři / série - zápis (editor+)
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("editor"))
-				r.Post("/books", bookH.Create)
-				r.Put("/books/{id}", bookH.Update)
-				r.Patch("/books/{id}", bookH.Patch) // částečná aktualizace (webové rozhraní)
-				r.Put("/books/{id}/chapters/order", bookH.ReorderChapters)
-				r.Put("/books/{id}/cover", bookH.SetCover)     // stáhne obálku ze zdroje
-				r.Post("/books/{id}/cover", bookH.UploadCover) // nahraný soubor
-				r.Post("/authors", authorH.Create)
-				r.Put("/authors/{id}", authorH.Update)
-				r.Put("/authors/{id}/image", authorH.SetImage)     // stáhne fotku ze zdroje
-				r.Post("/authors/{id}/image", authorH.UploadImage) // nahraný soubor
-				r.Delete("/authors/{id}/image", authorH.DeleteImage)
-				r.Post("/series", seriesH.Create)
-				r.Put("/series/{id}", seriesH.Update)
-			})
-
-			// Mazání (admin)
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("admin"))
-				r.Delete("/books/{id}", bookH.Delete)
-				r.Delete("/authors/{id}", authorH.Delete)
-				r.Delete("/series/{id}", seriesH.Delete)
-			})
-
-			// Administrace (admin)
-			r.Route("/admin", func(r chi.Router) {
-				r.Use(middleware.RequireRole("admin"))
-
-				r.Post("/users", adminH.CreateUser)
-
-				r.Get("/settings/metadata", adminH.MetadataSettings)
-				r.Put("/settings/metadata", adminH.SetMetadataSettings)
-				r.Get("/settings/registration", adminH.RegistrationSettings)
-				r.Put("/settings/registration", adminH.SetRegistrationSettings)
-				r.Get("/settings/library", adminH.LibrarySettings)
-				r.Put("/settings/library", adminH.SetLibrarySettings)
-
-				r.Get("/scanner", adminH.ScannerStatus)
-				r.Post("/scanner/rescan", adminH.Rescan)
-				r.Get("/library/repair", adminH.RepairPlan) // náhled, nic nemění
-				r.Post("/library/repair", adminH.Repair)
-				r.Get("/library/duplicates", adminH.DuplicateReport) // jen hlášení
-				r.Post("/library/duplicates/dismiss", adminH.DismissDuplicate)
-				r.Delete("/library/duplicates/dismiss", adminH.RestoreDuplicate)
-				r.Get("/library/merge", adminH.MergePlan) // náhled, nic nemění
-				r.Post("/library/merge", adminH.Merge)
-
-				r.Get("/import", importH.List)
-				r.Post("/import", importH.Create)
-				r.Get("/import/{id}", importH.Get)
-				r.Delete("/import/{id}", importH.Delete)
-				r.Get("/import/{id}/files", importH.Files)
-				r.Put("/import/{id}/files", importH.Upload) // ?path=<relativní cesta>
-				r.Post("/import/{id}/analyze", importH.Analyze)
-				r.Post("/import/{id}/commit", importH.Commit)
-				r.Get("/import/{id}/cover", importH.Cover) // ?key=<adresář knihy>
-
-				r.Get("/stats", adminH.Stats)
-				r.Get("/system", adminH.System)
-				r.Get("/audit", adminH.Audit)
-
-				r.Get("/listening", adminH.Listening)
-				r.Get("/listening/{id}", adminH.ListeningUser)
-			})
-
-			// Metadata knih - zdroje a jejich pořadí řídí administrace (editor+)
-			r.Group(func(r chi.Router) {
-				r.Use(middleware.RequireRole("editor"))
-				r.Get("/metadata/sources", metadataH.Sources) // pořadí zdrojů
-				r.Get("/metadata/search", metadataH.Search)   // ?q=<dotaz>
-				r.Get("/metadata/author/search", metadataH.SearchAuthors)
-				r.Get("/metadata/author", metadataH.FetchAuthorByURL) // ?url=<url>
-				r.Get("/metadata/book/{id}", metadataH.FetchByID)     // dle DK ID
-				r.Get("/metadata/book", metadataH.FetchByURL)         // ?url=<url>
-			})
-		})
-	})
-
-	// Webové rozhraní (SPA) - vše, co není /health ani /api/v1/*.
-	// Statické cesty mají v chi přednost před wildcardem, takže API zůstává nedotčené.
-	r.Handle("/*", web.Handler())
+	r := newRouter(cfg, deps, prods)
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
@@ -322,23 +129,58 @@ func runServe() error {
 	return nil
 }
 
-// providerFactories vrací všechny zdroje metadat, které binárka umí. Které
-// z nich se použijí a v jakém pořadí, rozhoduje nastavení (viz
-// service.SettingsService); registry podle něj řetězec sestavuje a mění.
-func providerFactories() map[string]metadata.Factory {
-	return map[string]metadata.Factory{
-		"databazeknih": func(metadata.ProviderConfig) metadata.Provider { return databazeknih.NewClient() },
-		"cbdb":         func(metadata.ProviderConfig) metadata.Provider { return cbdb.NewClient() },
-		"openlibrary":  func(metadata.ProviderConfig) metadata.Provider { return openlibrary.NewClient() },
-		"googlebooks": func(cfg metadata.ProviderConfig) metadata.Provider {
-			return googlebooks.NewClient(cfg.GoogleBooksAPIKey)
-		},
-		audible.MarketplaceCOM.Name: func(metadata.ProviderConfig) metadata.Provider {
-			return audible.NewClient(audible.MarketplaceCOM)
-		},
-		audible.MarketplaceDE.Name: func(metadata.ProviderConfig) metadata.Provider {
-			return audible.NewClient(audible.MarketplaceDE)
-		},
-		"goodreads": func(metadata.ProviderConfig) metadata.Provider { return goodreads.NewClient() },
+// newRouter sestaví router: /health, API jádra a produktů pod /api/v1 a
+// webová rozhraní produktů vybíraná podle hostname.
+func newRouter(cfg *config.Config, deps product.Deps, prods []product.Product) http.Handler {
+	r := chi.NewRouter()
+	r.Use(chimw.Recoverer)
+	r.Use(chimw.RealIP)
+	r.Use(middleware.Logger)
+
+	r.Get("/health", corehandler.Health)
+
+	r.Route("/api/v1", func(r chi.Router) {
+		// Neznámé API cesty musí vracet JSON, ne index.html z SPA handleru níže.
+		r.NotFound(httpx.NotFoundJSON)
+		r.MethodNotAllowed(httpx.MethodNotAllowedJSON)
+
+		corehandler.RegisterRoutes(r, deps.Auth, corehandler.Handlers{
+			Auth:  corehandler.NewAuth(deps.Auth, deps.Registration),
+			Users: corehandler.NewUser(deps.Users, deps.Audit),
+			Admin: corehandler.NewAdmin(deps.Users, deps.Registration, deps.Audit),
+		})
+		for _, p := range prods {
+			p.RegisterRoutes(r)
+		}
+	})
+
+	// Webová rozhraní (SPA) - vše, co není /health ani /api/v1/*. Statické
+	// cesty mají v chi přednost před wildcardem, takže API zůstává nedotčené.
+	r.Handle("/*", webMux(cfg, prods))
+	return r
+}
+
+// webMux vybere SPA podle hostu: <PRODUKT>_HOST (seznam oddělený čárkami)
+// přiřadí host produktu, ostatní hosty dostanou DEFAULT_PRODUCT.
+func webMux(cfg *config.Config, prods []product.Product) http.Handler {
+	handlers := make(map[string]http.Handler, len(prods))
+	for _, p := range prods {
+		handlers[p.Name()] = web.New(p.Web(), p.Name())
 	}
+
+	fallback, ok := handlers[cfg.DefaultProduct]
+	if !ok {
+		slog.Warn("DEFAULT_PRODUCT neodpovídá žádnému produktu", "value", cfg.DefaultProduct)
+		fallback = handlers[prods[0].Name()]
+	}
+
+	mux := web.NewHostMux(fallback)
+	for _, p := range prods {
+		hosts := cfg.EnvList(strings.ToUpper(p.Name())+"_HOST", nil)
+		if len(hosts) > 0 {
+			mux.Handle(hosts, handlers[p.Name()])
+			slog.Info("webové rozhraní", "produkt", p.Name(), "hosty", hosts)
+		}
+	}
+	return mux
 }

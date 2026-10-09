@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"mediater/internal/core/config"
-	corehandler "mediater/internal/core/handler"
 	"mediater/internal/core/db"
+	corehandler "mediater/internal/core/handler"
 	"mediater/internal/core/middleware"
 	"mediater/internal/libriter/metadata"
 	"mediater/internal/libriter/model"
@@ -135,6 +135,7 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 	bookSvc := service.NewBook(store, scanner.New(audioRoot, t.TempDir(), store))
 
 	adminH := NewAdmin(userSvc, settingsSvc, registry, scn, systemSvc, auditSvc, service.NewListening(store))
+	coreAdminH := corehandler.NewAdmin(userSvc, settingsSvc.RegistrationService, auditSvc)
 	authH := corehandler.NewAuth(authSvc, settingsSvc)
 	userH := corehandler.NewUser(userSvc, auditSvc)
 	bookH := NewBook(bookSvc, t.TempDir(), auditSvc)
@@ -184,12 +185,12 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 		})
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(middleware.RequireRole(model.RoleAdmin))
-			r.Post("/users", adminH.CreateUser)
+			r.Post("/users", coreAdminH.CreateUser)
 			r.Get("/stats", adminH.Stats)
 			r.Get("/system", adminH.System)
-			r.Get("/audit", adminH.Audit)
-			r.Get("/settings/registration", adminH.RegistrationSettings)
-			r.Put("/settings/registration", adminH.SetRegistrationSettings)
+			r.Get("/audit", coreAdminH.Audit)
+			r.Get("/settings/registration", coreAdminH.RegistrationSettings)
+			r.Put("/settings/registration", coreAdminH.SetRegistrationSettings)
 			r.Post("/scanner/rescan", adminH.Rescan)
 			r.Get("/library/repair", adminH.RepairPlan)
 			r.Post("/library/repair", adminH.Repair)
