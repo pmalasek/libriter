@@ -25,12 +25,13 @@ import (
 	"mediater/internal/core/version"
 	"mediater/internal/core/web"
 	"mediater/internal/libriter"
+	"mediater/internal/sceniter"
 )
 
 // products vrací produkty, které binárka obsahuje, v pořadí migrací a
 // registrace rout.
 func products() []product.Product {
-	return []product.Product{libriter.New()}
+	return []product.Product{libriter.New(), sceniter.New()}
 }
 
 // runServe spustí HTTP server: jádro (účty, přihlášení, administrace uživatelů)

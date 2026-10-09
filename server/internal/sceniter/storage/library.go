@@ -1,0 +1,589 @@
+package storage
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+
+	"github.com/google/uuid"
+
+	"mediater/internal/sceniter/model"
+)
+
+const movieCols = `
+	m.id, m.source_key, m.title, m.original_title, m.year, m.overview, m.tagline, m.runtime_min,
+	m.tmdb_id, m.imdb_id, m.poster_path, m.backdrop_path, m.tmdb_rating, m.credits_json,
+	m.match_state, m.created_at, m.updated_at`
+
+// mainMovieFile vybere hlavní soubor filmu: největší (nejlepší verzi).
+const mainMovieFile = `(SELECT id FROM sc_media_files WHERE movie_id = m.id ORDER BY size_bytes DESC, file_path LIMIT 1)`
+
+func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, error) {
+	var (
+		m                                                  model.Movie
+		orig, overview, tagline, imdb, poster, bd, credits sql.NullString
+		year, runtime, tmdb                                sql.NullInt64
+		rating                                             sql.NullFloat64
+	)
+	dest := []any{&m.ID, &m.SourceKey, &m.Title, &orig, &year, &overview, &tagline, &runtime,
+		&tmdb, &imdb, &poster, &bd, &rating, &credits, &m.MatchState, &m.CreatedAt, &m.UpdatedAt}
+	if err := sc.Scan(append(dest, extra...)...); err != nil {
+		return m, err
+	}
+	m.OriginalTitle, m.Year, m.Overview, m.Tagline = ptrString(orig), ptrInt(year), ptrString(overview), ptrString(tagline)
+	m.RuntimeMin, m.TMDBID, m.IMDBID = ptrInt(runtime), ptrInt(tmdb), ptrString(imdb)
+	m.PosterPath, m.BackdropPath, m.TMDBRating = ptrString(poster), ptrString(bd), ptrFloat(rating)
+	m.Credits = model.UnmarshalCredits(ptrString(credits))
+	m.Genres = []string{}
+	return m, nil
+}
+
+// MovieFilter omezuje výpis filmů.
+type MovieFilter struct {
+	Query string // podřetězec názvu nebo původního názvu
+	Genre string
+	Sort  string // title | year | added | rating
+	Limit int    // 0 = bez omezení
+	// WithoutFiles zahrne i filmy bez souborů – pro administraci párování.
+	WithoutFiles bool
+	MatchState   string
+}
+
+// ListMovies vrátí filmy, které mají aspoň jeden soubor.
+func (s *Store) ListMovies(ctx context.Context, f MovieFilter) ([]model.Movie, error) {
+	q := `SELECT ` + movieCols + `, mf.id, mf.duration_sec FROM sc_movies m `
+	if f.WithoutFiles {
+		q += `LEFT JOIN sc_media_files mf ON mf.id = ` + mainMovieFile
+	} else {
+		q += `JOIN sc_media_files mf ON mf.id = ` + mainMovieFile
+	}
+	q += ` WHERE 1 = 1`
+	args := []any{}
+	if f.Query != "" {
+		args = append(args, likePattern(f.Query))
+		q += fmt.Sprintf(` AND (m.title LIKE ?%d ESCAPE '\' OR m.original_title LIKE ?%[1]d ESCAPE '\')`, len(args))
+	}
+	if f.Genre != "" {
+		args = append(args, f.Genre)
+		q += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM sc_movie_genres mg JOIN sc_genres g ON g.id = mg.genre_id
+			WHERE mg.movie_id = m.id AND g.name = ?%d)`, len(args))
+	}
+	if f.MatchState != "" {
+		args = append(args, f.MatchState)
+		q += fmt.Sprintf(` AND m.match_state = ?%d`, len(args))
+	}
+	switch f.Sort {
+	case "year":
+		q += ` ORDER BY m.year DESC NULLS LAST, m.title`
+	case "added":
+		q += ` ORDER BY m.created_at DESC, m.title`
+	case "rating":
+		q += ` ORDER BY m.tmdb_rating DESC NULLS LAST, m.title`
+	default:
+		q += ` ORDER BY m.title`
+	}
+	if f.Limit > 0 {
+		q += fmt.Sprintf(` LIMIT %d`, f.Limit)
+	}
+
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list movies: %w", err)
+	}
+	defer rows.Close()
+
+	out := []model.Movie{}
+	for rows.Next() {
+		var (
+			mediaID  *uuid.UUID
+			duration sql.NullFloat64
+		)
+		m, err := scanMovie(rows, &mediaID, &duration)
+		if err != nil {
+			return nil, fmt.Errorf("list movies: %w", err)
+		}
+		m.MediaID, m.DurationSec = mediaID, ptrFloat(duration)
+		out = append(out, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	genres, err := s.genresByID(ctx, "movie")
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if g := genres[out[i].ID]; g != nil {
+			out[i].Genres = g
+		}
+	}
+	return out, nil
+}
+
+// GetMovie vrátí film podle ID (i bez souborů).
+func (s *Store) GetMovie(ctx context.Context, id uuid.UUID) (*model.Movie, error) {
+	q := `SELECT ` + movieCols + `, mf.id, mf.duration_sec FROM sc_movies m
+		LEFT JOIN sc_media_files mf ON mf.id = ` + mainMovieFile + ` WHERE m.id = ?1`
+	var (
+		mediaID  *uuid.UUID
+		duration sql.NullFloat64
+	)
+	m, err := scanMovie(s.db.QueryRowContext(ctx, q, id), &mediaID, &duration)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get movie: %w", err)
+	}
+	m.MediaID, m.DurationSec = mediaID, ptrFloat(duration)
+	genres, err := s.genresByID(ctx, "movie")
+	if err != nil {
+		return nil, err
+	}
+	if g := genres[m.ID]; g != nil {
+		m.Genres = g
+	}
+	return &m, nil
+}
+
+// genresByID vrátí žánry všech filmů (kind "movie") nebo seriálů ("show").
+func (s *Store) genresByID(ctx context.Context, kind string) (map[uuid.UUID][]string, error) {
+	table, col := "sc_movie_genres", "movie_id"
+	if kind == "show" {
+		table, col = "sc_show_genres", "show_id"
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT x.`+col+`, g.name FROM `+table+` x JOIN sc_genres g ON g.id = x.genre_id ORDER BY g.name`)
+	if err != nil {
+		return nil, fmt.Errorf("genres: %w", err)
+	}
+	defer rows.Close()
+	byID := map[uuid.UUID][]string{}
+	for rows.Next() {
+		var (
+			id   uuid.UUID
+			name string
+		)
+		if err := rows.Scan(&id, &name); err != nil {
+			return nil, err
+		}
+		byID[id] = append(byID[id], name)
+	}
+	return byID, rows.Err()
+}
+
+const showCols = `
+	s.id, s.source_key, s.title, s.original_title, s.year, s.overview, s.status, s.tmdb_id,
+	s.poster_path, s.backdrop_path, s.tmdb_rating, s.credits_json, s.match_state, s.created_at, s.updated_at`
+
+// showCounts spočítá řady a díly, které mají soubor.
+const showCounts = `
+	(SELECT count(DISTINCT se.id) FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
+	   WHERE se.show_id = s.id AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)),
+	(SELECT count(*) FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
+	   WHERE se.show_id = s.id AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id))`
+
+func scanShow(sc interface{ Scan(...any) error }) (model.Show, error) {
+	var (
+		sh                                          model.Show
+		orig, overview, status, poster, bd, credits sql.NullString
+		year, tmdb                                  sql.NullInt64
+		rating                                      sql.NullFloat64
+	)
+	err := sc.Scan(&sh.ID, &sh.SourceKey, &sh.Title, &orig, &year, &overview, &status, &tmdb,
+		&poster, &bd, &rating, &credits, &sh.MatchState, &sh.CreatedAt, &sh.UpdatedAt,
+		&sh.SeasonCount, &sh.EpisodeCount)
+	if err != nil {
+		return sh, err
+	}
+	sh.OriginalTitle, sh.Year, sh.Overview, sh.Status = ptrString(orig), ptrInt(year), ptrString(overview), ptrString(status)
+	sh.TMDBID, sh.PosterPath, sh.BackdropPath, sh.TMDBRating = ptrInt(tmdb), ptrString(poster), ptrString(bd), ptrFloat(rating)
+	sh.Credits = model.UnmarshalCredits(ptrString(credits))
+	sh.Genres = []string{}
+	return sh, nil
+}
+
+// ShowFilter omezuje výpis seriálů.
+type ShowFilter struct {
+	Query        string
+	Genre        string
+	Sort         string // title | year | added | rating
+	Limit        int
+	WithoutFiles bool
+	MatchState   string
+}
+
+// ListShows vrátí seriály, které mají aspoň jeden díl se souborem.
+func (s *Store) ListShows(ctx context.Context, f ShowFilter) ([]model.Show, error) {
+	q := `SELECT ` + showCols + `, ` + showCounts + ` FROM sc_shows s WHERE 1 = 1`
+	if !f.WithoutFiles {
+		q += ` AND EXISTS (SELECT 1 FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
+			JOIN sc_media_files mf ON mf.episode_id = e.id WHERE se.show_id = s.id)`
+	}
+	args := []any{}
+	if f.Query != "" {
+		args = append(args, likePattern(f.Query))
+		q += fmt.Sprintf(` AND (s.title LIKE ?%d ESCAPE '\' OR s.original_title LIKE ?%[1]d ESCAPE '\')`, len(args))
+	}
+	if f.Genre != "" {
+		args = append(args, f.Genre)
+		q += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM sc_show_genres sg JOIN sc_genres g ON g.id = sg.genre_id
+			WHERE sg.show_id = s.id AND g.name = ?%d)`, len(args))
+	}
+	if f.MatchState != "" {
+		args = append(args, f.MatchState)
+		q += fmt.Sprintf(` AND s.match_state = ?%d`, len(args))
+	}
+	switch f.Sort {
+	case "year":
+		q += ` ORDER BY s.year DESC NULLS LAST, s.title`
+	case "added":
+		q += ` ORDER BY s.updated_at DESC, s.title`
+	case "rating":
+		q += ` ORDER BY s.tmdb_rating DESC NULLS LAST, s.title`
+	default:
+		q += ` ORDER BY s.title`
+	}
+	if f.Limit > 0 {
+		q += fmt.Sprintf(` LIMIT %d`, f.Limit)
+	}
+	rows, err := s.db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("list shows: %w", err)
+	}
+	defer rows.Close()
+	out := []model.Show{}
+	for rows.Next() {
+		sh, err := scanShow(rows)
+		if err != nil {
+			return nil, fmt.Errorf("list shows: %w", err)
+		}
+		out = append(out, sh)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	genres, err := s.genresByID(ctx, "show")
+	if err != nil {
+		return nil, err
+	}
+	for i := range out {
+		if g := genres[out[i].ID]; g != nil {
+			out[i].Genres = g
+		}
+	}
+	return out, nil
+}
+
+// GetShow vrátí seriál podle ID.
+func (s *Store) GetShow(ctx context.Context, id uuid.UUID) (*model.Show, error) {
+	q := `SELECT ` + showCols + `, ` + showCounts + ` FROM sc_shows s WHERE s.id = ?1`
+	sh, err := scanShow(s.db.QueryRowContext(ctx, q, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get show: %w", err)
+	}
+	genres, err := s.genresByID(ctx, "show")
+	if err != nil {
+		return nil, err
+	}
+	if g := genres[sh.ID]; g != nil {
+		sh.Genres = g
+	}
+	return &sh, nil
+}
+
+const episodeCols = `
+	e.id, e.season_id, se.show_id, se.number, e.number, e.title, e.overview, e.air_date,
+	e.still_path, e.runtime_min, e.created_at, sh.title,
+	(SELECT id FROM sc_media_files WHERE episode_id = e.id ORDER BY size_bytes DESC, file_path LIMIT 1),
+	(SELECT duration_sec FROM sc_media_files WHERE episode_id = e.id ORDER BY size_bytes DESC, file_path LIMIT 1)`
+
+const episodeFrom = ` FROM sc_episodes e JOIN sc_seasons se ON se.id = e.season_id JOIN sc_shows sh ON sh.id = se.show_id`
+
+func scanEpisode(sc interface{ Scan(...any) error }) (model.Episode, error) {
+	var (
+		e                               model.Episode
+		title, overview, airDate, still sql.NullString
+		runtime                         sql.NullInt64
+		duration                        sql.NullFloat64
+		mediaID                         *uuid.UUID
+	)
+	err := sc.Scan(&e.ID, &e.SeasonID, &e.ShowID, &e.Season, &e.Number, &title, &overview, &airDate,
+		&still, &runtime, &e.CreatedAt, &e.ShowTitle, &mediaID, &duration)
+	if err != nil {
+		return e, err
+	}
+	e.Title, e.Overview, e.AirDate, e.StillPath = ptrString(title), ptrString(overview), ptrString(airDate), ptrString(still)
+	e.RuntimeMin, e.MediaID, e.DurationSec = ptrInt(runtime), mediaID, ptrFloat(duration)
+	return e, nil
+}
+
+// ListSeasons vrátí řady seriálu s díly, které mají soubor, seřazené podle čísla.
+func (s *Store) ListSeasons(ctx context.Context, showID uuid.UUID) ([]model.Season, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, show_id, number, title, overview, poster_path FROM sc_seasons
+		WHERE show_id = ?1 ORDER BY number`, showID)
+	if err != nil {
+		return nil, fmt.Errorf("list seasons: %w", err)
+	}
+	seasons := []model.Season{}
+	index := map[uuid.UUID]int{}
+	for rows.Next() {
+		var (
+			se                      model.Season
+			title, overview, poster sql.NullString
+		)
+		if err := rows.Scan(&se.ID, &se.ShowID, &se.Number, &title, &overview, &poster); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		se.Title, se.Overview, se.PosterPath = ptrString(title), ptrString(overview), ptrString(poster)
+		se.Episodes = []model.Episode{}
+		index[se.ID] = len(seasons)
+		seasons = append(seasons, se)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	erows, err := s.db.QueryContext(ctx, `SELECT `+episodeCols+episodeFrom+`
+		WHERE se.show_id = ?1 AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)
+		ORDER BY se.number, e.number`, showID)
+	if err != nil {
+		return nil, fmt.Errorf("list episodes: %w", err)
+	}
+	defer erows.Close()
+	for erows.Next() {
+		e, err := scanEpisode(erows)
+		if err != nil {
+			return nil, err
+		}
+		if i, ok := index[e.SeasonID]; ok {
+			seasons[i].Episodes = append(seasons[i].Episodes, e)
+		}
+	}
+	if err := erows.Err(); err != nil {
+		return nil, err
+	}
+	// Řady bez souborů (jen z TMDB) se nevracejí.
+	out := seasons[:0]
+	for _, se := range seasons {
+		if len(se.Episodes) > 0 {
+			out = append(out, se)
+		}
+	}
+	return out, nil
+}
+
+// GetEpisode vrátí díl podle ID.
+func (s *Store) GetEpisode(ctx context.Context, id uuid.UUID) (*model.Episode, error) {
+	e, err := scanEpisode(s.db.QueryRowContext(ctx, `SELECT `+episodeCols+episodeFrom+` WHERE e.id = ?1`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get episode: %w", err)
+	}
+	return &e, nil
+}
+
+// NextEpisode vrátí díl, který v pořadí (řada, díl) následuje po daném a má
+// soubor, nebo ErrNotFound na konci seriálu.
+func (s *Store) NextEpisode(ctx context.Context, id uuid.UUID) (*model.Episode, error) {
+	e, err := scanEpisode(s.db.QueryRowContext(ctx, `SELECT `+episodeCols+episodeFrom+`
+		JOIN (SELECT se2.show_id, se2.number AS sn, e2.number AS en FROM sc_episodes e2
+		      JOIN sc_seasons se2 ON se2.id = e2.season_id WHERE e2.id = ?1) cur ON cur.show_id = se.show_id
+		WHERE (se.number > cur.sn OR (se.number = cur.sn AND e.number > cur.en))
+		  AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)
+		ORDER BY se.number, e.number LIMIT 1`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("next episode: %w", err)
+	}
+	return &e, nil
+}
+
+// RecentEpisodes vrátí naposledy přidané díly (napříč seriály).
+func (s *Store) RecentEpisodes(ctx context.Context, limit int) ([]model.Episode, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT `+episodeCols+episodeFrom+`
+		WHERE EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)
+		ORDER BY e.created_at DESC, se.number DESC, e.number DESC LIMIT ?1`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("recent episodes: %w", err)
+	}
+	defer rows.Close()
+	out := []model.Episode{}
+	for rows.Next() {
+		e, err := scanEpisode(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// ListMedia vrátí soubory filmu nebo dílu včetně stop a titulků, největší první.
+func (s *Store) ListMedia(ctx context.Context, movieID, episodeID *uuid.UUID) ([]model.MediaFile, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id FROM sc_media_files
+		WHERE (?1 IS NOT NULL AND movie_id = ?1) OR (?2 IS NOT NULL AND episode_id = ?2)
+		ORDER BY size_bytes DESC, file_path`, movieID, episodeID)
+	if err != nil {
+		return nil, fmt.Errorf("list media: %w", err)
+	}
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	out := []model.MediaFile{}
+	for _, id := range ids {
+		mf, err := s.GetMedia(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *mf)
+	}
+	return out, nil
+}
+
+// GetMedia vrátí soubor se stopami a externími titulky.
+func (s *Store) GetMedia(ctx context.Context, id uuid.UUID) (*model.MediaFile, error) {
+	var (
+		mf                                     model.MediaFile
+		container, vcodec, vprofile, pix, perr sql.NullString
+		duration                               sql.NullFloat64
+		bitrate, width, height                 sql.NullInt64
+		mtime, probed                          sql.NullTime
+	)
+	err := s.db.QueryRowContext(ctx, `
+		SELECT id, movie_id, episode_id, file_path, size_bytes, mtime, container, duration_sec, bitrate,
+		       video_codec, video_profile, width, height, pix_fmt, probed_at, probe_error
+		FROM sc_media_files WHERE id = ?1`, id).Scan(
+		&mf.ID, &mf.MovieID, &mf.EpisodeID, &mf.FilePath, &mf.SizeBytes, &mtime, &container, &duration, &bitrate,
+		&vcodec, &vprofile, &width, &height, &pix, &probed, &perr)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get media: %w", err)
+	}
+	mf.Container, mf.DurationSec, mf.Bitrate = ptrString(container), ptrFloat(duration), ptrInt64(bitrate)
+	mf.VideoCodec, mf.VideoProfile, mf.PixFmt = ptrString(vcodec), ptrString(vprofile), ptrString(pix)
+	mf.Width, mf.Height, mf.ProbeError = ptrInt(width), ptrInt(height), ptrString(perr)
+	if mtime.Valid {
+		t := mtime.Time
+		mf.ModTime = &t
+	}
+	if probed.Valid {
+		t := probed.Time
+		mf.ProbedAt = &t
+	}
+
+	mf.Streams = []model.Stream{}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT idx, kind, codec, language, title, channels, is_default, is_forced
+		FROM sc_streams WHERE media_file_id = ?1 ORDER BY idx`, id)
+	if err != nil {
+		return nil, fmt.Errorf("streams: %w", err)
+	}
+	for rows.Next() {
+		var (
+			st                 model.Stream
+			codec, lang, title sql.NullString
+			channels           sql.NullInt64
+		)
+		if err := rows.Scan(&st.Index, &st.Kind, &codec, &lang, &title, &channels, &st.IsDefault, &st.IsForced); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		st.Codec, st.Language, st.Title, st.Channels = ptrString(codec), ptrString(lang), ptrString(title), ptrInt(channels)
+		mf.Streams = append(mf.Streams, st)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	mf.Subtitles = []model.ExternalSubtitle{}
+	srows, err := s.db.QueryContext(ctx, `
+		SELECT id, file_path, language, format, is_forced FROM sc_external_subtitles
+		WHERE media_file_id = ?1 ORDER BY language, file_path`, id)
+	if err != nil {
+		return nil, fmt.Errorf("external subtitles: %w", err)
+	}
+	defer srows.Close()
+	for srows.Next() {
+		var (
+			sub  model.ExternalSubtitle
+			lang sql.NullString
+		)
+		if err := srows.Scan(&sub.ID, &sub.FilePath, &lang, &sub.Format, &sub.IsForced); err != nil {
+			return nil, err
+		}
+		sub.Language = ptrString(lang)
+		mf.Subtitles = append(mf.Subtitles, sub)
+	}
+	return &mf, srows.Err()
+}
+
+// Genres vrátí všechny žánry, které má nějaký film nebo seriál.
+func (s *Store) Genres(ctx context.Context) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT name FROM sc_genres g WHERE EXISTS (SELECT 1 FROM sc_movie_genres WHERE genre_id = g.id)
+		   OR EXISTS (SELECT 1 FROM sc_show_genres WHERE genre_id = g.id)
+		ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []string{}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		out = append(out, n)
+	}
+	return out, rows.Err()
+}
+
+// Stats jsou počty pro administraci.
+type Stats struct {
+	Movies          int   `json:"movies"`
+	Shows           int   `json:"shows"`
+	Episodes        int   `json:"episodes"`
+	Files           int   `json:"files"`
+	TotalBytes      int64 `json:"total_bytes"`
+	UnmatchedMovies int   `json:"unmatched_movies"`
+	UnmatchedShows  int   `json:"unmatched_shows"`
+}
+
+func (s *Store) Stats(ctx context.Context) (Stats, error) {
+	var st Stats
+	err := s.db.QueryRowContext(ctx, `
+		SELECT
+		  (SELECT count(*) FROM sc_movies m WHERE EXISTS (SELECT 1 FROM sc_media_files f WHERE f.movie_id = m.id)),
+		  (SELECT count(*) FROM sc_shows),
+		  (SELECT count(DISTINCT episode_id) FROM sc_media_files WHERE episode_id IS NOT NULL),
+		  (SELECT count(*) FROM sc_media_files),
+		  (SELECT COALESCE(sum(size_bytes), 0) FROM sc_media_files),
+		  (SELECT count(*) FROM sc_movies WHERE match_state = 'unmatched'),
+		  (SELECT count(*) FROM sc_shows WHERE match_state = 'unmatched')`).
+		Scan(&st.Movies, &st.Shows, &st.Episodes, &st.Files, &st.TotalBytes, &st.UnmatchedMovies, &st.UnmatchedShows)
+	return st, err
+}
