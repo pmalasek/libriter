@@ -1,6 +1,6 @@
 # Data directory (databáze, obálky a audio backendu). Jen tahle cesta –
 # obecné „data/“ chytalo i zdrojáky libriter-mobile/src/data.
-/libriter-backend/data/
+/server/data/
 
 # Environment variables
 .env
@@ -16,9 +16,9 @@ Thumbs.db
 
 # Go
 bin/
-libriter-backend/main
-libriter-backend/dist/
-libriter-backend/tmp/
+server/main
+server/dist/
+server/tmp/
 *.exe
 *.exe~
 *.dll

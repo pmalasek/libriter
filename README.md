@@ -8,7 +8,7 @@ Osobní správce a přehrávač audioknih s webovým rozhraním a mobilní aplik
 libriter/
 ├── justfile            # build frontendu i backendu (just build)
 ├── package.json        # kořen npm workspaces (shared + web + mobil)
-├── libriter-backend/   # REST API + server webového rozhraní (Go)
+├── server/             # REST API + server webového rozhraní (Go)
 │   └── internal/web/dist/   # sem se sestaví frontend, vkompiluje se do binárky
 ├── libriter-shared/    # Kód společný webu a mobilu (typy API, klient, přehrávač)
 ├── libriter-frontend/  # Webové rozhraní (React + Vite + Tailwind)
@@ -25,7 +25,7 @@ libriter/
 Produkční build je **jediná binárka** – webové rozhraní je v ní vestavěné přes
 `go:embed` a servíruje se ze stejného portu jako API.
 
-Databázové schéma je v `libriter-backend/internal/db/migrations/` a aplikuje se
+Databázové schéma je v `server/internal/db/migrations/` a aplikuje se
 automaticky při startu backendu.
 
 ---
@@ -128,7 +128,7 @@ ffprobe -version
 Zkopírujte `env.example` do `.env` a upravte hodnoty:
 
 ```bash
-cp libriter-backend/env.example libriter-backend/.env
+cp server/env.example server/.env
 ```
 
 ```dotenv
@@ -172,7 +172,7 @@ Vývojový server Vite přebírá adresu backendu z `BACKEND_URL` (výchozí
 `http://localhost:8080`), což je proměnná prostředí, ne součást `.env`.
 
 **Jak se `.env` hledá:** v aktuálním adresáři, pak v jeho podadresáři
-`libriter-backend/`, a takto dál v nadřazených adresářích. Cestu lze vynutit
+`server/`, a takto dál v nadřazených adresářích. Cestu lze vynutit
 proměnnou `LIBRITER_ENV_FILE`. Skutečné proměnné prostředí mají vždy přednost
 před hodnotami z `.env`.
 
@@ -202,7 +202,7 @@ Vznikne `bin/libriter` s vestavěným webovým rozhraním. Rozhraní pak najdete
 `http://localhost:8080`, API na `http://localhost:8080/api/v1`.
 
 Binárku lze spustit z libovolného adresáře: `.env` se hledá v aktuálním adresáři
-a v nadřazených (včetně podadresáře `libriter-backend/`) a relativní cesty v něm
+a v nadřazených (včetně podadresáře `server/`) a relativní cesty v něm
 (`DB_PATH`, `COVER_ROOT`, …) se vztahují k adresáři toho `.env`. Server na startu
 vypíše, kterou databázi otevřel. Jiný soubor vynutíte přes `LIBRITER_ENV_FILE`.
 
@@ -277,7 +277,7 @@ sudo -u libriter LIBRITER_ENV_FILE=/etc/libriter/libriter.env libriter user list
 | Cíl | Popis |
 |-----|-------|
 | `just build` | Frontend i backend → `bin/libriter` |
-| `just frontend` | `npm ci` v kořeni + build webu (výstup do `libriter-backend/internal/web/dist`) |
+| `just frontend` | `npm ci` v kořeni + build webu (výstup do `server/internal/web/dist`) |
 | `just backend` | `go build` s aktuálně sestaveným frontendem |
 | `just dev-backend` | `go run ./cmd/server` |
 | `just dev-frontend` | `npm run dev` |
@@ -1152,7 +1152,7 @@ si například přesunul vyhledávání z `/hledat` na `/search?in=books`. Když
 zdá, že import nefunguje, nejrychleji to prověří živý smoke test:
 
 ```bash
-cd libriter-backend
+cd server
 LIBRITER_LIVE_METADATA=1 go test ./internal/metadata/ -run Live -v
 ```
 

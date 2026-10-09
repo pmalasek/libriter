@@ -227,7 +227,8 @@ func loadDotEnv() dotEnv {
 }
 
 // findEnvFile hledá .env v aktuálním adresáři i v nadřazených, a v každém z nich
-// také v podadresáři libriter-backend/. Explicitní volbu lze vynutit přes
+// také v podadresáři server/ (a v dřívějším libriter-backend/, ať lokální .env
+// z doby před přejmenováním dál funguje). Explicitní volbu lze vynutit přes
 // LIBRITER_ENV_FILE.
 func findEnvFile() string {
 	if explicit := os.Getenv("LIBRITER_ENV_FILE"); explicit != "" {
@@ -242,6 +243,7 @@ func findEnvFile() string {
 	for {
 		for _, candidate := range []string{
 			filepath.Join(dir, ".env"),
+			filepath.Join(dir, "server", ".env"),
 			filepath.Join(dir, "libriter-backend", ".env"),
 		} {
 			if info, err := os.Stat(candidate); err == nil && !info.IsDir() {

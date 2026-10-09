@@ -1,12 +1,12 @@
 # Libriter – build orchestrace
 #
-# Frontend se sestavuje přímo do libriter-backend/internal/web/dist a odtud
+# Frontend se sestavuje přímo do server/internal/web/dist a odtud
 # se přes go:embed vkompiluje do binárky. `just backend` funguje i bez
 # sestaveného frontendu – server pak na / vrací stránku s návodem (503).
 
 bin          := "bin/libriter"
 frontend_dir := "libriter-frontend"
-backend_dir  := "libriter-backend"
+backend_dir  := "server"
 mobile_dir   := "libriter-mobile"
 dist         := backend_dir / "internal/web/dist"
 
@@ -35,7 +35,7 @@ backend:
         -o ../{{bin}} ./cmd/server
 
 # Vývojový server na :8080
-[working-directory('libriter-backend')]
+[working-directory('server')]
 dev-backend:
     go run ./cmd/server
 
@@ -45,7 +45,7 @@ dev-frontend:
     npm run dev
 
 # go vet ./...
-[working-directory('libriter-backend')]
+[working-directory('server')]
 vet:
     go vet ./...
 

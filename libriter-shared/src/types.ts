@@ -1,6 +1,6 @@
 import { t, type UILanguage } from './i18n'
 
-// Typy zrcadlí JSON modely backendu (libriter-backend/internal/model/model.go).
+// Typy zrcadlí JSON modely backendu (server/internal/model/model.go).
 // Pole s `omitempty` na Go straně jsou zde volitelná.
 
 export type Role = 'admin' | 'editor' | 'reader'
