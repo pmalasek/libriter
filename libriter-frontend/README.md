@@ -23,7 +23,7 @@ adresu z řádku **Network** ve výpisu Vite.
 npm run build
 ```
 
-Výstup jde **do backendu** (`../server/internal/web/dist`), odkud se
+Výstup jde **do backendu** (`../server/internal/core/web/dist`), odkud se
 přes `go:embed` vkompiluje do binárky. Žádný krok s kopírováním není potřeba.
 Adresář `dist` drží v gitu soubor `.gitkeep`, aby `go build` prošel i bez
 sestaveného frontendu; po každém buildu ho Vite plugin obnoví.

@@ -1,0 +1,171 @@
+package model
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+
+	coremodel "mediater/internal/core/model"
+)
+
+// Typy identity žijí v jádře (mediater/internal/core/model); knižní kód je
+// dál používá pod původními jmény.
+type (
+	Role       = coremodel.Role
+	Permission = coremodel.Permission
+	User       = coremodel.User
+	AuditEntry = coremodel.AuditEntry
+)
+
+const (
+	RoleAdmin         = coremodel.RoleAdmin
+	RoleEditor        = coremodel.RoleEditor
+	RoleReader        = coremodel.RoleReader
+	DefaultUILanguage = coremodel.DefaultUILanguage
+)
+
+var (
+	RoleLevel   = coremodel.RoleLevel
+	UILanguages = coremodel.UILanguages
+)
+
+type Rating struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	BookID    uuid.UUID `json:"book_id"`
+	Rating    int16     `json:"rating"`
+	Review    *string   `json:"review,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// Author – jméno je uložené po částech; Name je z nich odvozené celé jméno,
+// které udržuje storage vrstva (viz AuthorName.Full).
+type Author struct {
+	ID         uuid.UUID `json:"id"`
+	FirstName  string    `json:"first_name"`
+	MiddleName string    `json:"middle_name"`
+	LastName   string    `json:"last_name"`
+	Name       string    `json:"name"`
+	Bio        *string   `json:"bio,omitempty"`
+	ImagePath  *string   `json:"image_path,omitempty"`
+	BirthYear  *int      `json:"birth_year,omitempty"`
+	DeathYear  *int      `json:"death_year,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+type Series struct {
+	ID          uuid.UUID `json:"id"`
+	Title       string    `json:"title"`
+	Description *string   `json:"description,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// Language je položka číselníku jazyků (ISO 639-1).
+type Language struct {
+	Code       string `json:"code"`
+	NameCs     string `json:"name_cs"`     // český název, malým písmenem („němčina“)
+	NameNative string `json:"name_native"` // název v jazyce samotném („Deutsch“)
+}
+
+type Book struct {
+	ID              uuid.UUID  `json:"id"`
+	Authors         []Author   `json:"authors"` // seřazeno podle book_authors.position
+	SeriesID        *uuid.UUID `json:"series_id,omitempty"`
+	SeriesPosition  *int16     `json:"series_position,omitempty"`
+	Title           string     `json:"title"`
+	Narrator        *string    `json:"narrator,omitempty"`
+	DurationSeconds int        `json:"duration_seconds"`
+	ChapterCount    int        `json:"chapter_count"` // odvozené – počet řádků v chapters
+	FilePath        string     `json:"file_path"`     // adresář knihy relativně k AUDIO_ROOT
+	AlbumTag        *string    `json:"-"`             // album tag, podle kterého scanner páruje soubory ke knize
+	CoverPath       *string    `json:"cover_path,omitempty"`
+	Language        string     `json:"language"`
+	Description     *string    `json:"description,omitempty"`
+	InternalRating  *int16     `json:"internal_rating,omitempty"`
+	PublishedYear   *int       `json:"published_year,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+type Chapter struct {
+	ID                 uuid.UUID `json:"id"`
+	BookID             uuid.UUID `json:"book_id"`
+	Position           int       `json:"position"`
+	Title              string    `json:"title"`
+	FilePath           string    `json:"-"` // relativní cesta k audio souboru od AUDIO_ROOT
+	StartOffsetSeconds int       `json:"start_offset_seconds"`
+	DurationSeconds    int       `json:"duration_seconds"`
+	// SizeBytes je velikost audio souboru. 0 znamená neznámou velikost –
+	// řádek vznikl před migrací 012 a čeká na další průchod scanneru.
+	SizeBytes int64 `json:"size_bytes"`
+}
+
+type PlaybackPosition struct {
+	ID              uuid.UUID  `json:"id"`
+	UserID          uuid.UUID  `json:"user_id"`
+	BookID          uuid.UUID  `json:"book_id"`
+	DeviceID        *uuid.UUID `json:"device_id,omitempty"`
+	PositionSeconds int        `json:"position_seconds"`
+	PlaybackSpeed   float64    `json:"playback_speed"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+}
+
+type Bookmark struct {
+	ID              uuid.UUID  `json:"id"`
+	UserID          uuid.UUID  `json:"user_id"`
+	BookID          uuid.UUID  `json:"book_id"`
+	ChapterID       *uuid.UUID `json:"chapter_id,omitempty"`
+	PositionSeconds int        `json:"position_seconds"`
+	Note            *string    `json:"note,omitempty"`
+	CreatedAt       time.Time  `json:"created_at"`
+}
+
+// Druhy poslechové session.
+const (
+	PlaySessionBook   = "book"
+	PlaySessionSeries = "series"
+	PlaySessionList   = "list"
+)
+
+// PlaySession je to, co uživatel poslouchá: kniha, série nebo vlastní seznam.
+// Rozposlouchaných session může mít víc naráz a přepíná se mezi nimi.
+type PlaySession struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+	Kind   string    `json:"kind"`
+	// SourceID je kniha nebo série, ze které session vznikla; u seznamu je prázdné.
+	SourceID *uuid.UUID `json:"source_id,omitempty"`
+	// Title nese jen seznam. Název knihy a série si rozhraní dohledá samo,
+	// aby přejmenování v knihovně nezůstalo v session viset ve staré podobě.
+	Title         *string           `json:"title,omitempty"`
+	CurrentBookID *uuid.UUID        `json:"current_book_id,omitempty"`
+	PlaybackSpeed float64           `json:"playback_speed"`
+	FinishedAt    *time.Time        `json:"finished_at,omitempty"`
+	CreatedAt     time.Time         `json:"created_at"`
+	UpdatedAt     time.Time         `json:"updated_at"`
+	Items         []PlaySessionItem `json:"items"`
+}
+
+// BookProgress je stav knihy u uživatele. Existence řádku znamená
+// rozposlouchanou knihu, FinishedAt doposlechnutou; kniha bez řádku je
+// neposlechnutá. Na rozdíl od PlaySession.FinishedAt přežije smazání poslechu
+// a další poslech ho neruší.
+type BookProgress struct {
+	UserID     uuid.UUID  `json:"-"`
+	BookID     uuid.UUID  `json:"book_id"`
+	StartedAt  time.Time  `json:"started_at"`
+	FinishedAt *time.Time `json:"finished_at,omitempty"`
+	UpdatedAt  time.Time  `json:"updated_at"`
+}
+
+// PlaySessionItem je jedna kniha session i s vlastní rozposlouchanou pozicí.
+type PlaySessionItem struct {
+	BookID   uuid.UUID `json:"book_id"`
+	Position int       `json:"position"`
+	// ChapterID je prázdné, když kapitola zmizela při opravě knihovny –
+	// přehrávání pak začne první kapitolou knihy.
+	ChapterID *uuid.UUID `json:"chapter_id,omitempty"`
+	// PositionSeconds je pozice v kapitole, ne v celé knize.
+	PositionSeconds int `json:"position_seconds"`
+}

@@ -1,6 +1,6 @@
 # Libriter – build orchestrace
 #
-# Frontend se sestavuje přímo do server/internal/web/dist a odtud
+# Frontend se sestavuje přímo do server/internal/core/web/dist a odtud
 # se přes go:embed vkompiluje do binárky. `just backend` funguje i bez
 # sestaveného frontendu – server pak na / vrací stránku s návodem (503).
 
@@ -8,7 +8,7 @@ bin          := "bin/mediater"
 frontend_dir := "libriter-frontend"
 backend_dir  := "server"
 mobile_dir   := "libriter-mobile"
-dist         := backend_dir / "internal/web/dist"
+dist         := backend_dir / "internal/core/web/dist"
 
 [private]
 default:
@@ -20,7 +20,7 @@ build: frontend backend
 # Závislosti se instalují v kořeni: web, mobil i libriter-shared jsou npm
 # workspaces s jedním společným package-lock.json.
 #
-# npm ci && npm run build (výstup do internal/web/dist)
+# npm ci && npm run build (výstup do internal/core/web/dist)
 frontend:
     npm ci
     npm run build -w {{frontend_dir}}
@@ -31,7 +31,7 @@ frontend:
 backend:
     mkdir -p bin
     cd {{backend_dir}} && CGO_ENABLED=0 go build \
-        -ldflags "-X mediater/internal/version.Version=${MEDIATER_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}" \
+        -ldflags "-X mediater/internal/core/version.Version=${MEDIATER_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}" \
         -o ../{{bin}} ./cmd/server
 
 # Vývojový server na :8080

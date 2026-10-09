@@ -1,0 +1,198 @@
+package handler
+
+import (
+	"errors"
+	"log/slog"
+	"net/http"
+	"strings"
+
+	"mediater/internal/core/middleware"
+	"mediater/internal/core/service"
+)
+
+// MinPasswordLength je minimální délka hesla; platí pro registraci, změnu
+// hesla i zakládání účtu adminem.
+const MinPasswordLength = 8
+
+type AuthHandler struct {
+	svc *service.AuthService
+	// settings rozhoduje, jestli je veřejná registrace zapnutá a jakou roli
+	// nový účet dostane. Nastavuje se v administraci.
+	settings service.RegistrationSource
+}
+
+func NewAuth(svc *service.AuthService, settings service.RegistrationSource) *AuthHandler {
+	return &AuthHandler{svc: svc, settings: settings}
+}
+
+// GET /api/v1/auth/config  (veřejné)
+//
+// Přihlašovací stránka podle toho ukazuje či skrývá odkaz na registraci.
+// Nic citlivého to neprozrazuje – zákaz stejně vynucuje Register níže.
+func (h *AuthHandler) Config(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.settings.Registration(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání nastavení")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"registration_enabled": settings.Enabled,
+		"default_role":         settings.DefaultRole,
+	})
+}
+
+// POST /api/v1/auth/register
+func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.settings.Registration(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "auth.register_failed", "chyba při registraci")
+		return
+	}
+	if !settings.Enabled {
+		writeError(w, http.StatusForbidden, "auth.registration_disabled", "registrace nových uživatelů je vypnutá")
+		return
+	}
+
+	var req struct {
+		DisplayName string `json:"display_name"`
+		Email       string `json:"email"`
+		Login       string `json:"login"`
+		Password    string `json:"password"`
+		UILanguage  string `json:"ui_language"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
+		return
+	}
+
+	req.DisplayName = strings.TrimSpace(req.DisplayName)
+	req.Email = strings.TrimSpace(req.Email)
+
+	if req.DisplayName == "" || req.Email == "" || len(req.Password) < MinPasswordLength {
+		writeError(w, http.StatusBadRequest, "validation.register_fields", "display_name, email a heslo (min. 8 znaků) jsou povinné")
+		return
+	}
+
+	user, token, err := h.svc.Register(r.Context(), req.DisplayName, req.Email, req.Login, req.Password, settings.DefaultRole, req.UILanguage)
+	if errors.Is(err, service.ErrInvalidLanguage) {
+		writeError(w, http.StatusBadRequest, "user.invalid_language", "nepodporovaný jazyk rozhraní")
+		return
+	}
+	if errors.Is(err, service.ErrEmailTaken) {
+		writeError(w, http.StatusConflict, "user.email_taken", "email je již registrován")
+		return
+	}
+	if WriteUserInputError(w, err) {
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "auth.register_failed", "chyba při registraci")
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"user":  user,
+		"token": token,
+	})
+}
+
+// GET /api/v1/auth/stream-token  (přihlášený uživatel)
+//
+// Vydá krátkodobý token, kterým přehrávač otevírá audio soubory. Prvek <audio>
+// neumí poslat hlavičku Authorization, takže token putuje v adrese – a do
+// adresy přihlašovací token nepatří.
+func (h *AuthHandler) StreamToken(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "auth.missing_token", "chybí autorizační token")
+		return
+	}
+
+	token, expiresAt, err := h.svc.GenerateStreamToken(userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "auth.token_failed", "token pro přehrávání se nepodařilo vydat")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"token":      token,
+		"expires_at": expiresAt,
+	})
+}
+
+// POST /api/v1/auth/mobile-token  (přihlášený uživatel)
+//
+// Vymění běžné přihlášení za dlouhodobý token mobilní aplikace. Ta se
+// přihlašuje jednou a pak jede i offline – s 72hodinovým přihlašovacím
+// tokenem by po víkendu bez signálu žádala heslo u stažené knihy.
+//
+// Mobilní token další mobilní token nevyrazí: uniklý token by se sám
+// prodlužoval donekonečna a odhlášení by ho nikdy nedohnalo.
+func (h *AuthHandler) MobileToken(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "auth.missing_token", "chybí autorizační token")
+		return
+	}
+	if middleware.ScopeFromCtx(r.Context()) == service.ScopeMobile {
+		writeError(w, http.StatusForbidden, "auth.mobile_token_refresh", "mobilní token nelze obnovit mobilním tokenem – přihlaste se znovu")
+		return
+	}
+
+	var req struct {
+		// DeviceName jde jen do logu, ať je v serverovém záznamu poznat,
+		// komu se token vydal. Nikde se neukládá.
+		DeviceName string `json:"device_name"`
+	}
+	// Prázdné tělo je v pořádku – jméno zařízení je nepovinné.
+	if r.ContentLength > 0 {
+		if err := readJSON(r, &req); err != nil {
+			writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
+			return
+		}
+	}
+
+	token, expiresAt, err := h.svc.GenerateMobileToken(userID, middleware.RoleFromCtx(r.Context()))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "auth.token_failed", "token pro mobilní aplikaci se nepodařilo vydat")
+		return
+	}
+
+	slog.Info("vydán mobilní token", "user_id", userID,
+		"device", strings.TrimSpace(req.DeviceName), "expires_at", expiresAt)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"token":      token,
+		"expires_at": expiresAt,
+	})
+}
+
+// POST /api/v1/auth/login
+//
+// Pole login se porovnává s přihlašovacím jménem i s e-mailem uživatele.
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Login    string `json:"login"`
+		Password string `json:"password"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
+		return
+	}
+
+	user, token, err := h.svc.Login(r.Context(), strings.TrimSpace(req.Login), req.Password)
+	if errors.Is(err, service.ErrInvalidCredentials) {
+		writeError(w, http.StatusUnauthorized, "auth.invalid_credentials", "neplatné přihlašovací údaje")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "auth.login_failed", "chyba při přihlášení")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user":  user,
+		"token": token,
+	})
+}

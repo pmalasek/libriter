@@ -13,23 +13,25 @@ import (
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 
-	"mediater/internal/api/handler"
-	"mediater/internal/api/middleware"
-	"mediater/internal/config"
-	"mediater/internal/db"
-	"mediater/internal/importer"
-	"mediater/internal/metadata"
-	"mediater/internal/metadata/audible"
-	"mediater/internal/metadata/cbdb"
-	"mediater/internal/metadata/databazeknih"
-	"mediater/internal/metadata/goodreads"
-	"mediater/internal/metadata/googlebooks"
-	"mediater/internal/metadata/openlibrary"
-	"mediater/internal/scanner"
-	"mediater/internal/service"
-	"mediater/internal/storage"
-	"mediater/internal/version"
-	"mediater/internal/web"
+	"mediater/internal/core/config"
+	"mediater/internal/core/db"
+	corehandler "mediater/internal/core/handler"
+	"mediater/internal/core/httpx"
+	"mediater/internal/core/middleware"
+	"mediater/internal/core/version"
+	"mediater/internal/core/web"
+	"mediater/internal/libriter/handler"
+	"mediater/internal/libriter/importer"
+	"mediater/internal/libriter/metadata"
+	"mediater/internal/libriter/metadata/audible"
+	"mediater/internal/libriter/metadata/cbdb"
+	"mediater/internal/libriter/metadata/databazeknih"
+	"mediater/internal/libriter/metadata/goodreads"
+	"mediater/internal/libriter/metadata/googlebooks"
+	"mediater/internal/libriter/metadata/openlibrary"
+	"mediater/internal/libriter/scanner"
+	"mediater/internal/libriter/service"
+	"mediater/internal/libriter/storage"
 )
 
 // runServe spustí HTTP server, scanner a obsluhu webového rozhraní.
@@ -85,19 +87,19 @@ func runServe() error {
 	scn.SetDefaultLanguage(settingsSvc.DefaultLanguage)
 	scn.Start(appCtx)
 
-	authSvc := service.NewAuth(store, cfg.JWT)
-	userSvc := service.NewUser(store, authSvc)
+	authSvc := service.NewAuth(store.Core(), cfg.JWT)
+	userSvc := service.NewUser(store.Core(), authSvc)
 	bookSvc := service.NewBook(store, scn)
 	authorSvc := service.NewAuthor(store)
 	authorImageSvc := service.NewAuthorImage(store, registry, cfg.Storage.AuthorImageRoot)
 	seriesSvc := service.NewSeries(store)
-	auditSvc := service.NewAudit(store)
+	auditSvc := service.NewAudit(store.Core())
 	systemSvc := service.NewSystem(store, cfg, startedAt)
 	playSessionSvc := service.NewPlaySession(store)
 	listeningSvc := service.NewListening(store)
 
-	authH := handler.NewAuth(authSvc, settingsSvc)
-	userH := handler.NewUser(userSvc, auditSvc)
+	authH := corehandler.NewAuth(authSvc, settingsSvc)
+	userH := corehandler.NewUser(userSvc, auditSvc)
 	bookH := handler.NewBook(bookSvc, cfg.Storage.CoverRoot, auditSvc).
 		WithCovers(service.NewBookCover(store, registry, cfg.Storage.CoverRoot))
 	authorH := handler.NewAuthor(authorSvc, cfg.Storage.AuthorImageRoot, authorImageSvc, auditSvc)
@@ -120,12 +122,12 @@ func runServe() error {
 	r.Use(chimw.RealIP)
 	r.Use(middleware.Logger)
 
-	r.Get("/health", handler.Health)
+	r.Get("/health", corehandler.Health)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// Neznámé API cesty musí vracet JSON, ne index.html z SPA handleru níže.
-		r.NotFound(handler.NotFoundJSON)
-		r.MethodNotAllowed(handler.MethodNotAllowedJSON)
+		r.NotFound(httpx.NotFoundJSON)
+		r.MethodNotAllowed(httpx.MethodNotAllowedJSON)
 
 		// --- auth (bez přihlášení) ---
 		r.Get("/auth/config", authH.Config) // je registrace zapnutá?

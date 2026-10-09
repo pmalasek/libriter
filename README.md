@@ -9,7 +9,7 @@ libriter/
 ├── justfile            # build frontendu i backendu (just build)
 ├── package.json        # kořen npm workspaces (shared + web + mobil)
 ├── server/             # REST API + server webového rozhraní (Go)
-│   └── internal/web/dist/   # sem se sestaví frontend, vkompiluje se do binárky
+│   └── internal/core/web/dist/   # sem se sestaví frontend, vkompiluje se do binárky
 ├── libriter-shared/    # Kód společný webu a mobilu (typy API, klient, přehrávač)
 ├── libriter-frontend/  # Webové rozhraní (React + Vite + Tailwind)
 ├── libriter-mobile/    # Mobilní aplikace (plán: docs/mobile-app-plan.md)
@@ -277,7 +277,7 @@ sudo -u libriter LIBRITER_ENV_FILE=/etc/libriter/libriter.env libriter user list
 | Cíl | Popis |
 |-----|-------|
 | `just build` | Frontend i backend → `bin/mediater` |
-| `just frontend` | `npm ci` v kořeni + build webu (výstup do `server/internal/web/dist`) |
+| `just frontend` | `npm ci` v kořeni + build webu (výstup do `server/internal/core/web/dist`) |
 | `just backend` | `go build` s aktuálně sestaveným frontendem |
 | `just dev-backend` | `go run ./cmd/server` |
 | `just dev-frontend` | `npm run dev` |

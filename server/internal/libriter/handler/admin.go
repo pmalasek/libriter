@@ -1,0 +1,223 @@
+package handler
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"strconv"
+	"strings"
+
+	"mediater/internal/core/middleware"
+	"mediater/internal/libriter/metadata"
+	"mediater/internal/libriter/model"
+	"mediater/internal/libriter/scanner"
+	"mediater/internal/libriter/service"
+
+	"github.com/google/uuid"
+)
+
+// libraryScanner je to, co administrace potřebuje od scanneru. Rozhraní
+// místo konkrétního typu drží handler testovatelný bez souborového systému.
+type libraryScanner interface {
+	Status() scanner.Status
+	Rescan() error
+	PlanRepair(ctx context.Context) (scanner.RepairPlan, error)
+	Repair(ctx context.Context, force bool) (scanner.RepairResult, error)
+	PlanDuplicates(ctx context.Context) (scanner.DuplicateReport, error)
+	DismissDuplicate(ctx context.Context, groupKey string, actorID *uuid.UUID) (scanner.DuplicateGroup, error)
+	RestoreDuplicate(ctx context.Context, groupKey string) error
+	PlanMerge(ctx context.Context) (scanner.MergePlan, error)
+	Merge(ctx context.Context, targets []uuid.UUID) (scanner.MergeResult, error)
+}
+
+// AdminHandler obsluhuje endpointy pod /api/v1/admin. Skupinu chrání
+// RequireRole("admin"), handlery tedy roli znovu neověřují.
+type AdminHandler struct {
+	users     *service.UserService
+	settings  *service.SettingsService
+	registry  *metadata.Registry
+	scanner   libraryScanner
+	system    *service.SystemService
+	audit     *service.AuditService
+	listening *service.ListeningService
+}
+
+func NewAdmin(
+	users *service.UserService,
+	settings *service.SettingsService,
+	registry *metadata.Registry,
+	scn libraryScanner,
+	system *service.SystemService,
+	audit *service.AuditService,
+	listening *service.ListeningService,
+) *AdminHandler {
+	return &AdminHandler{
+		users:     users,
+		settings:  settings,
+		registry:  registry,
+		scanner:   scn,
+		system:    system,
+		audit:     audit,
+		listening: listening,
+	}
+}
+
+// Stránkování auditu; strop musí odpovídat stropu v service.AuditService.
+const (
+	auditPageSize    = 50
+	auditMaxPageSize = 200
+)
+
+// actorID vrátí ID přihlášeného administrátora pro zápis do audit logu.
+func actorID(r *http.Request) uuid.UUID {
+	id, _ := middleware.UserIDFromCtx(r.Context())
+	return id
+}
+
+// POST /api/v1/admin/users  (admin)
+//
+// Založí účet s libovolnou rolí. Veřejná registrace roli neurčuje, takže
+// editora i dalšího admina umí vyrobit jen tudy (nebo přes CLI).
+func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		DisplayName string `json:"display_name"`
+		Email       string `json:"email"`
+		Login       string `json:"login"`
+		Password    string `json:"password"`
+		Role        string `json:"role"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
+		return
+	}
+
+	req.DisplayName = strings.TrimSpace(req.DisplayName)
+	req.Email = strings.TrimSpace(req.Email)
+	req.Role = strings.ToLower(strings.TrimSpace(req.Role))
+	if req.Role == "" {
+		req.Role = model.RoleReader
+	}
+
+	if req.DisplayName == "" || req.Email == "" || len(req.Password) < minPasswordLength {
+		writeError(w, http.StatusBadRequest, "validation.register_fields", "display_name, email a heslo (min. 8 znaků) jsou povinné")
+		return
+	}
+	if _, ok := model.RoleLevel[req.Role]; !ok {
+		writeError(w, http.StatusBadRequest, "user.unknown_role", "neznámá role")
+		return
+	}
+
+	u, err := h.users.Create(r.Context(), req.DisplayName, req.Email, req.Login, req.Password, req.Role)
+	if writeUserInputError(w, err) {
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při vytváření uživatele")
+		return
+	}
+
+	h.audit.Record(r.Context(), actorID(r), service.AuditEvent{
+		Action:      service.AuditUserCreate,
+		TargetType:  service.AuditTargetUser,
+		TargetID:    u.ID.String(),
+		TargetLabel: u.Email,
+		Details:     map[string]string{"role": u.Role},
+	})
+
+	writeJSON(w, http.StatusCreated, u)
+}
+
+// GET /api/v1/admin/stats  (admin)
+func (h *AdminHandler) Stats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.system.Stats(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání statistik")
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+// GET /api/v1/admin/system  (admin)
+func (h *AdminHandler) System(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.system.Info())
+}
+
+// GET /api/v1/admin/audit?limit=50&before=<id>  (admin)
+//
+// Stránkuje se kurzorem (id posledního záznamu), ne offsetem – log mezitím
+// roste a offset by záznamy přeskakoval.
+func (h *AdminHandler) Audit(w http.ResponseWriter, r *http.Request) {
+	limit, err := intParam(r, "limit", auditPageSize)
+	if err != nil || limit <= 0 {
+		writeError(w, http.StatusBadRequest, "validation.invalid", "parametr limit musí být kladné číslo")
+		return
+	}
+	// Strop držíme i tady, aby kurzor níž odpovídal skutečné velikosti stránky.
+	if limit > auditMaxPageSize {
+		limit = auditMaxPageSize
+	}
+	before, err := intParam(r, "before", 0)
+	if err != nil || before < 0 {
+		writeError(w, http.StatusBadRequest, "validation.invalid", "parametr before musí být nezáporné číslo")
+		return
+	}
+
+	entries, err := h.audit.List(r.Context(), int(limit), before)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání auditu")
+		return
+	}
+
+	// Kurzor posíláme jen tehdy, když stránka došla plná – jinak jsme na konci.
+	var nextBefore *int64
+	if len(entries) > 0 && len(entries) == int(limit) {
+		last := entries[len(entries)-1].ID
+		nextBefore = &last
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":       entries,
+		"next_before": nextBefore,
+	})
+}
+
+// GET /api/v1/admin/listening  (admin)
+//
+// Přehled poslechu všech uživatelů. Čtení se neaudituje – zapisují se jen
+// zásahy, které něco mění.
+func (h *AdminHandler) Listening(w http.ResponseWriter, r *http.Request) {
+	summaries, err := h.listening.Overview(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání poslechů")
+		return
+	}
+	writeJSON(w, http.StatusOK, summaries)
+}
+
+// GET /api/v1/admin/listening/{id}  (admin)
+//
+// Poslechy, stav knih a deník jednoho uživatele.
+func (h *AdminHandler) ListeningUser(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+
+	detail, err := h.listening.UserDetail(r.Context(), id)
+	switch {
+	case errors.Is(err, service.ErrNotFound):
+		writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání poslechů")
+	default:
+		writeJSON(w, http.StatusOK, detail)
+	}
+}
+
+func intParam(r *http.Request, name string, def int64) (int64, error) {
+	raw := r.URL.Query().Get(name)
+	if raw == "" {
+		return def, nil
+	}
+	return strconv.ParseInt(raw, 10, 64)
+}

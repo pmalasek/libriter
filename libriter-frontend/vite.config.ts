@@ -6,7 +6,7 @@ import { defineConfig, type Plugin } from 'vite'
 
 // Frontend se sestavuje přímo do backendu, odkud se přes go:embed
 // vkompiluje do binárky – žádný kopírovací krok není potřeba.
-const outDir = path.resolve(import.meta.dirname, '../server/internal/web/dist')
+const outDir = path.resolve(import.meta.dirname, '../server/internal/core/web/dist')
 
 const backendUrl = process.env.BACKEND_URL ?? 'http://localhost:8080'
 

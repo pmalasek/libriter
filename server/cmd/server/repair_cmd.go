@@ -7,10 +7,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"mediater/internal/config"
-	"mediater/internal/db"
-	"mediater/internal/scanner"
-	"mediater/internal/storage"
+	"mediater/internal/core/config"
+	"mediater/internal/core/db"
+	"mediater/internal/libriter/scanner"
+	"mediater/internal/libriter/storage"
 )
 
 const repairUsage = `Použití: libriter repair-chapters [--apply] [--force-missing]
