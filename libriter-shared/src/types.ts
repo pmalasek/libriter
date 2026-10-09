@@ -1,6 +1,6 @@
 import { t, type User } from 'core-shared'
 
-// Typy zrcadlí JSON modely backendu (server/internal/model/model.go).
+// Typy zrcadlí JSON modely backendu (server/internal/libriter/model/model.go, identita v server/internal/core/model).
 // Pole s `omitempty` na Go straně jsou zde volitelná.
 
 export interface Author {

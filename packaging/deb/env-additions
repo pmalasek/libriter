@@ -1,0 +1,21 @@
+# ---- Weby produktů (doplněno ve verzi 2.0) ----
+# Host rozhoduje, které webové rozhraní prohlížeč dostane; API na hostu
+# nezávisí. Ostatní hosty (IP adresa, localhost) dostanou DEFAULT_PRODUCT.
+LIBRITER_HOST=
+SCENITER_HOST=
+DEFAULT_PRODUCT=libriter
+
+# ---- Sceniter – filmy a seriály (doplněno ve verzi 2.0) ----
+# Prázdné VIDEO_ROOT = Sceniter je vypnutý. Adresář stačí číst; nesmí ležet
+# pod /home (služba má ProtectHome=true).
+VIDEO_ROOT=
+SCENITER_MOVIES_DIRS=Filmy,Movies
+SCENITER_SHOWS_DIRS=Seriály,Serialy,Shows,Series,TV
+SCENITER_IMAGE_ROOT=/var/lib/libriter/sceniter-images
+SCENITER_RESCAN_MINUTES=0
+TMDB_API_KEY=
+TMDB_LANGUAGE=cs-CZ
+TRANSCODE_ROOT=/var/cache/libriter/transcode
+TRANSCODE_MAX_SESSIONS=2
+TRANSCODE_IDLE_SECONDS=60
+TRANSCODE_MAX_HEIGHT=1080

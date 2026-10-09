@@ -1,32 +1,56 @@
-# Libriter
+# Libriter a Sceniter
 
-Osobní správce a přehrávač audioknih s webovým rozhraním a mobilní aplikací.
+Dva osobní produkty nad jedním serverem a společnými účty:
+
+- **Libriter** – správce a přehrávač audioknih s webovým rozhraním a mobilní
+  aplikací.
+- **Sceniter** – knihovna filmů a seriálů s webovým rozhraním a přehráváním
+  v prohlížeči (přímo, nebo s převodem přes ffmpeg). Provoz a konvence názvů
+  souborů: [docs/sceniter.md](docs/sceniter.md), plán:
+  [docs/sceniter-plan.md](docs/sceniter-plan.md).
+
+Uživatel má jeden účet a jednu roli pro oba produkty. Každý produkt má vlastní
+web na vlastní doméně; které rozhraní prohlížeč dostane, rozhoduje server podle
+hlavičky `Host` (`LIBRITER_HOST`, `SCENITER_HOST`).
 
 ## Architektura
 
 ```
-libriter/
-├── justfile            # build frontendu i backendu (just build)
-├── package.json        # kořen npm workspaces (shared + web + mobil)
-├── server/             # REST API + server webového rozhraní (Go)
-│   └── internal/libriter/web/dist/   # sem se sestaví frontend, vkompiluje se do binárky
-├── libriter-shared/    # Kód společný webu a mobilu (typy API, klient, přehrávač)
-├── libriter-frontend/  # Webové rozhraní (React + Vite + Tailwind)
-├── libriter-mobile/    # Mobilní aplikace (plán: docs/mobile-app-plan.md)
-├── _scripts/           # Pomocné skripty
-├── bin/                # Sestavená binárka (just build)
-└── data/
-    ├── libriter.db     # SQLite databáze (DB_PATH) – vytvoří se automaticky
-    ├── audio/          # Audio soubory (AUDIO_ROOT)
-    ├── covers/         # Obálky knih (COVER_ROOT)
-    └── author-images/  # Fotky autorů (AUTHOR_IMAGE_ROOT)
+mediater/               # monorepo (pracovní zastřešující název)
+├── justfile            # build webů i backendu (just build)
+├── package.json        # kořen npm workspaces
+├── server/             # Go modul `mediater` – jedna binárka pro oba produkty
+│   ├── cmd/server/     # main, serve (skládá jádro a produkty), CLI
+│   └── internal/
+│       ├── core/       # účty, přihlášení, role, nastavení, audit, migrace, web, middleware
+│       ├── libriter/   # audioknihy (API na /api/v1/...), web v libriter/web/dist
+│       └── sceniter/   # filmy a seriály (API na /api/v1/sceniter/...), web v sceniter/web/dist
+├── core-shared/        # TS bez Reactu: klient API, účty, i18n jádra, formátování
+├── core-web/           # React pro oba weby: shadcn/ui, vzhled, přihlášení, profil
+├── libriter-shared/    # TS Libriteru (typy, přehrávač) – sdílí web a mobil
+├── libriter-frontend/  # web Libriteru (React + Vite + Tailwind)
+├── libriter-mobile/    # mobilní aplikace Libriteru (Expo; docs/mobile-app-plan.md)
+├── sceniter-shared/    # TS Sceniteru (typy, formátování, texty)
+├── sceniter-frontend/  # web Sceniteru (React + Vite + Tailwind + hls.js)
+├── packaging/deb/      # balíček .deb (jméno zůstává `libriter`)
+├── deploy/nginx/       # reverse proxy pro obě domény
+├── _scripts/           # pomocné skripty
+├── bin/                # sestavená binárka bin/mediater (just build)
+└── server/data/        # vývojová data (DB_PATH, AUDIO_ROOT, …)
 ```
 
-Produkční build je **jediná binárka** – webové rozhraní je v ní vestavěné přes
-`go:embed` a servíruje se ze stejného portu jako API.
+Produkční build je **jediná binárka** – obě webová rozhraní jsou v ní vestavěná
+přes `go:embed` a servírují se ze stejného portu jako API.
 
-Databázové schéma je v `server/internal/db/migrations/` a aplikuje se
-automaticky při startu backendu.
+Schéma databáze má dvě části. Základní řada migrací 001–017 je
+v `server/internal/core/db/migrations/` (vznikla, když byl jen Libriter, proto
+obsahuje i knižní tabulky). Každý produkt má navíc vlastní řadu migrací
+(`server/internal/<produkt>/migrations/`, záznamy v tabulce `module_migrations`);
+tabulky Sceniteru mají prefix `sc_`. Vše se aplikuje automaticky při startu.
+
+Jádro nesmí importovat žádný produkt – hlídá to test
+`server/internal/core/imports_test.go`. Cesty API Libriteru zůstávají kvůli
+vydané mobilní aplikaci beze změny; hlídá je `server/cmd/server/router_test.go`.
 
 ---
 
@@ -183,6 +207,10 @@ se ponechává tak, jak je.
 
 ---
 
+Proměnné webů produktů (`LIBRITER_HOST`, `SCENITER_HOST`, `DEFAULT_PRODUCT`)
+a Sceniteru (`VIDEO_ROOT`, `TMDB_API_KEY`, `TRANSCODE_*` …) jsou popsané
+v [server/env.example](server/env.example) a [docs/sceniter.md](docs/sceniter.md).
+
 ## Instalace a spuštění
 
 ### 1. Vytvoření adresářů pro data
@@ -206,14 +234,21 @@ a v nadřazených (včetně podadresáře `server/`) a relativní cesty v něm
 (`DB_PATH`, `COVER_ROOT`, …) se vztahují k adresáři toho `.env`. Server na startu
 vypíše, kterou databázi otevřel. Jiný soubor vynutíte přes `LIBRITER_ENV_FILE`.
 
-### 3. Vývoj – dva procesy
+### 3. Vývoj – backend a weby
 
 | Terminál | Příkaz | Co běží |
 |----------|--------|---------|
 | 1 | `just dev-backend` | Go API na `http://localhost:8080` |
-| 2 | `just dev-frontend` | Vite s hot reloadem na `http://localhost:5173` |
+| 2 | `just dev-frontend` | web Libriteru s hot reloadem na `http://localhost:5173` |
+| 3 | `just dev-sceniter` | web Sceniteru s hot reloadem na `http://localhost:5174` |
 
-Pracujte na `http://localhost:5173`. Vite proxuje `/api` a `/health` na backend,
+Sceniter potřebuje v `server/.env` aspoň `VIDEO_ROOT` (adresář s videi);
+bez něj API Sceniteru vrací `sceniter.disabled`. Vestavěné weby obou produktů
+jdou vyzkoušet i přes samotný backend: s `LIBRITER_HOST=libriter.localhost`
+a `SCENITER_HOST=sceniter.localhost` otevřete `http://libriter.localhost:8080`
+a `http://sceniter.localhost:8080` (prohlížeč `*.localhost` posílá na 127.0.0.1).
+
+Pracujte na `http://localhost:5173` (5174 pro Sceniter). Vite proxuje `/api` a `/health` na backend,
 takže CORS není potřeba a frontend volá stejné relativní cesty jako v produkci.
 Běží-li backend na jiném portu: `BACKEND_URL=http://localhost:9000 npm run dev`.
 
@@ -229,16 +264,21 @@ repozitáře**, ne v podadresáři:
 npm install
 ```
 
-Web, mobilní aplikace a společný balíček `libriter-shared` jsou npm workspaces
-s jedním `package-lock.json` v kořeni. `libriter-shared` drží to, co by se
-jinak psalo dvakrát a rozešlo by se: typy API, klienta nad `fetch`, konstanty
-přehrávače a popisky poslechu. Publikuje TypeScript zdroj bez build kroku
-(Vite i Metro si `.ts` přeloží samy) a nezávisí na Reactu ani na DOM –
-ukládání session, react-query hooky a komponenty zůstávají v aplikacích.
+Weby, mobilní aplikace a sdílené balíčky jsou npm workspaces s jedním
+`package-lock.json` v kořeni:
 
-Soubory jako `src/api/types.ts` nebo `src/auth/permissions.ts` ve frontendu
-zůstaly jako tenké re-exporty z `libriter-shared`, takže importy uvnitř webu
-se přesunem nezměnily.
+| Balíček | Obsah | Kdo ho používá |
+|---|---|---|
+| `core-shared` | klient nad `fetch`, typy účtů, oprávnění, vzhled, formátování, i18next s texty jádra | všechno ostatní |
+| `core-web` | React: shadcn/ui, téma a paleta, přihlášení, jazyk, přihlašovací a profilová stránka | oba weby |
+| `libriter-shared` | typy a logika Libriteru, texty knihovny; re-exportuje `core-shared` | web a mobil Libriteru |
+| `sceniter-shared` | typy a formátování Sceniteru, texty videoknihovny; re-exportuje `core-shared` | web Sceniteru (a budoucí TV klienti) |
+
+Balíčky publikují TypeScript zdroj bez build kroku (Vite i Metro si `.ts`
+přeloží samy); `*-shared` nezávisí na Reactu ani na DOM. Ve webu Libriteru
+zůstaly původní soubory (`src/components/ui/button.tsx`, `src/auth/…`) jako
+tenké re-exporty z `core-web` a `libriter-shared`, takže se importy uvnitř
+webu přesunem nezměnily. Úplnost překladů všech balíčků: `just i18n-check`.
 
 ### 4. Release a instalace z .deb
 
@@ -250,7 +290,7 @@ Skript [_scripts/release.sh](_scripts/release.sh) najde poslední tag `vX.Y.Z`
 (první release začíná od `v0.0.0`), zeptá se na patch / minor / major, vypíše
 commity od posledního releasu a po potvrzení:
 
-1. sestaví web i backend s novou verzí vloženou do binárky,
+1. sestaví oba weby i backend s novou verzí vloženou do binárky,
 2. zabalí `dist/libriter_X.Y.Z_amd64.deb` (obsah balíčku: [packaging/deb/](packaging/deb/)),
 3. vytvoří a pushne tag a GitHub release se seznamem změn a `.deb` přílohou.
 
@@ -263,10 +303,14 @@ Instalace na serveru:
 sudo apt install ./libriter_X.Y.Z_amd64.deb
 ```
 
-Balíček založí systémového uživatele `libriter`, službu `libriter.service`
-(hned ji spustí), konfiguraci `/etc/libriter/libriter.env` s vygenerovaným
-`JWT_SECRET` a data pod `/var/lib/libriter`. Upgrade konfiguraci nepřepíše;
-`apt purge` smaže konfiguraci i uživatele, data nechá. Příkazy CLI na serveru:
+Balíček se jmenuje `libriter` i po přidání Sceniteru (binárka je
+`/usr/bin/mediater`, `/usr/bin/libriter` na ni odkazuje). Založí systémového
+uživatele `libriter`, službu `libriter.service` (hned ji spustí), konfiguraci
+`/etc/libriter/libriter.env` s vygenerovaným `JWT_SECRET` a data pod
+`/var/lib/libriter`. Upgrade konfiguraci nepřepíše; nové proměnné (od 2.0
+weby produktů a Sceniter) doplní na konec souboru, pokud tam ještě nejsou –
+jejich popis je v `/usr/share/libriter/env-additions`. `apt purge` smaže
+konfiguraci i uživatele, data nechá. Příkazy CLI na serveru:
 
 ```bash
 sudo -u libriter LIBRITER_ENV_FILE=/etc/libriter/libriter.env libriter user list
@@ -276,13 +320,15 @@ sudo -u libriter LIBRITER_ENV_FILE=/etc/libriter/libriter.env libriter user list
 
 | Cíl | Popis |
 |-----|-------|
-| `just build` | Frontend i backend → `bin/mediater` |
-| `just frontend` | `npm ci` v kořeni + build webu (výstup do `server/internal/libriter/web/dist`) |
-| `just backend` | `go build` s aktuálně sestaveným frontendem |
+| `just build` | Oba weby i backend → `bin/mediater` |
+| `just frontend` | `npm ci` v kořeni + build obou webů (výstup do `server/internal/{libriter,sceniter}/web/dist`) |
+| `just backend` | `go build` s aktuálně sestavenými weby |
 | `just dev-backend` | `go run ./cmd/server` |
-| `just dev-frontend` | `npm run dev` |
+| `just dev-frontend` | web Libriteru: `npm run dev` (5173) |
+| `just dev-sceniter` | web Sceniteru: `npm run dev` (5174) |
 | `just vet` | `go vet ./...` |
-| `just typecheck` | `tsc` ve všech workspaces (shared, web, mobil) |
+| `just typecheck` | `tsc` ve všech workspaces (sdílené balíčky, weby, mobil) |
+| `just i18n-check` | Úplnost překladů jádra, Libriteru a Sceniteru |
 | `just mobile-start` | Metro bundler mobilní aplikace (dev build) |
 | `just mobile-ios` | Sestaví a spustí aplikaci na připojeném iPhonu |
 | `just mobile-android` | Totéž pro Android |
@@ -296,18 +342,19 @@ sudo -u libriter LIBRITER_ENV_FILE=/etc/libriter/libriter.env libriter user list
 | `just setup` | Nainstaluje vývojové nástroje (viz Požadavky) |
 | `just doctor` | Zkontroluje, co z nástrojů je a co chybí |
 | `just deploy` | Nový release: verze, `.deb` a GitHub release (viz níže) |
-| `just clean` | Smaže `bin/` a sestavený frontend |
+| `just clean` | Smaže `bin/` a sestavené weby |
 
 Backend jde sestavit i bez frontendu (`just backend` na čerstvém klonu) – server
 pak na `/` vrátí stránku s návodem a HTTP 503, ale API funguje normálně.
 
 > **Pozor:** backend spouštějte jako balíček (`go run ./cmd/server`), ne jako
 > jediný soubor (`go run cmd/server/main.go`). Balíček `main` je rozdělený do
-> `main.go`, `serve.go` a `user_cmd.go`, takže build jediného souboru selže.
+> `main.go`, `serve.go`, `user_cmd.go` a `repair_cmd.go`, takže build jediného
+> souboru selže.
 
 Při prvním startu backend automaticky:
 - vytvoří soubor databáze na cestě `DB_PATH` (včetně adresáře)
-- aplikuje migrace z `internal/db/migrations/` – všechny tabulky
+- aplikuje migrace z `internal/core/db/migrations/` a produktů – všechny tabulky
   (authors, series, books, book_authors, chapters, tags, users, roles,
   permissions, ratings, ...)
 - založí výchozí role **admin**, **editor**, **reader** a jejich oprávnění

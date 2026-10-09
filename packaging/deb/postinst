@@ -3,6 +3,7 @@ set -e
 
 ENV_FILE=/etc/libriter/libriter.env
 DATA_DIR=/var/lib/libriter
+ADDITIONS=/usr/share/libriter/env-additions
 
 if [ "$1" = "configure" ]; then
     if ! getent passwd libriter >/dev/null; then
@@ -11,7 +12,8 @@ if [ "$1" = "configure" ]; then
     fi
 
     for dir in "$DATA_DIR" "$DATA_DIR/books" "$DATA_DIR/covers" \
-               "$DATA_DIR/author-images" "$DATA_DIR/import"; do
+               "$DATA_DIR/author-images" "$DATA_DIR/import" \
+               "$DATA_DIR/sceniter-images"; do
         mkdir -p "$dir"
         chown libriter:libriter "$dir"
     done
@@ -22,6 +24,28 @@ if [ "$1" = "configure" ]; then
         secret=$(openssl rand -hex 32)
         sed -i "s/^JWT_SECRET=\$/JWT_SECRET=$secret/" "$ENV_FILE"
     fi
+    # Nové proměnné se doplní na konec konfigurace, jen pokud tam ještě nejsou
+    # (ani zakomentované). Dodávaný conffile se proto mezi verzemi nemění
+    # a dpkg se při upgradu neptá, kterou verzi ponechat – volba „nová“ by
+    # vynulovala JWT_SECRET a odhlásila mobilní aplikace.
+    if [ -f "$ADDITIONS" ]; then
+        header_written=0
+        while IFS= read -r line; do
+            case "$line" in
+                ''|'#'*) continue ;;
+            esac
+            key="${line%%=*}"
+            if ! grep -qE "^[#[:space:]]*${key}=" "$ENV_FILE"; then
+                if [ "$header_written" = 0 ]; then
+                    printf '\n# Doplněno balíčkem %s – popis viz %s\n' \
+                        "$(date +%Y-%m-%d)" "$ADDITIONS" >>"$ENV_FILE"
+                    header_written=1
+                fi
+                printf '%s\n' "$line" >>"$ENV_FILE"
+            fi
+        done <"$ADDITIONS"
+    fi
+
     chown root:libriter "$ENV_FILE"
     chmod 640 "$ENV_FILE"
 

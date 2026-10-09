@@ -1,11 +1,13 @@
 Package: libriter
 Version: @VERSION@
-Section: sound
+Section: video
 Priority: optional
 Architecture: @ARCH@
 Depends: ffmpeg, adduser, openssl
 Maintainer: Petr Malasek <petr.malasek@gmail.com>
 Homepage: https://github.com/pmalasek/libriter
-Description: Libriter – knihovna audioknih
- Server s webovým rozhraním a API pro mobilní aplikaci. Jedna binárka
- s vestavěným webem, data v SQLite pod /var/lib/libriter.
+Description: Libriter a Sceniter – audioknihy, filmy a seriály
+ Jeden server (binárka mediater) se dvěma produkty nad společnými účty:
+ Libriter (audioknihy, API pro mobilní aplikaci) a Sceniter (filmy
+ a seriály, přehrávání v prohlížeči s převodem přes ffmpeg). Weby jsou
+ vestavěné v binárce, data v SQLite pod /var/lib/libriter.

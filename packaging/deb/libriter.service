@@ -1,5 +1,5 @@
 [Unit]
-Description=Libriter – knihovna audioknih
+Description=Libriter a Sceniter – audioknihy, filmy a seriály
 After=network-online.target
 Wants=network-online.target
 
@@ -9,7 +9,7 @@ User=libriter
 Group=libriter
 Environment=LIBRITER_ENV_FILE=/etc/libriter/libriter.env
 WorkingDirectory=/var/lib/libriter
-ExecStart=/usr/bin/libriter serve
+ExecStart=/usr/bin/mediater serve
 Restart=on-failure
 RestartSec=5
 
@@ -18,6 +18,12 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 ReadWritePaths=/var/lib/libriter
+# /var/cache/libriter – pracovní adresář převodů videa (TRANSCODE_ROOT).
+CacheDirectory=libriter
+# VIDEO_ROOT stačí číst; ProtectSystem=strict čtení nebrání, ProtectHome ale
+# skryje /home. Leží-li knihovna na síťovém disku, doplňte přes
+#   systemctl edit libriter
+# řádek RequiresMountsFor=/cesta/k/videu, ať služba startuje až po připojení.
 
 [Install]
 WantedBy=multi-user.target

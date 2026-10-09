@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-#  Libriter – nový release
+#  Libriter + Sceniter (mediater) – nový release
 #
 #  Spuštění: just deploy        (nebo bash _scripts/release.sh)
 #
@@ -121,14 +121,18 @@ deb="$DIST/$deb_name.deb"
 
 info "Balím $deb_name.deb"
 rm -rf "$root"
-install -d "$root/DEBIAN" "$root/usr/bin" "$root/lib/systemd/system" "$root/etc/libriter"
+install -d "$root/DEBIAN" "$root/usr/bin" "$root/lib/systemd/system" "$root/etc/libriter" \
+  "$root/usr/share/libriter"
 
 sed -e "s/@VERSION@/$deb_version/" -e "s/@ARCH@/$ARCH/" \
   "$PKG_SRC/control.in" >"$root/DEBIAN/control"
 install -m 644 "$PKG_SRC/conffiles" "$root/DEBIAN/conffiles"
 install -m 755 "$PKG_SRC/postinst" "$PKG_SRC/prerm" "$PKG_SRC/postrm" "$root/DEBIAN/"
 
-install -m 755 bin/mediater "$root/usr/bin/libriter"
+install -m 755 bin/mediater "$root/usr/bin/mediater"
+# Příkazy z dokumentace (libriter user add …) fungují dál.
+ln -s mediater "$root/usr/bin/libriter"
+install -m 644 "$PKG_SRC/env-additions" "$root/usr/share/libriter/env-additions"
 install -m 644 "$PKG_SRC/libriter.service" "$root/lib/systemd/system/libriter.service"
 install -m 640 "$PKG_SRC/libriter.env" "$root/etc/libriter/libriter.env"
 
