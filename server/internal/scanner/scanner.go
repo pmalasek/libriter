@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"libriter/internal/storage"
+	"mediater/internal/storage"
 
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"

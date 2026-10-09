@@ -17,8 +17,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"libriter/internal/imagestore"
-	"libriter/internal/model"
+	"mediater/internal/imagestore"
+	"mediater/internal/model"
 
 	"github.com/dhowden/tag"
 	"github.com/google/uuid"

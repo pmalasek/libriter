@@ -20,8 +20,8 @@ import (
 	"strings"
 	"time"
 
-	"libriter/internal/metadata"
-	"libriter/internal/metadata/htmlutil"
+	"mediater/internal/metadata"
+	"mediater/internal/metadata/htmlutil"
 
 	"golang.org/x/net/html"
 )

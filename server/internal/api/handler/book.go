@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"libriter/internal/imagestore"
-	"libriter/internal/service"
-	"libriter/internal/storage"
+	"mediater/internal/imagestore"
+	"mediater/internal/service"
+	"mediater/internal/storage"
 
 	"github.com/google/uuid"
 )

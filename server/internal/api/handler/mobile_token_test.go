@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"testing"
 
-	"libriter/internal/model"
-	"libriter/internal/storage"
+	"mediater/internal/model"
+	"mediater/internal/storage"
 )
 
 // mobileToken si vyžádá dlouhodobý token stejnou cestou jako mobilní aplikace.

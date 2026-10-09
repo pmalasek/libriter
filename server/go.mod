@@ -1,4 +1,4 @@
-module libriter
+module mediater
 
 go 1.26.2
 

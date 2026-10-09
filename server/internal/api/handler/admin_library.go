@@ -4,10 +4,10 @@ import (
 	"errors"
 	"net/http"
 
-	"libriter/internal/metadata"
-	"libriter/internal/scanner"
-	"libriter/internal/service"
-	"libriter/internal/storage"
+	"mediater/internal/metadata"
+	"mediater/internal/scanner"
+	"mediater/internal/service"
+	"mediater/internal/storage"
 
 	"github.com/google/uuid"
 )

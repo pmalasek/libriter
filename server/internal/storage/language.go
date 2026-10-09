@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 )
 
 // ListLanguages vrátí celý číselník jazyků seřazený podle českého názvu.

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"libriter/internal/model"
-	"libriter/internal/service"
+	"mediater/internal/model"
+	"mediater/internal/service"
 
 	"github.com/google/uuid"
 )

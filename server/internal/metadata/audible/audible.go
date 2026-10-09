@@ -18,9 +18,9 @@ import (
 	"strconv"
 	"strings"
 
-	"libriter/internal/metadata"
-	"libriter/internal/metadata/htmlutil"
-	"libriter/internal/model"
+	"mediater/internal/metadata"
+	"mediater/internal/metadata/htmlutil"
+	"mediater/internal/model"
 )
 
 const (

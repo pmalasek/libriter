@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"libriter/internal/api/middleware"
-	"libriter/internal/model"
-	"libriter/internal/service"
+	"mediater/internal/api/middleware"
+	"mediater/internal/model"
+	"mediater/internal/service"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"

@@ -13,11 +13,11 @@ import (
 
 	"golang.org/x/term"
 
-	"libriter/internal/config"
-	"libriter/internal/db"
-	"libriter/internal/model"
-	"libriter/internal/service"
-	"libriter/internal/storage"
+	"mediater/internal/config"
+	"mediater/internal/db"
+	"mediater/internal/model"
+	"mediater/internal/service"
+	"mediater/internal/storage"
 )
 
 const userUsage = `Správa uživatelů z příkazové řádky.

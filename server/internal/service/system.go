@@ -7,9 +7,9 @@ import (
 	"runtime"
 	"time"
 
-	"libriter/internal/config"
-	"libriter/internal/storage"
-	"libriter/internal/version"
+	"mediater/internal/config"
+	"mediater/internal/storage"
+	"mediater/internal/version"
 )
 
 // DiskUsage je volné a celkové místo svazku, na kterém leží audio soubory.

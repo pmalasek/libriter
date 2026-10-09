@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"libriter/internal/config"
-	"libriter/internal/model"
-	"libriter/internal/storage"
+	"mediater/internal/config"
+	"mediater/internal/model"
+	"mediater/internal/storage"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"

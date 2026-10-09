@@ -11,12 +11,12 @@ import (
 	"strings"
 	"testing"
 
-	"libriter/internal/config"
-	"libriter/internal/db"
-	"libriter/internal/metadata"
-	"libriter/internal/scanner"
-	"libriter/internal/service"
-	"libriter/internal/storage"
+	"mediater/internal/config"
+	"mediater/internal/db"
+	"mediater/internal/metadata"
+	"mediater/internal/scanner"
+	"mediater/internal/service"
+	"mediater/internal/storage"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"

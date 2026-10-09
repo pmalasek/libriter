@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"libriter/internal/metadata"
+	"mediater/internal/metadata"
 )
 
 // stubProvider vrací jeden výsledek a pamatuje si poslední dotaz.

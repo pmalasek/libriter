@@ -6,10 +6,10 @@ import (
 	"strings"
 	"time"
 
-	"libriter/internal/imagestore"
-	"libriter/internal/model"
-	"libriter/internal/service"
-	"libriter/internal/storage"
+	"mediater/internal/imagestore"
+	"mediater/internal/model"
+	"mediater/internal/service"
+	"mediater/internal/storage"
 )
 
 type AuthorHandler struct {

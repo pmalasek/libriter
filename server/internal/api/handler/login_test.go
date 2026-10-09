@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"testing"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 )
 
 // Přihlásit se jde loginem i e-mailem, obojí bez ohledu na velikost písmen.

@@ -14,7 +14,7 @@ import (
 	"net/url"
 	"strings"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 )
 
 // SearchQuery je dotaz na knihu. Author je nepovinný, ale hodně pomáhá:

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"libriter/internal/storage"
+	"mediater/internal/storage"
 
 	"github.com/google/uuid"
 )

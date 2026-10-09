@@ -13,9 +13,9 @@ import (
 	"strconv"
 	"strings"
 
-	"libriter/internal/imagestore"
-	"libriter/internal/model"
-	"libriter/internal/scanner"
+	"mediater/internal/imagestore"
+	"mediater/internal/model"
+	"mediater/internal/scanner"
 
 	"github.com/google/uuid"
 	"golang.org/x/text/unicode/norm"

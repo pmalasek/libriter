@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"libriter/internal/metadata"
+	"mediater/internal/metadata"
 )
 
 // Výřezy skutečných odpovědí katalogu (audible.com, audible.de).

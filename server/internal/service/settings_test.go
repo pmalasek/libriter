@@ -7,10 +7,10 @@ import (
 	"reflect"
 	"testing"
 
-	"libriter/internal/config"
-	"libriter/internal/db"
-	"libriter/internal/model"
-	"libriter/internal/storage"
+	"mediater/internal/config"
+	"mediater/internal/db"
+	"mediater/internal/model"
+	"mediater/internal/storage"
 )
 
 var testProviders = []string{"cbdb", "databazeknih", "googlebooks", "openlibrary"}

@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 
 	"github.com/google/uuid"
 )

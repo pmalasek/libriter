@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"libriter/internal/storage"
+	"mediater/internal/storage"
 
 	"github.com/google/uuid"
 )

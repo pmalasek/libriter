@@ -8,11 +8,11 @@ import (
 	"testing"
 	"time"
 
-	"libriter/internal/config"
-	"libriter/internal/db"
-	"libriter/internal/model"
-	"libriter/internal/service"
-	"libriter/internal/storage"
+	"mediater/internal/config"
+	"mediater/internal/db"
+	"mediater/internal/model"
+	"mediater/internal/service"
+	"mediater/internal/storage"
 )
 
 // newAuthTestEnv připraví store, AuthService a chráněný handler, který jen

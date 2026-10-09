@@ -109,7 +109,7 @@ read -rp "Pokračovat s releasem $version? [y/N] " confirm
 #  4. Build
 # -----------------------------------------------------------------------------
 info "Build $version"
-LIBRITER_VERSION="$version" GOOS=linux GOARCH="$ARCH" just build
+MEDIATER_VERSION="$version" GOOS=linux GOARCH="$ARCH" just build
 
 # -----------------------------------------------------------------------------
 #  5. Balíček .deb
@@ -128,7 +128,7 @@ sed -e "s/@VERSION@/$deb_version/" -e "s/@ARCH@/$ARCH/" \
 install -m 644 "$PKG_SRC/conffiles" "$root/DEBIAN/conffiles"
 install -m 755 "$PKG_SRC/postinst" "$PKG_SRC/prerm" "$PKG_SRC/postrm" "$root/DEBIAN/"
 
-install -m 755 bin/libriter "$root/usr/bin/libriter"
+install -m 755 bin/mediater "$root/usr/bin/libriter"
 install -m 644 "$PKG_SRC/libriter.service" "$root/lib/systemd/system/libriter.service"
 install -m 640 "$PKG_SRC/libriter.env" "$root/etc/libriter/libriter.env"
 

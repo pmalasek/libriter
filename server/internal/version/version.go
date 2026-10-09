@@ -7,7 +7,7 @@ import (
 	"runtime/debug"
 )
 
-// Version nastavuje linker: -X libriter/internal/version.Version=<verze>
+// Version nastavuje linker: -X mediater/internal/version.Version=<verze>
 var Version = "dev"
 
 // String vrátí verzi k zobrazení v administraci a v logu při startu.

@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"libriter/internal/importer"
-	"libriter/internal/service"
+	"mediater/internal/importer"
+	"mediater/internal/service"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"

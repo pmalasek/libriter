@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"libriter/internal/service"
+	"mediater/internal/service"
 )
 
 // GET /api/v1/books/progress

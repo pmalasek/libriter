@@ -8,10 +8,10 @@ import (
 	"sort"
 	"strings"
 
-	"libriter/internal/config"
-	"libriter/internal/metadata"
-	"libriter/internal/model"
-	"libriter/internal/storage"
+	"mediater/internal/config"
+	"mediater/internal/metadata"
+	"mediater/internal/model"
+	"mediater/internal/storage"
 )
 
 // Klíče v tabulce settings.

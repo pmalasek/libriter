@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
-	"libriter/internal/config"
-	"libriter/internal/db"
-	"libriter/internal/model"
+	"mediater/internal/config"
+	"mediater/internal/db"
+	"mediater/internal/model"
 
 	"github.com/google/uuid"
 )

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"libriter/internal/metadata"
+	"mediater/internal/metadata"
 )
 
 // Obálka z metadat se stahuje jen z adres, které některý zdroj prohlásí za

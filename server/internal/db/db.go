@@ -14,7 +14,7 @@ import (
 	"golang.org/x/text/language"
 	"modernc.org/sqlite"
 
-	"libriter/internal/config"
+	"mediater/internal/config"
 )
 
 // CollationCzech je název vlastní kolace registrované v driveru.

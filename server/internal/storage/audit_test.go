@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 )
 
 func TestAuditListNewestFirstWithCursor(t *testing.T) {

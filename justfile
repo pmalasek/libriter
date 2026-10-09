@@ -4,7 +4,7 @@
 # se přes go:embed vkompiluje do binárky. `just backend` funguje i bez
 # sestaveného frontendu – server pak na / vrací stránku s návodem (503).
 
-bin          := "bin/libriter"
+bin          := "bin/mediater"
 frontend_dir := "libriter-frontend"
 backend_dir  := "server"
 mobile_dir   := "libriter-mobile"
@@ -14,7 +14,7 @@ dist         := backend_dir / "internal/web/dist"
 default:
     @just --list
 
-# Sestaví frontend i backend do bin/libriter
+# Sestaví frontend i backend do bin/mediater
 build: frontend backend
 
 # Závislosti se instalují v kořeni: web, mobil i libriter-shared jsou npm
@@ -25,13 +25,13 @@ frontend:
     npm ci
     npm run build -w {{frontend_dir}}
 
-# go build -o bin/libriter (vkompiluje aktuální dist)
+# go build -o bin/mediater (vkompiluje aktuální dist)
 # Verzi vkládá linker; administrace ji ukazuje v přehledu systému. Release
-# (`just deploy`) ji předává přes LIBRITER_VERSION, jinak platí `git describe`.
+# (`just deploy`) ji předává přes MEDIATER_VERSION, jinak platí `git describe`.
 backend:
     mkdir -p bin
     cd {{backend_dir}} && CGO_ENABLED=0 go build \
-        -ldflags "-X libriter/internal/version.Version=${LIBRITER_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}" \
+        -ldflags "-X mediater/internal/version.Version=${MEDIATER_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}" \
         -o ../{{bin}} ./cmd/server
 
 # Vývojový server na :8080

@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strconv"
 
-	"libriter/internal/metadata"
-	"libriter/internal/metadata/databazeknih"
-	"libriter/internal/service"
+	"mediater/internal/metadata"
+	"mediater/internal/metadata/databazeknih"
+	"mediater/internal/service"
 
 	"github.com/go-chi/chi/v5"
 )

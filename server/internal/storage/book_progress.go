@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 
 	"github.com/google/uuid"
 )

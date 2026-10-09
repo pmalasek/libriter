@@ -16,13 +16,13 @@ import (
 	"testing"
 	"time"
 
-	"libriter/internal/metadata"
-	"libriter/internal/metadata/audible"
-	"libriter/internal/metadata/cbdb"
-	"libriter/internal/metadata/databazeknih"
-	"libriter/internal/metadata/goodreads"
-	"libriter/internal/metadata/googlebooks"
-	"libriter/internal/metadata/openlibrary"
+	"mediater/internal/metadata"
+	"mediater/internal/metadata/audible"
+	"mediater/internal/metadata/cbdb"
+	"mediater/internal/metadata/databazeknih"
+	"mediater/internal/metadata/goodreads"
+	"mediater/internal/metadata/googlebooks"
+	"mediater/internal/metadata/openlibrary"
 )
 
 func TestLiveProviders(t *testing.T) {

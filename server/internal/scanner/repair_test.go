@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"libriter/internal/config"
-	"libriter/internal/db"
-	"libriter/internal/model"
-	"libriter/internal/storage"
+	"mediater/internal/config"
+	"mediater/internal/db"
+	"mediater/internal/model"
+	"mediater/internal/storage"
 
 	"github.com/google/uuid"
 )

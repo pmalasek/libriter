@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"libriter/internal/metadata"
+	"mediater/internal/metadata"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 )
 
 func TestLargestImageInDir(t *testing.T) {

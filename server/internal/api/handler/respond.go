@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"libriter/internal/imagestore"
+	"mediater/internal/imagestore"
 )
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

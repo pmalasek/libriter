@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	"libriter/internal/imagestore"
-	"libriter/internal/metadata"
-	"libriter/internal/model"
-	"libriter/internal/storage"
+	"mediater/internal/imagestore"
+	"mediater/internal/metadata"
+	"mediater/internal/model"
+	"mediater/internal/storage"
 
 	"github.com/google/uuid"
 )

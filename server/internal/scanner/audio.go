@@ -24,7 +24,7 @@ import (
 	"strconv"
 	"strings"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 
 	"github.com/dhowden/tag"
 )

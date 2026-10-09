@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"testing"
 
-	"libriter/internal/model"
-	"libriter/internal/storage"
+	"mediater/internal/model"
+	"mediater/internal/storage"
 
 	"github.com/google/uuid"
 )

@@ -177,7 +177,7 @@ proměnnou `LIBRITER_ENV_FILE`. Skutečné proměnné prostředí mají vždy p�
 před hodnotami z `.env`.
 
 **Relativní cesty** (`DB_PATH`, `AUDIO_ROOT`, `COVER_ROOT`, `AUTHOR_IMAGE_ROOT`) zapsané v `.env` se
-vztahují k adresáři toho `.env` – ne k aktuálnímu adresáři. `bin/libriter` tak
+vztahují k adresáři toho `.env` – ne k aktuálnímu adresáři. `bin/mediater` tak
 míří na stejná data, ať ho spustíte odkudkoli. Cesta předaná proměnnou prostředí
 se ponechává tak, jak je.
 
@@ -195,10 +195,10 @@ mkdir -p data/audio data/covers data/author-images
 
 ```bash
 just build          # npm ci + npm run build, potom go build
-bin/libriter
+bin/mediater
 ```
 
-Vznikne `bin/libriter` s vestavěným webovým rozhraním. Rozhraní pak najdete na
+Vznikne `bin/mediater` s vestavěným webovým rozhraním. Rozhraní pak najdete na
 `http://localhost:8080`, API na `http://localhost:8080/api/v1`.
 
 Binárku lze spustit z libovolného adresáře: `.env` se hledá v aktuálním adresáři
@@ -276,7 +276,7 @@ sudo -u libriter LIBRITER_ENV_FILE=/etc/libriter/libriter.env libriter user list
 
 | Cíl | Popis |
 |-----|-------|
-| `just build` | Frontend i backend → `bin/libriter` |
+| `just build` | Frontend i backend → `bin/mediater` |
 | `just frontend` | `npm ci` v kořeni + build webu (výstup do `server/internal/web/dist`) |
 | `just backend` | `go build` s aktuálně sestaveným frontendem |
 | `just dev-backend` | `go run ./cmd/server` |
@@ -507,13 +507,13 @@ zakládat i v administraci webového rozhraní.
 
 ```bash
 # nové konto (bez --password se heslo zadá interaktivně, skrytě a dvakrát)
-bin/libriter user add --email admin@example.com --name "Jan Novák" --login jan --role admin
+bin/mediater user add --email admin@example.com --name "Jan Novák" --login jan --role admin
 
 # povýšení už registrovaného účtu
-bin/libriter user set-role --email jan@example.com --role editor
+bin/mediater user set-role --email jan@example.com --role editor
 
 # přehled účtů
-bin/libriter user list
+bin/mediater user list
 ```
 
 Ve vývoji bez buildu: `go run ./cmd/server user add --email … --name …`.

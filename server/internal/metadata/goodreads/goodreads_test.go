@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"libriter/internal/metadata"
+	"mediater/internal/metadata"
 )
 
 // Výřez stránky hledání – dva řádky, první je studijní příručka.

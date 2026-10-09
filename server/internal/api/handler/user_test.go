@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"testing"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 )
 
 func TestUserAppearancePersistsAcrossLoginAndProfileEdits(t *testing.T) {

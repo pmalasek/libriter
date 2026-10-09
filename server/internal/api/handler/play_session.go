@@ -7,10 +7,10 @@ import (
 	"strings"
 	"time"
 
-	"libriter/internal/api/middleware"
-	"libriter/internal/model"
-	"libriter/internal/service"
-	"libriter/internal/storage"
+	"mediater/internal/api/middleware"
+	"mediater/internal/model"
+	"mediater/internal/service"
+	"mediater/internal/storage"
 
 	"github.com/google/uuid"
 )

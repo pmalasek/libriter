@@ -9,8 +9,8 @@ import (
 	"strings"
 	"unicode"
 
-	"libriter/internal/imagestore"
-	"libriter/internal/scanner"
+	"mediater/internal/imagestore"
+	"mediater/internal/scanner"
 
 	"github.com/google/uuid"
 	"golang.org/x/text/unicode/norm"

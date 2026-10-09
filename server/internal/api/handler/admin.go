@@ -7,11 +7,11 @@ import (
 	"strconv"
 	"strings"
 
-	"libriter/internal/api/middleware"
-	"libriter/internal/metadata"
-	"libriter/internal/model"
-	"libriter/internal/scanner"
-	"libriter/internal/service"
+	"mediater/internal/api/middleware"
+	"mediater/internal/metadata"
+	"mediater/internal/model"
+	"mediater/internal/scanner"
+	"mediater/internal/service"
 
 	"github.com/google/uuid"
 )

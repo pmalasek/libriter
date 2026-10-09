@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"sort"
 
-	"libriter/internal/audiostore"
-	"libriter/internal/imagestore"
-	"libriter/internal/model"
-	"libriter/internal/storage"
+	"mediater/internal/audiostore"
+	"mediater/internal/imagestore"
+	"mediater/internal/model"
+	"mediater/internal/storage"
 
 	"github.com/google/uuid"
 )

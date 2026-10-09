@@ -23,9 +23,9 @@ import (
 	"sync"
 	"time"
 
-	"libriter/internal/model"
-	"libriter/internal/scanner"
-	"libriter/internal/storage"
+	"mediater/internal/model"
+	"mediater/internal/scanner"
+	"mediater/internal/storage"
 
 	"github.com/google/uuid"
 )

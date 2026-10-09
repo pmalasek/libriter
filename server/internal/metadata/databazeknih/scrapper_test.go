@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/net/html"
 
-	"libriter/internal/metadata"
+	"mediater/internal/metadata"
 )
 
 // Výřez ze skutečné stránky s výsledky: obálka odkazuje na tutéž adresu jako

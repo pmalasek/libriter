@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 )
 
 // Poslední admin musí zůstat: jinak by knihovna zůstala bez správce a role

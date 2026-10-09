@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 
 	"github.com/google/uuid"
 )

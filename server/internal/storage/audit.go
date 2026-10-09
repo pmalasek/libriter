@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"libriter/internal/model"
+	"mediater/internal/model"
 
 	"github.com/google/uuid"
 )

@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"strings"
 
-	"libriter/internal/api/middleware"
-	"libriter/internal/service"
+	"mediater/internal/api/middleware"
+	"mediater/internal/service"
 )
 
 // minPasswordLength je minimální délka hesla; platí pro registraci, změnu

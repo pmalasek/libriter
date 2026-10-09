@@ -15,8 +15,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"libriter/internal/audiostore"
-	"libriter/internal/imagestore"
+	"mediater/internal/audiostore"
+	"mediater/internal/imagestore"
 
 	"github.com/google/uuid"
 )

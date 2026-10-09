@@ -184,7 +184,7 @@ type dotEnv struct {
 
 // path vrátí cestu z konfigurace. Relativní cesty zapsané v .env se vztahují
 // k adresáři toho .env, ne k aktuálnímu adresáři – binárku tak lze spustit
-// odkudkoli (např. bin/libriter z korene repozitáře) a pořád míří na stejná data.
+// odkudkoli (např. bin/mediater z korene repozitáře) a pořád míří na stejná data.
 // Cesty předané skutečnou proměnnou prostředí se nechávají být.
 func (d dotEnv) path(key, fallback string) string {
 	value := envStr(key, fallback)

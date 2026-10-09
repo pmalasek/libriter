@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
-	"libriter/internal/audiostore"
-	"libriter/internal/model"
-	"libriter/internal/service"
+	"mediater/internal/audiostore"
+	"mediater/internal/model"
+	"mediater/internal/service"
 )
 
 type AudioHandler struct {
