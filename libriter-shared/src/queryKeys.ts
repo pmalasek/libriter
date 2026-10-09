@@ -3,7 +3,10 @@
  * nerozešlo – hooky samotné zůstávají v aplikacích, protože se liší v tom,
  * odkud data berou (mobil čte z lokální databáze, web přímo ze serveru).
  */
+import { coreQueryKeys } from 'core-shared'
+
 export const queryKeys = {
+  ...coreQueryKeys,
   books: ['books'] as const,
   book: (id: string) => ['books', id] as const,
   chapters: (id: string) => ['books', id, 'chapters'] as const,
@@ -14,8 +17,6 @@ export const queryKeys = {
   languages: ['languages'] as const,
   metadataSources: ['metadata', 'sources'] as const,
   metadataSourcesFor: (language: string) => ['metadata', 'sources', language] as const,
-  user: (id: string) => ['users', id] as const,
-  authConfig: ['auth', 'config'] as const,
   sessions: ['sessions'] as const,
   session: (id: string) => ['sessions', id] as const,
   // Záměrně mimo prefix ['books'] – zneplatnění knihovny po úpravě knihy

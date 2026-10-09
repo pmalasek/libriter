@@ -2,32 +2,28 @@ import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tan
 import { useCallback, useMemo } from 'react'
 import { bookStatus, progressMap, queryKeys } from 'libriter-shared'
 import { apiFetch, apiUpload, asList } from './client'
+
+// Hooky účtu (přihlášení, profil) jsou sdílené s ostatními produkty.
+export { useAuthConfig, useChangePassword, useLogin, useRegister, useUpdateProfile, useUser } from 'core-web/src/api/hooks'
 import type {
-  AuthConfig,
   Author,
   AuthorMetadata,
   AuthorRequest,
   AuthorSearchResult,
-  AuthResponse,
   Book,
   BookDeleteResult,
   BookMetadata,
   BookPatchRequest,
   BookProgress,
   BookStatus,
-  ChangePasswordRequest,
   Chapter,
   Language,
-  LoginRequest,
   MetadataSearchResult,
   MetadataSources,
   PlaySession,
-  RegisterRequest,
   ReorderChaptersRequest,
   Series,
   SeriesRequest,
-  UpdateUserRequest,
-  User,
 } from './types'
 
 // Klíče cache se sdílí s mobilní aplikací (libriter-shared/src/queryKeys.ts);
@@ -119,15 +115,6 @@ export function useSeriesOne(id: string) {
   })
 }
 
-export function useUser(id: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.user(id ?? ''),
-    queryFn: ({ signal }) => apiFetch<User>(`/users/${id}`, { signal }),
-    enabled: Boolean(id),
-    refetchOnWindowFocus: true,
-  })
-}
-
 /**
  * Rozposlouchané poslechy přihlášeného uživatele. Pozici do nich zapisuje
  * přehrávač sám (viz PlayerProvider), tady jde hlavně o seznam pro přepínání
@@ -181,51 +168,7 @@ export function useSeriesTitle() {
   return useCallback((id: string) => map.get(id)?.title, [map])
 }
 
-/**
- * Veřejné nastavení přihlášení – je registrace zapnutá a jakou roli nový účet
- * dostane. Mění se zřídka, takže stačí načíst jednou za relaci.
- */
-export function useAuthConfig() {
-  return useQuery({
-    queryKey: queryKeys.authConfig,
-    queryFn: () => apiFetch<AuthConfig>('/auth/config', { anonymous: true }),
-    staleTime: 5 * 60 * 1000,
-  })
-}
-
 // --- mutace ---
-
-export function useLogin() {
-  return useMutation({
-    mutationFn: (body: LoginRequest) =>
-      apiFetch<AuthResponse>('/auth/login', { method: 'POST', json: body, anonymous: true }),
-  })
-}
-
-export function useRegister() {
-  return useMutation({
-    mutationFn: (body: RegisterRequest) =>
-      apiFetch<AuthResponse>('/auth/register', { method: 'POST', json: body, anonymous: true }),
-  })
-}
-
-export function useUpdateProfile(userId: string) {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (body: UpdateUserRequest) =>
-      apiFetch<User>(`/users/${userId}`, { method: 'PUT', json: body }),
-    onSuccess: (user) => {
-      queryClient.setQueryData(queryKeys.user(userId), user)
-    },
-  })
-}
-
-export function useChangePassword(userId: string) {
-  return useMutation({
-    mutationFn: (body: ChangePasswordRequest) =>
-      apiFetch<{ status: string }>(`/users/${userId}/password`, { method: 'PUT', json: body }),
-  })
-}
 
 /**
  * Ruční změna stavu knihy – označení za doposlechnutou a zrušení označení.

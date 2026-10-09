@@ -1,0 +1,83 @@
+import { LogOutIcon, UserIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router'
+import { roleLabel } from 'core-shared'
+import { useAuth } from '../../auth/AuthContext'
+import { Avatar, AvatarFallback } from '../ui/avatar'
+import { Button } from '../ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu'
+import { initials } from 'core-shared'
+import { cn } from '../../lib/utils'
+
+/**
+ * Účet v hlavičce (jen avatar) nebo v patičce sidebaru (showName – avatar
+ * se jménem a rolí, roztažený na celou šířku).
+ */
+export function UserMenu({ showName = false, className }: { showName?: boolean; className?: string }) {
+  const { t } = useTranslation()
+  const { user, signOut } = useAuth()
+  const navigate = useNavigate()
+
+  if (!user) return null
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {showName ? (
+          <Button
+            variant="ghost"
+            size="lg"
+            aria-label={t('layout.account.menu')}
+            className={cn('h-auto min-w-0 flex-1 justify-start gap-2 px-1.5 py-1.5', className)}
+          >
+            <Avatar className="size-8">
+              <AvatarFallback className="text-xs">{initials(user.display_name)}</AvatarFallback>
+            </Avatar>
+            <span className="min-w-0 text-left">
+              <span className="block truncate text-sm font-medium">{user.display_name}</span>
+              <span className="block truncate text-xs font-normal text-muted-foreground">
+                {roleLabel(user.role)}
+              </span>
+            </span>
+          </Button>
+        ) : (
+          <Button variant="ghost" size="icon" aria-label={t('layout.account.menu')} className={className}>
+            <Avatar className="size-7">
+              <AvatarFallback className="text-xs">{initials(user.display_name)}</AvatarFallback>
+            </Avatar>
+          </Button>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56" sideOffset={8}>
+        <DropdownMenuLabel>
+          <div className="truncate font-medium">{user.display_name}</div>
+          <div className="truncate text-xs font-normal text-muted-foreground">{user.email}</div>
+          <div className="mt-1 text-xs font-normal text-muted-foreground">
+            {roleLabel(user.role)}
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => navigate('/profile')}>
+          <UserIcon />
+          {t('layout.account.profile')}
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={() => {
+            signOut()
+            navigate('/login', { replace: true })
+          }}
+        >
+          <LogOutIcon />
+          {t('layout.account.signOut')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}

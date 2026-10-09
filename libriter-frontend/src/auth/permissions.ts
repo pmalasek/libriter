@@ -1,3 +1,2 @@
-// Role a oprávnění se sdílí s mobilní aplikací
-// (libriter-shared/src/permissions.ts).
-export * from 'libriter-shared'
+// Sdílené s ostatními produkty – implementace je v core-web.
+export * from 'core-web/src/auth/permissions'

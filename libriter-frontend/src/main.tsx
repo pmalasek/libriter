@@ -8,7 +8,9 @@ import { LanguageProvider } from '@/i18n/LanguageProvider'
 import { Toaster } from '@/components/ui/sonner'
 import { PlayerProvider } from '@/player/PlayerProvider'
 import { ThemeProvider } from '@/theme/ThemeProvider'
+import { BrandProvider } from 'core-web/src/brand'
 import { App } from './App'
+import { libriterBrand } from './brand'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -32,6 +34,7 @@ createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
+        <BrandProvider brand={libriterBrand}>
         <AuthProvider>
           <LanguageProvider>
             <ThemeProvider>
@@ -43,6 +46,7 @@ createRoot(rootElement).render(
             </ThemeProvider>
           </LanguageProvider>
         </AuthProvider>
+        </BrandProvider>
       </BrowserRouter>
     </QueryClientProvider>
   </StrictMode>,

@@ -4,6 +4,7 @@
   "workspaces": [
     "core-shared",
     "libriter-shared",
+    "core-web",
     "libriter-frontend",
     "libriter-mobile"
   ],
