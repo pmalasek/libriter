@@ -4,9 +4,11 @@
   "workspaces": [
     "core-shared",
     "libriter-shared",
+    "sceniter-shared",
     "core-web",
     "libriter-frontend",
-    "libriter-mobile"
+    "libriter-mobile",
+    "sceniter-frontend"
   ],
   "scripts": {
     "postinstall": "node _scripts/restore-expo-sqlite-sources.mjs && node _scripts/patch-track-player-android.mjs",

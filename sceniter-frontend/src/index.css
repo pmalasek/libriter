@@ -1,0 +1,13 @@
+/* Vzhled je společný všem produktům – viz core-web/src/styles/base.css. */
+@import "core-web/src/styles/base.css";
+
+/* Tailwind hledá třídy i ve zdrojích Sceniteru. */
+@source "./";
+
+/* Přehrávač: video vyplní plochu a ovládání prohlížeče zůstane čitelné. */
+.sceniter-video::cue {
+  font-family: var(--font-sans, system-ui), sans-serif;
+  background: oklch(0 0 0 / 0.55);
+  font-size: clamp(16px, 2.4vw, 30px);
+  line-height: 1.35;
+}

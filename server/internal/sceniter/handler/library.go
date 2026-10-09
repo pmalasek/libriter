@@ -443,7 +443,7 @@ func (h *Handler) MatchAll(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Matcher.Kick()
-	w.WriteHeader(http.StatusAccepted)
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
 
 // GET /sceniter/admin/library/unmatched

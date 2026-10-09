@@ -1,29 +1,32 @@
-# Libriter – build orchestrace
+# Mediater (Libriter + Sceniter) – build orchestrace
 #
-# Frontend se sestavuje přímo do server/internal/libriter/web/dist a odtud
-# se přes go:embed vkompiluje do binárky. `just backend` funguje i bez
-# sestaveného frontendu – server pak na / vrací stránku s návodem (503).
+# Weby se sestavují přímo do server/internal/<produkt>/web/dist a odtud se
+# přes go:embed vkompilují do binárky. `just backend` funguje i bez
+# sestavených webů – server pak na / vrací stránku s návodem (503).
 
 bin          := "bin/mediater"
 frontend_dir := "libriter-frontend"
+sceniter_dir := "sceniter-frontend"
 backend_dir  := "server"
 mobile_dir   := "libriter-mobile"
 dist         := backend_dir / "internal/libriter/web/dist"
+sceniter_dist := backend_dir / "internal/sceniter/web/dist"
 
 [private]
 default:
     @just --list
 
-# Sestaví frontend i backend do bin/mediater
+# Sestaví oba weby i backend do bin/mediater
 build: frontend backend
 
-# Závislosti se instalují v kořeni: web, mobil i libriter-shared jsou npm
+# Závislosti se instalují v kořeni: weby, mobil i sdílené balíčky jsou npm
 # workspaces s jedním společným package-lock.json.
 #
-# npm ci && npm run build (výstup do internal/libriter/web/dist)
+# npm ci && build obou webů (výstup do internal/{libriter,sceniter}/web/dist)
 frontend:
     npm ci
     npm run build -w {{frontend_dir}}
+    npm run build -w {{sceniter_dir}}
 
 # go build -o bin/mediater (vkompiluje aktuální dist)
 # Verzi vkládá linker; administrace ji ukazuje v přehledu systému. Release
@@ -44,12 +47,23 @@ dev-backend:
 dev-frontend:
     npm run dev
 
+# Web Sceniteru: Vite na :5174, proxy /api na :8080
+[working-directory('sceniter-frontend')]
+dev-sceniter:
+    npm run dev
+
+# Kontrola úplnosti překladů (jádro, Libriter, Sceniter)
+i18n-check:
+    npm run i18n:check -w core-shared
+    npm run i18n:check -w libriter-shared
+    npm run i18n:check -w sceniter-shared
+
 # go vet ./...
 [working-directory('server')]
 vet:
     go vet ./...
 
-# tsc ve všech npm workspaces (shared, web, mobil)
+# tsc ve všech npm workspaces (sdílené balíčky, weby, mobil)
 typecheck:
     npm run typecheck
 
@@ -340,4 +354,4 @@ doctor:
 # Smaže bin/ a obsah dist/
 clean:
     rm -rf bin
-    find {{dist}} -mindepth 1 ! -name .gitkeep -delete
+    find {{dist}} {{sceniter_dist}} -mindepth 1 ! -name .gitkeep -delete

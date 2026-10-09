@@ -7,6 +7,8 @@
 /dist/
 tmp/
 
-# Sestavený frontend (vzniká přes `make frontend`, vkompiluje se do binárky)
+# Sestavené frontendy (vznikají přes `just frontend`, vkompilují se do binárky)
 /internal/libriter/web/dist/*
 !/internal/libriter/web/dist/.gitkeep
+/internal/sceniter/web/dist/*
+!/internal/sceniter/web/dist/.gitkeep
