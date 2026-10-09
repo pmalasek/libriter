@@ -1,4 +1,4 @@
-import { currentLanguage, t } from './i18n'
+import { currentLanguage, t } from 'core-shared'
 import type { Author, Book } from './types'
 
 const collators = new Map<string, Intl.Collator>()

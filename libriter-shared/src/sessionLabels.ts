@@ -1,4 +1,4 @@
-import { t } from './i18n'
+import { t } from 'core-shared'
 import type { Book, PlaySession, Series } from './types'
 
 /**

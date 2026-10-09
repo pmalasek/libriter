@@ -2,6 +2,7 @@
   "name": "mediater",
   "private": true,
   "workspaces": [
+    "core-shared",
     "libriter-shared",
     "libriter-frontend",
     "libriter-mobile"
