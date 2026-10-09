@@ -38,6 +38,7 @@ libriter-mobile/dist/
 libriter-mobile/ios/
 libriter-mobile/android/
 src_books/
+movies/
 
 # Release (`just deploy`) – sestavené .deb balíčky
 /dist/
