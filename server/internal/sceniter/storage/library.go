@@ -51,6 +51,9 @@ type MovieFilter struct {
 	// WithoutFiles zahrne i filmy bez souborů – pro administraci párování.
 	WithoutFiles bool
 	MatchState   string
+	// RetryDays vynechá tituly, jejichž automatické párování se nepovedlo
+	// před méně než RetryDays dny (0 = nevynechávat).
+	RetryDays int
 }
 
 // ListMovies vrátí filmy, které mají aspoň jeden soubor.
@@ -79,6 +82,10 @@ func (s *Store) ListMovies(ctx context.Context, f MovieFilter) ([]model.Movie, e
 	if f.MatchState != "" {
 		args = append(args, f.MatchState)
 		q += fmt.Sprintf(` AND m.match_state = ?%d`, len(args))
+	}
+	if f.RetryDays > 0 {
+		args = append(args, fmt.Sprintf("-%d days", f.RetryDays))
+		q += fmt.Sprintf(` AND (m.match_attempted_at IS NULL OR m.match_attempted_at < datetime('now', ?%d))`, len(args))
 	}
 	switch f.Sort {
 	case "year":
@@ -227,6 +234,7 @@ type ShowFilter struct {
 	Limit        int
 	WithoutFiles bool
 	MatchState   string
+	RetryDays    int // viz MovieFilter.RetryDays
 }
 
 // ListShows vrátí seriály, které mají aspoň jeden díl se souborem.
@@ -254,6 +262,10 @@ func (s *Store) ListShows(ctx context.Context, f ShowFilter) ([]model.Show, erro
 	if f.MatchState != "" {
 		args = append(args, f.MatchState)
 		q += fmt.Sprintf(` AND s.match_state = ?%d`, len(args))
+	}
+	if f.RetryDays > 0 {
+		args = append(args, fmt.Sprintf("-%d days", f.RetryDays))
+		q += fmt.Sprintf(` AND (s.match_attempted_at IS NULL OR s.match_attempted_at < datetime('now', ?%d))`, len(args))
 	}
 	switch f.Sort {
 	case "year":

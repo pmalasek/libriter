@@ -137,8 +137,12 @@ type Request struct {
 	ID  string `json:"id,omitempty"`
 	URL string `json:"url,omitempty"`
 	// Season je číslo sezóny pro příkaz season.
-	Season int               `json:"season,omitempty"`
-	Config map[string]string `json:"config,omitempty"`
+	Season int `json:"season,omitempty"`
+	// Episodes jsou čísla dílů řady, které má server na disku (season).
+	// Plugin, který stahuje každý díl zvlášť, může ostatní vynechat;
+	// prázdné = všechny.
+	Episodes []int             `json:"episodes,omitempty"`
+	Config   map[string]string `json:"config,omitempty"`
 }
 
 // SearchResult je jeden výsledek hledání.
@@ -196,6 +200,10 @@ func (e *Error) Error() string {
 
 // IsNotFound říká, že plugin záznam nenašel.
 func IsNotFound(err error) bool { return codeOf(err) == ErrCodeNotFound }
+
+// IsRateLimited říká, že zdroj odmítá požadavky (HTTP 429, ochrana proti
+// botům) nebo je plugin po takovém odmítnutí pozastavený.
+func IsRateLimited(err error) bool { return codeOf(err) == ErrCodeRateLimited }
 
 func codeOf(err error) string {
 	var e *Error

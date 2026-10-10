@@ -517,8 +517,9 @@ func parseEpisodeList(doc *html.Node) []listEntry {
 }
 
 // Season stáhne řadu seriálu i s díly. Seriál, který na ČSFD řady nemá,
-// vede díly rovnou na své stránce.
-func (c *Client) Season(ctx context.Context, showID string, number int) (*plugin.SeasonMetadata, error) {
+// vede díly rovnou na své stránce. Stránky dílů (popis, obrázek) stahuje
+// jen pro díly v only; prázdné only = všechny.
+func (c *Client) Season(ctx context.Context, showID string, number int, only []int) (*plugin.SeasonMetadata, error) {
 	doc, err := c.get(ctx, "/film/"+showID+"/prehled/")
 	if err != nil {
 		return nil, err
@@ -553,13 +554,25 @@ func (c *Client) Season(ctx context.Context, showID string, number int) (*plugin
 		return nil, ErrNotFound
 	}
 
+	wanted := map[int]bool{}
+	for _, n := range only {
+		wanted[n] = true
+	}
+
 	// Popis a obrázek dílu jsou jen na jeho stránce. Co se nestihne, zůstane
 	// jen s názvem (doplní se při příštím spárování).
 	deadline := time.Now().Add(episodeBudget)
 	for _, e := range episodes {
 		ep := plugin.EpisodeMetadata{Number: e.episode, Title: e.title}
-		if e.href != "" && time.Now().Before(deadline) && ctx.Err() == nil {
-			if edoc, err := c.get(ctx, e.href); err == nil {
+		if e.href != "" && (len(wanted) == 0 || wanted[e.episode]) && time.Now().Before(deadline) && ctx.Err() == nil {
+			edoc, err := c.get(ctx, e.href)
+			// Odmítnutí zdrojem ukončí celou řadu – další stránky by
+			// ochranu proti botům jen dráždily.
+			var se *StatusError
+			if errors.As(err, &se) && se.Status == http.StatusTooManyRequests {
+				return nil, err
+			}
+			if err == nil {
 				ed := ParseFilm(edoc)
 				ep.Overview = ed.Overview
 				if photo := galleryPhoto(edoc); photo != "" {

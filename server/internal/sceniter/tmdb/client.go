@@ -106,6 +106,7 @@ func (c *Client) get(ctx context.Context, path string, q url.Values, out any) er
 		return err
 	}
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "Mediater/1.0 (osobni-videoknihovna)")
 	if bearer {
 		req.Header.Set("Authorization", "Bearer "+c.key)
 	}

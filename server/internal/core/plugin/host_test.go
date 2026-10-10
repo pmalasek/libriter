@@ -41,6 +41,8 @@ func fakePlugin() sdk.Plugin {
 			switch req.ID {
 			case "missing":
 				return nil, sdk.NotFound("nic")
+			case "limited":
+				return nil, sdk.Errorf(plugin.ErrCodeRateLimited, "HTTP 429")
 			case "slow":
 				time.Sleep(5 * time.Second)
 			case "big":
@@ -157,6 +159,44 @@ func TestMinInterval(t *testing.T) {
 	}
 	if d := time.Since(start); d < 400*time.Millisecond {
 		t.Fatalf("tři volání za %v, odstup 200 ms nedodržen", d)
+	}
+}
+
+func TestRateLimitPause(t *testing.T) {
+	h := newHost(t, 0o755)
+	h.SetBackoff(500*time.Millisecond, 2*time.Second)
+	ctx := context.Background()
+	p, _ := h.Get("fake")
+	var v plugin.VideoMetadata
+
+	if err := h.Fetch(ctx, "fake", plugin.Request{Kind: plugin.KindMovie, ID: "limited"}, &v); !plugin.IsRateLimited(err) {
+		t.Fatalf("limited: %v", err)
+	}
+	if p.PausedUntil().IsZero() {
+		t.Fatal("plugin po 429 není pozastavený")
+	}
+	// Během pauzy volání skončí hned, plugin se nespouští.
+	start := time.Now()
+	if err := h.Fetch(ctx, "fake", plugin.Request{Kind: plugin.KindMovie, ID: "1"}, &v); !plugin.IsRateLimited(err) {
+		t.Fatalf("během pauzy: %v", err)
+	}
+	if d := time.Since(start); d > 400*time.Millisecond {
+		t.Fatalf("volání během pauzy čekalo %v", d)
+	}
+	if _, _, err := h.DownloadImage(ctx, "fake", "https://img.fake.example/a.jpg"); !plugin.IsRateLimited(err) {
+		t.Fatalf("obrázek během pauzy: %v", err)
+	}
+
+	time.Sleep(time.Until(p.PausedUntil()) + 50*time.Millisecond)
+	if err := h.Fetch(ctx, "fake", plugin.Request{Kind: plugin.KindMovie, ID: "1"}, &v); err != nil {
+		t.Fatalf("po pauze: %v", err)
+	}
+	// Úspěch vynuloval backoff – další pauza je zase nejkratší.
+	if err := h.Fetch(ctx, "fake", plugin.Request{Kind: plugin.KindMovie, ID: "limited"}, &v); !plugin.IsRateLimited(err) {
+		t.Fatalf("limited 2: %v", err)
+	}
+	if d := time.Until(p.PausedUntil()); d > 600*time.Millisecond {
+		t.Fatalf("pauza %v, backoff se nevynuloval", d)
 	}
 }
 

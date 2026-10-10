@@ -133,7 +133,10 @@ knihovny v jejím jazyce. Automaticky se párují jen jisté shody: stejný rok
 (±1) a stejný název bez diakritiky, nebo jediný výsledek se shodným názvem.
 Zbytek zůstane „nespárovaný“ a admin ho spáruje ručně v **Administrace →
 Párování** (nebo editor tlačítkem *Spárovat se zdrojem metadat* v detailu),
-přičemž může zvolit i jiný zdroj, než má knihovna. Dvě verze téhož filmu ve
+přičemž může zvolit i jiný zdroj, než má knihovna. Titul, pro který zdroj
+jistou shodu nenašel, se automaticky znovu hledá až po 7 dnech (šetří
+požadavky na zdroj); hned ho zkusí **Spárovat vše** v administraci nebo
+vrácení titulu do stavu „nespárovaný“. Dvě verze téhož filmu ve
 stejné knihovně se po spárování sloučí do jednoho titulu. *Nepárovat* titul
 vyřadí z automatického párování.
 
@@ -146,6 +149,14 @@ dříve spárované tituly obsazení jen podle jmen a bez fotek – doplní je
 **Administrace → Přehled → Obnovit metadata**, která znovu načte všechny
 spárované tituly z jejich zdroje (u ČSFD s odstupem 2 s na dotaz). Obnova
 přepíše ruční úpravy názvu a popisu, stejně jako nové spárování.
+
+**Velké knihovny** (tisíce titulů): pro první párování nastavte knihovnám
+zdroj `tmdb` – oficiální API se štědrým limitem. ČSFD je scraping webu
+s ochranou proti botům; párování probíhá po jednom titulu s odstupem 2 s,
+seriál stojí stránku za každý díl na disku. Když zdroj začne odmítat
+požadavky, server ho pozastaví (1 až 30 minut, viz [plugins.md](plugins.md))
+a párování pak samo pokračuje; v logu je to hláška *zdroj odmítá požadavky*.
+ČSFD je vhodné spíš na ruční dopárování jednotlivých titulů.
 
 Podmínky TMDB vyžadují uvést zdroj – web to dělá v patičce stránek, pokud je
 plugin TMDB nainstalovaný.

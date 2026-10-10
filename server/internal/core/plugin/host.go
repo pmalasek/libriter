@@ -33,6 +33,13 @@ const (
 	maxStderr = 16 << 10
 	// maxImage je strop staženého obrázku.
 	maxImage = 20 << 20
+	// imageGap je odstup mezi obrázky téhož pluginu.
+	imageGap = 200 * time.Millisecond
+	// Pauza pluginu po odmítnutí zdrojem (HTTP 429, ochrana proti botům):
+	// začíná na backoffMin, s každým dalším odmítnutím se zdvojí až na
+	// backoffMax, úspěšné volání ji vynuluje.
+	backoffMin = time.Minute
+	backoffMax = 30 * time.Minute
 )
 
 // ErrUnknownPlugin znamená, že plugin s daným jménem není nainstalovaný.
@@ -59,6 +66,51 @@ type Plugin struct {
 	// mu drží jedno volání pluginu najednou a s ním odstup mezi voláními.
 	mu   sync.Mutex
 	last time.Time
+
+	// imgMu drží odstup mezi staženými obrázky (nezávisle na voláních).
+	imgMu   sync.Mutex
+	imgLast time.Time
+
+	// Pauza po odmítnutí zdrojem – společná pro volání i obrázky.
+	pauseMu     sync.Mutex
+	pausedUntil time.Time
+	backoff     time.Duration
+}
+
+// PausedUntil vrátí, do kdy je plugin po odmítnutí zdrojem pozastavený
+// (nulový čas = není).
+func (p *Plugin) PausedUntil() time.Time {
+	p.pauseMu.Lock()
+	defer p.pauseMu.Unlock()
+	if time.Now().After(p.pausedUntil) {
+		return time.Time{}
+	}
+	return p.pausedUntil
+}
+
+// pausedErr vrátí chybu rate_limited, dokud pauza trvá.
+func (p *Plugin) pausedErr() error {
+	if until := p.PausedUntil(); !until.IsZero() {
+		return &Error{Plugin: p.Manifest.Name, Code: ErrCodeRateLimited,
+			Message: "zdroj odmítá požadavky, pozastaveno do " + until.Format("15:04:05")}
+	}
+	return nil
+}
+
+// penalize prodlouží pauzu po odmítnutí zdrojem a vrátí její délku.
+func (p *Plugin) penalize(lo, hi time.Duration) time.Duration {
+	p.pauseMu.Lock()
+	defer p.pauseMu.Unlock()
+	p.backoff = min(max(lo, 2*p.backoff), hi)
+	p.pausedUntil = time.Now().Add(p.backoff)
+	return p.backoff
+}
+
+// recovered vynuluje pauzu po úspěšném volání.
+func (p *Plugin) recovered() {
+	p.pauseMu.Lock()
+	p.backoff = 0
+	p.pauseMu.Unlock()
 }
 
 // Name je jméno pluginu z manifestu.
@@ -107,18 +159,22 @@ type Host struct {
 
 	listenMu  sync.Mutex
 	listeners []func()
-	// timeout jde v testech zkrátit.
-	timeout time.Duration
+	// timeout a pauza po odmítnutí jdou v testech zkrátit.
+	timeout    time.Duration
+	backoffMin time.Duration
+	backoffMax time.Duration
 }
 
 // NewHost vytvoří hostitele nad adresářem pluginů. Pluginy se načtou až
 // voláním Discover.
 func NewHost(dir string) *Host {
 	h := &Host{
-		dir:     dir,
-		http:    &http.Client{Timeout: 30 * time.Second},
-		log:     slog.Default().With("component", "plugins"),
-		timeout: callTimeout,
+		dir:        dir,
+		http:       &http.Client{Timeout: 30 * time.Second},
+		log:        slog.Default().With("component", "plugins"),
+		timeout:    callTimeout,
+		backoffMin: backoffMin,
+		backoffMax: backoffMax,
 	}
 	h.set.Store(&pluginSet{byName: map[string]*Plugin{}})
 	return h
@@ -316,6 +372,21 @@ func (h *Host) DownloadImage(ctx context.Context, name, rawURL string) ([]byte, 
 	if !p.SupportsImageURL(rawURL) {
 		return nil, "", ErrNotAllowed
 	}
+	if err := p.pausedErr(); err != nil {
+		return nil, "", err
+	}
+
+	p.imgMu.Lock()
+	defer p.imgMu.Unlock()
+	if wait := time.Until(p.imgLast.Add(imageGap)); wait > 0 {
+		select {
+		case <-ctx.Done():
+			return nil, "", ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+	defer func() { p.imgLast = time.Now() }()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, "", err
@@ -326,6 +397,12 @@ func (h *Host) DownloadImage(ctx context.Context, name, rawURL string) ([]byte, 
 		return nil, "", err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusForbidden {
+		d := p.penalize(h.backoffMin, h.backoffMax)
+		h.log.Warn("zdroj odmítá obrázky, plugin pozastaven", "plugin", p.Name(), "status", resp.StatusCode, "pauza", d)
+		return nil, "", &Error{Plugin: p.Name(), Code: ErrCodeRateLimited,
+			Message: fmt.Sprintf("obrázek %s: HTTP %d", rawURL, resp.StatusCode)}
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("obrázek %s: HTTP %d", rawURL, resp.StatusCode)
 	}
@@ -362,9 +439,23 @@ func (h *Host) call(ctx context.Context, p *Plugin, cmd string, req Request, out
 	}
 	defer func() { p.last = time.Now() }()
 
+	// Po odmítnutí zdrojem se nečeká (ruční párování z administrace by
+	// viselo), volání rovnou skončí chybou rate_limited.
+	if err := p.pausedErr(); err != nil {
+		return err
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, h.timeout)
 	defer cancel()
-	return h.run(ctx, p, cmd, req, out)
+	err := h.run(ctx, p, cmd, req, out)
+	switch {
+	case IsRateLimited(err):
+		d := p.penalize(h.backoffMin, h.backoffMax)
+		h.log.Warn("zdroj odmítá požadavky, plugin pozastaven", "plugin", p.Name(), "cmd", cmd, "pauza", d, "err", err)
+	case err == nil:
+		p.recovered()
+	}
+	return err
 }
 
 // run spustí plugin s jedním příkazem a přečte odpověď.

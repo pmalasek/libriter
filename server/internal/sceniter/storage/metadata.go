@@ -224,7 +224,7 @@ func (s *Store) SetMatchState(ctx context.Context, kind string, id uuid.UUID, st
 	}
 	q := `UPDATE ` + table + ` SET match_state = ?2, updated_at = CURRENT_TIMESTAMP`
 	if state == model.MatchUnmatched {
-		q += `, meta_provider = NULL, meta_id = NULL`
+		q += `, meta_provider = NULL, meta_id = NULL, match_attempted_at = NULL`
 	}
 	res, err := s.db.ExecContext(ctx, q+` WHERE id = ?1`, id, state)
 	if err != nil {
@@ -232,6 +232,18 @@ func (s *Store) SetMatchState(ctx context.Context, kind string, id uuid.UUID, st
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
 		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkMatchAttempt zaznamená nepovedené automatické párování titulu.
+func (s *Store) MarkMatchAttempt(ctx context.Context, kind string, id uuid.UUID) error {
+	table := "sc_movies"
+	if kind == model.KindShow {
+		table = "sc_shows"
+	}
+	if _, err := s.db.ExecContext(ctx, `UPDATE `+table+` SET match_attempted_at = CURRENT_TIMESTAMP WHERE id = ?1`, id); err != nil {
+		return fmt.Errorf("mark match attempt: %w", err)
 	}
 	return nil
 }

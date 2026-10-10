@@ -47,7 +47,7 @@ func main() {
 			if err != nil {
 				return nil, err
 			}
-			s, err := c.Season(ctx, id, req.Season)
+			s, err := c.Season(ctx, id, req.Season, req.Episodes)
 			return s, wrap(err)
 		},
 	})

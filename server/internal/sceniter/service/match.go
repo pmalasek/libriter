@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
 	"github.com/google/uuid"
@@ -19,6 +20,10 @@ import (
 	"mediater/internal/sceniter/model"
 	"mediater/internal/sceniter/storage"
 )
+
+// matchRetryDays je po kolika dnech se automatické párování zkusí znovu
+// u titulu, pro který zdroj nenašel jistý výsledek.
+const matchRetryDays = 7
 
 // ErrMetadataDisabled znamená, že pro titul není k dispozici žádný zdroj
 // metadat (knihovna nemá výchozí zdroj, nebo plugin není nainstalovaný).
@@ -35,7 +40,11 @@ type Matcher struct {
 	mu      sync.Mutex
 	running bool
 	again   bool
-	appCtx  context.Context
+	// force = příští běh zkusí i nedávno nepovedené tituly (KickAll).
+	force  bool
+	appCtx context.Context
+	// retry spustí párování znovu po skončení pauzy zdroje (HTTP 429).
+	retry *time.Timer
 
 	// Obnova metadat spárovaných titulů (RefreshAll).
 	refresh RefreshStatus
@@ -117,14 +126,20 @@ func (m *Matcher) RefreshAll() error {
 		m.mu.Unlock()
 
 		for _, j := range jobs {
-			if ctx.Err() != nil {
-				return
-			}
 			var err error
-			if j.kind == model.KindMovie {
-				_, err = m.MatchMovie(ctx, j.id, j.provider, j.metaID, j.state)
-			} else {
-				err = m.MatchShow(ctx, j.id, j.provider, j.metaID, j.state)
+			for {
+				if ctx.Err() != nil {
+					return
+				}
+				if j.kind == model.KindMovie {
+					_, err = m.MatchMovie(ctx, j.id, j.provider, j.metaID, j.state)
+				} else {
+					err = m.MatchShow(ctx, j.id, j.provider, j.metaID, j.state)
+				}
+				// Zdroj odmítá požadavky – počkat na konec pauzy a titul zkusit znovu.
+				if !plugin.IsRateLimited(err) || !m.waitPause(ctx, j.provider) {
+					break
+				}
 			}
 			m.mu.Lock()
 			m.refresh.Done++
@@ -180,22 +195,31 @@ func (m *Matcher) supports(provider, kind string) bool {
 
 // Kick spustí automatické párování nespárovaných titulů na pozadí. Když už
 // běží, proběhne po jeho skončení ještě jednou (mezitím přibyly soubory).
-func (m *Matcher) Kick() {
+// Tituly, pro které zdroj nedávno nenašel jistý výsledek, vynechá.
+func (m *Matcher) Kick() { m.kick(false) }
+
+// KickAll je Kick, který zkusí i nedávno nepovedené tituly (ruční
+// „Spárovat vše“ z administrace).
+func (m *Matcher) KickAll() { m.kick(true) }
+
+func (m *Matcher) kick(force bool) {
 	if !m.Enabled() {
 		return
 	}
 	m.mu.Lock()
+	m.force = m.force || force
 	if m.running {
 		m.again = true
 		m.mu.Unlock()
 		return
 	}
 	m.running = true
+	force, m.force = m.force, false
 	m.mu.Unlock()
 
 	go func() {
 		for {
-			m.autoMatch(m.appCtx)
+			m.autoMatch(m.appCtx, force)
 			m.mu.Lock()
 			if !m.again || m.appCtx.Err() != nil {
 				m.running = false
@@ -203,17 +227,19 @@ func (m *Matcher) Kick() {
 				return
 			}
 			m.again = false
+			force, m.force = m.force, false
 			m.mu.Unlock()
 		}
 	}()
 }
 
-func (m *Matcher) autoMatch(ctx context.Context) {
+func (m *Matcher) autoMatch(ctx context.Context, force bool) {
 	libs, err := m.store.ListLibraries(ctx, true)
 	if err != nil {
 		m.log.Warn("knihovny", "err", err)
 		return
 	}
+	limited := map[string]bool{}
 	for _, lib := range libs {
 		if ctx.Err() != nil {
 			return
@@ -222,55 +248,139 @@ func (m *Matcher) autoMatch(ctx context.Context) {
 		if lib.Provider != nil {
 			provider = *lib.Provider
 		}
-		if !m.supports(provider, lib.Kind) {
+		if !m.supports(provider, lib.Kind) || limited[provider] {
 			continue
 		}
+		retryDays := matchRetryDays
+		if force {
+			retryDays = 0
+		}
+		var err error
 		if lib.Kind == model.KindShow {
-			m.autoMatchShows(ctx, lib, provider)
+			err = m.autoMatchShows(ctx, lib, provider, retryDays)
 		} else {
-			m.autoMatchMovies(ctx, lib, provider)
+			err = m.autoMatchMovies(ctx, lib, provider, retryDays)
+		}
+		// Zdroj odmítá požadavky: dál ho nezatěžovat, zbytek dopáruje
+		// další běh po skončení pauzy.
+		if plugin.IsRateLimited(err) {
+			limited[provider] = true
+			m.retryAfterPause(provider, force)
 		}
 	}
 }
 
-func (m *Matcher) autoMatchMovies(ctx context.Context, lib model.Library, provider string) {
-	movies, err := m.store.ListMovies(ctx, storage.MovieFilter{Library: lib.ID, MatchState: model.MatchUnmatched, WithoutFiles: true})
+// markAttempt zaznamená nepovedené párování – titul se znovu zkusí až po
+// matchRetryDays dnech nebo ručním „Spárovat vše“.
+func (m *Matcher) markAttempt(ctx context.Context, kind string, id uuid.UUID) {
+	if err := m.store.MarkMatchAttempt(ctx, kind, id); err != nil {
+		m.log.Warn("záznam pokusu o párování", "id", id, "err", err)
+	}
+}
+
+// pausedUntil vrátí konec pauzy zdroje po odmítnutí (nulový čas = není).
+func (m *Matcher) pausedUntil(provider string) time.Time {
+	if p, ok := m.plugins.Get(provider); ok {
+		return p.PausedUntil()
+	}
+	return time.Time{}
+}
+
+// waitPause počká na konec pauzy zdroje. False = kontext skončil.
+func (m *Matcher) waitPause(ctx context.Context, provider string) bool {
+	wait := time.Until(m.pausedUntil(provider))
+	if wait <= 0 {
+		wait = time.Second
+	}
+	select {
+	case <-ctx.Done():
+		return false
+	case <-time.After(wait + time.Second):
+		return true
+	}
+}
+
+// retryAfterPause naplánuje automatické párování na konec pauzy zdroje.
+func (m *Matcher) retryAfterPause(provider string, force bool) {
+	wait := time.Until(m.pausedUntil(provider)) + time.Second
+	m.log.Warn("zdroj odmítá požadavky, párování pokračuje po pauze", "zdroj", provider, "za", wait.Round(time.Second))
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.retry != nil {
+		m.retry.Stop()
+	}
+	m.retry = time.AfterFunc(wait, func() { m.kick(force) })
+}
+
+// rateLimited vrátí chybu rate_limited, pokud byl zdroj během párování
+// pozastavený – titul se pak neuloží (chyběly by mu obrázky) a spáruje
+// se znovu po pauze.
+func (m *Matcher) rateLimited(provider string) error {
+	if until := m.pausedUntil(provider); !until.IsZero() {
+		return &plugin.Error{Plugin: provider, Code: plugin.ErrCodeRateLimited,
+			Message: "zdroj odmítá požadavky do " + until.Format("15:04:05")}
+	}
+	return nil
+}
+
+// autoMatchMovies vrací chybu jen tehdy, když zdroj odmítá požadavky.
+func (m *Matcher) autoMatchMovies(ctx context.Context, lib model.Library, provider string, retryDays int) error {
+	movies, err := m.store.ListMovies(ctx, storage.MovieFilter{Library: lib.ID, MatchState: model.MatchUnmatched, WithoutFiles: true, RetryDays: retryDays})
 	if err != nil {
 		m.log.Warn("nespárované filmy", "knihovna", lib.Name, "err", err)
-		return
+		return nil
 	}
 	for _, mv := range movies {
 		if ctx.Err() != nil {
-			return
+			return nil
 		}
-		id, ok := m.pick(ctx, provider, lib.Language, model.KindMovie, mv.Title, deref(mv.OriginalTitle), derefInt(mv.Year))
+		id, ok, err := m.pick(ctx, provider, lib.Language, model.KindMovie, mv.Title, deref(mv.OriginalTitle), derefInt(mv.Year))
+		if plugin.IsRateLimited(err) {
+			return err
+		}
 		if !ok {
+			m.markAttempt(ctx, model.KindMovie, mv.ID)
 			continue
 		}
 		if _, err := m.MatchMovie(ctx, mv.ID, provider, id, model.MatchAuto); err != nil {
+			if plugin.IsRateLimited(err) {
+				return err
+			}
 			m.log.Warn("párování filmu", "title", mv.Title, "zdroj", provider, "err", err)
+			m.markAttempt(ctx, model.KindMovie, mv.ID)
 		}
 	}
+	return nil
 }
 
-func (m *Matcher) autoMatchShows(ctx context.Context, lib model.Library, provider string) {
-	shows, err := m.store.ListShows(ctx, storage.ShowFilter{Library: lib.ID, MatchState: model.MatchUnmatched, WithoutFiles: true})
+// autoMatchShows vrací chybu jen tehdy, když zdroj odmítá požadavky.
+func (m *Matcher) autoMatchShows(ctx context.Context, lib model.Library, provider string, retryDays int) error {
+	shows, err := m.store.ListShows(ctx, storage.ShowFilter{Library: lib.ID, MatchState: model.MatchUnmatched, WithoutFiles: true, RetryDays: retryDays})
 	if err != nil {
 		m.log.Warn("nespárované seriály", "knihovna", lib.Name, "err", err)
-		return
+		return nil
 	}
 	for _, sh := range shows {
 		if ctx.Err() != nil {
-			return
+			return nil
 		}
-		id, ok := m.pick(ctx, provider, lib.Language, model.KindShow, sh.Title, deref(sh.OriginalTitle), derefInt(sh.Year))
+		id, ok, err := m.pick(ctx, provider, lib.Language, model.KindShow, sh.Title, deref(sh.OriginalTitle), derefInt(sh.Year))
+		if plugin.IsRateLimited(err) {
+			return err
+		}
 		if !ok {
+			m.markAttempt(ctx, model.KindShow, sh.ID)
 			continue
 		}
 		if err := m.MatchShow(ctx, sh.ID, provider, id, model.MatchAuto); err != nil {
+			if plugin.IsRateLimited(err) {
+				return err
+			}
 			m.log.Warn("párování seriálu", "title", sh.Title, "zdroj", provider, "err", err)
+			m.markAttempt(ctx, model.KindShow, sh.ID)
 		}
 	}
+	return nil
 }
 
 func deref(s *string) string {
@@ -290,7 +400,10 @@ func derefInt(n *int) int {
 // pick vybere výsledek hledání, kterému lze věřit bez člověka: shoda roku
 // ±1 a názvu, nebo jediný výsledek se shodným názvem. Jinak nic – titul
 // zůstane nespárovaný a editor ho spáruje ručně.
-func (m *Matcher) pick(ctx context.Context, provider, lang, kind, title, original string, year int) (string, bool) {
+//
+// Chyba hledání se vrací kvůli rate_limited (párování se má zastavit);
+// ostatní chyby jen zaloguje.
+func (m *Matcher) pick(ctx context.Context, provider, lang, kind, title, original string, year int) (string, bool, error) {
 	for _, q := range []string{title, original} {
 		if strings.TrimSpace(q) == "" {
 			continue
@@ -299,14 +412,16 @@ func (m *Matcher) pick(ctx context.Context, provider, lang, kind, title, origina
 			Kind: kind, Language: lang, Query: &plugin.Query{Title: q, OriginalTitle: original},
 		})
 		if err != nil {
-			m.log.Warn("hledání metadat", "zdroj", provider, "query", q, "err", err)
-			return "", false
+			if !plugin.IsRateLimited(err) {
+				m.log.Warn("hledání metadat", "zdroj", provider, "query", q, "err", err)
+			}
+			return "", false, err
 		}
 		if id, ok := pickResult(res, title, original, year); ok {
-			return id, true
+			return id, true, nil
 		}
 	}
-	return "", false
+	return "", false, nil
 }
 
 // pickResult je čistá část výběru (testovatelná bez sítě).
@@ -421,6 +536,9 @@ func (m *Matcher) MatchMovie(ctx context.Context, id uuid.UUID, provider, metaID
 		return uuid.Nil, err
 	}
 	meta := m.titleMeta(ctx, provider, metaID, &d, "movie-"+id.String())
+	if err := m.rateLimited(provider); err != nil {
+		return uuid.Nil, err
+	}
 	return m.store.ApplyMovieMeta(ctx, id, meta, state)
 }
 
@@ -438,21 +556,27 @@ func (m *Matcher) MatchShow(ctx context.Context, id uuid.UUID, provider, metaID 
 		return err
 	}
 	meta := m.titleMeta(ctx, provider, metaID, &d, "show-"+id.String())
-	if err := m.store.ApplyShowMeta(ctx, id, meta, state); err != nil {
-		if errors.Is(err, storage.ErrConflict) {
-			return fmt.Errorf("seriál %s/%s už v knihovně je: %w", provider, metaID, err)
-		}
-		return err
-	}
 
+	// Řady se stáhnou celé dřív, než se cokoli uloží: když zdroj začne
+	// odmítat požadavky, seriál zůstane nespárovaný a spáruje se znovu
+	// (spárovaný seriál by už další metadata řad nedostal).
 	seasons, err := m.store.ListSeasons(ctx, id)
 	if err != nil {
 		return err
 	}
+	var seasonMetas []storage.SeasonMeta
 	for _, se := range seasons {
-		s, err := m.plugins.Season(ctx, provider, plugin.Request{ID: metaID, Season: se.Number, Language: lib.Language})
+		var onDiskNumbers []int
+		for _, e := range se.Episodes {
+			onDiskNumbers = append(onDiskNumbers, e.Number)
+		}
+		s, err := m.plugins.Season(ctx, provider, plugin.Request{ID: metaID, Season: se.Number,
+			Episodes: onDiskNumbers, Language: lib.Language})
 		if plugin.IsNotFound(err) {
 			continue
+		}
+		if plugin.IsRateLimited(err) {
+			return err
 		}
 		if err != nil {
 			m.log.Warn("řada ze zdroje", "zdroj", provider, "show", id, "season", se.Number, "err", err)
@@ -472,6 +596,19 @@ func (m *Matcher) MatchShow(ctx context.Context, id uuid.UUID, provider, metaID 
 			}
 			sm.Episodes = append(sm.Episodes, em)
 		}
+		seasonMetas = append(seasonMetas, sm)
+	}
+	if err := m.rateLimited(provider); err != nil {
+		return err
+	}
+
+	if err := m.store.ApplyShowMeta(ctx, id, meta, state); err != nil {
+		if errors.Is(err, storage.ErrConflict) {
+			return fmt.Errorf("seriál %s/%s už v knihovně je: %w", provider, metaID, err)
+		}
+		return err
+	}
+	for _, sm := range seasonMetas {
 		if err := m.store.ApplySeasonMeta(ctx, id, sm); err != nil {
 			return err
 		}
@@ -546,7 +683,10 @@ func (m *Matcher) download(ctx context.Context, provider, url, name string) stri
 	}
 	data, contentType, err := m.plugins.DownloadImage(ctx, provider, url)
 	if err != nil {
-		m.log.Warn("obrázek ze zdroje", "zdroj", provider, "url", url, "err", err)
+		// Pauzu zdroje zalogoval hostitel; titul se pak celý zahodí.
+		if !plugin.IsRateLimited(err) {
+			m.log.Warn("obrázek ze zdroje", "zdroj", provider, "url", url, "err", err)
+		}
 		return ""
 	}
 	ext := imagestore.ExtForContentType(contentType)

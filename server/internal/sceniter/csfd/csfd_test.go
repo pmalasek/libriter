@@ -3,6 +3,7 @@ package csfd
 import (
 	"compress/gzip"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -136,7 +137,7 @@ func TestSeason(t *testing.T) {
 	defer srv.Close()
 
 	c := New().WithBaseURL(srv.URL)
-	s, err := c.Season(context.Background(), "1024280", 1)
+	s, err := c.Season(context.Background(), "1024280", 1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,11 +152,56 @@ func TestSeason(t *testing.T) {
 	if s.Episodes[1].Overview != "" || s.Episodes[1].StillURL != "" {
 		t.Errorf("díl 2 bez stránky: %+v", s.Episodes[1])
 	}
-	if _, err := c.Season(context.Background(), "1024280", 9); err != ErrNotFound {
+	if _, err := c.Season(context.Background(), "1024280", 9, nil); err != ErrNotFound {
 		t.Fatalf("neexistující řada: %v", err)
 	}
 	if _, err := c.Film(context.Background(), "1"); err != ErrNotFound {
 		t.Fatalf("neexistující film: %v", err)
+	}
+}
+
+// Stránky dílů, které server nemá na disku, se nestahují; 429 na stránce
+// dílu ukončí celou řadu.
+func TestSeasonOnlyAndRateLimit(t *testing.T) {
+	const episodePath = "/film/1024280-docent/1239641-lesni-vrazda/prehled/"
+	pages := map[string]string{
+		"/film/1024280/prehled/":                        "show-docent.html",
+		"/film/1024280-docent/1239640-serie-1/prehled/": "season-docent-1.html",
+		episodePath: "episode-docent-1-1.html",
+	}
+	var episodeHits int
+	limited := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == episodePath {
+			episodeHits++
+			if limited {
+				w.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+		}
+		name, ok := pages[r.URL.Path]
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		_, _ = w.Write([]byte(fixture(t, name)))
+	}))
+	defer srv.Close()
+
+	c := New().WithBaseURL(srv.URL)
+	s, err := c.Season(context.Background(), "1024280", 1, []int{2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if episodeHits != 0 || len(s.Episodes) != 3 || s.Episodes[0].Overview != "" {
+		t.Fatalf("díl 1 není na disku, stránka se stáhla %d× (%+v)", episodeHits, s.Episodes[0])
+	}
+
+	limited = true
+	_, err = c.Season(context.Background(), "1024280", 1, nil)
+	var se *StatusError
+	if !errors.As(err, &se) || se.Status != http.StatusTooManyRequests {
+		t.Fatalf("429 na stránce dílu: %v", err)
 	}
 }
 

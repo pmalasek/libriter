@@ -419,6 +419,8 @@ func (h *Handler) writeMetadataError(w http.ResponseWriter, err error) bool {
 		writeError(w, http.StatusServiceUnavailable, "sceniter.metadata_disabled", "zdroj metadat není nastaven nebo nainstalován")
 	case plugin.IsNotFound(err):
 		writeError(w, http.StatusNotFound, "sceniter.metadata_not_found", "titul u zdroje nenalezen")
+	case plugin.IsRateLimited(err):
+		writeError(w, http.StatusTooManyRequests, "sceniter.metadata_rate_limited", "zdroj metadat dočasně odmítá požadavky: "+err.Error())
 	case errors.Is(err, storage.ErrConflict):
 		writeError(w, http.StatusConflict, "sceniter.metadata_conflict", err.Error())
 	default:
@@ -508,7 +510,7 @@ func (h *Handler) MatchAll(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "sceniter.metadata_disabled", "není nainstalovaný žádný zdroj metadat")
 		return
 	}
-	h.Matcher.Kick()
+	h.Matcher.KickAll()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
 

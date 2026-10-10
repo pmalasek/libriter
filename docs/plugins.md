@@ -49,6 +49,13 @@ server: jeden plugin běží nejvýš jednou najednou a mezi koncem jednoho a
 začátkem dalšího volání čeká `min_interval_ms`. Plugin, který během jednoho
 volání stahuje víc stránek, si odstup mezi nimi drží sám.
 
+Když zdroj začne odmítat požadavky (HTTP 429, stránka ochrany proti botům),
+plugin vrátí kód `rate_limited`. Server ho pak pozastaví – nejdřív na minutu,
+s každým dalším odmítnutím na dvojnásobek, nejvýš na 30 minut; úspěšné
+volání pauzu vynuluje. Během pauzy volání pluginu i stahování jeho obrázků
+skončí hned chybou `rate_limited` a automatické párování pokračuje až po ní.
+Odmítnutí obrázku (HTTP 429 nebo 403) pozastaví plugin stejně.
+
 ### Obrázky
 
 Plugin vrací jen adresy obrázků (`image_url`, `poster_url`, `still_url`, …).
@@ -170,8 +177,13 @@ Místo objektu jde napsat i samotné jméno (`"directors": ["Lana Wachowski"]`)
 Jen pro `kind: "show"`:
 
 ```json
-{"kind": "show", "id": "1024280", "season": 1, "language": "cs", "config": {}}
+{"kind": "show", "id": "1024280", "season": 1, "episodes": [1, 2, 5],
+ "language": "cs", "config": {}}
 ```
+
+`episodes` jsou čísla dílů, které server má na disku. Plugin, který stahuje
+každý díl zvlášť (scraping), smí ostatním dílům vrátit jen číslo a název;
+prázdné nebo chybějící `episodes` = všechny díly.
 
 ```json
 {"season": {"number": 1, "name": "Série 1", "overview": "…", "poster_url": "…",
