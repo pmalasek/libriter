@@ -170,6 +170,7 @@ export default {
       match: 'Matching',
       transcode: 'Conversions',
       users: 'Users',
+      showIssues: 'Episode check',
     },
     stats: {
       movies: 'Movies',
@@ -231,6 +232,18 @@ export default {
       attempted: 'tried {{date}}',
       movies: 'Movies',
       shows: 'TV shows',
+    },
+    showIssues: {
+      title: 'Shows to check: {{count}}',
+      hint: 'Episodes whose files do not fit the numbering: several files for one episode, missing episodes in a season, or files without an episode number in the name (numbered by their order in the folder). Fix the file or folder name and rescan the library.',
+      empty: 'Episode numbering looks fine.',
+      details: 'Details',
+      duplicate: '{{episode}}: several files ({{count}})',
+      gap: '{{season}}: missing episodes {{episodes}}',
+      positional: '{{season}}: files without an episode number in the name ({{count}})',
+      summaryDuplicate: 'episodes with several files: {{count}}',
+      summaryGap: 'gaps in numbering: {{count}}',
+      summaryPositional: 'files without a number in the name',
     },
     libraries: {
       title: 'Libraries',

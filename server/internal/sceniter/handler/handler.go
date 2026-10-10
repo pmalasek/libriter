@@ -159,6 +159,7 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Post("/admin/metadata/refresh-all", h.RefreshAll)
 					r.Get("/admin/metadata/refresh", h.RefreshStatus)
 					r.Get("/admin/library/unmatched", h.Unmatched)
+					r.Get("/admin/library/show-issues", h.ShowIssues)
 					r.Get("/admin/stats", h.Stats)
 					r.Get("/admin/transcode", h.TranscodeSessions)
 					r.Delete("/admin/transcode/{session}", h.StopTranscode)

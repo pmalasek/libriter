@@ -170,6 +170,7 @@ export default {
       match: 'Association',
       transcode: 'Conversions',
       users: 'Utilisateurs',
+      showIssues: 'Contrôle des épisodes',
     },
     stats: {
       movies: 'Films',
@@ -231,6 +232,18 @@ export default {
       attempted: 'essayé {{date}}',
       movies: 'Films',
       shows: 'Séries',
+    },
+    showIssues: {
+      title: 'Séries à vérifier : {{count}}',
+      hint: 'Épisodes dont les fichiers ne correspondent pas à la numérotation : plusieurs fichiers pour un épisode, épisodes manquants dans une saison, ou fichiers sans numéro d’épisode dans le nom (numérotés selon leur ordre dans le dossier). Corrigez le nom du fichier ou du dossier et relancez l’analyse de la bibliothèque.',
+      empty: 'La numérotation des épisodes est correcte.',
+      details: 'Détails',
+      duplicate: '{{episode}} : plusieurs fichiers ({{count}})',
+      gap: '{{season}} : épisodes manquants {{episodes}}',
+      positional: '{{season}} : fichiers sans numéro d’épisode dans le nom ({{count}})',
+      summaryDuplicate: 'épisodes avec plusieurs fichiers : {{count}}',
+      summaryGap: 'trous dans la numérotation : {{count}}',
+      summaryPositional: 'fichiers sans numéro dans le nom',
     },
     libraries: {
       title: 'Bibliothèques',

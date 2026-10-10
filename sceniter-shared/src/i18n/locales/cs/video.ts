@@ -182,6 +182,7 @@ export default {
       match: 'Párování',
       transcode: 'Převody',
       users: 'Uživatelé',
+      showIssues: 'Kontrola dílů',
     },
     stats: {
       movies: 'Filmy',
@@ -243,6 +244,18 @@ export default {
       attempted: 'zkoušeno {{date}}',
       movies: 'Filmy',
       shows: 'Seriály',
+    },
+    showIssues: {
+      title: 'Seriály ke kontrole: {{count}}',
+      hint: 'Díly, u kterých soubory nesedí na čísla: víc souborů u jednoho dílu, chybějící díly v řadě, nebo soubory bez čísla dílu v názvu (číslované podle pořadí ve složce). Opravte název souboru nebo složky a spusťte nový průchod knihovnou.',
+      empty: 'Číslování dílů je v pořádku.',
+      details: 'Podrobnosti',
+      duplicate: '{{episode}}: více souborů ({{count}})',
+      gap: '{{season}}: chybí díly {{episodes}}',
+      positional: '{{season}}: soubory bez čísla dílu v názvu ({{count}})',
+      summaryDuplicate: 'díly s více soubory: {{count}}',
+      summaryGap: 'díry v číslování: {{count}}',
+      summaryPositional: 'soubory bez čísla v názvu',
     },
     libraries: {
       title: 'Knihovny',

@@ -640,23 +640,36 @@ func (s *Scanner) reassignEpisode(ctx context.Context, lib *model.Library, abs, 
 	return nil
 }
 
-// positionInDir vrátí pořadí souboru mezi videi v adresáři (1 = první).
-// Díl bez čísla v názvu se tak řadí podle přirozeného pořadí souborů.
+// positionInDir vrátí číslo dílu pro soubor bez čísla v názvu: jeho pořadí
+// mezi takovými videi v adresáři (1 = první), přičemž čísla, která sousední
+// soubory nesou v názvu, se přeskočí – soubor bez čísla se tak nesloučí
+// s dílem, který už ve složce je.
 func positionInDir(abs string) int {
 	entries, err := os.ReadDir(filepath.Dir(abs))
 	if err != nil {
 		return 1
 	}
+	taken := map[int]bool{}
 	var names []string
 	for _, e := range entries {
-		if !e.IsDir() && IsVideo(e.Name()) && !Ignored(e.Name()) {
-			names = append(names, e.Name())
+		if e.IsDir() || !IsVideo(e.Name()) || Ignored(e.Name()) {
+			continue
 		}
+		if ep := ParseEpisode(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))); ep.OK {
+			taken[ep.Episode] = true
+			continue
+		}
+		names = append(names, e.Name())
 	}
 	sort.Strings(names)
-	for i, n := range names {
+	pos := 0
+	for _, n := range names {
+		pos++
+		for taken[pos] {
+			pos++
+		}
 		if n == filepath.Base(abs) {
-			return i + 1
+			return pos
 		}
 	}
 	return 1

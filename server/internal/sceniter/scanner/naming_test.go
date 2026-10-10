@@ -74,6 +74,9 @@ func TestParseEpisode(t *testing.T) {
 		{"Nemocnice na kraji města - Díl 4", 0, 4, ""},
 		{"Bitva_o_nebe_nad_Británií_4", 0, 4, ""},
 		{"Planeta Země - 03", 0, 3, ""},
+		{"Desate-Kralovstvi-3-cz", 0, 3, ""},
+		{"Show 4 720p", 0, 4, ""},
+		{"Show-12-eng", 0, 12, ""},
 	}
 	for _, c := range cases {
 		got := ParseEpisode(c.in)

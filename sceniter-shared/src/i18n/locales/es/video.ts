@@ -170,6 +170,7 @@ export default {
       match: 'Vinculación',
       transcode: 'Conversiones',
       users: 'Usuarios',
+      showIssues: 'Revisión de episodios',
     },
     stats: {
       movies: 'Películas',
@@ -231,6 +232,18 @@ export default {
       attempted: 'intentado {{date}}',
       movies: 'Películas',
       shows: 'Series',
+    },
+    showIssues: {
+      title: 'Series por revisar: {{count}}',
+      hint: 'Episodios cuyos archivos no encajan con la numeración: varios archivos para un episodio, episodios que faltan en una temporada o archivos sin número de episodio en el nombre (numerados por su orden en la carpeta). Corrija el nombre del archivo o de la carpeta y vuelva a escanear la biblioteca.',
+      empty: 'La numeración de episodios es correcta.',
+      details: 'Detalles',
+      duplicate: '{{episode}}: varios archivos ({{count}})',
+      gap: '{{season}}: faltan los episodios {{episodes}}',
+      positional: '{{season}}: archivos sin número de episodio en el nombre ({{count}})',
+      summaryDuplicate: 'episodios con varios archivos: {{count}}',
+      summaryGap: 'huecos en la numeración: {{count}}',
+      summaryPositional: 'archivos sin número en el nombre',
     },
     libraries: {
       title: 'Bibliotecas',

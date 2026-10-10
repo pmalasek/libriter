@@ -27,6 +27,7 @@ const AdminOverviewPage = lazyPage(() => import('@/pages/admin/AdminOverviewPage
 const AdminLibrariesPage = lazyPage(() => import('@/pages/admin/AdminLibrariesPage'), 'AdminLibrariesPage')
 const AdminSourcesPage = lazyPage(() => import('@/pages/admin/AdminSourcesPage'), 'AdminSourcesPage')
 const AdminMatchPage = lazyPage(() => import('@/pages/admin/AdminMatchPage'), 'AdminMatchPage')
+const AdminShowIssuesPage = lazyPage(() => import('@/pages/admin/AdminShowIssuesPage'), 'AdminShowIssuesPage')
 const AdminTranscodePage = lazyPage(() => import('@/pages/admin/AdminTranscodePage'), 'AdminTranscodePage')
 
 export function App() {
@@ -62,6 +63,7 @@ export function App() {
                 <Route path="libraries" element={<AdminLibrariesPage />} />
                 <Route path="sources" element={<AdminSourcesPage />} />
                 <Route path="match" element={<AdminMatchPage />} />
+                <Route path="shows" element={<AdminShowIssuesPage />} />
                 <Route path="transcode" element={<AdminTranscodePage />} />
               </Route>
             </Route>

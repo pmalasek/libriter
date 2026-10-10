@@ -170,6 +170,7 @@ export default {
       match: 'Zuordnung',
       transcode: 'Umwandlungen',
       users: 'Benutzer',
+      showIssues: 'Folgenprüfung',
     },
     stats: {
       movies: 'Filme',
@@ -231,6 +232,18 @@ export default {
       attempted: 'versucht {{date}}',
       movies: 'Filme',
       shows: 'Serien',
+    },
+    showIssues: {
+      title: 'Zu prüfende Serien: {{count}}',
+      hint: 'Folgen, deren Dateien nicht zur Nummerierung passen: mehrere Dateien für eine Folge, fehlende Folgen einer Staffel oder Dateien ohne Folgennummer im Namen (nach Reihenfolge im Ordner nummeriert). Datei- oder Ordnernamen korrigieren und die Bibliothek neu durchsuchen.',
+      empty: 'Die Folgennummerierung ist in Ordnung.',
+      details: 'Details',
+      duplicate: '{{episode}}: mehrere Dateien ({{count}})',
+      gap: '{{season}}: fehlende Folgen {{episodes}}',
+      positional: '{{season}}: Dateien ohne Folgennummer im Namen ({{count}})',
+      summaryDuplicate: 'Folgen mit mehreren Dateien: {{count}}',
+      summaryGap: 'Lücken in der Nummerierung: {{count}}',
+      summaryPositional: 'Dateien ohne Nummer im Namen',
     },
     libraries: {
       title: 'Bibliotheken',

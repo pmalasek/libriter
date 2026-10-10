@@ -339,6 +339,30 @@ export interface SearchResults {
 }
 
 /** Průběh obnovy metadat spárovaných titulů (administrace). */
+export type ShowIssueKind = 'duplicate_files' | 'gap' | 'positional'
+
+/** Nález kontroly číslování dílů. */
+export interface ShowIssueItem {
+  kind: ShowIssueKind
+  season: number
+  /** Díl s více soubory (duplicate_files). */
+  episode?: number
+  /** Chybějící čísla dílů v řadě (gap). */
+  missing?: number[]
+  /** Dotčené soubory (duplicate_files; positional – všechny takové soubory řady). */
+  files?: string[]
+}
+
+/** Seriál s nálezy (GET /sceniter/admin/library/show-issues). */
+export interface ShowIssue {
+  id: string
+  title: string
+  source_key: string
+  poster_path?: string
+  updated_at: string
+  issues: ShowIssueItem[]
+}
+
 export interface RefreshStatus {
   running: boolean
   done: number

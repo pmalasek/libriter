@@ -26,6 +26,7 @@ import {
   type Season,
   type Show,
   type ShowDetail,
+  type ShowIssue,
   type ShowSummary,
   type TitleKind,
   type TitlePatch,
@@ -359,6 +360,14 @@ export function useAdminUnmatched<K extends TitleKind>(
   return usePagedList({
     queryKey: queryKeys.adminUnmatchedList(kind, attempted),
     fetchPage: pageFetcher('/admin/library/unmatched', { kind, attempted: attempted ? '1' : '0' }),
+  })
+}
+
+/** Seriály s podezřelým číslováním dílů (kontrola v administraci). */
+export function useAdminShowIssues() {
+  return useQuery({
+    queryKey: queryKeys.adminShowIssues,
+    queryFn: async () => list((await apiFetch<{ items: ShowIssue[] | null }>(`${BASE}/admin/library/show-issues`)).items),
   })
 }
 

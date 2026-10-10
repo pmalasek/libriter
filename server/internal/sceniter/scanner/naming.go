@@ -244,9 +244,17 @@ func ParseEpisode(name string) EpisodeInfo {
 	}
 	// Poslední možnost: samotné číslo na konci názvu. Bez něj by se díl
 	// čísloval podle pořadí souborů, které se při postupném kopírování mění.
-	if m := trailingNumRe.FindStringSubmatch(strings.TrimSpace(name)); m != nil {
-		if e, _ := strconv.Atoi(m[1]); e > 0 {
-			return EpisodeInfo{Episode: e, OK: true}
+	// Za číslem bývají ještě značky vydání ("Desate-Kralovstvi-3-cz").
+	name = strings.TrimSpace(name)
+	candidates := []string{name}
+	if loc := releaseTagRe.FindStringIndex(name); loc != nil && loc[0] > 0 {
+		candidates = append(candidates, strings.TrimSpace(name[:loc[0]]))
+	}
+	for _, c := range candidates {
+		if m := trailingNumRe.FindStringSubmatch(c); m != nil {
+			if e, _ := strconv.Atoi(m[1]); e > 0 {
+				return EpisodeInfo{Episode: e, OK: true}
+			}
 		}
 	}
 	return EpisodeInfo{}

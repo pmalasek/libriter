@@ -280,3 +280,45 @@ func TestPickResultHeuristics(t *testing.T) {
 		t.Errorf("první výsledek neomezeného hledání s přesným rokem: %s %v", id, ok)
 	}
 }
+
+func TestShowIssues(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	file := func(show string, season, number int, name string) {
+		t.Helper()
+		id, err := e.store.EnsureEpisode(ctx, storage.EpisodeKey{LibraryID: e.showLib, ShowKey: "Seriály/" + show, ShowTitle: show, Season: season, Episode: number})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.store.SaveMedia(ctx, storage.SaveMediaInput{FilePath: "Seriály/" + show + "/" + name, EpisodeID: &id, SizeBytes: 1, ModTime: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	file("Desáté království", 1, 1, "Desáté království 1.avi")
+	file("Desáté království", 1, 1, "Desate-Kralovstvi-bez-cisla.avi")
+	file("Desáté království", 1, 2, "Desáté království 2.avi")
+	file("Desáté království", 1, 4, "Desáté království 4.avi")
+	file("V pořádku", 1, 1, "V pořádku S01E01.mkv")
+	file("V pořádku", 1, 2, "V pořádku S01E02.mkv")
+
+	got, err := e.lib.ShowIssues(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Title != "Desáté království" {
+		t.Fatalf("seriály s nálezy = %+v", got)
+	}
+	kinds := map[string]ShowIssueItem{}
+	for _, it := range got[0].Issues {
+		kinds[it.Kind] = it
+	}
+	if d := kinds[IssueDuplicateFiles]; d.Episode != 1 || len(d.Files) != 2 {
+		t.Errorf("duplicita = %+v", d)
+	}
+	if g := kinds[IssueGap]; len(g.Missing) != 1 || g.Missing[0] != 3 {
+		t.Errorf("díra = %+v", g)
+	}
+	if p := kinds[IssuePositional]; len(p.Files) != 1 || p.Files[0] != "Seriály/Desáté království/Desate-Kralovstvi-bez-cisla.avi" {
+		t.Errorf("pořadí = %+v", p)
+	}
+}

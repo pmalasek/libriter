@@ -391,3 +391,18 @@ func TestDetachMergedFile(t *testing.T) {
 		t.Errorf("po průchodu soubor patří k %s, chci %s", rec.MovieID, id)
 	}
 }
+
+func TestPositionInDirSkipsNumbered(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"X 1.avi", "X 2.avi", "bez-cisla.avi", "jiny.avi"} {
+		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got := positionInDir(filepath.Join(dir, "bez-cisla.avi")); got != 3 {
+		t.Errorf("bez-cisla = %d, chci 3", got)
+	}
+	if got := positionInDir(filepath.Join(dir, "jiny.avi")); got != 4 {
+		t.Errorf("jiny = %d, chci 4", got)
+	}
+}

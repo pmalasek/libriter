@@ -625,6 +625,15 @@ func (h *Handler) Unmatched(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// GET /sceniter/admin/library/show-issues
+func (h *Handler) ShowIssues(w http.ResponseWriter, r *http.Request) {
+	items, err := h.Library.ShowIssues(r.Context())
+	if writeStoreError(w, err, "sceniter.not_found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
 // GET /sceniter/admin/stats
 func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
 	st, err := h.Store.Stats(r.Context())
