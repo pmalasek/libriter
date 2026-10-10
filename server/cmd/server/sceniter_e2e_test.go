@@ -174,6 +174,22 @@ func TestSceniterEndToEnd(t *testing.T) {
 	if other.Total != 2 || len(other.Items) != 1 || other.Items[0].Title != "Pelíšky" {
 		t.Errorf("druhá stránka: %+v", other)
 	}
+	// Směr řazení: název sestupně, rok vzestupně (bez směru by byl sestupně).
+	other.Items = nil
+	e.json("GET", "/api/v1/sceniter/movies?sort=title&dir=desc", nil, &other)
+	if len(other.Items) != 2 || other.Items[0].Title != "Pelíšky" {
+		t.Errorf("název sestupně: %+v", other)
+	}
+	other.Items = nil
+	e.json("GET", "/api/v1/sceniter/movies?sort=year&dir=asc", nil, &other)
+	if len(other.Items) != 2 || other.Items[0].Title != "Amadeus" {
+		t.Errorf("rok vzestupně: %+v", other)
+	}
+	other.Items = nil
+	e.json("GET", "/api/v1/sceniter/movies?sort=year", nil, &other)
+	if len(other.Items) != 2 || other.Items[0].Title != "Pelíšky" {
+		t.Errorf("rok bez směru (od nejnovějšího): %+v", other)
+	}
 	other.Items = nil
 	e.json("GET", "/api/v1/sceniter/movies?q=PELISKY", nil, &other)
 	if other.Total != 1 {

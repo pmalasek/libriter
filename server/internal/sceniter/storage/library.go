@@ -53,6 +53,7 @@ type MovieFilter struct {
 	Query   string // podřetězec názvu nebo původního názvu (bez ohledu na diakritiku)
 	Genre   string
 	Sort    string // title | year | added | rating
+	Dir     string // asc | desc; prázdné = přirozený směr klíče (viz titleOrder)
 	Limit   int    // 0 = bez omezení
 	Offset  int
 	// WithoutFiles zahrne i filmy bez souborů – pro administraci párování.
@@ -116,18 +117,31 @@ func titleWhere(kind string, library uuid.UUID, query, genre, matchState string,
 	return strings.Join(conds, " AND "), args
 }
 
-// titleOrder je řazení výpisu; vždy končí jedinečným id, aby stránky na
-// sebe navazovaly. Rok a hodnocení sestupně dávají NULL na konec samy.
-func titleOrder(sort string) string {
+// titleOrder je řazení výpisu. Bez směru má každý klíč svůj přirozený
+// (název vzestupně, ostatní od nejnovějšího / nejlepšího). Tituly bez roku
+// nebo hodnocení jdou vždy na konec; při shodě rozhoduje název vzestupně
+// a nakonec jedinečné id, aby stránky na sebe navazovaly.
+func titleOrder(sort, dir string) string {
+	desc := sort != "" && sort != "title"
+	switch dir {
+	case "asc":
+		desc = false
+	case "desc":
+		desc = true
+	}
+	d := ""
+	if desc {
+		d = " DESC"
+	}
 	switch sort {
 	case "year":
-		return ` ORDER BY t.year DESC, t.title, t.id`
+		return ` ORDER BY t.year IS NULL, t.year` + d + `, t.title, t.id`
 	case "added":
-		return ` ORDER BY t.created_at DESC, t.title, t.id`
+		return ` ORDER BY t.created_at` + d + `, t.title, t.id`
 	case "rating":
-		return ` ORDER BY t.rating DESC, t.title, t.id`
+		return ` ORDER BY t.rating IS NULL, t.rating` + d + `, t.title, t.id`
 	default:
-		return ` ORDER BY t.title, t.id`
+		return ` ORDER BY t.title` + d + `, t.id` + d
 	}
 }
 
@@ -161,7 +175,7 @@ func (s *Store) ListMovies(ctx context.Context, f MovieFilter) ([]model.Movie, e
 		(SELECT id FROM sc_media_files WHERE movie_id = t.id ORDER BY size_bytes DESC, file_path LIMIT 1),
 		(SELECT duration_sec FROM sc_media_files WHERE movie_id = t.id ORDER BY size_bytes DESC, file_path LIMIT 1)
 		FROM sc_movies t JOIN sc_libraries l ON l.id = t.library_id
-		WHERE ` + where + titleOrder(f.Sort) + limitOffset(f.Limit, f.Offset)
+		WHERE ` + where + titleOrder(f.Sort, f.Dir) + limitOffset(f.Limit, f.Offset)
 
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -311,6 +325,7 @@ type ShowFilter struct {
 	Query        string
 	Genre        string
 	Sort         string // title | year | added | rating
+	Dir          string // asc | desc; prázdné = přirozený směr klíče (viz titleOrder)
 	Limit        int
 	Offset       int
 	WithoutFiles bool
@@ -339,7 +354,7 @@ func (s *Store) ListShows(ctx context.Context, f ShowFilter) ([]model.Show, erro
 	where, args := f.where()
 	cols := strings.ReplaceAll(showCols, "s.", "t.") + `, ` + strings.ReplaceAll(showCounts, "= s.id", "= t.id")
 	q := `SELECT ` + cols + ` FROM sc_shows t JOIN sc_libraries l ON l.id = t.library_id
-		WHERE ` + where + titleOrder(f.Sort) + limitOffset(f.Limit, f.Offset)
+		WHERE ` + where + titleOrder(f.Sort, f.Dir) + limitOffset(f.Limit, f.Offset)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list shows: %w", err)

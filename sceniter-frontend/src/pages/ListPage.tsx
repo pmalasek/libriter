@@ -1,42 +1,81 @@
 import { FilmIcon, TvIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useParams, useSearchParams } from 'react-router'
+import { SORT_DIRS, VIEW_MODES, type SortDir, type ViewMode } from 'sceniter-shared'
 import { EmptyState } from 'core-web/src/components/EmptyState'
 import { ErrorState } from 'core-web/src/components/ErrorState'
 import { PageHeader } from 'core-web/src/components/PageHeader'
 import { Skeleton } from 'core-web/src/components/ui/skeleton'
 import { columnsByWidth, VirtualGrid } from 'core-web/src/components/VirtualGrid'
 import { useDebouncedValue, type PagedList } from 'core-web/src/lib/paged'
+import { usePersistedChoice } from 'core-web/src/lib/prefs'
 import { useLibraries, useMovies, useShows } from '@/api/hooks'
 import { ListToolbar } from '@/components/ListToolbar'
-import { SORTS, type Sort } from '@/lib/sort'
 import { PosterCard } from '@/components/PosterCard'
-import { POSTER_GRID, posterCardHeight } from '@/lib/posterGrid'
+import { TitleRow, TitleRowHeader } from '@/components/TitleRow'
+import { POSTER_LAYOUT, posterCardHeight } from '@/lib/posterGrid'
+import { SORT_DEFAULT_DIR, SORTS, type Sort } from '@/lib/sort'
 
-/** Stav filtrů v adrese (?q=&genre=&sort=) – přežije reload i zpět. */
+/**
+ * Stav filtrů v adrese (?q=&genre=&sort=&dir=) – přežije reload i zpět.
+ * Výchozí hodnoty (název, přirozený směr klíče) se do adresy nepíšou.
+ */
 function useListParams() {
   const [params, setParams] = useSearchParams()
   const sortParam = params.get('sort') as Sort | null
   const sort: Sort = sortParam && (SORTS as readonly string[]).includes(sortParam) ? sortParam : 'title'
-  const set = (key: string, value: string) =>
+  const dirParam = params.get('dir') as SortDir | null
+  const dir: SortDir = dirParam && (SORT_DIRS as readonly string[]).includes(dirParam) ? dirParam : SORT_DEFAULT_DIR[sort]
+  const update = (values: Record<string, string>) =>
     setParams(
       (p) => {
-        if (value) p.set(key, value)
-        else p.delete(key)
+        for (const [key, value] of Object.entries(values)) {
+          if (value) p.set(key, value)
+          else p.delete(key)
+        }
         return p
       },
       { replace: true },
     )
-  return { q: params.get('q') ?? '', genre: params.get('genre') ?? '', sort, set }
+  return {
+    q: params.get('q') ?? '',
+    genre: params.get('genre') ?? '',
+    sort,
+    dir,
+    setQuery: (q: string) => update({ q }),
+    setGenre: (genre: string) => update({ genre }),
+    // Změna klíče vrátí jeho přirozený směr (nejnovější první u data přidání).
+    setSort: (key: Sort) => update({ sort: key === 'title' ? '' : key, dir: '' }),
+    setDir: (d: SortDir) => update({ dir: d === SORT_DEFAULT_DIR[sort] ? '' : d }),
+  }
+}
+
+/** Panel nástrojů výpisu – filtry z adresy, zobrazení z uložené předvolby. */
+function Toolbar({ list, view, onView }: { list: ReturnType<typeof useListParams>; view: ViewMode; onView: (v: ViewMode) => void }) {
+  return (
+    <ListToolbar
+      query={list.q}
+      onQuery={list.setQuery}
+      genre={list.genre}
+      onGenre={list.setGenre}
+      sort={list.sort}
+      onSort={list.setSort}
+      dir={list.dir}
+      onDir={list.setDir}
+      view={view}
+      onView={onView}
+    />
+  )
 }
 
 function MovieList({ title, library = '' }: { title: string; library?: string }) {
   const { t } = useTranslation()
-  const { q, genre, sort, set } = useListParams()
+  const list = useListParams()
+  const [view, setView] = usePersistedChoice<ViewMode>('movies.view', 'tiles', VIEW_MODES)
   // Hledání se pošle až po chvíli klidu, ne po každé klávese.
-  const query = useDebouncedValue(q.trim())
-  const movies = useMovies({ library, q: query, genre, sort })
-  const filtered = Boolean(q || genre)
+  const query = useDebouncedValue(list.q.trim())
+  const movies = useMovies({ library, q: query, genre: list.genre, sort: list.sort, dir: list.dir })
+  const filtered = Boolean(list.q || list.genre)
 
   return (
     <div>
@@ -44,56 +83,104 @@ function MovieList({ title, library = '' }: { title: string; library?: string })
         sticky
         title={title}
         description={movies.total !== undefined ? t('video.movies.count', { count: movies.total }) : undefined}
-        actions={<ListToolbar query={q} onQuery={(v) => set('q', v)} genre={genre} onGenre={(v) => set('genre', v)} sort={sort} onSort={(v) => set('sort', v === 'title' ? '' : v)} />}
+        actions={<Toolbar list={list} view={view} onView={setView} />}
       />
       {movies.isError && movies.total === undefined ? <ErrorState error={movies.error} onRetry={movies.refetch} /> : null}
       {movies.total === 0 ? (
         <EmptyState icon={FilmIcon} title={filtered ? t('video.list.noResults') : t('video.movies.empty')} />
       ) : null}
-      <TitleGrid list={movies} render={(m) => <PosterCard movie={m} />} />
+      <TitleGrid
+        list={movies}
+        view={view}
+        kind="movie"
+        renderCard={(m, size) => <PosterCard movie={m} size={size} />}
+        renderRow={(m) => <TitleRow movie={m} />}
+      />
     </div>
   )
 }
 
 function ShowList({ title, library = '' }: { title: string; library?: string }) {
   const { t } = useTranslation()
-  const { q, genre, sort, set } = useListParams()
-  const query = useDebouncedValue(q.trim())
-  const shows = useShows({ library, q: query, genre, sort })
-  const filtered = Boolean(q || genre)
+  const list = useListParams()
+  const [view, setView] = usePersistedChoice<ViewMode>('shows.view', 'tiles', VIEW_MODES)
+  const query = useDebouncedValue(list.q.trim())
+  const shows = useShows({ library, q: query, genre: list.genre, sort: list.sort, dir: list.dir })
+  const filtered = Boolean(list.q || list.genre)
 
   return (
     <div>
       <PageHeader
         sticky
         title={title}
-        actions={<ListToolbar query={q} onQuery={(v) => set('q', v)} genre={genre} onGenre={(v) => set('genre', v)} sort={sort} onSort={(v) => set('sort', v === 'title' ? '' : v)} />}
+        actions={<Toolbar list={list} view={view} onView={setView} />}
       />
       {shows.isError && shows.total === undefined ? <ErrorState error={shows.error} onRetry={shows.refetch} /> : null}
       {shows.total === 0 ? (
         <EmptyState icon={TvIcon} title={filtered ? t('video.list.noResults') : t('video.shows.empty')} />
       ) : null}
-      <TitleGrid list={shows} render={(s) => <PosterCard show={s} />} />
+      <TitleGrid
+        list={shows}
+        view={view}
+        kind="show"
+        renderCard={(s, size) => <PosterCard show={s} size={size} />}
+        renderRow={(s) => <TitleRow show={s} />}
+      />
     </div>
   )
 }
 
 /**
- * Virtualizovaná mřížka plakátů: v DOM jsou jen řádky v okně a stránky
- * výpisu se dotahují podle toho, kam uživatel doroluje.
+ * Virtualizovaná mřížka plakátů nebo seznam: v DOM jsou jen řádky v okně
+ * a stránky výpisu se dotahují podle toho, kam uživatel doroluje.
  */
-function TitleGrid<T>({ list, render }: { list: PagedList<T>; render: (item: T) => React.ReactNode }) {
+function TitleGrid<T>({
+  list,
+  view,
+  kind,
+  renderCard,
+  renderRow,
+}: {
+  list: PagedList<T>
+  view: ViewMode
+  kind: 'movie' | 'show'
+  renderCard: (item: T, size: 'tiles' | 'small') => React.ReactNode
+  renderRow: (item: T) => React.ReactNode
+}) {
+  if (list.total === 0) return null
+  if (view === 'list') {
+    return (
+      <div className="glass inset-shadow-glass overflow-hidden rounded-2xl shadow-glass ring-1 ring-glass-edge">
+        <TitleRowHeader kind={kind} />
+        <VirtualGrid
+          count={list.total ?? 0}
+          columns={() => 1}
+          gap={0}
+          estimateRowHeight={() => 65}
+          onRangeChange={list.setRange}
+          rowClassName="border-t border-foreground/6"
+          renderItem={(index) => {
+            const item = list.getItem(index)
+            return item ? renderRow(item) : <Skeleton className="mx-3 my-2 h-12 rounded-lg" />
+          }}
+        />
+      </div>
+    )
+  }
+  const layout = POSTER_LAYOUT[view]
   return (
     <VirtualGrid
+      // Při změně velikosti dlaždic se rozvržení řádků počítá znovu.
+      key={view}
       count={list.total ?? 0}
-      columns={columnsByWidth(POSTER_GRID.minWidth, POSTER_GRID.gap, POSTER_GRID.minColumns)}
-      gap={POSTER_GRID.gap}
-      rowGap={POSTER_GRID.rowGap}
-      estimateRowHeight={posterCardHeight}
+      columns={columnsByWidth(layout.minWidth, layout.gap, layout.minColumns)}
+      gap={layout.gap}
+      rowGap={layout.rowGap}
+      estimateRowHeight={(width) => posterCardHeight(width, view)}
       onRangeChange={list.setRange}
       renderItem={(index) => {
         const item = list.getItem(index)
-        return item ? render(item) : <PosterSkeleton />
+        return item ? renderCard(item, view) : <PosterSkeleton />
       }}
     />
   )

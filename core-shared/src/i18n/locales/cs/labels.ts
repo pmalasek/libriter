@@ -43,6 +43,12 @@ export default {
       import: 'Import knih',
     },
   },
+  listControls: {
+    view: 'Zobrazení',
+    sortBy: 'Řadit podle',
+    ascending: 'Vzestupně – přepnout na sestupně',
+    descending: 'Sestupně – přepnout na vzestupně',
+  },
   viewMode: {
     tiles: 'Dlaždice',
     small: 'Malé dlaždice',

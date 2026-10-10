@@ -73,6 +73,7 @@ export interface ListParams extends Record<string, string> {
   q: string
   genre: string
   sort: string
+  dir: string
 }
 
 function pageFetcher<T>(path: string, p: Record<string, string | boolean | undefined>) {

@@ -1,9 +1,11 @@
 import { CheckCircle2Icon } from 'lucide-react'
+import { cn } from 'core-web/src/lib/utils'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { posterUrl, progressRatio, type MovieSummary, type ShowSummary, type WatchProgress } from 'sceniter-shared'
 import { Poster } from './Poster'
 import { ProgressBar } from './ProgressBar'
+import type { PosterSize } from '@/lib/posterGrid'
 
 /** Největší šířka plakátu v mřížce (CSS px) – načte se zmenšenina. */
 const POSTER_WIDTH = 240
@@ -14,12 +16,15 @@ export function PosterCard({
   show,
   progress,
   caption,
+  size = 'tiles',
 }: {
   movie?: MovieSummary
   show?: ShowSummary
   progress?: WatchProgress
   /** Popisek pod názvem místo roku / počtu dílů (např. role ve filmografii). */
   caption?: string
+  /** Malé dlaždice mají drobnější písmo (viz POSTER_LAYOUT). */
+  size?: PosterSize
 }) {
   const { t } = useTranslation()
   const title = movie ?? show
@@ -48,8 +53,8 @@ export function PosterCard({
         ) : null}
         {ratio > 0 && ratio < 1 ? <ProgressBar value={ratio} className="absolute inset-x-2 bottom-2" /> : null}
       </div>
-      <p className="mt-2 line-clamp-2 text-sm leading-snug font-medium">{title.title}</p>
-      {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
+      <p className={cn('line-clamp-2 leading-snug font-medium', size === 'small' ? 'mt-1.5 text-xs' : 'mt-2 text-sm')}>{title.title}</p>
+      {subtitle ? <p className={cn('text-muted-foreground', size === 'small' ? 'text-[11px]' : 'text-xs')}>{subtitle}</p> : null}
       {caption ? <p className="line-clamp-2 text-xs text-muted-foreground">{caption}</p> : null}
     </Link>
   )

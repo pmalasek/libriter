@@ -1,4 +1,4 @@
-import { currentLanguage, t } from 'core-shared'
+import { currentLanguage, t, type SortDir, type ViewMode } from 'core-shared'
 import type { Author, Book } from './types'
 
 const collators = new Map<string, Intl.Collator>()
@@ -21,13 +21,7 @@ function compareText(a: string, b: string): number {
   return collator().compare(a, b)
 }
 
-export type SortDir = 'asc' | 'desc'
-export const SORT_DIRS = ['asc', 'desc'] as const
-
-// --- zobrazení seznamu ---
-
-export type ViewMode = 'tiles' | 'small' | 'list'
-export const VIEW_MODES = ['tiles', 'small', 'list'] as const
+// --- zobrazení seznamu (typy SortDir a ViewMode jsou v core-shared) ---
 
 export function viewModeLabel(mode: ViewMode): string {
   return t(`labels.viewMode.${mode}`)

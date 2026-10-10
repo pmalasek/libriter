@@ -43,6 +43,12 @@ export default {
       import: 'Bücher importiert',
     },
   },
+  listControls: {
+    view: 'Ansicht',
+    sortBy: 'Sortieren nach',
+    ascending: 'Aufsteigend – zu absteigend wechseln',
+    descending: 'Absteigend – zu aufsteigend wechseln',
+  },
   viewMode: {
     tiles: 'Kacheln',
     small: 'Kleine Kacheln',

@@ -43,6 +43,12 @@ export default {
       import: 'Libros importados',
     },
   },
+  listControls: {
+    view: 'Vista',
+    sortBy: 'Ordenar por',
+    ascending: 'Ascendente: cambiar a descendente',
+    descending: 'Descendente: cambiar a ascendente',
+  },
   viewMode: {
     tiles: 'Mosaico',
     small: 'Mosaico pequeño',

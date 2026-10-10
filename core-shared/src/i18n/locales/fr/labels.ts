@@ -43,6 +43,12 @@ export default {
       import: 'Livres importés',
     },
   },
+  listControls: {
+    view: 'Affichage',
+    sortBy: 'Trier par',
+    ascending: 'Ordre croissant – passer à l’ordre décroissant',
+    descending: 'Ordre décroissant – passer à l’ordre croissant',
+  },
   viewMode: {
     tiles: 'Vignettes',
     small: 'Petites vignettes',

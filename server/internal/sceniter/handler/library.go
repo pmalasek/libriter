@@ -64,7 +64,7 @@ func listPage(r *http.Request) httpx.PageParams {
 	return p
 }
 
-// GET /sceniter/movies?library=&q=&genre=&sort=title|year|added|rating&limit=&offset=
+// GET /sceniter/movies?library=&q=&genre=&sort=title|year|added|rating&dir=asc|desc&limit=&offset=
 //
 // Stránka štíhlých záznamů (model.MovieSummary) a celkový počet.
 func (h *Handler) Movies(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +74,7 @@ func (h *Handler) Movies(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	page := listPage(r)
-	f := storage.MovieFilter{Library: lib, Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort")}
+	f := storage.MovieFilter{Library: lib, Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort"), Dir: q.Get("dir")}
 	h.writeMoviePage(w, r, f, page)
 }
 
@@ -121,7 +121,7 @@ func (h *Handler) Movie(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, m)
 }
 
-// GET /sceniter/shows?library=&q=&genre=&sort=&limit=&offset=
+// GET /sceniter/shows?library=&q=&genre=&sort=&dir=&limit=&offset=
 //
 // Stránka štíhlých záznamů (model.ShowSummary) a celkový počet.
 func (h *Handler) Shows(w http.ResponseWriter, r *http.Request) {
@@ -130,7 +130,7 @@ func (h *Handler) Shows(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	f := storage.ShowFilter{Library: lib, Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort")}
+	f := storage.ShowFilter{Library: lib, Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort"), Dir: q.Get("dir")}
 	h.writeShowPage(w, r, f, listPage(r))
 }
 

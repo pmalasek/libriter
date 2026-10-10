@@ -11,11 +11,14 @@ export function Poster({
   title,
   className,
   aspect = 'poster',
+  compact = false,
 }: {
   src?: string
   title: string
   className?: string
   aspect?: 'poster' | 'still'
+  /** Miniatura (řádek seznamu) – bez obrázku jen ikona, název se nevejde. */
+  compact?: boolean
 }) {
   const [failed, setFailed] = useState(false)
   const ratio = aspect === 'poster' ? 'aspect-[2/3]' : 'aspect-video'
@@ -24,12 +27,13 @@ export function Poster({
       <div
         className={cn(
           ratio,
-          'bg-brand-gradient relative flex w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl p-3 text-center text-primary-foreground shadow-glass ring-1 ring-white/15',
+          !compact && 'p-3',
+          'bg-brand-gradient relative flex w-full flex-col items-center justify-center gap-2 overflow-hidden rounded-2xl text-center text-primary-foreground shadow-glass ring-1 ring-white/15',
           className,
         )}
       >
-        <FilmIcon className="size-7 opacity-70" />
-        <span className="font-heading line-clamp-4 text-sm leading-tight font-semibold text-balance">{title}</span>
+        <FilmIcon className={cn('opacity-70', compact ? 'size-4' : 'size-7')} />
+        {compact ? null : <span className="font-heading line-clamp-4 text-sm leading-tight font-semibold text-balance">{title}</span>}
       </div>
     )
   }

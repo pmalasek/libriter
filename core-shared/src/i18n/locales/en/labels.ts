@@ -43,6 +43,12 @@ export default {
       import: 'Books imported',
     },
   },
+  listControls: {
+    view: 'View',
+    sortBy: 'Sort by',
+    ascending: 'Ascending – switch to descending',
+    descending: 'Descending – switch to ascending',
+  },
   viewMode: {
     tiles: 'Tiles',
     small: 'Small tiles',

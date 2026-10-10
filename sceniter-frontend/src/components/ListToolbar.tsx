@@ -1,14 +1,15 @@
 import { SearchIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import type { SortDir, ViewMode } from 'sceniter-shared'
+import { SortControl, ViewModeToggle } from 'core-web/src/components/ListControls'
 import { Input } from 'core-web/src/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'core-web/src/components/ui/select'
 import { useGenres } from '@/api/hooks'
 import { SORTS, type Sort } from '@/lib/sort'
 
-
 const ALL = '__all__'
 
-/** Hledání, žánr a řazení ve výpisu filmů a seriálů. */
+/** Hledání, žánr, řazení se směrem a zobrazení ve výpisu filmů a seriálů. */
 export function ListToolbar({
   query,
   onQuery,
@@ -16,6 +17,10 @@ export function ListToolbar({
   onGenre,
   sort,
   onSort,
+  dir,
+  onDir,
+  view,
+  onView,
 }: {
   query: string
   onQuery: (q: string) => void
@@ -23,6 +28,10 @@ export function ListToolbar({
   onGenre: (g: string) => void
   sort: Sort
   onSort: (s: Sort) => void
+  dir: SortDir
+  onDir: (d: SortDir) => void
+  view: ViewMode
+  onView: (v: ViewMode) => void
 }) {
   const { t } = useTranslation()
   const genres = useGenres()
@@ -61,18 +70,14 @@ export function ListToolbar({
           </SelectContent>
         </Select>
       ) : null}
-      <Select value={sort} onValueChange={(v) => onSort(v as Sort)}>
-        <SelectTrigger className="w-40" aria-label={t('video.list.sort')}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          {SORTS.map((s) => (
-            <SelectItem key={s} value={s}>
-              {sortLabel[s]}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <SortControl
+        options={SORTS.map((value) => ({ value, label: sortLabel[value] }))}
+        value={sort}
+        onChange={onSort}
+        dir={dir}
+        onDirChange={onDir}
+      />
+      <ViewModeToggle value={view} onChange={onView} />
     </>
   )
 }
