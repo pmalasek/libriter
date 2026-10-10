@@ -61,7 +61,7 @@ func TestClient(t *testing.T) {
 	if d.Overview != "Christmas 1967" || d.Tagline != "Cosy Dens" {
 		t.Errorf("anglický záložní popis: %q %q", d.Overview, d.Tagline)
 	}
-	if d.RuntimeMin != 115 || d.Year != 1999 || len(d.Genres) != 1 || d.Directors[0] != "Jan Hřebejk" || len(d.Cast) != 1 {
+	if d.RuntimeMin != 115 || d.Year != 1999 || len(d.Genres) != 1 || d.Directors[0].Name != "Jan Hřebejk" || len(d.Cast) != 1 {
 		t.Errorf("Movie = %+v", d)
 	}
 

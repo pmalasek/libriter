@@ -1,11 +1,11 @@
-import { RefreshCwIcon, SparklesIcon } from 'lucide-react'
+import { DatabaseZapIcon, RefreshCwIcon, SparklesIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { formatBytes, formatDateTime } from 'sceniter-shared'
 import { ErrorState } from 'core-web/src/components/ErrorState'
 import { Button } from 'core-web/src/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from 'core-web/src/components/ui/card'
-import { useAdminAction, useAdminStats } from '@/api/hooks'
+import { useAdminAction, useAdminStats, useRefreshStatus } from '@/api/hooks'
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
@@ -20,6 +20,8 @@ export function AdminOverviewPage() {
   const { t } = useTranslation()
   const stats = useAdminStats()
   const action = useAdminAction()
+  const refresh = useRefreshStatus()
+  const rs = refresh.data
 
   if (stats.isError) return <ErrorState error={stats.error} onRetry={() => void stats.refetch()} />
   const s = stats.data
@@ -73,20 +75,43 @@ export function AdminOverviewPage() {
             <CardTitle>{t('video.admin.metadata.title')}</CardTitle>
             <CardDescription>{s.metadata ? t('video.admin.metadata.enabled') : t('video.admin.metadata.disabled')}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button
-              variant="outline"
-              disabled={!s.metadata || action.isPending}
-              onClick={() =>
-                action.mutate(
-                  { path: '/admin/metadata/match-all' },
-                  { onSuccess: () => toast.success(t('video.admin.metadata.started')), onError: (e) => toast.error(e.message) },
-                )
-              }
-            >
-              <SparklesIcon />
-              {t('video.admin.metadata.matchAll')}
-            </Button>
+          <CardContent className="grid gap-3 text-sm">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                disabled={!s.metadata || action.isPending}
+                onClick={() =>
+                  action.mutate(
+                    { path: '/admin/metadata/match-all' },
+                    { onSuccess: () => toast.success(t('video.admin.metadata.started')), onError: (e) => toast.error(e.message) },
+                  )
+                }
+              >
+                <SparklesIcon />
+                {t('video.admin.metadata.matchAll')}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!s.metadata || action.isPending || rs?.running}
+                onClick={() =>
+                  action.mutate(
+                    { path: '/admin/metadata/refresh-all' },
+                    { onSuccess: () => toast.success(t('video.admin.metadata.refreshStarted')), onError: (e) => toast.error(e.message) },
+                  )
+                }
+              >
+                <DatabaseZapIcon className={rs?.running ? 'animate-pulse' : undefined} />
+                {t('video.admin.metadata.refreshAll')}
+              </Button>
+            </div>
+            <p className="text-muted-foreground">{t('video.admin.metadata.refreshHint')}</p>
+            {rs?.running ? (
+              <p className="tabular-nums">{t('video.admin.metadata.refreshRunning', { done: rs.done, total: rs.total })}</p>
+            ) : rs && rs.total > 0 ? (
+              <p className="text-muted-foreground tabular-nums">
+                {t('video.admin.metadata.refreshDone', { done: rs.done, failed: rs.failed })}
+              </p>
+            ) : null}
           </CardContent>
         </Card>
 

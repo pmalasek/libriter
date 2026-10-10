@@ -46,11 +46,54 @@ type Library struct {
 	ItemCount int `json:"item_count"`
 }
 
-// Credit je osoba z obsazení nebo štábu.
+// Role osob u titulu.
+const (
+	RoleCast     = "cast"
+	RoleDirector = "director"
+	RoleWriter   = "writer"
+	RoleCreator  = "creator"
+)
+
+// Credit je osoba z obsazení nebo štábu titulu.
 type Credit struct {
-	Name      string `json:"name"`
-	Role      string `json:"role"` // "cast" | "director" | "writer" | "creator"
-	Character string `json:"character,omitempty"`
+	PersonID    uuid.UUID `json:"person_id"`
+	Name        string    `json:"name"`
+	Role        string    `json:"role"` // RoleCast | RoleDirector | RoleWriter | RoleCreator
+	Character   string    `json:"character,omitempty"`
+	ProfilePath *string   `json:"profile_path,omitempty"`
+	// UpdatedAt osoby – obchází cache fotky po změně.
+	UpdatedAt *time.Time `json:"updated_at,omitempty"`
+
+	// Jen při zápisu ze zdroje metadat (do JSON nejdou): ID osoby u zdroje
+	// a už stažená fotka v SCENITER_IMAGE_ROOT.
+	ProviderID string `json:"-"`
+	ImagePath  string `json:"-"`
+}
+
+// Person je osoba z obsazení nebo štábu.
+type Person struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Provider    *string   `json:"-"`
+	ProviderID  *string   `json:"-"`
+	ProfilePath *string   `json:"profile_path,omitempty"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+// PersonCredit je jedna položka filmografie osoby: film nebo seriál
+// v knihovně a role v něm.
+type PersonCredit struct {
+	// Roles jsou role osoby v titulu (např. režie i scénář), v pořadí ze zdroje.
+	Roles     []string `json:"roles"`
+	Character string   `json:"character,omitempty"`
+	Movie     *Movie   `json:"movie,omitempty"`
+	Show      *Show    `json:"show,omitempty"`
+}
+
+// PersonDetail je osoba s filmografií z knihovny.
+type PersonDetail struct {
+	Person
+	Credits []PersonCredit `json:"credits"`
 }
 
 // Movie je film v knihovně.
@@ -69,12 +112,13 @@ type Movie struct {
 	PosterPath    *string           `json:"poster_path,omitempty"`
 	BackdropPath  *string           `json:"backdrop_path,omitempty"`
 	Rating        *int              `json:"rating,omitempty"`
-	Credits       []Credit          `json:"credits"`
-	Genres        []string          `json:"genres"`
-	MatchState    string            `json:"match_state"`
-	SourceKey     string            `json:"source_key"`
-	CreatedAt     time.Time         `json:"created_at"`
-	UpdatedAt     time.Time         `json:"updated_at"`
+	// Credits jsou obsazení a štáb – vyplněné jen v detailu, ve výpisech prázdné.
+	Credits    []Credit  `json:"credits"`
+	Genres     []string  `json:"genres"`
+	MatchState string    `json:"match_state"`
+	SourceKey  string    `json:"source_key"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 
 	// Odvozené pro výpisy: délka hlavního souboru a jeho ID.
 	DurationSec *float64   `json:"duration_sec,omitempty"`
@@ -96,12 +140,13 @@ type Show struct {
 	PosterPath    *string           `json:"poster_path,omitempty"`
 	BackdropPath  *string           `json:"backdrop_path,omitempty"`
 	Rating        *int              `json:"rating,omitempty"`
-	Credits       []Credit          `json:"credits"`
-	Genres        []string          `json:"genres"`
-	MatchState    string            `json:"match_state"`
-	SourceKey     string            `json:"source_key"`
-	CreatedAt     time.Time         `json:"created_at"`
-	UpdatedAt     time.Time         `json:"updated_at"`
+	// Credits jsou obsazení a štáb – vyplněné jen v detailu, ve výpisech prázdné.
+	Credits    []Credit  `json:"credits"`
+	Genres     []string  `json:"genres"`
+	MatchState string    `json:"match_state"`
+	SourceKey  string    `json:"source_key"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 
 	// Odvozené pro výpisy.
 	SeasonCount  int `json:"season_count"`
@@ -215,19 +260,8 @@ type UserState struct {
 	Progress    *WatchProgress `json:"progress,omitempty"`
 }
 
-// MarshalCredits a UnmarshalCredits převádí obsazení do sloupce credits_json.
-func MarshalCredits(c []Credit) *string {
-	if len(c) == 0 {
-		return nil
-	}
-	b, err := json.Marshal(c)
-	if err != nil {
-		return nil
-	}
-	s := string(b)
-	return &s
-}
-
+// UnmarshalCredits čte starý sloupec credits_json (jen pro přenos do
+// sc_credits, viz storage.BackfillCredits).
 func UnmarshalCredits(s *string) []Credit {
 	out := []Credit{}
 	if s == nil || *s == "" {

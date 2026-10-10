@@ -152,7 +152,8 @@ func fetch(ctx context.Context, req plugin.Request) (any, error) {
 		ExternalIDs: map[string]string{"tmdb": strconv.Itoa(d.ID)},
 		Seasons:     d.Seasons,
 		Credits: plugin.VideoCredits{
-			Directors: d.Directors, Writers: d.Writers, Creators: d.Creators,
+			Directors: people(c, d.Directors), Writers: people(c, d.Writers),
+			Creators: people(c, d.Creators), Cast: people(c, d.Cast),
 		},
 	}
 	if d.IMDBID != "" {
@@ -161,10 +162,20 @@ func fetch(ctx context.Context, req plugin.Request) (any, error) {
 	for _, g := range d.Genres {
 		out.Genres = append(out.Genres, g.Name)
 	}
-	for _, p := range d.Cast {
-		out.Credits.Cast = append(out.Credits.Cast, plugin.CastMember{Name: p.Name, Character: p.Character})
-	}
 	return out, nil
+}
+
+// people převede osoby z TMDB do protokolu pluginů (ID osoby a fotka).
+func people(c *tmdb.Client, list []tmdb.Person) []plugin.Person {
+	out := make([]plugin.Person, 0, len(list))
+	for _, p := range list {
+		pp := plugin.Person{Name: p.Name, Character: p.Character, ImageURL: c.ImageURL(tmdb.SizeProfile, p.ProfilePath)}
+		if p.ID != 0 {
+			pp.ID = strconv.Itoa(p.ID)
+		}
+		out = append(out, pp)
+	}
+	return out
 }
 
 func season(ctx context.Context, req plugin.Request) (*plugin.SeasonMetadata, error) {

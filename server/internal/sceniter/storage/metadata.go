@@ -75,16 +75,19 @@ func (s *Store) ApplyMovieMeta(ctx context.Context, id uuid.UUID, m TitleMeta, s
 		  original_title = COALESCE(?6, original_title), overview = COALESCE(?7, overview),
 		  tagline = COALESCE(?8, tagline), year = COALESCE(?9, year), runtime_min = COALESCE(?10, runtime_min),
 		  rating = COALESCE(?11, rating), poster_path = COALESCE(?12, poster_path),
-		  backdrop_path = COALESCE(?13, backdrop_path), credits_json = COALESCE(?14, credits_json),
-		  match_state = ?15, updated_at = CURRENT_TIMESTAMP
+		  backdrop_path = COALESCE(?13, backdrop_path),
+		  match_state = ?14, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?1`,
 		id, m.Provider, m.ID, model.MarshalExternalIDs(m.ExternalIDs), nullStr(m.Title), nullStr(m.OriginalTitle),
 		nullStr(m.Overview), nullStr(m.Tagline), nullInt(m.Year), nullInt(m.RuntimeMin), nullInt(m.Rating),
-		nullStr(m.PosterPath), nullStr(m.BackdropPath), model.MarshalCredits(m.Credits), state)
+		nullStr(m.PosterPath), nullStr(m.BackdropPath), state)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("apply movie meta: %w", err)
 	}
 	if err := setGenres(ctx, tx, "movie", id, m.Genres); err != nil {
+		return uuid.Nil, err
+	}
+	if err := setCredits(ctx, tx, model.KindMovie, id, m.Provider, m.Credits); err != nil {
 		return uuid.Nil, err
 	}
 	return id, tx.Commit()
@@ -104,12 +107,12 @@ func (s *Store) ApplyShowMeta(ctx context.Context, id uuid.UUID, m TitleMeta, st
 		  title = COALESCE(?5, title), original_title = COALESCE(?6, original_title),
 		  overview = COALESCE(?7, overview), status = COALESCE(?8, status), year = COALESCE(?9, year),
 		  rating = COALESCE(?10, rating), poster_path = COALESCE(?11, poster_path),
-		  backdrop_path = COALESCE(?12, backdrop_path), credits_json = COALESCE(?13, credits_json),
-		  match_state = ?14, updated_at = CURRENT_TIMESTAMP
+		  backdrop_path = COALESCE(?12, backdrop_path),
+		  match_state = ?13, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?1`,
 		id, m.Provider, m.ID, model.MarshalExternalIDs(m.ExternalIDs), nullStr(m.Title), nullStr(m.OriginalTitle),
 		nullStr(m.Overview), nullStr(m.Status), nullInt(m.Year), nullInt(m.Rating), nullStr(m.PosterPath),
-		nullStr(m.BackdropPath), model.MarshalCredits(m.Credits), state)
+		nullStr(m.BackdropPath), state)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return ErrConflict
@@ -117,6 +120,9 @@ func (s *Store) ApplyShowMeta(ctx context.Context, id uuid.UUID, m TitleMeta, st
 		return fmt.Errorf("apply show meta: %w", err)
 	}
 	if err := setGenres(ctx, tx, "show", id, m.Genres); err != nil {
+		return err
+	}
+	if err := setCredits(ctx, tx, model.KindShow, id, m.Provider, m.Credits); err != nil {
 		return err
 	}
 	return tx.Commit()

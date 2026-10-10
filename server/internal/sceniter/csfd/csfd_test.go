@@ -87,10 +87,14 @@ func TestParseFilm(t *testing.T) {
 	if !strings.HasPrefix(d.Overview, "Příběhy jedné historické generace") || strings.Contains(d.Overview, "oficiální text") {
 		t.Errorf("děj %q", d.Overview)
 	}
-	if len(d.Credits.Directors) != 1 || d.Credits.Directors[0] != "Jan Hřebejk" ||
-		len(d.Credits.Writers) != 1 || d.Credits.Writers[0] != "Petr Jarchovský" ||
+	if len(d.Credits.Directors) != 1 || d.Credits.Directors[0].Name != "Jan Hřebejk" ||
+		len(d.Credits.Writers) != 1 || d.Credits.Writers[0].Name != "Petr Jarchovský" ||
 		len(d.Credits.Cast) == 0 || d.Credits.Cast[0].Name != "Miroslav Donutil" {
 		t.Errorf("tvůrci %+v", d.Credits)
+	}
+	// ID tvůrců z odkazů /tvurce/<id>-…
+	if d.Credits.Directors[0].ID != "3195" || d.Credits.Writers[0].ID != "72212" || d.Credits.Cast[0].ID != "949" {
+		t.Errorf("ID tvůrců %+v", d.Credits)
 	}
 	if !strings.HasPrefix(d.PosterURL, "https://image.pmgstatic.com/") || len(d.Seasons) != 0 {
 		t.Errorf("plakát %q řady %v", d.PosterURL, d.Seasons)

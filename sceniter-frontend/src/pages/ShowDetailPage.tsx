@@ -20,7 +20,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from 'core-web/src/c
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'core-web/src/components/ui/select'
 import { useSetWatched, useShow } from '@/api/hooks'
 import { Attribution } from '@/components/Attribution'
-import { Credits } from '@/components/Credits'
+import { CastShelf, KeyCrew } from '@/components/CastShelf'
+import { DetailSkeleton, Expandable, GenreChips, SimilarShelf } from '@/components/DetailParts'
 import { EditTitleDialog } from '@/components/EditTitleDialog'
 import { Hero, MetaLine } from '@/components/Hero'
 import { Poster } from '@/components/Poster'
@@ -79,7 +80,7 @@ export function ShowDetailPage() {
 
   if (show.isError) return <ErrorState error={show.error} onRetry={() => void show.refetch()} />
   const s = show.data
-  if (!s) return <p className="py-8 text-center text-muted-foreground">{t('common.loading')}</p>
+  if (!s) return <DetailSkeleton />
 
   const up = s.up_next
   const current = s.seasons.find((x) => x.number === (season ?? up?.season ?? s.seasons[0]?.number)) ?? s.seasons[0]
@@ -95,10 +96,11 @@ export function ShowDetailPage() {
             s.year ? String(s.year) : null,
             t('video.shows.seasons', { count: s.season_count }),
             t('video.shows.episodes', { count: s.episode_count }),
-            s.genres.join(', '),
           ]}
         />
         <SourceRating rating={s.rating} provider={s.meta_provider} />
+        <GenreChips genres={s.genres} libraryId={s.library_id} />
+        <KeyCrew credits={s.credits} role="creator" />
         <div className="mt-5 flex flex-wrap gap-2">
           {up ? (
             <Button size="lg" onClick={() => navigate(`/watch/episode/${up.id}`)}>
@@ -125,7 +127,7 @@ export function ShowDetailPage() {
       </Hero>
 
       {s.match_state === 'unmatched' ? <p className="mt-6 text-sm text-muted-foreground">{t('video.detail.notMatched')}</p> : null}
-      {s.overview ? <p className="mt-6 max-w-3xl leading-relaxed">{s.overview}</p> : null}
+      {s.overview ? <Expandable key={s.id} text={s.overview} className="mt-6" /> : null}
 
       {current ? (
         <section className="mt-10">
@@ -155,7 +157,8 @@ export function ShowDetailPage() {
         </section>
       ) : null}
 
-      <Credits credits={s.credits} />
+      <CastShelf credits={s.credits} />
+      <SimilarShelf kind="show" id={s.id} />
       <ExternalLinks kind="show" ids={s.external_ids} />
       <Attribution provider={s.meta_provider ?? null} />
 

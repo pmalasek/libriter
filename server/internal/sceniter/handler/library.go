@@ -153,7 +153,7 @@ func (h *Handler) Genres(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	if q == "" {
-		writeJSON(w, http.StatusOK, map[string]any{"movies": []model.Movie{}, "shows": []model.Show{}})
+		writeJSON(w, http.StatusOK, map[string]any{"movies": []model.Movie{}, "shows": []model.Show{}, "people": []model.Person{}})
 		return
 	}
 	movies, err := h.Store.ListMovies(r.Context(), storage.MovieFilter{Query: q, Limit: 30})
@@ -164,7 +164,11 @@ func (h *Handler) Search(w http.ResponseWriter, r *http.Request) {
 	if writeStoreError(w, err, "sceniter.not_found") {
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"movies": movies, "shows": shows})
+	people, err := h.Store.SearchPeople(r.Context(), q, 20)
+	if writeStoreError(w, err, "sceniter.not_found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"movies": movies, "shows": shows, "people": people})
 }
 
 // ---- rozkoukanost ----

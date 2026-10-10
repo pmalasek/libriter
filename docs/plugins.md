@@ -140,14 +140,30 @@ Přijde `id`, nebo `url` (jen adresa z `url_patterns`). Odpověď je
   "rating": 90, "genres": ["Akční", "Sci-Fi"],
   "poster_url": "https://…", "backdrop_url": "",
   "external_ids": {"csfd": "9499", "imdb": "tt0133093"},
-  "credits": {"directors": ["Lana Wachowski"], "writers": [], "creators": [],
-              "cast": [{"name": "Keanu Reeves", "character": "Neo"}]},
+  "credits": {
+    "directors": [{"id": "3112", "name": "Lana Wachowski"}],
+    "writers": [], "creators": [],
+    "cast": [{"id": "6384", "name": "Keanu Reeves", "character": "Neo",
+              "image_url": "https://…/keanu.jpg"}]
+  },
   "seasons": []
 }}
 ```
 
 `rating` je v procentech. `external_ids` s klíči `imdb`, `tmdb`, `csfd`,
 `tvmaze`, `thetvdb` web zobrazí jako odkazy. `seasons` jsou čísla řad seriálu.
+
+Osoby v `credits` mají pořadí jako ve zdroji (hlavní role první):
+
+| Pole | Význam |
+|---|---|
+| `id` | ID osoby u zdroje. Podle něj server pozná stejného herce v různých titulech; bez ID páruje jen podle jména. |
+| `name` | Jméno (povinné). |
+| `character` | Postava (jen `cast`). |
+| `image_url` | Fotka osoby; server ji stáhne jen z `image_hosts`, a jen pokud ji osoba ještě nemá. |
+
+Místo objektu jde napsat i samotné jméno (`"directors": ["Lana Wachowski"]`)
+– starší tvar, osoba pak nemá ID ani fotku.
 
 ### `season`
 

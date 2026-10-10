@@ -13,7 +13,7 @@ import (
 
 const movieCols = `
 	m.id, m.library_id, m.source_key, m.title, m.original_title, m.year, m.overview, m.tagline, m.runtime_min,
-	m.meta_provider, m.meta_id, m.external_ids_json, m.poster_path, m.backdrop_path, m.rating, m.credits_json,
+	m.meta_provider, m.meta_id, m.external_ids_json, m.poster_path, m.backdrop_path, m.rating,
 	m.match_state, m.created_at, m.updated_at`
 
 // mainMovieFile vybere hlavní soubor filmu: největší (nejlepší verzi).
@@ -21,13 +21,13 @@ const mainMovieFile = `(SELECT id FROM sc_media_files WHERE movie_id = m.id ORDE
 
 func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, error) {
 	var (
-		m                                            model.Movie
-		orig, overview, tagline, poster, bd, credits sql.NullString
-		provider, metaID, external                   sql.NullString
-		year, runtime, rating                        sql.NullInt64
+		m                                   model.Movie
+		orig, overview, tagline, poster, bd sql.NullString
+		provider, metaID, external          sql.NullString
+		year, runtime, rating               sql.NullInt64
 	)
 	dest := []any{&m.ID, &m.LibraryID, &m.SourceKey, &m.Title, &orig, &year, &overview, &tagline, &runtime,
-		&provider, &metaID, &external, &poster, &bd, &rating, &credits, &m.MatchState, &m.CreatedAt, &m.UpdatedAt}
+		&provider, &metaID, &external, &poster, &bd, &rating, &m.MatchState, &m.CreatedAt, &m.UpdatedAt}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return m, err
 	}
@@ -35,7 +35,7 @@ func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, e
 	m.RuntimeMin, m.MetaProvider, m.MetaID = ptrInt(runtime), ptrString(provider), ptrString(metaID)
 	m.ExternalIDs = model.UnmarshalExternalIDs(ptrString(external))
 	m.PosterPath, m.BackdropPath, m.Rating = ptrString(poster), ptrString(bd), ptrInt(rating)
-	m.Credits = model.UnmarshalCredits(ptrString(credits))
+	m.Credits = []model.Credit{}
 	m.Genres = []string{}
 	return m, nil
 }
@@ -151,6 +151,9 @@ func (s *Store) GetMovie(ctx context.Context, id uuid.UUID) (*model.Movie, error
 	if g := genres[m.ID]; g != nil {
 		m.Genres = g
 	}
+	if m.Credits, err = s.creditsByTitle(ctx, model.KindMovie, m.ID); err != nil {
+		return nil, err
+	}
 	return &m, nil
 }
 
@@ -182,7 +185,7 @@ func (s *Store) genresByID(ctx context.Context, kind string) (map[uuid.UUID][]st
 const showCols = `
 	s.id, s.library_id, s.source_key, s.title, s.original_title, s.year, s.overview, s.status,
 	s.meta_provider, s.meta_id, s.external_ids_json,
-	s.poster_path, s.backdrop_path, s.rating, s.credits_json, s.match_state, s.created_at, s.updated_at`
+	s.poster_path, s.backdrop_path, s.rating, s.match_state, s.created_at, s.updated_at`
 
 // showCounts spočítá řady a díly, které mají soubor.
 const showCounts = `
@@ -191,17 +194,18 @@ const showCounts = `
 	(SELECT count(*) FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
 	   WHERE se.show_id = s.id AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id))`
 
-func scanShow(sc interface{ Scan(...any) error }) (model.Show, error) {
+func scanShow(sc interface{ Scan(...any) error }, extra ...any) (model.Show, error) {
 	var (
-		sh                                          model.Show
-		orig, overview, status, poster, bd, credits sql.NullString
-		provider, metaID, external                  sql.NullString
-		year, rating                                sql.NullInt64
+		sh                                 model.Show
+		orig, overview, status, poster, bd sql.NullString
+		provider, metaID, external         sql.NullString
+		year, rating                       sql.NullInt64
 	)
-	err := sc.Scan(&sh.ID, &sh.LibraryID, &sh.SourceKey, &sh.Title, &orig, &year, &overview, &status,
+	dest := []any{&sh.ID, &sh.LibraryID, &sh.SourceKey, &sh.Title, &orig, &year, &overview, &status,
 		&provider, &metaID, &external,
-		&poster, &bd, &rating, &credits, &sh.MatchState, &sh.CreatedAt, &sh.UpdatedAt,
-		&sh.SeasonCount, &sh.EpisodeCount)
+		&poster, &bd, &rating, &sh.MatchState, &sh.CreatedAt, &sh.UpdatedAt,
+		&sh.SeasonCount, &sh.EpisodeCount}
+	err := sc.Scan(append(dest, extra...)...)
 	if err != nil {
 		return sh, err
 	}
@@ -209,7 +213,7 @@ func scanShow(sc interface{ Scan(...any) error }) (model.Show, error) {
 	sh.MetaProvider, sh.MetaID = ptrString(provider), ptrString(metaID)
 	sh.ExternalIDs = model.UnmarshalExternalIDs(ptrString(external))
 	sh.PosterPath, sh.BackdropPath, sh.Rating = ptrString(poster), ptrString(bd), ptrInt(rating)
-	sh.Credits = model.UnmarshalCredits(ptrString(credits))
+	sh.Credits = []model.Credit{}
 	sh.Genres = []string{}
 	return sh, nil
 }
@@ -308,6 +312,9 @@ func (s *Store) GetShow(ctx context.Context, id uuid.UUID) (*model.Show, error) 
 	}
 	if g := genres[sh.ID]; g != nil {
 		sh.Genres = g
+	}
+	if sh.Credits, err = s.creditsByTitle(ctx, model.KindShow, sh.ID); err != nil {
+		return nil, err
 	}
 	return &sh, nil
 }

@@ -203,10 +203,12 @@ type Genre struct {
 
 // Person je člen obsazení nebo štábu.
 type Person struct {
-	Name      string `json:"name"`
-	Character string `json:"character"`
-	Job       string `json:"job"`
-	Order     int    `json:"order"`
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Character   string `json:"character"`
+	Job         string `json:"job"`
+	Order       int    `json:"order"`
+	ProfilePath string `json:"profile_path"`
 }
 
 type credits struct {
@@ -230,32 +232,32 @@ type Details struct {
 	BackdropPath  string
 	Genres        []Genre
 	Cast          []Person // seřazení podle pořadí v titulcích
-	Directors     []string
-	Writers       []string
-	Creators      []string
+	Directors     []Person
+	Writers       []Person
+	Creators      []Person
 	Seasons       []int // čísla řad (seriál)
 }
 
 type detailsResponse struct {
-	ID             int                     `json:"id"`
-	IMDBID         string                  `json:"imdb_id"`
-	Title          string                  `json:"title"`
-	Name           string                  `json:"name"`
-	OriginalTitle  string                  `json:"original_title"`
-	OriginalName   string                  `json:"original_name"`
-	Overview       string                  `json:"overview"`
-	Tagline        string                  `json:"tagline"`
-	Status         string                  `json:"status"`
-	ReleaseDate    string                  `json:"release_date"`
-	FirstAirDate   string                  `json:"first_air_date"`
-	Runtime        int                     `json:"runtime"`
-	EpisodeRunTime []int                   `json:"episode_run_time"`
-	VoteAverage    float64                 `json:"vote_average"`
-	PosterPath     string                  `json:"poster_path"`
-	BackdropPath   string                  `json:"backdrop_path"`
-	Genres         []Genre                 `json:"genres"`
-	Credits        credits                 `json:"credits"`
-	CreatedBy      []struct{ Name string } `json:"created_by"`
+	ID             int      `json:"id"`
+	IMDBID         string   `json:"imdb_id"`
+	Title          string   `json:"title"`
+	Name           string   `json:"name"`
+	OriginalTitle  string   `json:"original_title"`
+	OriginalName   string   `json:"original_name"`
+	Overview       string   `json:"overview"`
+	Tagline        string   `json:"tagline"`
+	Status         string   `json:"status"`
+	ReleaseDate    string   `json:"release_date"`
+	FirstAirDate   string   `json:"first_air_date"`
+	Runtime        int      `json:"runtime"`
+	EpisodeRunTime []int    `json:"episode_run_time"`
+	VoteAverage    float64  `json:"vote_average"`
+	PosterPath     string   `json:"poster_path"`
+	BackdropPath   string   `json:"backdrop_path"`
+	Genres         []Genre  `json:"genres"`
+	Credits        credits  `json:"credits"`
+	CreatedBy      []Person `json:"created_by"`
 	ExternalIDs    struct {
 		IMDBID string `json:"imdb_id"`
 	} `json:"external_ids"`
@@ -288,15 +290,15 @@ func (r detailsResponse) normalize() *Details {
 	for _, p := range r.Credits.Crew {
 		switch p.Job {
 		case "Director":
-			d.Directors = append(d.Directors, p.Name)
+			d.Directors = append(d.Directors, p)
 		case "Screenplay", "Writer":
 			if len(d.Writers) < 4 {
-				d.Writers = append(d.Writers, p.Name)
+				d.Writers = append(d.Writers, p)
 			}
 		}
 	}
 	for _, c := range r.CreatedBy {
-		d.Creators = append(d.Creators, c.Name)
+		d.Creators = append(d.Creators, c)
 	}
 	for _, s := range r.Seasons {
 		d.Seasons = append(d.Seasons, s.SeasonNumber)
@@ -368,6 +370,7 @@ const (
 	SizePoster   = "w500"
 	SizeBackdrop = "w1280"
 	SizeStill    = "w300"
+	SizeProfile  = "w185"
 )
 
 // ImageURL vrátí plnou adresu obrázku (path z TMDB, např. „/abc.jpg“).

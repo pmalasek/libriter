@@ -8,11 +8,14 @@ export function Hero({
   backdrop,
   poster,
   title,
+  cover,
   children,
 }: {
   backdrop?: string
   poster?: string
   title: string
+  /** Vlastní obrázek místo plakátu (fotka osoby). */
+  cover?: React.ReactNode
   children: React.ReactNode
 }) {
   return (
@@ -25,7 +28,7 @@ export function Hero({
       ) : null}
       <div className={cn('flex flex-col gap-6 sm:flex-row sm:items-end', backdrop && 'pt-24 sm:pt-40')}>
         <div className="w-40 shrink-0 sm:w-52">
-          <Poster src={poster} title={title} className="shadow-glass-lg" />
+          {cover ?? <Poster src={poster} title={title} className="shadow-glass-lg" />}
         </div>
         <div className="min-w-0 flex-1">{children}</div>
       </div>

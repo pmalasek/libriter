@@ -1,5 +1,5 @@
 import { apiUrl, currentLanguage, formatClock, t } from 'core-shared'
-import type { Episode, Movie, Show, Stream, WatchProgress } from './types'
+import type { Credit, CreditRole, Episode, Movie, Person, Show, Stream, WatchProgress } from './types'
 
 /** „S01E02“ – kód dílu do výpisů. */
 export function episodeCode(season: number, episode: number): string {
@@ -21,6 +21,17 @@ export function imageUrl(name: string | undefined, version?: string): string | u
 
 export function posterUrl(title: Pick<Movie | Show, 'poster_path' | 'updated_at'>): string | undefined {
   return imageUrl(title.poster_path, title.updated_at)
+}
+
+/** Fotka osoby (z detailu titulu nebo stránky osoby). */
+export function profileUrl(p: Pick<Person | Credit, 'profile_path' | 'updated_at'>): string | undefined {
+  return imageUrl(p.profile_path, p.updated_at)
+}
+
+/** Osoby titulu s danou rolí, bez opakování téže osoby. */
+export function creditsWithRole(credits: Credit[], role: CreditRole): Credit[] {
+  const seen = new Set<string>()
+  return credits.filter((c) => c.role === role && !seen.has(c.person_id) && seen.add(c.person_id))
 }
 
 export function backdropUrl(title: Pick<Movie | Show, 'backdrop_path' | 'updated_at'>): string | undefined {

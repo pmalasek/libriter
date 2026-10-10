@@ -19,6 +19,7 @@ const ShowDetailPage = lazyPage(() => import('@/pages/ShowDetailPage'), 'ShowDet
 const WatchPage = lazyPage(() => import('@/pages/WatchPage'), 'WatchPage')
 const WatchlistPage = lazyPage(() => import('@/pages/WatchlistPage'), 'WatchlistPage')
 const SearchPage = lazyPage(() => import('@/pages/SearchPage'), 'SearchPage')
+const PersonPage = lazyPage(() => import('@/pages/PersonPage'), 'PersonPage')
 const NotFoundPage = lazyPage(() => import('@/pages/NotFoundPage'), 'NotFoundPage')
 const ProfilePage = lazyPage(() => import('core-web/src/pages/ProfilePage'), 'ProfilePage')
 const AdminLayout = lazyPage(() => import('@/pages/admin/AdminLayout'), 'AdminLayout')
@@ -51,6 +52,7 @@ export function App() {
             <Route path="shows" element={<ShowsPage />} />
             <Route path="shows/:id" element={<ShowDetailPage />} />
             <Route path="library/:id" element={<LibraryPage />} />
+            <Route path="people/:id" element={<PersonPage />} />
             <Route path="watchlist" element={<WatchlistPage />} />
             <Route path="search" element={<SearchPage />} />
 

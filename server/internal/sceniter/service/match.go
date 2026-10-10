@@ -36,6 +36,108 @@ type Matcher struct {
 	running bool
 	again   bool
 	appCtx  context.Context
+
+	// Obnova metadat spárovaných titulů (RefreshAll).
+	refresh RefreshStatus
+}
+
+// RefreshStatus je průběh obnovy metadat spárovaných titulů.
+type RefreshStatus struct {
+	Running bool `json:"running"`
+	Done    int  `json:"done"`
+	Total   int  `json:"total"`
+	Failed  int  `json:"failed"`
+}
+
+// ErrRefreshRunning znamená, že obnova metadat už běží.
+var ErrRefreshRunning = errors.New("obnova metadat už běží")
+
+// RefreshStatusNow vrátí průběh obnovy metadat.
+func (m *Matcher) RefreshStatusNow() RefreshStatus {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.refresh
+}
+
+// RefreshAll znovu načte metadata (texty, obrázky, obsazení s fotkami)
+// u všech spárovaných titulů ze zdroje, se kterým jsou spárované. Běží na
+// pozadí; chyby jednotlivých titulů jen zaloguje. Přepíše ruční úpravy
+// názvu a popisu stejně jako ruční přepárování.
+func (m *Matcher) RefreshAll() error {
+	if !m.Enabled() {
+		return ErrMetadataDisabled
+	}
+	m.mu.Lock()
+	if m.refresh.Running {
+		m.mu.Unlock()
+		return ErrRefreshRunning
+	}
+	m.refresh = RefreshStatus{Running: true}
+	m.mu.Unlock()
+
+	go func() {
+		ctx := m.appCtx
+		defer func() {
+			m.mu.Lock()
+			m.refresh.Running = false
+			st := m.refresh
+			m.mu.Unlock()
+			m.log.Info("obnova metadat hotová", "titulů", st.Done, "chyb", st.Failed)
+		}()
+
+		type job struct {
+			kind, title, provider, metaID, state string
+			id                                   uuid.UUID
+		}
+		var jobs []job
+		for _, state := range []string{model.MatchAuto, model.MatchManual} {
+			movies, err := m.store.ListMovies(ctx, storage.MovieFilter{MatchState: state, WithoutFiles: true})
+			if err != nil {
+				m.log.Warn("obnova metadat: filmy", "err", err)
+				return
+			}
+			for _, mv := range movies {
+				if mv.MetaProvider != nil && mv.MetaID != nil {
+					jobs = append(jobs, job{model.KindMovie, mv.Title, *mv.MetaProvider, *mv.MetaID, state, mv.ID})
+				}
+			}
+			shows, err := m.store.ListShows(ctx, storage.ShowFilter{MatchState: state, WithoutFiles: true})
+			if err != nil {
+				m.log.Warn("obnova metadat: seriály", "err", err)
+				return
+			}
+			for _, sh := range shows {
+				if sh.MetaProvider != nil && sh.MetaID != nil {
+					jobs = append(jobs, job{model.KindShow, sh.Title, *sh.MetaProvider, *sh.MetaID, state, sh.ID})
+				}
+			}
+		}
+		m.mu.Lock()
+		m.refresh.Total = len(jobs)
+		m.mu.Unlock()
+
+		for _, j := range jobs {
+			if ctx.Err() != nil {
+				return
+			}
+			var err error
+			if j.kind == model.KindMovie {
+				_, err = m.MatchMovie(ctx, j.id, j.provider, j.metaID, j.state)
+			} else {
+				err = m.MatchShow(ctx, j.id, j.provider, j.metaID, j.state)
+			}
+			m.mu.Lock()
+			m.refresh.Done++
+			if err != nil {
+				m.refresh.Failed++
+			}
+			m.mu.Unlock()
+			if err != nil {
+				m.log.Warn("obnova metadat", "title", j.title, "zdroj", j.provider, "err", err)
+			}
+		}
+	}()
+	return nil
 }
 
 func NewMatcher(store *storage.Store, plugins *plugin.Host, imageRoot string) *Matcher {
@@ -392,19 +494,48 @@ func (m *Matcher) titleMeta(ctx context.Context, provider, metaID string, d *plu
 		BackdropPath: m.download(ctx, provider, d.BackdropURL, "backdrop-"+imagePrefix),
 		Genres:       append([]string{}, d.Genres...),
 	}
-	for _, n := range d.Credits.Directors {
-		meta.Credits = append(meta.Credits, model.Credit{Name: n, Role: "director"})
-	}
-	for _, n := range d.Credits.Writers {
-		meta.Credits = append(meta.Credits, model.Credit{Name: n, Role: "writer"})
-	}
-	for _, n := range d.Credits.Creators {
-		meta.Credits = append(meta.Credits, model.Credit{Name: n, Role: "creator"})
-	}
-	for _, p := range d.Credits.Cast {
-		meta.Credits = append(meta.Credits, model.Credit{Name: p.Name, Role: "cast", Character: p.Character})
+	for _, group := range []struct {
+		role   string
+		people []plugin.Person
+	}{
+		{model.RoleDirector, d.Credits.Directors},
+		{model.RoleWriter, d.Credits.Writers},
+		{model.RoleCreator, d.Credits.Creators},
+		{model.RoleCast, d.Credits.Cast},
+	} {
+		for _, p := range group.people {
+			meta.Credits = append(meta.Credits, model.Credit{
+				Name: p.Name, Role: group.role, Character: p.Character,
+				ProviderID: p.ID, ImagePath: m.personPhoto(ctx, provider, p),
+			})
+		}
 	}
 	return meta
+}
+
+// personPhoto stáhne fotku osoby, pokud ji zdroj nabízí a osoba ji ještě
+// nemá (fotky se nemění, opakované párování je nestahuje znovu). Vrací
+// název souboru, nebo prázdný řetězec.
+func (m *Matcher) personPhoto(ctx context.Context, provider string, p plugin.Person) string {
+	if p.ImageURL == "" || p.ID == "" {
+		return ""
+	}
+	if have, err := m.store.PersonPhoto(ctx, provider, p.ID); err == nil && have != "" {
+		return ""
+	}
+	return m.download(ctx, provider, p.ImageURL, "person-"+provider+"-"+safeName(p.ID))
+}
+
+// safeName nechá v ID zdroje jen znaky bezpečné pro název souboru.
+func safeName(s string) string {
+	b := make([]byte, 0, len(s))
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_' {
+			b = append(b, c)
+		}
+	}
+	return string(b)
 }
 
 // download stáhne obrázek ze zdroje do SCENITER_IMAGE_ROOT a vrátí název

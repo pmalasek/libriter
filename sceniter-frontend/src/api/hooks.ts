@@ -10,8 +10,10 @@ import {
   type MetadataSearchResponse,
   type Movie,
   type MovieDetail,
+  type PersonDetail,
   type Playback,
   type ProgressRequest,
+  type RefreshStatus,
   type SceniterConfig,
   type SceniterStats,
   type SearchResults,
@@ -105,6 +107,31 @@ export function useEpisode(id: string | undefined) {
   })
 }
 
+/** Osoba a její filmy a seriály v knihovně. */
+export function usePerson(id: string) {
+  return useQuery({
+    queryKey: queryKeys.person(id),
+    queryFn: async () => {
+      const p = await apiFetch<PersonDetail>(`${BASE}/people/${id}`)
+      return { ...p, credits: list(p.credits) }
+    },
+    enabled: Boolean(id),
+  })
+}
+
+/** Podobné tituly (stejná knihovna, společné žánry). */
+export function useSimilar(kind: TitleKind, id: string) {
+  return useQuery({
+    queryKey: queryKeys.similar(kind, id),
+    queryFn: async () =>
+      kind === 'movie'
+        ? { movies: list(await apiFetch<Movie[] | null>(`${BASE}/movies/${id}/similar`)), shows: [] as Show[] }
+        : { movies: [] as Movie[], shows: list(await apiFetch<Show[] | null>(`${BASE}/shows/${id}/similar`)) },
+    enabled: Boolean(id),
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
 export function useGenres() {
   return useQuery({
     queryKey: queryKeys.genres,
@@ -116,7 +143,10 @@ export function useGenres() {
 export function useSearch(q: string) {
   return useQuery({
     queryKey: queryKeys.search(q),
-    queryFn: () => apiFetch<SearchResults>(`${BASE}/search${params({ q })}`),
+    queryFn: async () => {
+      const r = await apiFetch<SearchResults>(`${BASE}/search${params({ q })}`)
+      return { movies: list(r.movies), shows: list(r.shows), people: list(r.people) }
+    },
     enabled: q.trim().length > 0,
     placeholderData: (prev) => prev,
   })
@@ -272,6 +302,15 @@ export function useAdminUnmatched() {
       const r = await apiFetch<{ movies: Movie[] | null; shows: Show[] | null }>(`${BASE}/admin/library/unmatched`)
       return { movies: list(r.movies), shows: list(r.shows) }
     },
+  })
+}
+
+/** Průběh obnovy metadat; během obnovy se obnovuje každé 3 s. */
+export function useRefreshStatus() {
+  return useQuery({
+    queryKey: queryKeys.adminRefresh,
+    queryFn: () => apiFetch<RefreshStatus>(`${BASE}/admin/metadata/refresh`),
+    refetchInterval: (query) => (query.state.data?.running ? 3000 : false),
   })
 }
 

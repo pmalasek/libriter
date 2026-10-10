@@ -2,11 +2,14 @@ import { SearchIcon } from 'lucide-react'
 import { useDeferredValue } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
+import { profileUrl } from 'sceniter-shared'
 import { EmptyState } from 'core-web/src/components/EmptyState'
 import { PageHeader } from 'core-web/src/components/PageHeader'
 import { Input } from 'core-web/src/components/ui/input'
 import { useSearch } from '@/api/hooks'
+import { PersonCard } from '@/components/PersonCard'
 import { PosterCard, PosterGrid } from '@/components/PosterCard'
+import { Shelf, ShelfItem } from '@/components/Shelf'
 
 export function SearchPage() {
   const { t } = useTranslation()
@@ -15,7 +18,7 @@ export function SearchPage() {
   const query = useDeferredValue(q)
   const results = useSearch(query)
   const data = results.data
-  const total = (data?.movies.length ?? 0) + (data?.shows.length ?? 0)
+  const total = (data?.movies.length ?? 0) + (data?.shows.length ?? 0) + (data?.people.length ?? 0)
 
   return (
     <div>
@@ -38,6 +41,15 @@ export function SearchPage() {
       />
       {!query.trim() ? <EmptyState icon={SearchIcon} title={t('video.search.empty')} /> : null}
       {query.trim() && data && total === 0 ? <EmptyState icon={SearchIcon} title={t('video.search.noResults', { query })} /> : null}
+      {data && data.people.length > 0 ? (
+        <Shelf title={t('video.search.people')} className="mt-0 mb-10">
+          {data.people.map((p) => (
+            <ShelfItem key={p.id}>
+              <PersonCard id={p.id} name={p.name} photo={profileUrl(p)} />
+            </ShelfItem>
+          ))}
+        </Shelf>
+      ) : null}
       {data && data.movies.length > 0 ? (
         <section className="mb-10">
           <h2 className="font-heading mb-3 text-lg font-semibold">{t('video.nav.movies')}</h2>

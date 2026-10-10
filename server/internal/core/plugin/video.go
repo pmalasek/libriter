@@ -1,5 +1,7 @@
 package plugin
 
+import "encoding/json"
+
 // VideoMetadata je položka fetch pro druhy movie a show.
 type VideoMetadata struct {
 	ID            string `json:"id"`
@@ -25,18 +27,49 @@ type VideoMetadata struct {
 	Seasons []int `json:"seasons,omitempty"`
 }
 
-// VideoCredits jsou tvůrci a obsazení.
+// VideoCredits jsou tvůrci a obsazení v pořadí, v jakém je uvádí zdroj.
 type VideoCredits struct {
-	Directors []string     `json:"directors,omitempty"`
-	Writers   []string     `json:"writers,omitempty"`
-	Creators  []string     `json:"creators,omitempty"`
-	Cast      []CastMember `json:"cast,omitempty"`
+	Directors []Person `json:"directors,omitempty"`
+	Writers   []Person `json:"writers,omitempty"`
+	Creators  []Person `json:"creators,omitempty"`
+	Cast      []Person `json:"cast,omitempty"`
 }
 
-// CastMember je herec a jeho role.
-type CastMember struct {
+// Person je osoba z obsazení nebo štábu. V JSON jde zapsat i jako prostý
+// řetězec se jménem ("Lana Wachowski") – starší tvar protokolu.
+type Person struct {
+	// ID je identifikátor osoby u zdroje; podle něj server pozná stejnou
+	// osobu v různých titulech.
+	ID        string `json:"id,omitempty"`
 	Name      string `json:"name"`
 	Character string `json:"character,omitempty"`
+	// ImageURL je fotka osoby; stahuje ji server (jen z image_hosts).
+	ImageURL string `json:"image_url,omitempty"`
+}
+
+// UnmarshalJSON přijme objekt i prostý řetězec se jménem.
+func (p *Person) UnmarshalJSON(b []byte) error {
+	var name string
+	if err := json.Unmarshal(b, &name); err == nil {
+		*p = Person{Name: name}
+		return nil
+	}
+	type plain Person
+	var v plain
+	if err := json.Unmarshal(b, &v); err != nil {
+		return err
+	}
+	*p = Person(v)
+	return nil
+}
+
+// Names vrátí jména osob (pro testy a výpisy).
+func Names(people []Person) []string {
+	out := make([]string, len(people))
+	for i, p := range people {
+		out[i] = p.Name
+	}
+	return out
 }
 
 // SeasonMetadata je výstup příkazu season.

@@ -45,10 +45,37 @@ export interface MetadataProvider {
   languages: string[]
 }
 
+export type CreditRole = 'cast' | 'director' | 'writer' | 'creator'
+
+/** Osoba z obsazení nebo štábu titulu. */
 export interface Credit {
+  person_id: string
   name: string
-  role: 'cast' | 'director' | 'writer' | 'creator'
+  role: CreditRole
   character?: string
+  /** Fotka osoby (název v úložišti obrázků). */
+  profile_path?: string
+  updated_at?: string
+}
+
+/** Osoba (herec, režisér, scenárista, tvůrce). */
+export interface Person {
+  id: string
+  name: string
+  profile_path?: string
+  updated_at: string
+}
+
+/** Položka filmografie: film nebo seriál z knihovny a role v něm. */
+export interface PersonCredit {
+  roles: CreditRole[]
+  character?: string
+  movie?: Movie
+  show?: Show
+}
+
+export interface PersonDetail extends Person {
+  credits: PersonCredit[]
 }
 
 export interface Movie {
@@ -69,6 +96,7 @@ export interface Movie {
   backdrop_path?: string
   /** Hodnocení zdroje v procentech (0–100). */
   rating?: number
+  /** Obsazení a štáb – jen v detailu, ve výpisech prázdné. */
   credits: Credit[]
   genres: string[]
   match_state: MatchState
@@ -95,6 +123,7 @@ export interface Show {
   poster_path?: string
   backdrop_path?: string
   rating?: number
+  /** Obsazení a štáb – jen v detailu, ve výpisech prázdné. */
   credits: Credit[]
   genres: string[]
   match_state: MatchState
@@ -245,6 +274,15 @@ export interface Home {
 export interface SearchResults {
   movies: Movie[]
   shows: Show[]
+  people: Person[]
+}
+
+/** Průběh obnovy metadat spárovaných titulů (administrace). */
+export interface RefreshStatus {
+  running: boolean
+  done: number
+  total: number
+  failed: number
 }
 
 export type PlaybackMode = 'direct' | 'remux' | 'transcode_audio' | 'transcode'

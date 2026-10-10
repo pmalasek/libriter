@@ -137,6 +137,16 @@ přičemž může zvolit i jiný zdroj, než má knihovna. Dvě verze téhož fi
 stejné knihovně se po spárování sloučí do jednoho titulu. *Nepárovat* titul
 vyřadí z automatického párování.
 
+**Obsazení a štáb** se ukládají jako osoby: klik na herce nebo režiséra v
+detailu titulu otevře jeho stránku s filmy a seriály z knihovny. TMDB a
+TVmaze dodávají i fotky osob (soubory `person-<zdroj>-<id>` v
+`SCENITER_IMAGE_ROOT`), ČSFD jen ID tvůrce. Osoby se stejným jménem z
+různých zdrojů sdílejí stránku i fotku. Po přechodu na verzi s osobami mají
+dříve spárované tituly obsazení jen podle jmen a bez fotek – doplní je
+**Administrace → Přehled → Obnovit metadata**, která znovu načte všechny
+spárované tituly z jejich zdroje (u ČSFD s odstupem 2 s na dotaz). Obnova
+přepíše ruční úpravy názvu a popisu, stejně jako nové spárování.
+
 Podmínky TMDB vyžadují uvést zdroj – web to dělá v patičce stránek, pokud je
 plugin TMDB nainstalovaný.
 
@@ -181,8 +191,10 @@ Vše pod `/api/v1/sceniter`. Přehrávací cesty nesou streamovací token v adre
 | `GET /home` | reader | Pokračovat, nově přidané po knihovnách, seznam |
 | `GET /libraries` | reader | Zapnuté knihovny v pořadí (menu) |
 | `GET /movies`, `/shows` | reader | Výpis (`?library=&q=&genre=&sort=title\|year\|added\|rating`) |
-| `GET /movies/{id}`, `/shows/{id}`, `/episodes/{id}` | reader | Detail se soubory a stavem uživatele |
-| `GET /genres`, `/search?q=` | reader | Žánry, hledání |
+| `GET /movies/{id}`, `/shows/{id}`, `/episodes/{id}` | reader | Detail se soubory, obsazením a stavem uživatele |
+| `GET /movies/{id}/similar`, `/shows/{id}/similar` | reader | Podobné tituly (stejná knihovna, společné žánry) |
+| `GET /people/{id}` | reader | Osoba a její filmy a seriály v knihovně |
+| `GET /genres`, `/search?q=` | reader | Žánry, hledání (tituly i osoby) |
 | `GET /media/{id}/playback?profile=&audio=&mode=` | reader | Rozhodnutí o přehrávání a adresy |
 | `GET /media/{id}/stream?t=` | token | Soubor tak, jak je (Range) |
 | `GET /media/{id}/hls/master.m3u8?t=&mode=&audio=` | token | Spustí převod, master playlist |
@@ -203,6 +215,7 @@ Vše pod `/api/v1/sceniter`. Přehrávací cesty nesou streamovací token v adre
 | `GET /admin/libraries/candidates`, `PUT /admin/libraries/order` | admin | Volné složky `VIDEO_ROOT`, pořadí knihoven |
 | `GET /admin/scanner`, `POST /admin/scanner/rescan` | admin | Stav a spuštění průchodu |
 | `POST /admin/metadata/match-all` | admin | Automatické párování |
+| `POST /admin/metadata/refresh-all`, `GET /admin/metadata/refresh` | admin | Obnova metadat spárovaných titulů, její průběh |
 | `GET /admin/library/unmatched`, `GET /admin/stats` | admin | Nespárované tituly, statistiky |
 | `GET /admin/transcode`, `DELETE /admin/transcode/{session}` | admin | Běžící převody |
 

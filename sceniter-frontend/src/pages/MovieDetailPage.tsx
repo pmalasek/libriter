@@ -9,7 +9,8 @@ import { Button } from 'core-web/src/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from 'core-web/src/components/ui/dialog'
 import { useMovie } from '@/api/hooks'
 import { Attribution } from '@/components/Attribution'
-import { Credits } from '@/components/Credits'
+import { CastShelf, KeyCrew } from '@/components/CastShelf'
+import { DetailSkeleton, Expandable, GenreChips, SimilarShelf } from '@/components/DetailParts'
 import { EditTitleDialog } from '@/components/EditTitleDialog'
 import { FileInfo } from '@/components/FileInfo'
 import { Hero, MetaLine } from '@/components/Hero'
@@ -28,7 +29,7 @@ export function MovieDetailPage() {
 
   if (movie.isError) return <ErrorState error={movie.error} onRetry={() => void movie.refetch()} />
   const m = movie.data
-  if (!m) return <p className="py-8 text-center text-muted-foreground">{t('common.loading')}</p>
+  if (!m) return <DetailSkeleton />
 
   const progress = m.user.progress
   const resume = canResume(progress)
@@ -45,10 +46,11 @@ export function MovieDetailPage() {
           items={[
             m.year ? String(m.year) : null,
             m.runtime_min ? t('video.detail.runtime', { minutes: m.runtime_min }) : m.duration_sec ? formatClock(m.duration_sec) : null,
-            m.genres.join(', '),
           ]}
         />
         <SourceRating rating={m.rating} provider={m.meta_provider} />
+        <GenreChips genres={m.genres} libraryId={m.library_id} />
+        <KeyCrew credits={m.credits} role="director" />
 
         <div className="mt-5 flex flex-wrap gap-2">
           {playable ? (
@@ -81,11 +83,12 @@ export function MovieDetailPage() {
 
       {m.match_state === 'unmatched' ? <p className="mt-6 text-sm text-muted-foreground">{t('video.detail.notMatched')}</p> : null}
       {m.tagline ? <p className="font-heading mt-6 text-lg italic">{m.tagline}</p> : null}
-      {m.overview ? <p className="mt-4 max-w-3xl leading-relaxed">{m.overview}</p> : null}
+      {m.overview ? <Expandable key={m.id} text={m.overview} className="mt-4" /> : null}
 
-      <Credits credits={m.credits} />
-      <ExternalLinks kind="movie" ids={m.external_ids} />
+      <CastShelf credits={m.credits} />
+      <SimilarShelf kind="movie" id={m.id} />
       <FileInfo files={m.files} />
+      <ExternalLinks kind="movie" ids={m.external_ids} />
       <Attribution provider={m.meta_provider ?? null} />
 
       {editing ? <EditTitleDialog kind="movie" title={m} open={editing} onOpenChange={setEditing} /> : null}

@@ -94,15 +94,33 @@ type show struct {
 	Summary  string `json:"summary"`
 	Embedded struct {
 		Cast []struct {
-			Person    struct{ Name string } `json:"person"`
+			Person    person                `json:"person"`
 			Character struct{ Name string } `json:"character"`
 		} `json:"cast"`
 		Crew []struct {
-			Type   string                `json:"type"`
-			Person struct{ Name string } `json:"person"`
+			Type   string `json:"type"`
+			Person person `json:"person"`
 		} `json:"crew"`
 		Seasons []season `json:"seasons"`
 	} `json:"_embedded"`
+}
+
+// person je osoba z obsazení nebo štábu (embed cast/crew).
+type person struct {
+	ID    int    `json:"id"`
+	Name  string `json:"name"`
+	Image *image `json:"image"`
+}
+
+func (p person) plugin() plugin.Person {
+	out := plugin.Person{Name: p.Name}
+	if p.ID != 0 {
+		out.ID = strconv.Itoa(p.ID)
+	}
+	if p.Image != nil {
+		out.ImageURL = p.Image.Medium
+	}
+	return out
 }
 
 type season struct {
@@ -202,11 +220,13 @@ func (c *Client) Show(ctx context.Context, id int) (*plugin.VideoMetadata, error
 		if i >= 15 {
 			break
 		}
-		d.Credits.Cast = append(d.Credits.Cast, plugin.CastMember{Name: p.Person.Name, Character: p.Character.Name})
+		pp := p.Person.plugin()
+		pp.Character = p.Character.Name
+		d.Credits.Cast = append(d.Credits.Cast, pp)
 	}
 	for _, p := range s.Embedded.Crew {
 		if p.Type == "Creator" {
-			d.Credits.Creators = append(d.Credits.Creators, p.Person.Name)
+			d.Credits.Creators = append(d.Credits.Creators, p.Person.plugin())
 		}
 	}
 	for _, se := range s.Embedded.Seasons {

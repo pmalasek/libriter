@@ -21,7 +21,7 @@ func TestClient(t *testing.T) {
 				"status":"Ended","averageRuntime":30,"genres":["Comedy"],"rating":{"average":8.5},
 				"externals":{"imdb":"tt0386676","thetvdb":73244},"image":{"original":"https://static.tvmaze.com/o.jpg"},
 				"summary":"<p>Steve Carell stars in <b>The Office</b>.</p>",
-				"_embedded":{"cast":[{"person":{"name":"Rainn Wilson"},"character":{"name":"Dwight"}}],
+				"_embedded":{"cast":[{"person":{"id":11,"name":"Rainn Wilson","image":{"medium":"https://static.tvmaze.com/p.jpg"}},"character":{"name":"Dwight"}}],
 				"crew":[{"type":"Creator","person":{"name":"Greg Daniels"}},{"type":"Producer","person":{"name":"X"}}],
 				"seasons":[{"id":2087,"number":1},{"id":2088,"number":2}]}}`))
 		case "/shows/526/seasons":
@@ -49,7 +49,8 @@ func TestClient(t *testing.T) {
 		d.ExternalIDs["imdb"] != "tt0386676" || d.ExternalIDs["thetvdb"] != "73244" {
 		t.Errorf("detail %+v", d)
 	}
-	if len(d.Credits.Creators) != 1 || d.Credits.Cast[0].Character != "Dwight" || len(d.Seasons) != 2 {
+	if len(d.Credits.Creators) != 1 || d.Credits.Cast[0].Character != "Dwight" || len(d.Seasons) != 2 ||
+		d.Credits.Cast[0].ID != "11" || d.Credits.Cast[0].ImageURL != "https://static.tvmaze.com/p.jpg" {
 		t.Errorf("tvůrci/řady %+v %v", d.Credits, d.Seasons)
 	}
 

@@ -39,6 +39,12 @@ func (p *Product) Init(d product.Deps) error {
 	cfg := p.cfg
 
 	store := storage.New(d.DB)
+	// Obsazení ze starého sloupce credits_json do tabulek osob (jednou, po migraci 004).
+	if n, err := store.BackfillCredits(d.Ctx); err != nil {
+		slog.Warn("přenos obsazení do sc_credits", "err", err)
+	} else if n > 0 {
+		slog.Info("obsazení přeneseno do sc_credits", "titulů", n)
+	}
 	// Metadata dodávají pluginy (TMDB, ČSFD, …); zdroj a jazyk pro
 	// automatické párování nastavuje admin u každé knihovny.
 	matcher := service.NewMatcher(store, d.Plugins, cfg.ImageRoot)

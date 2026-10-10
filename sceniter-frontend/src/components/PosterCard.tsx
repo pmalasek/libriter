@@ -10,10 +10,13 @@ export function PosterCard({
   movie,
   show,
   progress,
+  caption,
 }: {
   movie?: Movie
   show?: Show
   progress?: WatchProgress
+  /** Popisek pod názvem místo roku / počtu dílů (např. role ve filmografii). */
+  caption?: string
 }) {
   const { t } = useTranslation()
   const title = movie ?? show
@@ -44,6 +47,7 @@ export function PosterCard({
       </div>
       <p className="mt-2 line-clamp-2 text-sm leading-snug font-medium">{title.title}</p>
       {subtitle ? <p className="text-xs text-muted-foreground">{subtitle}</p> : null}
+      {caption ? <p className="line-clamp-2 text-xs text-muted-foreground">{caption}</p> : null}
     </Link>
   )
 }

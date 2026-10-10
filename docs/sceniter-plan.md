@@ -335,7 +335,7 @@ sudo nginx -t && curl -sI https://video.helpdesk24.works/health
 | Upstream nginx přejmenovat | Upstream `libriter` přesunut do `libriter-upstream.conf` (conf.d) | Obě domény ho sdílí; dvě definice nginx odmítne. |
 | Detailní README Libriteru přesunout do `docs/libriter.md` | README doplněné o Sceniter a monorepo, Libriter zůstal v README | Přesun dlouhého textu bez obsahové změny by jen rozbil odkazy. |
 | `core/fswatch` vytažené ze scanneru | Scanner Sceniteru má vlastní sledování změn | Knižní scanner zůstal nedotčený; sjednocení je samostatný refaktor. |
-| Lidé a obsazení v tabulkách `sc_people`, `sc_credits` | Sloupec `credits_json` u filmu a seriálu | Obsazení se jen zobrazuje; tabulky přidá migrace, až bude potřeba podle něj hledat. |
+| Lidé a obsazení v tabulkách `sc_people`, `sc_credits` | Nejdřív sloupec `credits_json`; od migrace 004 tabulky `sc_people` a `sc_credits` (přenos při startu, `credits_json` zůstává prázdný) | Zpočátku se obsazení jen zobrazovalo. Stránka osoby a hledání osob tabulky potřebují. Fotky osob jsou v `SCENITER_IMAGE_ROOT` naplocho (`person-<zdroj>-<id>`), ne v podadresáři `profiles`. |
 | Plný převod až ve fázi 4, titulky ve fázi 4 | Hotové spolu s backendem (fáze 2) | Správce HLS je od začátku navržený pro všechny režimy. |
 | Katalogy jádra jen s obecnými texty | Jádro dostalo celé jmenné prostory `common, format, labels, errors, language, auth, layout, profile, admin` | Dělit pětijazyčné katalogy po klíčích by bylo křehké; několik knižních popisků v jádru je zapsané v README `core-shared`. |
 | Správa uživatelů ve webu Sceniteru (`core-web`) | Administrace Sceniteru odkazuje na správu účtů v Libriteru | Stránky uživatelů v Libriteru závisí na knižních hookách; účty jsou stejně společné. |

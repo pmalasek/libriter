@@ -57,6 +57,8 @@ var (
 	episodeRe    = regexp.MustCompile(`\(S(\d+)E(\d+)\)|\(E(\d+)\)`)
 	seasonNameRe = regexp.MustCompile(`(?i)^(?:série|season|řada|sezóna)\s*(\d+)`)
 	durationRe   = regexp.MustCompile(`PT(?:(\d+)H)?(?:(\d+)M)?`)
+	// personIDRe vytáhne ID tvůrce z odkazu /tvurce/3112-jan-hrebejk/.
+	personIDRe = regexp.MustCompile(`/tvurce/(\d+)`)
 	// Velikost v adrese obrázku z galerie (…/cache/resized/w663/…).
 	resizedRe = regexp.MustCompile(`/cache/resized/w\d+/`)
 )
@@ -266,6 +268,7 @@ type jsonLD struct {
 	Image       string `json:"image"`
 	Director    []struct {
 		Name string `json:"name"`
+		URL  string `json:"url"`
 	} `json:"director"`
 	Actor []struct {
 		Name string `json:"name"`
@@ -294,6 +297,14 @@ func findJSONLD(doc *html.Node) *jsonLD {
 	return out
 }
 
+// personID vrátí ID tvůrce z odkazu na jeho stránku (prázdné, když tam není).
+func personID(href string) string {
+	if m := personIDRe.FindStringSubmatch(href); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
 // ParseFilm vytáhne metadata ze stránky filmu nebo seriálu.
 func ParseFilm(doc *html.Node) *plugin.VideoMetadata {
 	d := &plugin.VideoMetadata{}
@@ -309,7 +320,7 @@ func ParseFilm(doc *html.Node) *plugin.VideoMetadata {
 		}
 		d.PosterURL = absURL(ld.Image)
 		for _, p := range ld.Director {
-			d.Credits.Directors = append(d.Credits.Directors, p.Name)
+			d.Credits.Directors = append(d.Credits.Directors, plugin.Person{ID: personID(p.URL), Name: p.Name})
 		}
 		if r := ld.AggregateRating; r != nil && r.RatingValue > 0 {
 			best := r.BestRating
@@ -379,17 +390,18 @@ func ParseFilm(doc *html.Node) *plugin.VideoMetadata {
 				continue
 			}
 			role := strings.TrimSuffix(htmlutil.Collapse(htmlutil.Text(h4)), ":")
-			var names []string
+			var names []plugin.Person
 			htmlutil.Walk(c, func(n *html.Node) bool {
-				if n.Type == html.ElementNode && n.Data == "a" && strings.HasPrefix(htmlutil.Attr(n, "href"), "/tvurce/") {
-					names = append(names, htmlutil.Collapse(htmlutil.Text(n)))
+				if href := htmlutil.Attr(n, "href"); n.Type == html.ElementNode && n.Data == "a" && strings.HasPrefix(href, "/tvurce/") {
+					names = append(names, plugin.Person{ID: personID(href), Name: htmlutil.Collapse(htmlutil.Text(n))})
 					return false
 				}
 				return true
 			})
 			switch role {
 			case "Režie":
-				if len(d.Credits.Directors) == 0 {
+				// JSON-LD dává režiséry bez odkazu; blok tvůrců má i jejich ID.
+				if len(d.Credits.Directors) == 0 || (len(names) > 0 && d.Credits.Directors[0].ID == "") {
 					d.Credits.Directors = names
 				}
 			case "Scénář":
@@ -403,7 +415,7 @@ func ParseFilm(doc *html.Node) *plugin.VideoMetadata {
 					if len(d.Credits.Cast) >= maxCast {
 						break
 					}
-					d.Credits.Cast = append(d.Credits.Cast, plugin.CastMember{Name: n})
+					d.Credits.Cast = append(d.Credits.Cast, n)
 				}
 			}
 		}
