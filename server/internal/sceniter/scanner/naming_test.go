@@ -113,3 +113,45 @@ func TestIgnored(t *testing.T) {
 		}
 	}
 }
+
+func TestStripPart(t *testing.T) {
+	cases := []struct {
+		in   string
+		base string
+		part int
+	}{
+		{"pelisky.cd1", "pelisky", 1},
+		{"Pelíšky (1999) CD2", "Pelíšky (1999)", 2},
+		{"Film - part 2", "Film", 2},
+		{"Film_disk1", "Film", 1},
+		{"Film (pt3)", "Film", 3},
+		{"Apollo 13", "Apollo 13", 0},
+		{"cd1", "cd1", 0},
+	}
+	for _, c := range cases {
+		base, part := StripPart(c.in)
+		if base != c.base || part != c.part {
+			t.Errorf("StripPart(%q) = %q, %d; chci %q, %d", c.in, base, part, c.base, c.part)
+		}
+	}
+}
+
+func TestMovieKey(t *testing.T) {
+	cases := []struct {
+		rel   string
+		key   string
+		title string
+		year  int
+	}{
+		{"Filmy/Divadelní hry/Lakomec (1980).avi", "Filmy/Divadelní hry/Lakomec (1980)", "Lakomec", 1980},
+		{"Filmy/Detektivky Hany Proškové/Vražda v zahradě.avi", "Filmy/Detektivky Hany Proškové/Vražda v zahradě", "Vražda v zahradě", 0},
+		{"Filmy/Pelíšky (1999)/pelisky.cd2.avi", "Filmy/Pelíšky (1999)/pelisky", "pelisky", 0},
+		{"Filmy/Amadeus (1984).mkv", "Filmy/Amadeus (1984)", "Amadeus", 1984},
+	}
+	for _, c := range cases {
+		key, info := movieKeyOf(c.rel)
+		if key != c.key || info.Title != c.title || info.Year != c.year {
+			t.Errorf("movieKeyOf(%q) = %q, %+v; chci %q, %q, %d", c.rel, key, info, c.key, c.title, c.year)
+		}
+	}
+}

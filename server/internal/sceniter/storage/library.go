@@ -14,7 +14,7 @@ import (
 const movieCols = `
 	m.id, m.library_id, m.source_key, m.title, m.original_title, m.year, m.overview, m.tagline, m.runtime_min,
 	m.meta_provider, m.meta_id, m.external_ids_json, m.poster_path, m.backdrop_path, m.rating,
-	m.match_state, m.created_at, m.updated_at`
+	m.match_state, m.match_attempted_at, m.created_at, m.updated_at`
 
 // mainMovieFile vybere hlavní soubor filmu: největší (nejlepší verzi).
 const mainMovieFile = `(SELECT id FROM sc_media_files WHERE movie_id = m.id ORDER BY size_bytes DESC, file_path LIMIT 1)`
@@ -25,9 +25,10 @@ func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, e
 		orig, overview, tagline, poster, bd sql.NullString
 		provider, metaID, external          sql.NullString
 		year, runtime, rating               sql.NullInt64
+		attempted                           sql.NullTime
 	)
 	dest := []any{&m.ID, &m.LibraryID, &m.SourceKey, &m.Title, &orig, &year, &overview, &tagline, &runtime,
-		&provider, &metaID, &external, &poster, &bd, &rating, &m.MatchState, &m.CreatedAt, &m.UpdatedAt}
+		&provider, &metaID, &external, &poster, &bd, &rating, &m.MatchState, &attempted, &m.CreatedAt, &m.UpdatedAt}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return m, err
 	}
@@ -35,6 +36,9 @@ func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, e
 	m.RuntimeMin, m.MetaProvider, m.MetaID = ptrInt(runtime), ptrString(provider), ptrString(metaID)
 	m.ExternalIDs = model.UnmarshalExternalIDs(ptrString(external))
 	m.PosterPath, m.BackdropPath, m.Rating = ptrString(poster), ptrString(bd), ptrInt(rating)
+	if attempted.Valid {
+		m.MatchAttemptedAt = &attempted.Time
+	}
 	m.Credits = []model.Credit{}
 	m.Genres = []string{}
 	return m, nil
@@ -192,7 +196,7 @@ func (s *Store) genresByID(ctx context.Context, kind string) (map[uuid.UUID][]st
 const showCols = `
 	s.id, s.library_id, s.source_key, s.title, s.original_title, s.year, s.overview, s.status,
 	s.meta_provider, s.meta_id, s.external_ids_json,
-	s.poster_path, s.backdrop_path, s.rating, s.match_state, s.created_at, s.updated_at`
+	s.poster_path, s.backdrop_path, s.rating, s.match_state, s.match_attempted_at, s.created_at, s.updated_at`
 
 // showCounts spočítá řady a díly, které mají soubor.
 const showCounts = `
@@ -207,10 +211,11 @@ func scanShow(sc interface{ Scan(...any) error }, extra ...any) (model.Show, err
 		orig, overview, status, poster, bd sql.NullString
 		provider, metaID, external         sql.NullString
 		year, rating                       sql.NullInt64
+		attempted                          sql.NullTime
 	)
 	dest := []any{&sh.ID, &sh.LibraryID, &sh.SourceKey, &sh.Title, &orig, &year, &overview, &status,
 		&provider, &metaID, &external,
-		&poster, &bd, &rating, &sh.MatchState, &sh.CreatedAt, &sh.UpdatedAt,
+		&poster, &bd, &rating, &sh.MatchState, &attempted, &sh.CreatedAt, &sh.UpdatedAt,
 		&sh.SeasonCount, &sh.EpisodeCount}
 	err := sc.Scan(append(dest, extra...)...)
 	if err != nil {
@@ -220,6 +225,9 @@ func scanShow(sc interface{ Scan(...any) error }, extra ...any) (model.Show, err
 	sh.MetaProvider, sh.MetaID = ptrString(provider), ptrString(metaID)
 	sh.ExternalIDs = model.UnmarshalExternalIDs(ptrString(external))
 	sh.PosterPath, sh.BackdropPath, sh.Rating = ptrString(poster), ptrString(bd), ptrInt(rating)
+	if attempted.Valid {
+		sh.MatchAttemptedAt = &attempted.Time
+	}
 	sh.Credits = []model.Credit{}
 	sh.Genres = []string{}
 	return sh, nil
@@ -612,7 +620,14 @@ type Stats struct {
 	TotalBytes      int64 `json:"total_bytes"`
 	UnmatchedMovies int   `json:"unmatched_movies"`
 	UnmatchedShows  int   `json:"unmatched_shows"`
+	// Failed* jsou nespárované tituly, pro které žádný zdroj nenašel jistý výsledek.
+	FailedMovies int `json:"failed_movies"`
+	FailedShows  int `json:"failed_shows"`
 }
+
+// movieHasFiles omezí filmy na ty, které mají soubor (ostatní se nikde
+// nevypisují); obdoba showHasFiles.
+const movieHasFiles = ` EXISTS (SELECT 1 FROM sc_media_files f WHERE f.movie_id = m.id)`
 
 func (s *Store) Stats(ctx context.Context) (Stats, error) {
 	var st Stats
@@ -623,8 +638,11 @@ func (s *Store) Stats(ctx context.Context) (Stats, error) {
 		  (SELECT count(DISTINCT episode_id) FROM sc_media_files WHERE episode_id IS NOT NULL),
 		  (SELECT count(*) FROM sc_media_files),
 		  (SELECT COALESCE(sum(size_bytes), 0) FROM sc_media_files),
-		  (SELECT count(*) FROM sc_movies WHERE match_state = 'unmatched'),
-		  (SELECT count(*) FROM sc_shows WHERE match_state = 'unmatched')`).
-		Scan(&st.Movies, &st.Shows, &st.Episodes, &st.Files, &st.TotalBytes, &st.UnmatchedMovies, &st.UnmatchedShows)
+		  (SELECT count(*) FROM sc_movies m WHERE match_state = 'unmatched' AND`+movieHasFiles+`),
+		  (SELECT count(*) FROM sc_shows s WHERE match_state = 'unmatched' AND`+showHasFiles+`),
+		  (SELECT count(*) FROM sc_movies m WHERE match_state = 'unmatched' AND match_attempted_at IS NOT NULL AND`+movieHasFiles+`),
+		  (SELECT count(*) FROM sc_shows s WHERE match_state = 'unmatched' AND match_attempted_at IS NOT NULL AND`+showHasFiles+`)`).
+		Scan(&st.Movies, &st.Shows, &st.Episodes, &st.Files, &st.TotalBytes, &st.UnmatchedMovies, &st.UnmatchedShows,
+			&st.FailedMovies, &st.FailedShows)
 	return st, err
 }

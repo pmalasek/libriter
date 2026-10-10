@@ -514,6 +514,11 @@ func (h *Handler) MatchAll(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
 
+// GET /sceniter/admin/metadata/match – průběh automatického párování.
+func (h *Handler) MatchStatus(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, h.Matcher.MatchStatusNow())
+}
+
 // GET /sceniter/admin/library/unmatched
 func (h *Handler) Unmatched(w http.ResponseWriter, r *http.Request) {
 	movies, err := h.Store.ListMovies(r.Context(), storage.MovieFilter{MatchState: model.MatchUnmatched})

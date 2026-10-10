@@ -19,22 +19,25 @@ import (
 // v os.Args[0] se chová jako plugin (viz core/plugin/host_test.go).
 func TestMain(m *testing.M) {
 	if strings.HasPrefix(filepath.Base(os.Args[0]), plugin.FilePrefix) {
-		os.Exit(sdk.Serve(context.Background(), fakePlugin(), os.Args[1:], os.Stdin, os.Stdout))
+		name := strings.TrimPrefix(filepath.Base(os.Args[0]), plugin.FilePrefix)
+		os.Exit(sdk.Serve(context.Background(), fakePlugin(name), os.Args[1:], os.Stdin, os.Stdout))
 	}
 	os.Exit(m.Run())
 }
 
 // fakePlugin najde každý titul pod jeho názvem; „Blok“ odpoví 429,
-// „Neznámý“ nenajde nic.
-func fakePlugin() sdk.Plugin {
+// „Neznámý“ nenajde nic. Záložní zdroj „backup“ najde i „Neznámý“.
+func fakePlugin(name string) sdk.Plugin {
 	return sdk.Plugin{
-		Manifest: plugin.Manifest{Name: "fake", Title: "Fake", Version: "1.0", Kinds: []string{plugin.KindMovie}},
+		Manifest: plugin.Manifest{Name: name, Title: name, Version: "1.0", Kinds: []string{plugin.KindMovie}},
 		Search: func(_ context.Context, req plugin.Request) ([]plugin.SearchResult, error) {
 			switch req.Query.Title {
 			case "Blok":
 				return nil, sdk.Errorf(plugin.ErrCodeRateLimited, "HTTP 429")
 			case "Neznámý":
-				return nil, nil
+				if name != "backup" {
+					return nil, nil
+				}
 			}
 			return []plugin.SearchResult{{ID: req.Query.Title, Title: req.Query.Title}}, nil
 		},
@@ -44,7 +47,7 @@ func fakePlugin() sdk.Plugin {
 	}
 }
 
-func newFakeHost(t *testing.T) *plugin.Host {
+func newFakeHost(t *testing.T, names ...string) *plugin.Host {
 	t.Helper()
 	exe, err := os.Executable()
 	if err != nil {
@@ -55,8 +58,13 @@ func newFakeHost(t *testing.T) *plugin.Host {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, plugin.FilePrefix+"fake"), data, 0o755); err != nil {
-		t.Fatal(err)
+	if len(names) == 0 {
+		names = []string{"fake"}
+	}
+	for _, n := range names {
+		if err := os.WriteFile(filepath.Join(dir, plugin.FilePrefix+n), data, 0o755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	h := plugin.NewHost(dir)
 	if err := h.Discover(context.Background()); err != nil {
@@ -143,5 +151,36 @@ func TestAutoMatchRetryWindow(t *testing.T) {
 	}
 	if n := pending(); n != 1 {
 		t.Fatalf("po ručním vrácení: %d", n)
+	}
+}
+
+// Co zdroj knihovny nenajde, zkusí se v ostatních zdrojích. Průběh počítá
+// spárované i nenalezené tituly.
+func TestAutoMatchFallsBackToOtherProviders(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	lib, err := e.store.CreateLibrary(ctx, storage.LibraryInput{Dir: "Zdroj", Name: "Zdroj", Kind: "movie",
+		Language: "cs", Provider: "fake", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.movieLib = lib.ID
+	alfa, _ := e.movie(t, "Alfa")
+	unknown, _ := e.movie(t, "Neznámý")
+
+	m := NewMatcher(e.store, newFakeHost(t, "fake", "backup"), t.TempDir())
+	m.autoMatch(ctx, false)
+
+	for id, want := range map[uuid.UUID]string{alfa: "fake", unknown: "backup"} {
+		mv, err := e.store.GetMovie(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if mv.MatchState != model.MatchAuto || mv.MetaProvider == nil || *mv.MetaProvider != want {
+			t.Errorf("%s: stav %s, zdroj %v, chci %s", mv.Title, mv.MatchState, mv.MetaProvider, want)
+		}
+	}
+	if st := m.MatchStatusNow(); st.Running || st.Total != 2 || st.Done != 2 || st.Matched != 2 || st.Failed != 0 {
+		t.Errorf("průběh %+v", st)
 	}
 }

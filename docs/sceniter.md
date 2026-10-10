@@ -84,15 +84,18 @@ VIDEO_ROOT/
 │   ├── Křídla vášně - The Wings of the Dove (1997).avi      → „Křídla vášně“ / „The Wings of the Dove“, 1997
 │   ├── Křídla vášně - The Wings of the Dove (1997).srt      → titulky k filmu výš
 │   ├── 22.míle.2018.Mile.22.BRRip.720p.x264.AC3.CZ.mkv      → „22 míle“, 2018
-│   └── Pelíšky (1999)/pelisky.mkv                            → film v adresáři: název a rok z adresáře
+│   ├── Pelíšky (1999).cd1.avi, Pelíšky (1999).cd2.avi         → jeden film „Pelíšky“, 1999 (dva díly)
+│   └── Divadelní hry/Lakomec.avi                              → „Lakomec“; podsložka jen třídí
 └── Seriály/                                                  → knihovna typu „seriály“
     └── Docent/                                               → seriál „Docent“
         ├── S01/Docent - 01x02 - Preso s mlíčkem.mkv          → 1. řada, 2. díl „Preso s mlíčkem“
         └── S03/Docent - 02. díl - Příliš mnoho podezřelých.mkv → 3. řada (z adresáře), 2. díl
 ```
 
-- **Knihovna filmů**: soubor naplocho je film sám; soubor v podadresáři patří filmu
-  toho adresáře (více souborů = více verzí, přehrává se největší). Název končí
+- **Knihovna filmů**: každý soubor je film sám, i v podsložce. Podsložky
+  („Divadelní hry“, „Detektivky Hany Proškové“) jen třídí a do názvu ani
+  roku nevstupují. Díly jednoho filmu ve stejné složce (`cd1`/`cd2`,
+  `part1`, `disk1`) jsou jeden film. Název končí
   rokem v závorce nebo prvním rokem či značkou vydání (`720p`, `BRRip`,
   `x264`, `CZ`, `Dabing`…). „Český název - Original Title“ se rozdělí na název
   a původní název. Úvodní značky (`!(Dokument)-`, `[CZ]`) se zahodí a název
@@ -110,7 +113,9 @@ VIDEO_ROOT/
   soubory a ukázky (`sample`).
 
 Ručně opravený název (editor, tlačítko Upravit) scanner nepřepíše; soubor,
-který už v knihovně je, se nikdy nepřeřadí jinam.
+který už v knihovně je, se nepřeřadí jinam. Výjimkou jsou filmy založené
+starší verzí podle podsložky: ty se při průchodu rozdělí na filmy podle
+souborů (film s jediným souborem si nechá metadata, sdružený se páruje znovu).
 
 ## Metadata
 
@@ -129,12 +134,14 @@ databáze) odkazuje. Klíče a nastavení pluginů jsou v **Administrace → Zdr
 metadat**; tam jde i znovu načíst adresář pluginů bez restartu serveru.
 
 Po každém průchodu knihovnou se nespárované tituly zkusí spárovat se zdrojem
-knihovny v jejím jazyce. Automaticky se párují jen jisté shody: stejný rok
+knihovny v jejím jazyce. Když zdroj knihovny jistou shodu nenajde, zkusí se
+postupně ostatní nainstalované zdroje, které daný druh umí (zdroj, který
+právě odmítá požadavky, titul jen odloží). Automaticky se párují jen jisté shody: stejný rok
 (±1) a stejný název bez diakritiky, nebo jediný výsledek se shodným názvem.
 Zbytek zůstane „nespárovaný“ a admin ho spáruje ručně v **Administrace →
 Párování** (nebo editor tlačítkem *Spárovat se zdrojem metadat* v detailu),
-přičemž může zvolit i jiný zdroj, než má knihovna. Titul, pro který zdroj
-jistou shodu nenašel, se automaticky znovu hledá až po 7 dnech (šetří
+přičemž může zvolit i jiný zdroj, než má knihovna. Titul, pro který žádný zdroj
+jistou shodu nenašel (v administraci „nenalezeno“), se automaticky znovu hledá až po 7 dnech (šetří
 požadavky na zdroj); hned ho zkusí **Spárovat vše** v administraci nebo
 vrácení titulu do stavu „nespárovaný“. Dvě verze téhož filmu ve
 stejné knihovně se po spárování sloučí do jednoho titulu. *Nepárovat* titul
@@ -225,7 +232,7 @@ Vše pod `/api/v1/sceniter`. Přehrávací cesty nesou streamovací token v adre
 | `GET\|POST /admin/libraries`, `PATCH\|DELETE /admin/libraries/{id}` | admin | Správa knihoven |
 | `GET /admin/libraries/candidates`, `PUT /admin/libraries/order` | admin | Volné složky `VIDEO_ROOT`, pořadí knihoven |
 | `GET /admin/scanner`, `POST /admin/scanner/rescan` | admin | Stav a spuštění průchodu |
-| `POST /admin/metadata/match-all` | admin | Automatické párování |
+| `POST /admin/metadata/match-all`, `GET /admin/metadata/match` | admin | Automatické párování, jeho průběh |
 | `POST /admin/metadata/refresh-all`, `GET /admin/metadata/refresh` | admin | Obnova metadat spárovaných titulů, její průběh |
 | `GET /admin/library/unmatched`, `GET /admin/stats` | admin | Nespárované tituly, statistiky |
 | `GET /admin/transcode`, `DELETE /admin/transcode/{session}` | admin | Běžící převody |

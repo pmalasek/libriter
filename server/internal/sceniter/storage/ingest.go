@@ -108,6 +108,65 @@ func (s *Store) EnsureMovie(ctx context.Context, k MovieKey) (uuid.UUID, error) 
 	return id, nil
 }
 
+// MovieSourceKey vrátí source_key filmu, nebo ErrNotFound.
+func (s *Store) MovieSourceKey(ctx context.Context, id uuid.UUID) (string, error) {
+	var key string
+	err := s.db.QueryRowContext(ctx, `SELECT source_key FROM sc_movies WHERE id = ?1`, id).Scan(&key)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("movie source key: %w", err)
+	}
+	return key, nil
+}
+
+// MovieFilePaths vrátí cesty souborů filmu.
+func (s *Store) MovieFilePaths(ctx context.Context, id uuid.UUID) ([]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT file_path FROM sc_media_files WHERE movie_id = ?1`, id)
+	if err != nil {
+		return nil, fmt.Errorf("movie file paths: %w", err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
+// RekeyMovie změní source_key filmu. Spárovaný film si metadata nechá;
+// nespárovanému se název a rok přepíšou podle souboru a smažou se
+// zbytky dřívějších metadat. False = film s klíčem už existuje.
+func (s *Store) RekeyMovie(ctx context.Context, id uuid.UUID, k MovieKey) (bool, error) {
+	var n int
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FROM sc_movies WHERE source_key = ?1`, k.SourceKey).Scan(&n); err != nil {
+		return false, fmt.Errorf("rekey movie: %w", err)
+	}
+	if n > 0 {
+		return false, nil
+	}
+	const q = `
+		UPDATE sc_movies SET source_key = ?2, updated_at = CURRENT_TIMESTAMP,
+		  title          = CASE WHEN match_state = 'unmatched' THEN ?3 ELSE title END,
+		  original_title = CASE WHEN match_state = 'unmatched' THEN ?4 ELSE original_title END,
+		  year           = CASE WHEN match_state = 'unmatched' THEN ?5 ELSE year END,
+		  overview       = CASE WHEN match_state = 'unmatched' THEN NULL ELSE overview END,
+		  tagline        = CASE WHEN match_state = 'unmatched' THEN NULL ELSE tagline END,
+		  poster_path    = CASE WHEN match_state = 'unmatched' THEN NULL ELSE poster_path END,
+		  backdrop_path  = CASE WHEN match_state = 'unmatched' THEN NULL ELSE backdrop_path END,
+		  match_attempted_at = CASE WHEN match_state = 'unmatched' THEN NULL ELSE match_attempted_at END
+		WHERE id = ?1`
+	if _, err := s.db.ExecContext(ctx, q, id, k.SourceKey, k.Title, nullStr(k.OriginalTitle), nullInt(k.Year)); err != nil {
+		return false, fmt.Errorf("rekey movie: %w", err)
+	}
+	return true, nil
+}
+
 // EpisodeKey identifikuje díl na disku.
 type EpisodeKey struct {
 	LibraryID uuid.UUID

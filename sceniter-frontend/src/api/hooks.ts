@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useEffect, useRef } from 'react'
 import {
   apiFetch,
   queryKeys,
@@ -6,6 +7,7 @@ import {
   type Home,
   type Library,
   type LibraryRequest,
+  type MatchStatus,
   type MetadataProvider,
   type MetadataSearchResponse,
   type Movie,
@@ -312,6 +314,29 @@ export function useRefreshStatus() {
     queryFn: () => apiFetch<RefreshStatus>(`${BASE}/admin/metadata/refresh`),
     refetchInterval: (query) => (query.state.data?.running ? 3000 : false),
   })
+}
+
+/**
+ * Průběh automatického párování; během párování nebo pauzy zdroje se
+ * obnovuje průběžně. Po doběhnutí obnoví počty a seznam nespárovaných.
+ */
+export function useMatchStatus() {
+  const qc = useQueryClient()
+  const query = useQuery({
+    queryKey: queryKeys.adminMatch,
+    queryFn: () => apiFetch<MatchStatus>(`${BASE}/admin/metadata/match`),
+    refetchInterval: (query) => (query.state.data?.running ? 2000 : query.state.data?.paused_until ? 15000 : false),
+  })
+  const running = query.data?.running ?? false
+  const wasRunning = useRef(false)
+  useEffect(() => {
+    if (wasRunning.current && !running) {
+      void qc.invalidateQueries({ queryKey: queryKeys.adminStats })
+      void qc.invalidateQueries({ queryKey: queryKeys.adminUnmatched })
+    }
+    wasRunning.current = running
+  }, [qc, running])
+  return query
 }
 
 export function useAdminTranscodes() {

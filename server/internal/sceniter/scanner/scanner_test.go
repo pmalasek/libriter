@@ -64,7 +64,10 @@ func TestScanLibrary(t *testing.T) {
 		"Filmy/21 gramů (2003 - Alejandro González Iñárritu).avi.vsmeta",
 		"Filmy/Křídla vášně - The Wings of the Dove (1997).avi",
 		"Filmy/Křídla vášně - The Wings of the Dove (1997).srt",
-		"Filmy/Pelíšky (1999)/pelisky.cd1.mkv",
+		// Podsložky ve filmech jen třídí: každý soubor je film, díly cdN jsou jeden film.
+		"Filmy/Sbírka/Pelíšky (1999).cd1.mkv",
+		"Filmy/Sbírka/Pelíšky (1999).cd2.mkv",
+		"Filmy/Divadelní hry/Lakomec.avi",
 		"Seriály/Docent/S01/Docent - 01x01 - Lesní vražda.mkv",
 		"Seriály/Docent/S01/Docent - 01x02 - Preso s mlíčkem.mkv",
 		"Seriály/Docent/S03/Docent - 01. díl - Únos.mkv",
@@ -86,15 +89,15 @@ func TestScanLibrary(t *testing.T) {
 	ctx := context.Background()
 
 	st := scanOnce(t, s)
-	if st.Processed != 8 || st.Added != 8 {
-		t.Fatalf("status %+v, chci 8 zpracovaných i přidaných (soubor v @eaDir a mimo knihovny se přeskočí)", st)
+	if st.Processed != 10 || st.Added != 10 {
+		t.Fatalf("status %+v, chci 10 zpracovaných i přidaných (soubor v @eaDir a mimo knihovny se přeskočí)", st)
 	}
 	libs, err := store.ListLibraries(ctx, false)
 	if err != nil || len(libs) != 3 {
 		t.Fatalf("knihovny %+v %v", libs, err)
 	}
-	if libs[0].ItemCount != 3 || libs[1].ItemCount != 1 || libs[2].ItemCount != 1 {
-		t.Errorf("počty položek %d/%d/%d, chci 3/1/1", libs[0].ItemCount, libs[1].ItemCount, libs[2].ItemCount)
+	if libs[0].ItemCount != 4 || libs[1].ItemCount != 1 || libs[2].ItemCount != 1 {
+		t.Errorf("počty položek %d/%d/%d, chci 4/1/1", libs[0].ItemCount, libs[1].ItemCount, libs[2].ItemCount)
 	}
 	if shows, _ := store.ListShows(ctx, storage.ShowFilter{Library: libs[2].ID}); len(shows) != 1 || shows[0].Title != "Show Name" {
 		t.Errorf("seriály v knihovně dokumentů: %+v", shows)
@@ -112,7 +115,7 @@ func TestScanLibrary(t *testing.T) {
 		}
 		titles[m.Title] = y
 	}
-	want := map[string]int{"21 gramů": 2003, "Křídla vášně": 1997, "Pelíšky": 1999}
+	want := map[string]int{"21 gramů": 2003, "Křídla vášně": 1997, "Pelíšky": 1999, "Lakomec": 0}
 	if len(titles) != len(want) {
 		t.Fatalf("filmy %v, chci %v", titles, want)
 	}
@@ -175,8 +178,8 @@ func TestScanLibrary(t *testing.T) {
 		t.Fatalf("po smazání %+v", st)
 	}
 	movies, _ = store.ListMovies(ctx, storage.MovieFilter{})
-	if len(movies) != 2 {
-		t.Fatalf("po smazání %d filmů, chci 2", len(movies))
+	if len(movies) != 3 {
+		t.Fatalf("po smazání %d filmů, chci 3", len(movies))
 	}
 }
 
@@ -280,5 +283,57 @@ func TestScanReassignsEpisodeByName(t *testing.T) {
 	scanOnce(t, s)
 	if shows, _ := store.ListShows(ctx, storage.ShowFilter{}); shows[0].EpisodeCount != 4 {
 		t.Fatalf("po kontrole %d dílů, chci 4", shows[0].EpisodeCount)
+	}
+}
+
+// Filmy založené dřív podle podsložky se při kontrole rozdělí na filmy podle
+// souborů. Film s jediným souborem se jen přejmenuje a nechá si metadata.
+func TestScanReassignsLegacyFolderMovies(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{
+		"Filmy/Divadelní hry/Lakomec.avi",
+		"Filmy/Divadelní hry/Hamlet (1990).avi",
+		"Filmy/Pelíšky (1999)/pelisky.avi",
+	} {
+		touch(t, root, f)
+	}
+	store := newTestStore(t)
+	addLibrary(t, store, "Filmy", "movie")
+	ctx := context.Background()
+	libs, _ := store.ListLibraries(ctx, false)
+
+	// Stav podle starého pravidla: podsložka = film.
+	legacy := func(key, title string, year int, files ...string) {
+		id, err := store.EnsureMovie(ctx, storage.MovieKey{LibraryID: libs[0].ID, SourceKey: key, Title: title, Year: year})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := store.SetMatchState(ctx, "movie", id, "manual"); err != nil {
+			t.Fatal(err)
+		}
+		for _, f := range files {
+			if _, err := store.SaveMedia(ctx, storage.SaveMediaInput{FilePath: f, MovieID: &id, SizeBytes: 18, ModTime: time.Now()}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	legacy("Filmy/Divadelní hry", "Divadelní hry", 0, "Filmy/Divadelní hry/Lakomec.avi", "Filmy/Divadelní hry/Hamlet (1990).avi")
+	legacy("Filmy/Pelíšky (1999)", "Pelíšky", 1999, "Filmy/Pelíšky (1999)/pelisky.avi")
+
+	scanOnce(t, New(root, store))
+
+	movies, _ := store.ListMovies(ctx, storage.MovieFilter{})
+	got := map[string]string{}
+	for _, m := range movies {
+		got[m.Title] = m.MatchState
+	}
+	want := map[string]string{"Lakomec": "unmatched", "Hamlet": "unmatched", "Pelíšky": "manual"}
+	if len(got) != len(want) {
+		t.Fatalf("filmy %v, chci %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("film %q stav %q, chci %q (filmy %v)", k, got[k], v, got)
+		}
 	}
 }

@@ -66,7 +66,20 @@ var (
 	leadingJunkRe = regexp.MustCompile(`^[^\pL\pN(\[]+`)
 	// Pořadové číslo složky ve sbírce: "02. Putování s dinosaury".
 	ordinalRe = regexp.MustCompile(`^0\d{1,2}[.)]\s+`)
+	// Díl filmu rozděleného do více souborů: "pelisky.cd1", "Film - part 2", "Film (disk1)".
+	partSuffixRe = regexp.MustCompile(`(?i)[\s._\-(\[]+(?:cd|part|pt|dis[ck]|dvd)[\s._\-]*([1-9])[)\]]?$`)
 )
+
+// StripPart odstraní z názvu souboru označení dílu filmu (cd1, part2,
+// disk1) a vrátí zbytek a číslo dílu (0 = soubor není díl).
+func StripPart(stem string) (string, int) {
+	m := partSuffixRe.FindStringSubmatchIndex(stem)
+	if m == nil || m[0] == 0 {
+		return stem, 0
+	}
+	n, _ := strconv.Atoi(stem[m[2]:m[3]])
+	return stem[:m[0]], n
+}
 
 // ParseMovie rozebere název souboru nebo adresáře filmu (bez přípony) na
 // název, původní název a rok. Zvládá české konvence "Název (rok - režisér)",

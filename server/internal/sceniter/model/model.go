@@ -113,12 +113,14 @@ type Movie struct {
 	BackdropPath  *string           `json:"backdrop_path,omitempty"`
 	Rating        *int              `json:"rating,omitempty"`
 	// Credits jsou obsazení a štáb – vyplněné jen v detailu, ve výpisech prázdné.
-	Credits    []Credit  `json:"credits"`
-	Genres     []string  `json:"genres"`
-	MatchState string    `json:"match_state"`
-	SourceKey  string    `json:"source_key"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	Credits    []Credit `json:"credits"`
+	Genres     []string `json:"genres"`
+	MatchState string   `json:"match_state"`
+	// MatchAttemptedAt je čas posledního nepovedeného automatického párování.
+	MatchAttemptedAt *time.Time `json:"match_attempted_at,omitempty"`
+	SourceKey        string     `json:"source_key"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 
 	// Odvozené pro výpisy: délka hlavního souboru a jeho ID.
 	DurationSec *float64   `json:"duration_sec,omitempty"`
@@ -141,12 +143,14 @@ type Show struct {
 	BackdropPath  *string           `json:"backdrop_path,omitempty"`
 	Rating        *int              `json:"rating,omitempty"`
 	// Credits jsou obsazení a štáb – vyplněné jen v detailu, ve výpisech prázdné.
-	Credits    []Credit  `json:"credits"`
-	Genres     []string  `json:"genres"`
-	MatchState string    `json:"match_state"`
-	SourceKey  string    `json:"source_key"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	Credits    []Credit `json:"credits"`
+	Genres     []string `json:"genres"`
+	MatchState string   `json:"match_state"`
+	// MatchAttemptedAt je čas posledního nepovedeného automatického párování.
+	MatchAttemptedAt *time.Time `json:"match_attempted_at,omitempty"`
+	SourceKey        string     `json:"source_key"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
 
 	// Odvozené pro výpisy.
 	SeasonCount  int `json:"season_count"`

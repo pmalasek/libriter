@@ -1,11 +1,12 @@
 import { DatabaseZapIcon, RefreshCwIcon, SparklesIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router'
 import { toast } from 'sonner'
 import { formatBytes, formatDateTime } from 'sceniter-shared'
 import { ErrorState } from 'core-web/src/components/ErrorState'
 import { Button } from 'core-web/src/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from 'core-web/src/components/ui/card'
-import { useAdminAction, useAdminStats, useRefreshStatus } from '@/api/hooks'
+import { useAdminAction, useAdminStats, useMatchStatus, useRefreshStatus } from '@/api/hooks'
 
 function Stat({ label, value }: { label: string; value: string | number }) {
   return (
@@ -22,12 +23,16 @@ export function AdminOverviewPage() {
   const action = useAdminAction()
   const refresh = useRefreshStatus()
   const rs = refresh.data
+  const matching = useMatchStatus()
+  const ms = matching.data
 
   if (stats.isError) return <ErrorState error={stats.error} onRetry={() => void stats.refetch()} />
   const s = stats.data
   if (!s) return <p className="py-8 text-center text-muted-foreground">{t('common.loading')}</p>
   const sc = s.scanner
   const lib = s.library
+  const unmatched = lib.unmatched_movies + lib.unmatched_shows
+  const failed = lib.failed_movies + lib.failed_shows
 
   return (
     <div className="grid gap-6">
@@ -37,7 +42,7 @@ export function AdminOverviewPage() {
         <Stat label={t('video.admin.stats.episodes')} value={lib.episodes} />
         <Stat label={t('video.admin.stats.files')} value={lib.files} />
         <Stat label={t('video.admin.stats.size')} value={formatBytes(lib.total_bytes)} />
-        <Stat label={t('video.admin.stats.unmatched')} value={lib.unmatched_movies + lib.unmatched_shows} />
+        <Stat label={t('video.admin.stats.unmatched')} value={unmatched} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
@@ -79,15 +84,21 @@ export function AdminOverviewPage() {
             <div className="flex flex-wrap gap-2">
               <Button
                 variant="outline"
-                disabled={!s.metadata || action.isPending}
+                disabled={!s.metadata || action.isPending || ms?.running}
                 onClick={() =>
                   action.mutate(
                     { path: '/admin/metadata/match-all' },
-                    { onSuccess: () => toast.success(t('video.admin.metadata.started')), onError: (e) => toast.error(e.message) },
+                    {
+                      onSuccess: () => {
+                        toast.success(t('video.admin.metadata.started'))
+                        void matching.refetch()
+                      },
+                      onError: (e) => toast.error(e.message),
+                    },
                   )
                 }
               >
-                <SparklesIcon />
+                <SparklesIcon className={ms?.running ? 'animate-pulse' : undefined} />
                 {t('video.admin.metadata.matchAll')}
               </Button>
               <Button
@@ -104,6 +115,35 @@ export function AdminOverviewPage() {
                 {t('video.admin.metadata.refreshAll')}
               </Button>
             </div>
+            {ms?.running ? (
+              <div className="grid gap-1">
+                <p className="tabular-nums">
+                  {t('video.admin.metadata.matchRunning', { done: ms.done, total: ms.total, matched: ms.matched, failed: ms.failed })}
+                </p>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-[width]"
+                    style={{ width: `${ms.total > 0 ? (ms.done / ms.total) * 100 : 0}%` }}
+                  />
+                </div>
+                {ms.current ? <p className="truncate text-muted-foreground">{t('video.admin.metadata.matchCurrent', { title: ms.current })}</p> : null}
+              </div>
+            ) : ms && ms.total > 0 ? (
+              <p className="text-muted-foreground tabular-nums">
+                {t('video.admin.metadata.matchDone', { matched: ms.matched, failed: ms.failed, deferred: ms.deferred })}
+              </p>
+            ) : null}
+            {ms?.paused_until ? (
+              <p className="text-muted-foreground">{t('video.admin.metadata.matchPaused', { time: formatDateTime(ms.paused_until) })}</p>
+            ) : null}
+            {unmatched > 0 ? (
+              <p className="tabular-nums">
+                {t('video.admin.metadata.unmatchedSummary', { total: unmatched, pending: unmatched - failed, failed })}{' '}
+                <Link to="/admin/match" className="text-primary hover:underline">
+                  {t('video.admin.metadata.showUnmatched')}
+                </Link>
+              </p>
+            ) : null}
             <p className="text-muted-foreground">{t('video.admin.metadata.refreshHint')}</p>
             {rs?.running ? (
               <p className="tabular-nums">{t('video.admin.metadata.refreshRunning', { done: rs.done, total: rs.total })}</p>

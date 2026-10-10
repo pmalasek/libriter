@@ -22,6 +22,7 @@ export const queryKeys = {
   adminUnmatched: ['sceniter', 'admin', 'unmatched'] as const,
   adminTranscode: ['sceniter', 'admin', 'transcode'] as const,
   adminRefresh: ['sceniter', 'admin', 'refresh'] as const,
+  adminMatch: ['sceniter', 'admin', 'match'] as const,
   libraries: ['sceniter', 'libraries'] as const,
   adminLibraries: ['sceniter', 'admin', 'libraries'] as const,
   libraryCandidates: ['sceniter', 'admin', 'libraries', 'candidates'] as const,

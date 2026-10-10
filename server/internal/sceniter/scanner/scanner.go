@@ -355,11 +355,17 @@ func (s *Scanner) processIn(ctx context.Context, lib *model.Library, abs string)
 
 	// Nový soubor se zařadí podle cesty. Známý soubor zůstává u svého filmu
 	// nebo dílu; jen díl, jehož číslo je v názvu souboru, se opraví, když
-	// soubor patří jinam (číslování podle pořadí při postupném kopírování).
+	// soubor patří jinam (číslování podle pořadí při postupném kopírování),
+	// a film s klíčem podle staršího pravidla (podsložka = film) se přeřadí.
 	if existing != nil {
 		in.MovieID, in.EpisodeID = existing.MovieID, existing.EpisodeID
 		if lib.Kind == model.KindShow && in.EpisodeID != nil {
 			if err := s.reassignEpisode(ctx, lib, abs, rel, &in); err != nil {
+				return false, err
+			}
+		}
+		if lib.Kind == model.KindMovie && in.MovieID != nil {
+			if err := s.reassignMovie(ctx, lib, rel, &in); err != nil {
 				return false, err
 			}
 		}
@@ -386,17 +392,7 @@ func (s *Scanner) classify(ctx context.Context, lib *model.Library, abs, rel str
 
 // asMovie: parts je cesta pod adresářem filmů (prefix), poslední je soubor.
 func (s *Scanner) asMovie(ctx context.Context, lib *model.Library, parts, prefix []string, stem string, in *storage.SaveMediaInput) error {
-	var key string
-	info := ParseMovie(stem)
-	if len(parts) == 1 {
-		key = strings.Join(append(append([]string{}, prefix...), stem), "/")
-	} else {
-		// Film v adresáři: "Filmy/Pelíšky (1999)/pelisky.cd1.avi"
-		key = strings.Join(append(append([]string{}, prefix...), parts[0]), "/")
-		if dir := ParseMovie(parts[0]); dir.Year != 0 || info.Year == 0 {
-			info = dir
-		}
-	}
+	key, info := movieKey(prefix, parts, stem)
 	id, err := s.store.EnsureMovie(ctx, storage.MovieKey{
 		LibraryID: lib.ID, SourceKey: key, Title: info.Title, OriginalTitle: info.OriginalTitle, Year: info.Year,
 	})
@@ -405,6 +401,75 @@ func (s *Scanner) asMovie(ctx context.Context, lib *model.Library, parts, prefix
 	}
 	in.MovieID = &id
 	return nil
+}
+
+// movieKey určí klíč a údaje filmu. Ve filmech je film vždy soubor –
+// podsložky jen třídí ("Divadelní hry", "Detektivky…") a do názvu ani roku
+// nevstupují. Díly jednoho filmu (cd1, cd2) ve stejné složce sdílejí klíč.
+func movieKey(prefix, parts []string, stem string) (string, MovieInfo) {
+	base, _ := StripPart(stem)
+	path := append(append(append([]string{}, prefix...), parts[:len(parts)-1]...), base)
+	return strings.Join(path, "/"), ParseMovie(base)
+}
+
+// reassignMovie přeřadí známý soubor filmu, jehož klíč neodpovídá žádnému
+// z jeho souborů (film založený dřív podle podsložky). Když všechny soubory
+// filmu vedou na stejný nový klíč, film se jen přejmenuje a zůstanou mu
+// metadata; jinak soubor dostane vlastní film. Filmy sloučené podle
+// metadat (víc verzí) mají klíč jednoho ze souborů a zůstanou, jak jsou.
+func (s *Scanner) reassignMovie(ctx context.Context, lib *model.Library, rel string, in *storage.SaveMediaInput) error {
+	key, info := movieKeyOf(rel)
+	cur, err := s.store.MovieSourceKey(ctx, *in.MovieID)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil
+	}
+	if err != nil || cur == key {
+		return err
+	}
+	paths, err := s.store.MovieFilePaths(ctx, *in.MovieID)
+	if err != nil {
+		return err
+	}
+	whole := true
+	for _, p := range paths {
+		k, _ := movieKeyOf(p)
+		if k == cur {
+			return nil
+		}
+		whole = whole && k == key
+	}
+
+	mk := storage.MovieKey{LibraryID: lib.ID, SourceKey: key, Title: info.Title, OriginalTitle: info.OriginalTitle, Year: info.Year}
+	if whole {
+		ok, err := s.store.RekeyMovie(ctx, *in.MovieID, mk)
+		if err != nil {
+			return err
+		}
+		if ok {
+			s.log.Info("film přejmenován podle souboru", "z", cur, "na", key)
+			return nil
+		}
+	} else {
+		// Film sdružoval víc filmů (podsložka) – jeho metadata nepatří
+		// jistě žádnému z nich, zbylé soubory se spárují znovu.
+		if err := s.store.SetMatchState(ctx, model.KindMovie, *in.MovieID, model.MatchUnmatched); err != nil {
+			return err
+		}
+	}
+	id, err := s.store.EnsureMovie(ctx, mk)
+	if err != nil {
+		return err
+	}
+	s.log.Info("soubor přeřazen k vlastnímu filmu", "path", rel, "z", cur)
+	in.MovieID = &id
+	return nil
+}
+
+// movieKeyOf je movieKey pro relativní cestu souboru (první část je
+// složka knihovny).
+func movieKeyOf(rel string) (string, MovieInfo) {
+	parts := strings.Split(rel, "/")
+	return movieKey(parts[:1], parts[1:], strings.TrimSuffix(parts[len(parts)-1], filepath.Ext(rel)))
 }
 
 // asEpisode: parts je cesta pod adresářem seriálů, první je adresář seriálu.

@@ -100,6 +100,8 @@ export interface Movie {
   credits: Credit[]
   genres: string[]
   match_state: MatchState
+  /** Kdy se automatické párování naposledy nepovedlo (žádný zdroj nenašel jistou shodu). */
+  match_attempted_at?: string
   source_key: string
   created_at: string
   updated_at: string
@@ -127,6 +129,8 @@ export interface Show {
   credits: Credit[]
   genres: string[]
   match_state: MatchState
+  /** Kdy se automatické párování naposledy nepovedlo (žádný zdroj nenašel jistou shodu). */
+  match_attempted_at?: string
   source_key: string
   created_at: string
   updated_at: string
@@ -285,6 +289,21 @@ export interface RefreshStatus {
   failed: number
 }
 
+/** Průběh automatického párování nespárovaných titulů (administrace). */
+export interface MatchStatus {
+  running: boolean
+  done: number
+  total: number
+  matched: number
+  failed: number
+  /** Odložené – zdroj odmítal požadavky, dopárují se po pauze. */
+  deferred: number
+  /** Titul, který se právě páruje. */
+  current?: string
+  /** Konec pauzy zdroje, po kterém párování pokračuje. */
+  paused_until?: string
+}
+
 export type PlaybackMode = 'direct' | 'remux' | 'transcode_audio' | 'transcode'
 
 export interface SubtitleTrack {
@@ -358,6 +377,9 @@ export interface SceniterStats {
     total_bytes: number
     unmatched_movies: number
     unmatched_shows: number
+    /** Nespárované tituly, pro které žádný zdroj nenašel jistou shodu. */
+    failed_movies: number
+    failed_shows: number
   }
   scanner: SceniterScannerStatus
   transcodes: number

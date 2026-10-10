@@ -149,6 +149,7 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Get("/admin/scanner", h.ScannerStatus)
 					r.Post("/admin/scanner/rescan", h.Rescan)
 					r.Post("/admin/metadata/match-all", h.MatchAll)
+					r.Get("/admin/metadata/match", h.MatchStatus)
 					r.Post("/admin/metadata/refresh-all", h.RefreshAll)
 					r.Get("/admin/metadata/refresh", h.RefreshStatus)
 					r.Get("/admin/library/unmatched", h.Unmatched)
