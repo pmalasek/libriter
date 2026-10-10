@@ -35,6 +35,7 @@ const (
 	AuditMatch     = "sceniter.match"
 	AuditUnmatch   = "sceniter.unmatch"
 	AuditEdit      = "sceniter.edit"
+	AuditDetach    = "sceniter.detach_file"
 	auditTargetLib = "sceniter"
 )
 
@@ -140,6 +141,7 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Delete("/shows/{id}/match", h.Unmatch)
 					r.Put("/movies/{id}/ignore", h.Ignore)
 					r.Put("/shows/{id}/ignore", h.Ignore)
+					r.Post("/media/{id}/detach", h.DetachFile)
 				})
 
 				r.Group(func(r chi.Router) {

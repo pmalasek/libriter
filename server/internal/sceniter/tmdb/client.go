@@ -137,6 +137,7 @@ type SearchResult struct {
 	Overview      string  `json:"overview"`
 	PosterPath    string  `json:"poster_path,omitempty"`
 	Popularity    float64 `json:"popularity"`
+	VoteCount     int     `json:"vote_count"`
 }
 
 type searchResponse struct {
@@ -151,6 +152,7 @@ type searchResponse struct {
 		Overview      string  `json:"overview"`
 		PosterPath    string  `json:"poster_path"`
 		Popularity    float64 `json:"popularity"`
+		VoteCount     int     `json:"vote_count"`
 	} `json:"results"`
 }
 
@@ -165,6 +167,7 @@ func (r searchResponse) normalize() []SearchResult {
 			Overview:      x.Overview,
 			PosterPath:    x.PosterPath,
 			Popularity:    x.Popularity,
+			VoteCount:     x.VoteCount,
 		})
 	}
 	return out

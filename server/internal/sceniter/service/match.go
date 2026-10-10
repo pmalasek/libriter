@@ -480,72 +480,169 @@ func derefInt(n *int) int {
 	return *n
 }
 
-// pick vybere výsledek hledání, kterému lze věřit bez člověka: shoda roku
-// ±1 a názvu, nebo jediný výsledek se shodným názvem. Jinak nic – titul
-// zůstane nespárovaný a editor ho spáruje ručně.
+// pick vybere výsledek hledání, kterému lze věřit bez člověka (viz
+// pickResult). Jinak nic – titul zůstane nespárovaný a editor ho spáruje
+// ručně. Zkouší název s podtitulem ("Mizerové Na život a na smrt"), pak
+// název a původní název zvlášť; každý nejdřív s rokem a pak bez něj (rok
+// v názvu souboru bývá o rok vedle).
 //
 // Chyba hledání se vrací kvůli rate_limited (párování se má zastavit);
 // ostatní chyby jen zaloguje.
 func (m *Matcher) pick(ctx context.Context, provider, lang, kind, title, original string, year int) (string, bool, error) {
-	for _, q := range []string{title, original} {
-		if strings.TrimSpace(q) == "" {
+	queries := []string{strings.TrimSpace(title + " " + original), title, original}
+	years := []int{year}
+	if year > 0 {
+		years = append(years, 0)
+	}
+	seen := map[string]bool{}
+	for _, q := range queries {
+		q = strings.TrimSpace(q)
+		if q == "" || seen[q] {
 			continue
 		}
-		res, err := m.plugins.Search(ctx, provider, plugin.Request{
-			Kind: kind, Language: lang, Query: &plugin.Query{Title: q, OriginalTitle: original},
-		})
-		if err != nil {
-			if !plugin.IsRateLimited(err) {
-				m.log.Warn("hledání metadat", "zdroj", provider, "query", q, "err", err)
+		seen[q] = true
+		for _, y := range years {
+			res, err := m.plugins.Search(ctx, provider, plugin.Request{
+				Kind: kind, Language: lang, Query: &plugin.Query{Title: q, OriginalTitle: original, Year: y},
+			})
+			if err != nil {
+				if !plugin.IsRateLimited(err) {
+					m.log.Warn("hledání metadat", "zdroj", provider, "query", q, "err", err)
+				}
+				return "", false, err
 			}
-			return "", false, err
-		}
-		if id, ok := pickResult(res, title, original, year); ok {
-			return id, true, nil
+			if id, ok := pickResult(res, title, original, year, y == 0); ok {
+				return id, true, nil
+			}
 		}
 	}
 	return "", false, nil
 }
 
-// pickResult je čistá část výběru (testovatelná bez sítě).
-func pickResult(res []plugin.SearchResult, title, original string, year int) (string, bool) {
-	names := []string{fold(title), fold(original)}
-	sameName := func(r plugin.SearchResult) bool {
-		for _, n := range names {
-			if n != "" && (n == fold(r.Title) || n == fold(r.OriginalTitle)) {
-				return true
+// pickResult je čistá část výběru (testovatelná bez sítě). S rokem: shoda
+// názvu a roku ±1; shoda jen jednoho ze dvou názvů souboru (podtitul se
+// v názvu výsledku neobjevil) a přesného roku; první výsledek s přesným
+// rokem, pokud hledání rok neomezovalo (unfiltered – jinak má první
+// výsledek ten rok vždy). Bez roku: jediný výsledek se shodným názvem, nebo
+// mezi shodnými ten výrazně nejznámější. Nakonec jediný výsledek, jehož
+// název začíná názvem souboru ("Policejni Akademie 4" → "… 4: Občanská
+// patrola", ne však "Rychle a zběsile 1" → "… 10").
+func pickResult(res []plugin.SearchResult, title, original string, year int, unfiltered bool) (string, bool) {
+	t, o := fold(title), fold(original)
+	// match: full = sedí celý název souboru (oba názvy, nebo spojený tvar),
+	// part = sedí jen jeden z nich.
+	match := func(r plugin.SearchResult, yearOK bool) (full, part bool) {
+		rt, ro := fold(r.Title), fold(r.OriginalTitle)
+		is := func(n string) bool {
+			// Krátký nebo číselný název ("+1", "9") sedí jen s rokem.
+			if n == "" || !yearOK && weakName(n) {
+				return false
+			}
+			return n == rt || n == ro
+		}
+		if o == "" {
+			return is(t), false
+		}
+		full = is(t+o) || is(t) && is(o)
+		return full, !full && (is(t) || is(o))
+	}
+	ok := func(r *plugin.SearchResult) (string, bool) { return r.ID, r.ID != "" }
+
+	if year > 0 {
+		for i, r := range res {
+			if full, _ := match(r, true); full && r.Year != 0 && abs(r.Year-year) <= 1 {
+				return ok(&res[i])
 			}
 		}
-		return false
-	}
-	if year > 0 {
-		for _, r := range res {
-			if r.Year != 0 && abs(r.Year-year) <= 1 && sameName(r) {
-				return r.ID, r.ID != ""
+		for i, r := range res {
+			if _, part := match(r, true); part && r.Year == year {
+				return ok(&res[i])
 			}
 		}
 		// Rok sedí přesně a výsledek je první (nejrelevantnější) – název se
 		// může lišit diakritikou nebo podtitulem.
-		if len(res) > 0 && res[0].Year == year {
-			return res[0].ID, res[0].ID != ""
+		if unfiltered && len(res) > 0 && res[0].Year == year {
+			return ok(&res[0])
 		}
+	} else {
+		var same []*plugin.SearchResult
+		for i, r := range res {
+			if full, _ := match(r, false); full {
+				same = append(same, &res[i])
+			}
+		}
+		if len(same) == 1 {
+			return ok(same[0])
+		}
+		if r := dominant(same); r != nil {
+			return ok(r)
+		}
+		if len(same) > 1 {
+			return "", false // stejně pojmenované tituly – rozhodne člověk
+		}
+	}
+
+	// Prefix jen u názvu bez podtitulu o aspoň dvou slovech.
+	if o != "" || len(strings.Fields(title)) < 2 {
 		return "", false
 	}
-	// Bez roku: jediný výsledek se shodným názvem. Ostatní výsledky hledání
-	// (jiné tituly se stejným slovem) shodu nezpochybňují.
 	var only *plugin.SearchResult
-	for i := range res {
-		if sameName(res[i]) {
+	for i, r := range res {
+		if year > 0 && (r.Year == 0 || abs(r.Year-year) > 1) {
+			continue
+		}
+		if continues(fold(r.Title), t) || continues(fold(r.OriginalTitle), t) {
 			if only != nil {
-				return "", false // dva stejně pojmenované tituly – rozhodne člověk
+				return "", false
 			}
 			only = &res[i]
 		}
 	}
 	if only != nil {
-		return only.ID, only.ID != ""
+		return ok(only)
 	}
 	return "", false
+}
+
+// continues řekne, jestli název začíná prefixem a pokračuje něčím jiným než
+// číslicí (jiný díl série).
+func continues(name, prefix string) bool {
+	rest, ok := strings.CutPrefix(name, prefix)
+	return ok && rest != "" && !unicode.IsDigit([]rune(rest)[0])
+}
+
+// dominant vrátí z víc stejně pojmenovaných výsledků ten, který má výrazně
+// nejvíc hodnocení ("Pretty Woman" 1990 proti televiznímu dokumentu), nebo nil.
+func dominant(rs []*plugin.SearchResult) *plugin.SearchResult {
+	if len(rs) < 2 {
+		return nil
+	}
+	best, second := rs[0], 0
+	for _, r := range rs[1:] {
+		if r.Votes > best.Votes {
+			best, second = r, best.Votes
+		} else if r.Votes > second {
+			second = r.Votes
+		}
+	}
+	if best.Votes >= 50 && best.Votes >= 10*second {
+		return best
+	}
+	return nil
+}
+
+// weakName řekne, jestli je složený název tak krátký nebo číselný, že sám
+// o sobě shodu neprokazuje.
+func weakName(n string) bool {
+	if len([]rune(n)) < 3 {
+		return true
+	}
+	for _, r := range n {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return true
 }
 
 // fold převede název na tvar pro porovnání: bez diakritiky, interpunkce a
@@ -579,6 +676,12 @@ func (m *Matcher) Search(ctx context.Context, provider, kind, lang, query string
 	res, err := m.plugins.Search(ctx, provider, plugin.Request{
 		Kind: kind, Language: lang, Query: &plugin.Query{Title: query, Year: year},
 	})
+	// Rok z názvu souboru bývá vedle – bez výsledků zkusit hledat bez něj.
+	if err == nil && len(res) == 0 && year > 0 {
+		res, err = m.plugins.Search(ctx, provider, plugin.Request{
+			Kind: kind, Language: lang, Query: &plugin.Query{Title: query},
+		})
+	}
 	if res == nil {
 		res = []plugin.SearchResult{}
 	}

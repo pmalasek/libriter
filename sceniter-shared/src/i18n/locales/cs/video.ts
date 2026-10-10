@@ -79,6 +79,8 @@ export default {
     fileDetails: '{{container}} · {{video}} · {{resolution}} · {{size}}',
     audioTracks: 'Zvuk',
     subtitleTracks: 'Titulky',
+    detachFile: 'Oddělit do samostatného filmu',
+    detached: 'Soubor oddělen – spárujte nový film.',
     noFile: 'Soubor s videem není k dispozici.',
     season: '{{number}}. řada',
     specials: 'Speciály',

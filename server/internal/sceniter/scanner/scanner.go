@@ -21,6 +21,7 @@ import (
 	"log/slog"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -28,6 +29,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/google/uuid"
 
 	"mediater/internal/sceniter/model"
 	"mediater/internal/sceniter/storage"
@@ -284,7 +286,34 @@ func (s *Scanner) run(ctx context.Context) {
 	s.statusMu.Lock()
 	s.status.Removed = removed
 	s.statusMu.Unlock()
+	s.retitleUnmatched(ctx)
 	s.log.Info("průchod videoknihovnou dokončen", "soubory", len(seen), "odebráno", removed)
+}
+
+// retitleUnmatched znovu rozebere názvy souborů nespárovaných filmů. Známé
+// soubory se při průchodu nezakládají znovu, takže by lepší pravidla rozboru
+// (a s nimi úspěšnější párování) dostaly jen nově přidané filmy.
+func (s *Scanner) retitleUnmatched(ctx context.Context) {
+	movies, err := s.store.UnmatchedMovieKeys(ctx)
+	if err != nil {
+		s.fail(err)
+		return
+	}
+	n := 0
+	for _, m := range movies {
+		info := ParseMovie(path.Base(m.SourceKey))
+		if info.Title == m.Title && info.OriginalTitle == m.OriginalTitle && info.Year == m.Year {
+			continue
+		}
+		if err := s.store.RetitleUnmatchedMovie(ctx, m.ID, info.Title, info.OriginalTitle, info.Year); err != nil {
+			s.fail(err)
+			continue
+		}
+		n++
+	}
+	if n > 0 {
+		s.log.Info("názvy nespárovaných filmů přepočítány", "filmů", n)
+	}
 }
 
 func (s *Scanner) rel(abs string) string {
@@ -463,6 +492,55 @@ func (s *Scanner) reassignMovie(ctx context.Context, lib *model.Library, rel str
 	s.log.Info("soubor přeřazen k vlastnímu filmu", "path", rel, "z", cur)
 	in.MovieID = &id
 	return nil
+}
+
+// ErrPrimaryFile znamená, že soubor nelze oddělit od filmu: film nese jeho
+// klíč (vznikl z něj), oddělit lze jen soubory, které se k němu přisloučily.
+var ErrPrimaryFile = errors.New("soubor drží film, oddělit lze jen ostatní soubory")
+
+// MovieKeyOf vrátí klíč filmu, ke kterému soubor podle cesty patří.
+func MovieKeyOf(rel string) string {
+	key, _ := movieKeyOf(rel)
+	return key
+}
+
+// DetachFile oddělí soubor od filmu, se kterým se sloučil podle metadat
+// (chybné párování), do filmu podle vlastní cesty. Nový film je nespárovaný
+// a automatické párování ho chvíli vynechá, aby ho hned zase nesloučilo –
+// editor ho spáruje ručně. Vrací ID filmu, ke kterému soubor teď patří.
+func (s *Scanner) DetachFile(ctx context.Context, mediaID uuid.UUID) (uuid.UUID, error) {
+	s.ingest.Lock()
+	defer s.ingest.Unlock()
+
+	rec, err := s.store.MediaByID(ctx, mediaID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if rec.MovieID == nil {
+		return uuid.Nil, storage.ErrNotFound
+	}
+	movie, err := s.store.GetMovie(ctx, *rec.MovieID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	key, info := movieKeyOf(rec.FilePath)
+	if key == movie.SourceKey {
+		return uuid.Nil, ErrPrimaryFile
+	}
+	id, err := s.store.EnsureMovie(ctx, storage.MovieKey{
+		LibraryID: movie.LibraryID, SourceKey: key, Title: info.Title, OriginalTitle: info.OriginalTitle, Year: info.Year,
+	})
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if err := s.store.MoveMediaToMovie(ctx, mediaID, id); err != nil {
+		return uuid.Nil, err
+	}
+	if err := s.store.MarkMatchAttempt(ctx, model.KindMovie, id); err != nil {
+		return uuid.Nil, err
+	}
+	s.log.Info("soubor oddělen od filmu", "path", rec.FilePath, "z", movie.Title)
+	return id, nil
 }
 
 // movieKeyOf je movieKey pro relativní cestu souboru (první část je

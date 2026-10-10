@@ -89,7 +89,7 @@ func search(ctx context.Context, req plugin.Request) ([]plugin.SearchResult, err
 		out = append(out, plugin.SearchResult{
 			ID: strconv.Itoa(r.ID), Title: r.Title, OriginalTitle: r.OriginalTitle, Year: r.Year,
 			Note: r.Overview, ImageURL: c.ImageURL(tmdb.SizePoster, r.PosterPath),
-			URL: pageURL(req.Kind, r.ID),
+			URL: pageURL(req.Kind, r.ID), Votes: r.VoteCount,
 		})
 	}
 	return out, nil

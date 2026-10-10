@@ -532,6 +532,26 @@ func (h *Handler) Ignore(w http.ResponseWriter, r *http.Request) {
 	h.setMatchState(w, r, model.MatchIgnored, AuditUnmatch)
 }
 
+// POST /sceniter/media/{id}/detach – oddělí soubor od filmu, se kterým se
+// chybně sloučil, do samostatného nespárovaného filmu.
+func (h *Handler) DetachFile(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	movieID, err := h.Scanner.DetachFile(r.Context(), id)
+	if errors.Is(err, scanner.ErrPrimaryFile) {
+		writeError(w, http.StatusConflict, "media.primary_file", err.Error())
+		return
+	}
+	if writeStoreError(w, err, "media.not_found") {
+		return
+	}
+	h.Audit.Record(r.Context(), userID(r), coreservice.AuditEvent{Action: AuditDetach, TargetType: model.KindMovie,
+		TargetID: movieID.String(), Details: map[string]string{"media_id": id.String()}})
+	writeJSON(w, http.StatusOK, map[string]string{"movie_id": movieID.String()})
+}
+
 func (h *Handler) setMatchState(w http.ResponseWriter, r *http.Request, state, action string) {
 	id, ok := parseUUID(w, r, "id")
 	if !ok {

@@ -26,6 +26,29 @@ func TestParseMovie(t *testing.T) {
 		{"02. Putovani s dinosaury", "Putovani s dinosaury", "", 0},
 		{"[Dokument] Planeta Země (2006)", "Planeta Země", "", 2006},
 		{"Putovani.s.dinosaury.e01.1999.PDTV.XviD.CZ", "Putovani s dinosaury e01", "", 1999},
+		// Značky a žánry před rokem.
+		{"Narodni_trida__CZ_dabing__2019", "Narodni trida", "", 2019},
+		{"Past-Krimi-Thriller-CZ-dabing-1999", "Past", "", 1999},
+		{"Odstřelovač_CZdab_Akční__Thriller__Krimi__Mysteriózní_USA__2007", "Odstřelovač", "", 2007},
+		{"oko-dravce-czdab-akcni-mysteriozni-usa-nemecko-2008", "oko dravce", "", 2008},
+		{"Tátova volha-česká komedie_drama  2018", "Tátova volha", "", 2018},
+		{"Drama", "Drama", "", 0},
+		// Rok za "=" a před ",".
+		{"Neřízená střela =2010-DVD-CZ", "Neřízená střela", "", 2010},
+		{"Smrtonosna zbran 2-1989,USA-akcny,krimi,thriller", "Smrtonosna zbran 2", "", 1989},
+		// Poznámka v závorce, podtitul a dvojjazyčný název.
+		{"Počátek (Inception) CZ AVI", "Počátek", "Inception", 0},
+		{"Mizerové - Na život a na smrt", "Mizerové", "Na život a na smrt", 0},
+		{"Mumie.The.Mummy.2017.1080p.BluRay.x264", "Mumie", "The Mummy", 2017},
+		{"Včera_-Yesterday_cz_dabing__2019__BRRip", "Včera", "Yesterday", 2019},
+		// Samotné číslo za/před pomlčkou je pořadí, ne původní název.
+		{"Dej si pohov kámoši - 1", "Dej si pohov kámoši", "", 0},
+		{"RED - 1", "RED", "", 0},
+		{"1 - Deník Bridget Jonesové", "Deník Bridget Jonesové", "", 0},
+		{"Piráti z Karibiku - 3 - Na konci světa cz (2007)", "Piráti z Karibiku", "Na konci světa", 2007},
+		// Rozložená diakritika (NFD) se složí.
+		{"Terminál", "Terminál", "", 0},
+		{"X-Men 1 (2000)-CZ dabing; akční", "X-Men 1", "", 2000},
 	}
 	for _, c := range cases {
 		got := ParseMovie(c.in)

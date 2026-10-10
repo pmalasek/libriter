@@ -283,6 +283,8 @@ export interface UserState {
 
 export interface MovieDetail extends Movie {
   files: MediaFile[]
+  /** Soubory přisloučené k filmu podle metadat, které lze oddělit. */
+  detachable_files: string[]
   user: UserState
 }
 

@@ -200,23 +200,83 @@ func TestPickResult(t *testing.T) {
 		{ID: "1", Title: "Pelíšky", OriginalTitle: "Pelíšky", Year: 1999},
 		{ID: "2", Title: "Pelíšky 2", Year: 2010},
 	}
-	if id, ok := pickResult(res, "Pelisky", "", 1999); !ok || id != "1" {
+	if id, ok := pickResult(res, "Pelisky", "", 1999, true); !ok || id != "1" {
 		t.Errorf("rok + název bez diakritiky: %s %v", id, ok)
 	}
-	if id, ok := pickResult(res, "Pelíšky", "", 2000); !ok || id != "1" {
+	if id, ok := pickResult(res, "Pelíšky", "", 2000, true); !ok || id != "1" {
 		t.Errorf("rok ±1: %s %v", id, ok)
 	}
-	if id, ok := pickResult(res, "Pelíšky", "", 0); !ok || id != "1" {
+	if id, ok := pickResult(res, "Pelíšky", "", 0, true); !ok || id != "1" {
 		t.Errorf("bez roku: jediný výsledek se shodným názvem: %s %v", id, ok)
 	}
 	twins := append(res, plugin.SearchResult{ID: "3", Title: "Pelíšky", Year: 2021})
-	if _, ok := pickResult(twins, "Pelíšky", "", 0); ok {
+	if _, ok := pickResult(twins, "Pelíšky", "", 0, true); ok {
 		t.Error("bez roku a dva stejně pojmenované tituly se nesmí párovat automaticky")
 	}
-	if _, ok := pickResult(res, "Úplně jiný", "", 1980); ok {
+	if _, ok := pickResult(res, "Úplně jiný", "", 1980, true); ok {
 		t.Error("jiný rok i název")
 	}
-	if id, ok := pickResult(res[:1], "Pelíšky", "", 0); !ok || id != "1" {
+	if id, ok := pickResult(res[:1], "Pelíšky", "", 0, true); !ok || id != "1" {
 		t.Error("jediný výsledek se shodným názvem")
+	}
+}
+
+func TestPickResultHeuristics(t *testing.T) {
+	pretty := []plugin.SearchResult{
+		{ID: "1", Title: "Pretty Woman", Year: 1990, Votes: 9233},
+		{ID: "2", Title: "Pretty Woman", Year: 1991, Votes: 18},
+	}
+	if id, ok := pickResult(pretty, "Pretty Woman", "", 0, true); !ok || id != "1" {
+		t.Errorf("výrazně nejznámější ze stejně pojmenovaných: %s %v", id, ok)
+	}
+	pretty[1].Votes = 2000
+	if _, ok := pickResult(pretty, "Pretty Woman", "", 0, true); ok {
+		t.Error("dva podobně známé stejně pojmenované tituly – rozhodne člověk")
+	}
+
+	badBoys := []plugin.SearchResult{
+		{ID: "1", Title: "Mizerové", OriginalTitle: "Bad Boys", Year: 1995},
+		{ID: "2", Title: "Mizerové: Na život a na smrt", OriginalTitle: "Bad Boys: Ride or Die", Year: 2024},
+	}
+	if id, ok := pickResult(badBoys, "Mizerové", "Na život a na smrt", 0, true); !ok || id != "2" {
+		t.Errorf("název s podtitulem: %s %v", id, ok)
+	}
+	jumanji := []plugin.SearchResult{{ID: "1", Title: "Jumanji", OriginalTitle: "Jumanji", Year: 1995}}
+	if _, ok := pickResult(jumanji, "Jumanji", "Další level", 0, true); ok {
+		t.Error("shoda bez podtitulu a bez roku se nesmí párovat")
+	}
+	hunger := []plugin.SearchResult{{ID: "1", Title: "Hunger Games", Year: 2012}}
+	if _, ok := pickResult(hunger, "Hunger Games", "Vražedná pomsta", 2013, true); ok {
+		t.Error("shoda bez podtitulu jen s rokem ±1 se nesmí párovat")
+	}
+	wings := []plugin.SearchResult{{ID: "1", Title: "Křídla vášně", OriginalTitle: "The Wings of the Dove", Year: 1997}}
+	if id, ok := pickResult(wings, "Křídla vášně", "The Wings of the Dove", 1998, true); !ok || id != "1" {
+		t.Errorf("český a původní název: %s %v", id, ok)
+	}
+
+	plusOne := []plugin.SearchResult{{ID: "1", Title: "+1", OriginalTitle: "+1", Year: 2013}}
+	if _, ok := pickResult(plusOne, "1", "", 0, true); ok {
+		t.Error("číselný název bez roku se nesmí párovat")
+	}
+
+	police := []plugin.SearchResult{{ID: "1", Title: "Policejní akademie 4: Občanská patrola", Year: 1987}}
+	if id, ok := pickResult(police, "Policejni Akademie 4", "", 0, true); !ok || id != "1" {
+		t.Errorf("jediný výsledek začínající názvem: %s %v", id, ok)
+	}
+	if _, ok := pickResult(police, "Policejni", "", 0, true); ok {
+		t.Error("prefix z jednoho slova se nesmí párovat")
+	}
+	fast := []plugin.SearchResult{{ID: "1", Title: "Rychle a zběsile 10", Year: 2023}}
+	if _, ok := pickResult(fast, "Rychle a zběsile 1", "", 0, true); ok {
+		t.Error("prefix pokračující číslicí je jiný díl série")
+	}
+
+	// Hledání omezené rokem vrací první výsledek s tím rokem vždy.
+	riddick := []plugin.SearchResult{{ID: "1", Title: "Into Pitch Black", Year: 2000}}
+	if _, ok := pickResult(riddick, "Riddick", "", 2000, false); ok {
+		t.Error("první výsledek hledání omezeného rokem se nesmí brát jen kvůli roku")
+	}
+	if id, ok := pickResult(riddick, "Riddick", "", 2000, true); !ok || id != "1" {
+		t.Errorf("první výsledek neomezeného hledání s přesným rokem: %s %v", id, ok)
 	}
 }

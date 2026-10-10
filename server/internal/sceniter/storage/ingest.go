@@ -48,6 +48,35 @@ func (s *Store) MediaByPath(ctx context.Context, path string) (*MediaRecord, err
 	return &r, nil
 }
 
+// MediaOwner je soubor s filmem, ke kterému patří.
+type MediaOwner struct {
+	ID       uuid.UUID
+	MovieID  *uuid.UUID
+	FilePath string
+}
+
+// MediaByID vrátí cestu souboru a jeho film, nebo ErrNotFound.
+func (s *Store) MediaByID(ctx context.Context, id uuid.UUID) (*MediaOwner, error) {
+	r := MediaOwner{ID: id}
+	err := s.db.QueryRowContext(ctx, `SELECT movie_id, file_path FROM sc_media_files WHERE id = ?1`, id).
+		Scan(&r.MovieID, &r.FilePath)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("media by id: %w", err)
+	}
+	return &r, nil
+}
+
+// MoveMediaToMovie přeřadí soubor k jinému filmu.
+func (s *Store) MoveMediaToMovie(ctx context.Context, mediaID, movieID uuid.UUID) error {
+	if _, err := s.db.ExecContext(ctx, `UPDATE sc_media_files SET movie_id = ?2 WHERE id = ?1`, mediaID, movieID); err != nil {
+		return fmt.Errorf("move media: %w", err)
+	}
+	return nil
+}
+
 // ListMediaPaths vrátí cesty všech souborů v knihovně a jejich ID.
 func (s *Store) ListMediaPaths(ctx context.Context) (map[string]uuid.UUID, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT file_path, id FROM sc_media_files`)
@@ -165,6 +194,49 @@ func (s *Store) RekeyMovie(ctx context.Context, id uuid.UUID, k MovieKey) (bool,
 		return false, fmt.Errorf("rekey movie: %w", err)
 	}
 	return true, nil
+}
+
+// UnmatchedMovieKey je nespárovaný film s údaji, které má z názvu souboru.
+type UnmatchedMovieKey struct {
+	ID            uuid.UUID
+	SourceKey     string
+	Title         string
+	OriginalTitle string
+	Year          int
+}
+
+// UnmatchedMovieKeys vrátí nespárované filmy (pro přepočet názvů po změně
+// pravidel rozboru názvu souboru).
+func (s *Store) UnmatchedMovieKeys(ctx context.Context) ([]UnmatchedMovieKey, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, source_key, title, COALESCE(original_title, ''), COALESCE(year, 0)
+		FROM sc_movies WHERE match_state = 'unmatched'`)
+	if err != nil {
+		return nil, fmt.Errorf("unmatched movie keys: %w", err)
+	}
+	defer rows.Close()
+	var out []UnmatchedMovieKey
+	for rows.Next() {
+		var k UnmatchedMovieKey
+		if err := rows.Scan(&k.ID, &k.SourceKey, &k.Title, &k.OriginalTitle, &k.Year); err != nil {
+			return nil, fmt.Errorf("unmatched movie keys: %w", err)
+		}
+		out = append(out, k)
+	}
+	return out, rows.Err()
+}
+
+// RetitleUnmatchedMovie přepíše nespárovanému filmu název, původní název
+// a rok a smaže záznam o nepovedeném párování – s novým názvem se zkusí hned.
+func (s *Store) RetitleUnmatchedMovie(ctx context.Context, id uuid.UUID, title, original string, year int) error {
+	const q = `
+		UPDATE sc_movies SET title = ?2, original_title = ?3, year = ?4,
+		  match_attempted_at = NULL, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?1 AND match_state = 'unmatched'`
+	if _, err := s.db.ExecContext(ctx, q, id, title, nullStr(original), nullInt(year)); err != nil {
+		return fmt.Errorf("retitle movie: %w", err)
+	}
+	return nil
 }
 
 // EpisodeKey identifikuje díl na disku.

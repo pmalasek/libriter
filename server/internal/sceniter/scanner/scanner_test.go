@@ -337,3 +337,57 @@ func TestScanReassignsLegacyFolderMovies(t *testing.T) {
 		}
 	}
 }
+
+func TestDetachMergedFile(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"Filmy/Dej si pohov kámoši - 1.avi", "Filmy/R.E.D/RED - 1.avi"} {
+		touch(t, root, f)
+	}
+	store := newTestStore(t)
+	addLibrary(t, store, "Filmy", "movie")
+	ctx := context.Background()
+	s := New(root, store)
+	scanOnce(t, s)
+
+	// Chybné párování obou filmů na stejný titul je sloučí.
+	var ids []string
+	for _, f := range []string{"Filmy/Dej si pohov kámoši - 1.avi", "Filmy/R.E.D/RED - 1.avi"} {
+		rec, err := store.MediaByPath(ctx, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		merged, err := store.ApplyMovieMeta(ctx, *rec.MovieID, storage.TitleMeta{Provider: "tmdb", ID: "176068", Title: "+1"}, "auto")
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, merged.String())
+	}
+	if ids[0] != ids[1] {
+		t.Fatalf("filmy se nesloučily: %v", ids)
+	}
+
+	red, _ := store.MediaByPath(ctx, "Filmy/R.E.D/RED - 1.avi")
+	main, _ := store.MediaByPath(ctx, "Filmy/Dej si pohov kámoši - 1.avi")
+	if _, err := s.DetachFile(ctx, main.ID); err != ErrPrimaryFile {
+		t.Errorf("oddělení souboru, který drží film: %v", err)
+	}
+	id, err := s.DetachFile(ctx, red.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id.String() == ids[0] {
+		t.Fatal("soubor zůstal u sloučeného filmu")
+	}
+	m, err := store.GetMovie(ctx, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Title != "RED" || m.MatchState != "unmatched" || m.MatchAttemptedAt == nil {
+		t.Errorf("oddělený film %+v", m)
+	}
+	// Další průchod soubor nechá u odděleného filmu.
+	scanOnce(t, s)
+	if rec, _ := store.MediaByPath(ctx, "Filmy/R.E.D/RED - 1.avi"); *rec.MovieID != id {
+		t.Errorf("po průchodu soubor patří k %s, chci %s", rec.MovieID, id)
+	}
+}

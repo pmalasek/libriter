@@ -1,13 +1,14 @@
 import { PencilIcon, PlayIcon, RotateCcwIcon, SparklesIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate, useParams } from 'react-router'
+import { useLocation, useNavigate, useParams } from 'react-router'
+import { toast } from 'sonner'
 import { backdropUrl, canEdit, canResume, formatClock, posterUrl } from 'sceniter-shared'
 import { useAuth } from 'core-web/src/auth/AuthContext'
 import { ErrorState } from 'core-web/src/components/ErrorState'
 import { Button } from 'core-web/src/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from 'core-web/src/components/ui/dialog'
-import { useMovie } from '@/api/hooks'
+import { useDetachFile, useMovie } from '@/api/hooks'
 import { Attribution } from '@/components/Attribution'
 import { CastShelf, KeyCrew } from '@/components/CastShelf'
 import { DetailSkeleton, Expandable, GenreChips, SimilarShelf } from '@/components/DetailParts'
@@ -23,9 +24,19 @@ export function MovieDetailPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const location = useLocation()
   const movie = useMovie(id)
+  const detach = useDetachFile()
   const [editing, setEditing] = useState(false)
   const [matching, setMatching] = useState(false)
+
+  // Po oddělení souboru se nový film rovnou páruje (navigate se state.match).
+  const matchFromState = (location.state as { match?: boolean } | null)?.match === true
+  const matchOpen = matching || matchFromState
+  const setMatchOpen = (open: boolean) => {
+    setMatching(open)
+    if (!open && matchFromState) navigate(location.pathname, { replace: true, state: null })
+  }
 
   if (movie.isError) return <ErrorState error={movie.error} onRetry={() => void movie.refetch()} />
   const m = movie.data
@@ -87,12 +98,25 @@ export function MovieDetailPage() {
 
       <CastShelf credits={m.credits} />
       <SimilarShelf kind="movie" id={m.id} />
-      <FileInfo files={m.files} />
+      <FileInfo
+        files={m.files}
+        detachable={canEdit(user) ? m.detachable_files : []}
+        detaching={detach.isPending}
+        onDetach={(fileId) =>
+          detach.mutate(fileId, {
+            onSuccess: ({ movie_id }) => {
+              toast.success(t('video.detail.detached'))
+              navigate(`/movies/${movie_id}`, { state: { match: true } })
+            },
+            onError: (err) => toast.error(err.message),
+          })
+        }
+      />
       <ExternalLinks kind="movie" ids={m.external_ids} />
       <Attribution provider={m.meta_provider ?? null} />
 
       {editing ? <EditTitleDialog kind="movie" title={m} open={editing} onOpenChange={setEditing} /> : null}
-      <Dialog open={matching} onOpenChange={setMatching}>
+      <Dialog open={matchOpen} onOpenChange={setMatchOpen}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>{t('video.detail.match')}</DialogTitle>
@@ -103,7 +127,7 @@ export function MovieDetailPage() {
             initialQuery={m.original_title || m.title}
             initialYear={m.year}
             onMatched={(newId) => {
-              setMatching(false)
+              setMatchOpen(false)
               if (newId !== m.id) navigate(`/movies/${newId}`, { replace: true })
             }}
           />

@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // VideoExts jsou přípony souborů, které scanner zakládá jako video.
@@ -50,15 +52,29 @@ var (
 	// Rok v závorce: "Název (2003 - Režisér)", "Altamira (2016 FullHD…)".
 	parenYearRe = regexp.MustCompile(`[(\[]\s*((?:19|20)\d{2})\b`)
 	// Samostatný rok mezi oddělovači: "22.míle.2018.Mile…", "Amadeus-1984-CZ…".
-	yearTokenRe = regexp.MustCompile(`(?:^|[\s._\-])((?:19|20)\d{2})(?:$|[\s._\-])`)
+	// Také za "=" a před "," nebo "CZ": "Neřízená střela =2010-DVD", "Zbraň 1-1987,USA", "2-1991CZ".
+	yearTokenRe = regexp.MustCompile(`(?:^|[\s._\-=,])((?:19|20)\d{2})(?:$|[\s._\-,)]|(?i:cz))`)
 	// Značky vydání, za kterými už název nepokračuje.
 	releaseTagRe = regexp.MustCompile(`(?i)(?:^|[\s._\-\[(])(` + strings.Join([]string{
 		`480p`, `576p`, `720p`, `1080[pi]`, `2160p`, `4k`, `uhd`, `fullhd`, `hd(?:tv|rip)?`,
 		`br-?rip`, `bd-?rip`, `blu-?ray`, `bluray`, `web-?dl`, `web-?rip`, `dvd-?rip`, `dvd(?:scr|r)?`,
 		`hdtv`, `x26[45]`, `h\.?26[45]`, `hevc`, `xvid`, `divx`, `ac3`, `dts`, `aac`, `mp3`,
-		`cz(?:-?dab(?:ing)?\.?)?`, `sk`, `dabing`, `titulky`, `cztit(?:ulky)?`, `eng`, `multi`, `remux`,
-		`proper`, `repack`, `extended`, `unrated`,
-	}, "|") + `)(?:$|[\s._\-\])])`)
+		`cz(?:-?dab(?:ing)?\.?)?`, `sk`, `dab`, `dabing`, `titulky`, `cz-?tit(?:ulky)?`, `eng`, `multi`, `remux`,
+		`proper`, `repack`, `extended`, `unrated`, `avi`, `novink[ay]`, `pres[\s._\-]+multiload`, `multiload`,
+		`csfd`, `nejstahovanejsi`, `(?:super|top|vysoka)[\s._\-]+kvalit[aou]`,
+	}, "|") + `)(?:$|[\s._\-\]),])`)
+	// Žánry, kterými názvy souborů často pokračují ("Past-Krimi-Thriller-CZ").
+	// Název jimi nikdy nezačíná (film "Drama" zůstane).
+	genreTagRe = regexp.MustCompile(`(?i)[\s._\-(,]+(` + strings.Join([]string{
+		`komedie`, `drama`, `ak[čc]n[íiýy]`, `thriller`, `krimi`, `horor`, `sci-fi`, `fanta[sz]y`,
+		`romanti[cč]k[ýyáé]`, `dobrodru[žz]n[ýyáé]`, `v[áa]le[čc]n[ýyáée]`, `[žz]ivotopisn[ýyáé]`,
+		`mysteri[óo]zn[íi]`, `western`, `poeti[cč]k[ýyáé]`, `road[\s._\-]+movie`,
+		`[čc]esk[áaýyée][\s._\-]+(?:film|komedie|drama)`,
+	}, "|") + `)(?:$|[\s._\-,)])`)
+	// Pomlčka s mezerou aspoň z jedné strany odděluje název: "Včera -Yesterday".
+	looseDashRe = regexp.MustCompile(`\s+-\s*|\s*-\s+`)
+	// Poznámka v závorce bez roku: "Počátek (Inception)", "(Jiří Strach)".
+	parenNoteRe  = regexp.MustCompile(`[\s._\-]+[(\[]([^()\[\]]*)(?:[)\]]|$)`)
 	separatorsRe = regexp.MustCompile(`[._]+`)
 	spacesRe     = regexp.MustCompile(`\s+`)
 	// Úvodní značky bez roku: "!(Dokument)-Název", "[CZ] Název", "_ Název".
@@ -85,7 +101,8 @@ func StripPart(stem string) (string, int) {
 // název, původní název a rok. Zvládá české konvence "Název (rok - režisér)",
 // "Český název - Original Title (rok)" i scénové "Název.2018.720p.x264…".
 func ParseMovie(name string) MovieInfo {
-	name = strings.TrimSpace(name)
+	// Názvy souborů z macOS mívají diakritiku rozloženou (NFD).
+	name = norm.NFC.String(strings.TrimSpace(name))
 	name = leadingTagRe.ReplaceAllString(name, "")
 	name = leadingJunkRe.ReplaceAllString(name, "")
 	name = ordinalRe.ReplaceAllString(name, "")
@@ -98,20 +115,58 @@ func ParseMovie(name string) MovieInfo {
 	} else if loc := firstYearToken(name); loc != nil {
 		info.Year, _ = strconv.Atoi(name[loc[2]:loc[3]])
 		title = name[:loc[0]]
-	} else if m := releaseTagRe.FindStringIndex(name); m != nil && m[0] > 0 {
-		title = name[:m[0]]
+	}
+	// Značky vydání a žánry stojí i před rokem ("Narodni_trida__CZ_dabing__2019").
+	for _, re := range []*regexp.Regexp{releaseTagRe, genreTagRe} {
+		if m := re.FindStringIndex(title); m != nil && m[0] > 0 {
+			title = title[:m[0]]
+		}
+	}
+	var note string
+	if m := parenNoteRe.FindStringSubmatchIndex(title); m != nil && m[0] > 0 {
+		note = cleanTitle(title[m[2]:m[3]])
+		title = title[:m[0]] + " " + title[m[1]:]
 	}
 
-	title = cleanTitle(title)
-	if t, orig, ok := strings.Cut(title, " - "); ok && strings.TrimSpace(t) != "" && strings.TrimSpace(orig) != "" {
-		info.Title, info.OriginalTitle = strings.TrimSpace(t), strings.TrimSpace(orig)
-	} else {
-		info.Title = title
+	// "Český název - Original Title"; samotné číslo ("RED - 1", "1 - Deník
+	// Bridget Jonesové") je pořadí ve sbírce, ne název.
+	// Název bez mezer s víc pomlčkami ("oko-dravce-czdab-2008") má pomlčky
+	// jako oddělovač i v části, která po uříznutí zbyla.
+	if !strings.ContainsAny(name, " _") && strings.Count(name, "-") >= 2 {
+		title = strings.ReplaceAll(title, "-", " ")
+	}
+	segs := strings.Split(looseDashRe.ReplaceAllString(cleanTitle(title), " - "), " - ")
+	var names []string
+	for _, seg := range segs {
+		if seg = strings.TrimSpace(seg); seg != "" && (len(segs) == 1 || !allDigits(seg)) {
+			names = append(names, seg)
+		}
+	}
+	if len(names) > 0 {
+		info.Title, info.OriginalTitle = names[0], strings.Join(names[1:], " - ")
+	}
+	if info.OriginalTitle == "" && info.Title != "" {
+		info.OriginalTitle = note
+	}
+	// Český a anglický název bez oddělovače: "Mumie The Mummy".
+	if info.OriginalTitle == "" {
+		if i := strings.Index(info.Title, " The "); i > 0 {
+			info.Title, info.OriginalTitle = info.Title[:i], info.Title[i+1:]
+		}
 	}
 	if info.Title == "" {
 		info.Title = cleanTitle(name)
 	}
 	return info
+}
+
+func allDigits(s string) bool {
+	for _, r := range s {
+		if !unicode.IsDigit(r) {
+			return false
+		}
+	}
+	return s != ""
 }
 
 // firstYearToken najde první samostatný rok, který není hned na začátku

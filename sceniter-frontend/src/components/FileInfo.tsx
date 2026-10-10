@@ -1,13 +1,25 @@
-import { ChevronDownIcon } from 'lucide-react'
+import { ChevronDownIcon, UnlinkIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes, resolutionLabel, trackLabel, type MediaFile } from 'sceniter-shared'
+import { Button } from 'core-web/src/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from 'core-web/src/components/ui/collapsible'
 
 /**
  * Technické údaje souborů: kontejner, kodek, rozlišení, stopy. Sbalené –
- * souhrn hlavního (největšího) souboru je vidět hned.
+ * souhrn hlavního (největšího) souboru je vidět hned. Soubory z `detachable`
+ * (přisloučené podle metadat) jde oddělit do samostatného filmu.
  */
-export function FileInfo({ files }: { files: MediaFile[] }) {
+export function FileInfo({
+  files,
+  detachable = [],
+  onDetach,
+  detaching = false,
+}: {
+  files: MediaFile[]
+  detachable?: string[]
+  onDetach?: (fileId: string) => void
+  detaching?: boolean
+}) {
   const { t } = useTranslation()
   if (files.length === 0) return <p className="mt-8 text-sm text-muted-foreground">{t('video.detail.noFile')}</p>
   const main = files.reduce((a, b) => (b.size_bytes > a.size_bytes ? b : a))
@@ -51,6 +63,12 @@ export function FileInfo({ files }: { files: MediaFile[] }) {
                     <p className="mt-1 text-muted-foreground">
                       {t('video.detail.subtitleTracks')}: {[...subs.map(trackLabel), ...f.external_subtitles.map((s) => (s.language ?? s.format).toUpperCase())].join(', ')}
                     </p>
+                  ) : null}
+                  {onDetach && detachable.includes(f.id) ? (
+                    <Button size="sm" variant="outline" className="mt-3" disabled={detaching} onClick={() => onDetach(f.id)}>
+                      <UnlinkIcon />
+                      {t('video.detail.detachFile')}
+                    </Button>
                   ) : null}
                 </li>
               )

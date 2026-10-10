@@ -73,6 +73,8 @@ export default {
     fileDetails: '{{container}} · {{video}} · {{resolution}} · {{size}}',
     audioTracks: 'Audio',
     subtitleTracks: 'Subtítulos',
+    detachFile: 'Separar en una película aparte',
+    detached: 'Archivo separado: empareja la nueva película.',
     noFile: 'El archivo de vídeo no está disponible.',
     season: 'Temporada {{number}}',
     specials: 'Especiales',

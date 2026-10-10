@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"mediater/internal/sceniter/model"
+	"mediater/internal/sceniter/scanner"
 	"mediater/internal/sceniter/storage"
 )
 
@@ -31,7 +32,10 @@ func NewLibrary(store *storage.Store) *Library { return &Library{store: store} }
 type MovieDetail struct {
 	model.Movie
 	Files []model.MediaFile `json:"files"`
-	User  model.UserState   `json:"user"`
+	// DetachableFiles jsou soubory, které se k filmu přisloučily podle
+	// metadat a lze je oddělit (viz scanner.DetachFile).
+	DetachableFiles []uuid.UUID     `json:"detachable_files"`
+	User            model.UserState `json:"user"`
 }
 
 func (l *Library) Movie(ctx context.Context, userID, id uuid.UUID) (*MovieDetail, error) {
@@ -47,7 +51,15 @@ func (l *Library) Movie(ctx context.Context, userID, id uuid.UUID) (*MovieDetail
 	if err != nil {
 		return nil, err
 	}
-	return &MovieDetail{Movie: *m, Files: files, User: st}, nil
+	detachable := []uuid.UUID{}
+	if len(files) > 1 {
+		for _, f := range files {
+			if scanner.MovieKeyOf(f.FilePath) != m.SourceKey {
+				detachable = append(detachable, f.ID)
+			}
+		}
+	}
+	return &MovieDetail{Movie: *m, Files: files, DetachableFiles: detachable, User: st}, nil
 }
 
 // EpisodeWithProgress je díl s rozkoukaností uživatele.

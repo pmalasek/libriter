@@ -157,6 +157,9 @@ type SearchResult struct {
 	ImageURL      string `json:"image_url,omitempty"`
 	BirthYear     int    `json:"birth_year,omitempty"`
 	DeathYear     int    `json:"death_year,omitempty"`
+	// Votes je počet hodnocení u zdroje – podle něj se rozliší známý film
+	// od stejně pojmenovaných neznámých (0 = zdroj ho neuvádí).
+	Votes int `json:"votes,omitempty"`
 }
 
 // SearchResponse je výstup příkazu search.

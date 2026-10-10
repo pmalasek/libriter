@@ -315,6 +315,15 @@ export function useMatchTitle() {
   })
 }
 
+/** Oddělí soubor od filmu, se kterým se chybně sloučil; vrací ID nového filmu. */
+export function useDetachFile() {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: (mediaId: string) => apiFetch<{ movie_id: string }>(`${BASE}/media/${mediaId}/detach`, { method: 'POST' }),
+    onSuccess: invalidate,
+  })
+}
+
 export function useSetMatchState() {
   const invalidate = useInvalidateAll()
   return useMutation({
