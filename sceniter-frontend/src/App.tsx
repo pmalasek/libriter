@@ -30,6 +30,7 @@ const AdminSourcesPage = lazyPage(() => import('@/pages/admin/AdminSourcesPage')
 const AdminMatchPage = lazyPage(() => import('@/pages/admin/AdminMatchPage'), 'AdminMatchPage')
 const AdminIssuesPage = lazyPage(() => import('@/pages/admin/AdminIssuesPage'), 'AdminIssuesPage')
 const AdminTranscodePage = lazyPage(() => import('@/pages/admin/AdminTranscodePage'), 'AdminTranscodePage')
+const AdminTrashPage = lazyPage(() => import('@/pages/admin/AdminTrashPage'), 'AdminTrashPage')
 
 export function App() {
   return (
@@ -68,6 +69,7 @@ export function App() {
                 <Route path="sources" element={<AdminSourcesPage />} />
                 <Route path="match" element={<AdminMatchPage />} />
                 <Route path="issues" element={<AdminIssuesPage />} />
+                <Route path="trash" element={<AdminTrashPage />} />
                 <Route path="transcode" element={<AdminTranscodePage />} />
               </Route>
             </Route>

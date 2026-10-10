@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
-import { episodeCode, posterUrl, type MovieIssue, type ShowIssue, type ShowIssueItem } from 'sceniter-shared'
+import { episodeCode, formatBytes, posterUrl, type MovieIssue, type ShowIssue, type ShowIssueItem } from 'sceniter-shared'
 import { EmptyState } from 'core-web/src/components/EmptyState'
 import { ErrorState } from 'core-web/src/components/ErrorState'
 import { Button } from 'core-web/src/components/ui/button'
@@ -36,7 +36,7 @@ function IssueLine({ showId, issue, onTrash }: { showId: string; issue: ShowIssu
             {t('video.admin.showIssues.duplicate', { episode: episodeCode(issue.season, issue.episode ?? 0), count: files.length })}
             <FixLink showId={showId} dir={issue.dir} />
           </p>
-          <FileList files={files} ids={issue.file_ids} onTrash={onTrash} />
+          <FileList files={files} ids={issue.file_ids} sizes={issue.file_sizes} onTrash={onTrash} />
         </li>
       )
     case 'gap':
@@ -60,17 +60,35 @@ function IssueLine({ showId, issue, onTrash }: { showId: string; issue: ShowIssu
 }
 
 /** Seznam cest; s ids a onTrash má každý soubor tlačítko koše. */
-function FileList({ files, ids, onTrash }: { files: string[]; ids?: string[]; onTrash?: (file: TrashTarget) => void }) {
+function FileList({
+  files,
+  ids,
+  sizes,
+  onTrash,
+}: {
+  files: string[]
+  ids?: string[]
+  sizes?: number[]
+  onTrash?: (file: TrashTarget) => void
+}) {
   const { t } = useTranslation()
   return (
     <ul className="mt-1 mb-2 grid gap-0.5 pl-4">
       {files.map((f, i) => {
         const id = ids?.[i]
+        const size = sizes?.[i]
         return (
           <li key={f} className="flex items-center gap-2 font-mono text-xs break-all text-muted-foreground">
             <span className="min-w-0 flex-1">{f}</span>
+            {size != null ? <span className="shrink-0 tabular-nums">{formatBytes(size)}</span> : null}
             {id && onTrash ? (
-              <Button variant="ghost" size="icon-xs" aria-label={t('video.detail.deleteFile')} title={t('video.detail.deleteFile')} onClick={() => onTrash({ id, file_path: f })}>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label={t('video.detail.deleteFile')}
+                title={t('video.detail.deleteFile')}
+                onClick={() => onTrash({ id, file_path: f, size_bytes: size })}
+              >
                 <Trash2Icon />
               </Button>
             ) : null}
@@ -161,6 +179,7 @@ function MovieIssueRow({ movie }: { movie: MovieIssue }) {
         {movie.files.map((f) => (
           <li key={f.id} className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="font-mono text-xs break-all text-muted-foreground">{f.file_path}</span>
+            <span className="font-mono text-xs text-muted-foreground tabular-nums">{formatBytes(f.size_bytes)}</span>
             {f.detachable ? (
               <Button
                 size="sm"
@@ -177,7 +196,7 @@ function MovieIssueRow({ movie }: { movie: MovieIssue }) {
                 {t('video.detail.detachFile')}
               </Button>
             ) : null}
-            <Button size="sm" variant="outline" onClick={() => setTrashing({ id: f.id, file_path: f.file_path })}>
+            <Button size="sm" variant="outline" onClick={() => setTrashing({ id: f.id, file_path: f.file_path, size_bytes: f.size_bytes })}>
               <Trash2Icon />
               {t('video.detail.deleteFile')}
             </Button>

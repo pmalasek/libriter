@@ -38,6 +38,9 @@ const (
 	AuditDetach    = "sceniter.detach_file"
 	AuditRenumber  = "sceniter.renumber"
 	AuditTrash     = "sceniter.trash_file"
+	AuditRestore   = "sceniter.trash_restore"
+	AuditPurge     = "sceniter.trash_delete"
+	AuditEmpty     = "sceniter.trash_empty"
 	auditTargetLib = "sceniter"
 )
 
@@ -166,6 +169,10 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Get("/admin/library/unmatched", h.Unmatched)
 					r.Get("/admin/library/show-issues", h.ShowIssues)
 					r.Get("/admin/library/movie-issues", h.MovieIssues)
+					r.Get("/admin/trash", h.ListTrash)
+					r.Post("/admin/trash/restore", h.RestoreTrash)
+					r.Post("/admin/trash/delete", h.DeleteTrash)
+					r.Post("/admin/trash/empty", h.EmptyTrash)
 					r.Get("/admin/stats", h.Stats)
 					r.Get("/admin/transcode", h.TranscodeSessions)
 					r.Delete("/admin/transcode/{session}", h.StopTranscode)

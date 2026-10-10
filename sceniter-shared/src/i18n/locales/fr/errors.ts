@@ -22,6 +22,11 @@ export default {
     last_file: 'Le seul fichier d\'un film ne peut pas être supprimé',
   },
   renumber: { invalid: 'Renumérotation non valide : fichiers hors du dossier ou numéros d\'épisode en double' },
+  trash: {
+    invalid_path: 'Le chemin n\'est pas dans la corbeille d\'une bibliothèque',
+    restore_conflict: 'Un fichier existe déjà à l\'emplacement d\'origine',
+    not_found: 'Le fichier n\'est plus dans la corbeille',
+  },
   subtitle: {
     not_found: 'Sous-titres introuvables',
     unsupported: 'Ces sous-titres ne peuvent pas être convertis',

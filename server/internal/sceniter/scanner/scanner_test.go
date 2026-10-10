@@ -607,3 +607,73 @@ func TestTrashFile(t *testing.T) {
 		t.Errorf("seriály %+v", shows)
 	}
 }
+
+// Koš: výpis, obnovení (soubor se hned vrátí do knihovny), trvalé smazání
+// a vysypání; cesty mimo koš se odmítnou.
+func TestTrashPage(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"Serialy/Show/S01/a.mkv", "Serialy/Show/S01/a.cs.srt", "Serialy/Show/S01/b.mkv", "Serialy/Show/S01/c.mkv"} {
+		touch(t, root, f)
+	}
+	store := newTestStore(t)
+	addLibrary(t, store, "Serialy", "show")
+	s := New(root, store)
+	scanOnce(t, s)
+	ctx := context.Background()
+	for _, f := range []string{"a", "b", "c"} {
+		rec, _ := store.MediaByPath(ctx, "Serialy/Show/S01/"+f+".mkv")
+		if _, err := s.TrashFile(ctx, rec.ID); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	libs, err := s.ListTrash(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(libs) != 1 || len(libs[0].Items) != 3 || libs[0].SizeBytes == 0 {
+		t.Fatalf("koš %+v", libs)
+	}
+	var a TrashItem
+	for _, it := range libs[0].Items {
+		if it.Path == "Serialy/.trash/Show/S01/a.mkv" {
+			a = it
+		}
+	}
+	if a.OriginalPath != "Serialy/Show/S01/a.mkv" || len(a.Subtitles) != 1 {
+		t.Fatalf("položka a %+v", a)
+	}
+
+	for _, bad := range []string{"Serialy/Show/S01/b.mkv", "Serialy/.trash/../Show/S01/b.mkv", "Jinde/.trash/x.mkv"} {
+		if err := s.DeleteTrash(ctx, bad); !errors.Is(err, ErrTrashPath) {
+			t.Errorf("DeleteTrash(%q) = %v", bad, err)
+		}
+	}
+
+	if _, err := s.RestoreTrash(ctx, a.Path); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.MediaByPath(ctx, "Serialy/Show/S01/a.mkv"); err != nil {
+		t.Errorf("obnovený soubor není v knihovně: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Serialy/Show/S01/a.cs.srt")); err != nil {
+		t.Error("titulky se neobnovily")
+	}
+
+	if err := s.DeleteTrash(ctx, "Serialy/.trash/Show/S01/b.mkv"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Serialy/.trash/Show/S01/b.mkv")); err == nil {
+		t.Error("soubor zůstal v koši")
+	}
+
+	if _, err := s.EmptyTrash(ctx, "Serialy"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "Serialy/.trash")); err == nil {
+		t.Error("koš zůstal")
+	}
+	if _, err := s.EmptyTrash(ctx, "Jinde"); !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("neznámá knihovna: %v", err)
+	}
+}

@@ -22,6 +22,11 @@ export default {
     last_file: 'El único archivo de una película no se puede eliminar',
   },
   renumber: { invalid: 'Renumeración no válida: archivos fuera de la carpeta o números de episodio repetidos' },
+  trash: {
+    invalid_path: 'La ruta no está en la papelera de una biblioteca',
+    restore_conflict: 'Ya existe un archivo en la ubicación original',
+    not_found: 'El archivo ya no está en la papelera',
+  },
   subtitle: {
     not_found: 'Subtítulos no encontrados',
     unsupported: 'Estos subtítulos no se pueden convertir',

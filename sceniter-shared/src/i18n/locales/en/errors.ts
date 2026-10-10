@@ -24,6 +24,11 @@ export default {
     last_file: 'The only file of a movie cannot be deleted',
   },
   renumber: { invalid: 'Invalid renumbering: files outside the folder or duplicate episode numbers' },
+  trash: {
+    invalid_path: 'The path is not in a library trash',
+    restore_conflict: 'A file already exists at the original location',
+    not_found: 'The file is no longer in the trash',
+  },
   subtitle: {
     not_found: 'Subtitles not found',
     unsupported: 'These subtitles cannot be converted',

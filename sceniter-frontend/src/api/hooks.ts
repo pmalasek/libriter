@@ -35,6 +35,7 @@ import {
   type MovieIssue,
   type RenumberPlan,
   type ShowFolder,
+  type TrashLibrary,
 } from 'sceniter-shared'
 
 const BASE = '/sceniter'
@@ -421,6 +422,41 @@ export function useRenumber() {
     onSuccess: (_plan, vars) => {
       if (!vars.dryRun) invalidate()
     },
+  })
+}
+
+/** Koše knihoven (.trash) s videi. */
+export function useAdminTrash() {
+  return useQuery({
+    queryKey: queryKeys.adminTrash,
+    queryFn: async () => list((await apiFetch<{ items: TrashLibrary[] | null }>(`${BASE}/admin/trash`)).items),
+  })
+}
+
+/** Vrátí video z koše na původní místo a do knihovny. */
+export function useRestoreTrash() {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: (path: string) => apiFetch<{ path: string }>(`${BASE}/admin/trash/restore`, { method: 'POST', json: { path } }),
+    onSuccess: invalidate,
+  })
+}
+
+/** Trvale smaže video z koše. */
+export function useDeleteTrash() {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: (path: string) => apiFetch<void>(`${BASE}/admin/trash/delete`, { method: 'POST', json: { path } }),
+    onSuccess: invalidate,
+  })
+}
+
+/** Vysype koš knihovny (library = složka knihovny). */
+export function useEmptyTrash() {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: (library: string) => apiFetch<{ freed_bytes: number }>(`${BASE}/admin/trash/empty`, { method: 'POST', json: { library } }),
+    onSuccess: invalidate,
   })
 }
 

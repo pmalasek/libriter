@@ -11,6 +11,7 @@ export function AdminLayout() {
     { to: '/admin/sources', label: t('video.admin.nav.sources') },
     { to: '/admin/match', label: t('video.admin.nav.match') },
     { to: '/admin/issues', label: t('video.admin.nav.issues') },
+    { to: '/admin/trash', label: t('video.admin.nav.trash') },
     { to: '/admin/transcode', label: t('video.admin.nav.transcode') },
   ]
   return (

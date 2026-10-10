@@ -21,12 +21,13 @@ type EpisodeFileRow struct {
 	EpisodeID  uuid.UUID
 	MediaID    uuid.UUID
 	FilePath   string
+	SizeBytes  int64
 	// EmbeddedTitle je název vložený v souboru ("" = žádný nebo nezjištěný).
 	EmbeddedTitle string
 }
 
 const episodeFilesSelect = `
-	SELECT sh.id, sh.title, sh.source_key, sh.poster_path, sh.updated_at, se.number, e.number, e.id, m.id, m.file_path, COALESCE(m.embedded_title, '')
+	SELECT sh.id, sh.title, sh.source_key, sh.poster_path, sh.updated_at, se.number, e.number, e.id, m.id, m.file_path, m.size_bytes, COALESCE(m.embedded_title, '')
 	FROM sc_media_files m
 	JOIN sc_episodes e ON e.id = m.episode_id
 	JOIN sc_seasons se ON se.id = e.season_id
@@ -59,7 +60,7 @@ func scanEpisodeFiles(rows *sql.Rows) ([]EpisodeFileRow, error) {
 	for rows.Next() {
 		var r EpisodeFileRow
 		if err := rows.Scan(&r.ShowID, &r.ShowTitle, &r.SourceKey, &r.PosterPath, &r.UpdatedAt, &r.Season, &r.Episode,
-			&r.EpisodeID, &r.MediaID, &r.FilePath, &r.EmbeddedTitle); err != nil {
+			&r.EpisodeID, &r.MediaID, &r.FilePath, &r.SizeBytes, &r.EmbeddedTitle); err != nil {
 			return nil, err
 		}
 		out = append(out, r)
@@ -96,13 +97,14 @@ type MovieFileRow struct {
 	UpdatedAt  time.Time
 	MediaID    uuid.UUID
 	FilePath   string
+	SizeBytes  int64
 }
 
 // MovieFiles vrátí soubory filmů s více než jedním souborem, seřazené
 // podle filmu a cesty.
 func (s *Store) MovieFiles(ctx context.Context) ([]MovieFileRow, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT mv.id, mv.title, mv.source_key, mv.poster_path, mv.updated_at, m.id, m.file_path
+		SELECT mv.id, mv.title, mv.source_key, mv.poster_path, mv.updated_at, m.id, m.file_path, m.size_bytes
 		FROM sc_media_files m
 		JOIN sc_movies mv ON mv.id = m.movie_id
 		WHERE mv.id IN (SELECT movie_id FROM sc_media_files WHERE movie_id IS NOT NULL GROUP BY movie_id HAVING COUNT(*) > 1)
@@ -114,7 +116,7 @@ func (s *Store) MovieFiles(ctx context.Context) ([]MovieFileRow, error) {
 	var out []MovieFileRow
 	for rows.Next() {
 		var r MovieFileRow
-		if err := rows.Scan(&r.MovieID, &r.Title, &r.SourceKey, &r.PosterPath, &r.UpdatedAt, &r.MediaID, &r.FilePath); err != nil {
+		if err := rows.Scan(&r.MovieID, &r.Title, &r.SourceKey, &r.PosterPath, &r.UpdatedAt, &r.MediaID, &r.FilePath, &r.SizeBytes); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

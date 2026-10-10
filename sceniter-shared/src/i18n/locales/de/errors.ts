@@ -22,6 +22,11 @@ export default {
     last_file: 'Die einzige Datei eines Films kann nicht gelöscht werden',
   },
   renumber: { invalid: 'Ungültige Neunummerierung: Dateien außerhalb des Ordners oder doppelte Folgennummern' },
+  trash: {
+    invalid_path: 'Der Pfad liegt nicht im Papierkorb einer Bibliothek',
+    restore_conflict: 'Am ursprünglichen Ort existiert bereits eine Datei',
+    not_found: 'Die Datei ist nicht mehr im Papierkorb',
+  },
   subtitle: {
     not_found: 'Untertitel nicht gefunden',
     unsupported: 'Diese Untertitel können nicht umgewandelt werden',

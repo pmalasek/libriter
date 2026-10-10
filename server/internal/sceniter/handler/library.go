@@ -657,6 +657,85 @@ func (h *Handler) TrashFile(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"trash_path": dest})
 }
 
+// GET /sceniter/admin/trash – koše knihoven s videi.
+func (h *Handler) ListTrash(w http.ResponseWriter, r *http.Request) {
+	items, err := h.Scanner.ListTrash(r.Context())
+	if writeStoreError(w, err, "sceniter.not_found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// trashRequest čte {"path": …} nebo {"library": …} pro akce koše.
+func trashRequest(w http.ResponseWriter, r *http.Request) (path, library string, ok bool) {
+	var req struct {
+		Path    string `json:"path"`
+		Library string `json:"library"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
+		return "", "", false
+	}
+	return req.Path, req.Library, true
+}
+
+// writeTrashError odpoví na chyby akcí koše; vrací true, pokud odpověděl.
+func writeTrashError(w http.ResponseWriter, err error) bool {
+	switch {
+	case errors.Is(err, scanner.ErrTrashPath):
+		writeError(w, http.StatusBadRequest, "trash.invalid_path", err.Error())
+	case errors.Is(err, scanner.ErrRenameConflict):
+		writeError(w, http.StatusConflict, "trash.restore_conflict", err.Error())
+	default:
+		return writeStoreError(w, err, "trash.not_found")
+	}
+	return true
+}
+
+// POST /sceniter/admin/trash/restore {path} – vrátí video z koše na původní místo.
+func (h *Handler) RestoreTrash(w http.ResponseWriter, r *http.Request) {
+	p, _, ok := trashRequest(w, r)
+	if !ok {
+		return
+	}
+	dest, err := h.Scanner.RestoreTrash(r.Context(), p)
+	if writeTrashError(w, err) {
+		return
+	}
+	h.Audit.Record(r.Context(), userID(r), coreservice.AuditEvent{Action: AuditRestore, TargetType: "media",
+		Details: map[string]string{"from": p, "to": dest}})
+	writeJSON(w, http.StatusOK, map[string]string{"path": dest})
+}
+
+// POST /sceniter/admin/trash/delete {path} – trvale smaže video z koše.
+func (h *Handler) DeleteTrash(w http.ResponseWriter, r *http.Request) {
+	p, _, ok := trashRequest(w, r)
+	if !ok {
+		return
+	}
+	if writeTrashError(w, h.Scanner.DeleteTrash(r.Context(), p)) {
+		return
+	}
+	h.Audit.Record(r.Context(), userID(r), coreservice.AuditEvent{Action: AuditPurge, TargetType: "media",
+		Details: map[string]string{"path": p}})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /sceniter/admin/trash/empty {library} – vysype koš knihovny (složka knihovny).
+func (h *Handler) EmptyTrash(w http.ResponseWriter, r *http.Request) {
+	_, lib, ok := trashRequest(w, r)
+	if !ok {
+		return
+	}
+	freed, err := h.Scanner.EmptyTrash(r.Context(), lib)
+	if writeTrashError(w, err) {
+		return
+	}
+	h.Audit.Record(r.Context(), userID(r), coreservice.AuditEvent{Action: AuditEmpty, TargetType: "library",
+		Details: map[string]string{"library": lib, "bytes": strconv.FormatInt(freed, 10)}})
+	writeJSON(w, http.StatusOK, map[string]int64{"freed_bytes": freed})
+}
+
 // GET /sceniter/admin/library/movie-issues
 func (h *Handler) MovieIssues(w http.ResponseWriter, r *http.Request) {
 	items, err := h.Library.MovieIssues(r.Context())

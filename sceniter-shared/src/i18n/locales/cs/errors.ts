@@ -22,6 +22,11 @@ export default {
     last_file: 'Jediný soubor filmu nelze smazat',
   },
   renumber: { invalid: 'Neplatné přečíslování: soubory mimo složku nebo duplicitní čísla dílů' },
+  trash: {
+    invalid_path: 'Cesta nevede do koše knihovny',
+    restore_conflict: 'Na původním místě už soubor je',
+    not_found: 'Soubor už v koši není',
+  },
   subtitle: {
     not_found: 'Titulky nenalezeny',
     unsupported: 'Tyto titulky nejde převést',

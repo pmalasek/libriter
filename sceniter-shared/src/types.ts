@@ -353,6 +353,8 @@ export interface ShowIssueItem {
   files?: string[]
   /** ID souborů z files (duplicate_files) – pro přesun do koše. */
   file_ids?: string[]
+  /** Velikosti souborů z files v bajtech (duplicate_files). */
+  file_sizes?: number[]
   /** Složka dotčených souborů – odkaz na editor číslování. */
   dir?: string
 }
@@ -371,6 +373,7 @@ export interface ShowIssue {
 export interface MovieIssueFile {
   id: string
   file_path: string
+  size_bytes: number
   detachable: boolean
 }
 
@@ -422,6 +425,26 @@ export interface RenumberChange {
 export interface RenumberPlan {
   season: number
   files: RenumberChange[]
+}
+
+/** Video v koši knihovny. */
+export interface TrashItem {
+  /** Cesta v koši relativní k VIDEO_ROOT. */
+  path: string
+  /** Kam se soubor obnoví. */
+  original_path: string
+  size_bytes: number
+  trashed_at: string
+  subtitles: string[]
+}
+
+/** Koš jedné knihovny (GET /sceniter/admin/trash). */
+export interface TrashLibrary {
+  dir: string
+  name: string
+  /** Všechny soubory v koši včetně titulků. */
+  size_bytes: number
+  items: TrashItem[]
 }
 
 export interface RefreshStatus {

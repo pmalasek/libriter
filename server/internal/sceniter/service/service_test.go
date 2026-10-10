@@ -312,7 +312,7 @@ func TestShowIssues(t *testing.T) {
 	for _, it := range got[0].Issues {
 		kinds[it.Kind] = it
 	}
-	if d := kinds[IssueDuplicateFiles]; d.Episode != 1 || len(d.Files) != 2 {
+	if d := kinds[IssueDuplicateFiles]; d.Episode != 1 || len(d.Files) != 2 || len(d.FileSizes) != 2 || d.FileSizes[0] != 1 {
 		t.Errorf("duplicita = %+v", d)
 	}
 	if g := kinds[IssueGap]; len(g.Missing) != 1 || g.Missing[0] != 3 {
@@ -353,7 +353,7 @@ func TestMovieIssues(t *testing.T) {
 		t.Fatalf("filmy s nálezy = %+v", got)
 	}
 	for _, f := range got[0].Files {
-		if f.Detachable != (f.FilePath == "Filmy/Dej si pohov/Dej si pohov.mkv") {
+		if f.Detachable != (f.FilePath == "Filmy/Dej si pohov/Dej si pohov.mkv") || f.SizeBytes != 1 {
 			t.Errorf("soubor %+v", f)
 		}
 	}

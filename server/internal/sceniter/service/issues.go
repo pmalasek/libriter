@@ -34,6 +34,8 @@ type ShowIssueItem struct {
 	Files []string `json:"files,omitempty"`
 	// FileIDs jsou ID souborů z Files (IssueDuplicateFiles) – pro smazání z kontroly.
 	FileIDs []uuid.UUID `json:"file_ids,omitempty"`
+	// FileSizes jsou velikosti souborů z Files v bajtech (IssueDuplicateFiles).
+	FileSizes []int64 `json:"file_sizes,omitempty"`
 	// Dir je složka dotčených souborů (u IssueGap prvního souboru řady) –
 	// odkaz na editor složky, kde se číslování opraví.
 	Dir string `json:"dir,omitempty"`
@@ -86,9 +88,11 @@ func showIssues(files []storage.EpisodeFileRow) []ShowIssueItem {
 			k := j
 			var paths []string
 			var ids []uuid.UUID
+			var sizes []int64
 			for k < len(files) && files[k].Season == season && files[k].Episode == files[j].Episode {
 				paths = append(paths, files[k].FilePath)
 				ids = append(ids, files[k].MediaID)
+				sizes = append(sizes, files[k].SizeBytes)
 				if !scanner.EpisodeFromPath(files[k].FilePath, files[k].EmbeddedTitle).OK {
 					positional = append(positional, files[k].FilePath)
 				}
@@ -97,7 +101,7 @@ func showIssues(files []storage.EpisodeFileRow) []ShowIssueItem {
 			number := files[j].Episode
 			numbers = append(numbers, number)
 			if len(paths) > 1 {
-				out = append(out, ShowIssueItem{Kind: IssueDuplicateFiles, Season: season, Episode: number, Files: paths, FileIDs: ids, Dir: path.Dir(paths[0])})
+				out = append(out, ShowIssueItem{Kind: IssueDuplicateFiles, Season: season, Episode: number, Files: paths, FileIDs: ids, FileSizes: sizes, Dir: path.Dir(paths[0])})
 			}
 			j = k
 		}
@@ -135,6 +139,7 @@ func gaps(numbers []int) []int {
 type MovieIssueFile struct {
 	ID         uuid.UUID `json:"id"`
 	FilePath   string    `json:"file_path"`
+	SizeBytes  int64     `json:"size_bytes"`
 	Detachable bool      `json:"detachable"`
 }
 
@@ -168,7 +173,7 @@ func (l *Library) MovieIssues(ctx context.Context) ([]MovieIssue, error) {
 		for _, f := range rows[i:j] {
 			detachable := scanner.MovieKeyOf(f.FilePath) != r.SourceKey
 			foreign = foreign || detachable
-			m.Files = append(m.Files, MovieIssueFile{ID: f.MediaID, FilePath: f.FilePath, Detachable: detachable})
+			m.Files = append(m.Files, MovieIssueFile{ID: f.MediaID, FilePath: f.FilePath, SizeBytes: f.SizeBytes, Detachable: detachable})
 		}
 		if foreign {
 			out = append(out, m)
