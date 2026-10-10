@@ -11,6 +11,7 @@ import (
 	"mediater/internal/core/config"
 	"mediater/internal/core/db"
 	"mediater/internal/sceniter/migrations"
+	"mediater/internal/sceniter/model"
 	"mediater/internal/sceniter/storage"
 )
 
@@ -399,10 +400,29 @@ func TestPositionInDirSkipsNumbered(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if got := positionInDir(filepath.Join(dir, "bez-cisla.avi")); got != 3 {
+	if got := positionInDir(filepath.Join(dir, "bez-cisla.avi"), "X", 0); got != 3 {
 		t.Errorf("bez-cisla = %d, chci 3", got)
 	}
-	if got := positionInDir(filepath.Join(dir, "jiny.avi")); got != 4 {
+	if got := positionInDir(filepath.Join(dir, "jiny.avi"), "X", 0); got != 4 {
 		t.Errorf("jiny = %d, chci 4", got)
+	}
+}
+
+func TestEpisodeKeyAbsoluteNumbering(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "Colombo", "S05")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"Colombo 32.Případ.avi", "Colombo 33.Smrt.avi", "Colombo 34.Aréna.avi"} {
+		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	lib := &model.Library{}
+	parts := []string{"Colombo", "S05", "Colombo 33.Smrt.avi"}
+	key, ok := episodeKey(lib, filepath.Join(dir, parts[2]), parts, []string{"Seriály"}, "Colombo 33.Smrt", "")
+	if !ok || key.Season != 5 || key.Episode != 2 {
+		t.Errorf("Colombo 33 v S05 = S%dE%d (%v), chci S5E2", key.Season, key.Episode, ok)
 	}
 }

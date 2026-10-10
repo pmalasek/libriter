@@ -31,9 +31,10 @@ type ffprobeOutput struct {
 		Disposition map[string]int    `json:"disposition"`
 	} `json:"streams"`
 	Format struct {
-		FormatName string `json:"format_name"`
-		Duration   string `json:"duration"`
-		BitRate    string `json:"bit_rate"`
+		FormatName string            `json:"format_name"`
+		Duration   string            `json:"duration"`
+		BitRate    string            `json:"bit_rate"`
+		Tags       map[string]string `json:"tags"`
 	} `json:"format"`
 }
 
@@ -62,7 +63,7 @@ func parseProbe(data []byte) *storage.Probe {
 	if err := json.Unmarshal(data, &out); err != nil {
 		return &storage.Probe{Error: fmt.Sprintf("výstup ffprobe: %v", err)}
 	}
-	p := &storage.Probe{Container: containerName(out.Format.FormatName)}
+	p := &storage.Probe{Container: containerName(out.Format.FormatName), Title: formatTitle(out.Format.Tags)}
 	p.DurationSec, _ = strconv.ParseFloat(out.Format.Duration, 64)
 	p.Bitrate, _ = strconv.ParseInt(out.Format.BitRate, 10, 64)
 
@@ -99,6 +100,33 @@ func parseProbe(data []byte) *storage.Probe {
 		p.Streams = append(p.Streams, st)
 	}
 	return p
+}
+
+// formatTitle vrátí tag title kontejneru (klíč bývá i velkými písmeny).
+func formatTitle(tags map[string]string) string {
+	for k, v := range tags {
+		if strings.EqualFold(k, "title") {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}
+
+// ProbeTitle zjistí jen název vložený v souboru – rychlé, čte hlavičku.
+// Doplňuje název u souborů prozkoumaných před zavedením embedded_title.
+func ProbeTitle(ctx context.Context, ffprobe, path string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, ffprobe, "-v", "error", "-print_format", "json",
+		"-show_entries", "format_tags", path).Output()
+	if err != nil {
+		return "", err
+	}
+	var res ffprobeOutput
+	if err := json.Unmarshal(out, &res); err != nil {
+		return "", err
+	}
+	return formatTitle(res.Format.Tags), nil
 }
 
 // containerName převede format_name z ffprobe ("matroska,webm",

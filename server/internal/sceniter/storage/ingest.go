@@ -21,12 +21,14 @@ type MediaRecord struct {
 	SizeBytes int64
 	ModTime   time.Time
 	Probed    bool
+	// EmbeddedTitle je název vložený v souboru; nil = ještě nezjištěný.
+	EmbeddedTitle *string
 }
 
 // MediaByPath vrátí záznam souboru podle cesty, nebo ErrNotFound.
 func (s *Store) MediaByPath(ctx context.Context, path string) (*MediaRecord, error) {
 	const q = `
-		SELECT id, movie_id, episode_id, size_bytes, mtime, probed_at IS NOT NULL
+		SELECT id, movie_id, episode_id, size_bytes, mtime, probed_at IS NOT NULL, embedded_title
 		FROM sc_media_files WHERE file_path = ?1`
 	var (
 		r        MediaRecord
@@ -34,7 +36,7 @@ func (s *Store) MediaByPath(ctx context.Context, path string) (*MediaRecord, err
 		episode  *uuid.UUID
 		modified sql.NullTime
 	)
-	err := s.db.QueryRowContext(ctx, q, path).Scan(&r.ID, &movie, &episode, &r.SizeBytes, &modified, &r.Probed)
+	err := s.db.QueryRowContext(ctx, q, path).Scan(&r.ID, &movie, &episode, &r.SizeBytes, &modified, &r.Probed, &r.EmbeddedTitle)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -310,7 +312,9 @@ type Probe struct {
 	Width        int
 	Height       int
 	Streams      []model.Stream
-	Error        string // ffprobe selhal; soubor se přesto založí
+	// Title je název vložený v kontejneru (tag title), "" = žádný.
+	Title string
+	Error string // ffprobe selhal; soubor se přesto založí
 }
 
 // SubtitleFile je externí soubor titulků.
@@ -329,8 +333,10 @@ type SaveMediaInput struct {
 	SizeBytes int64
 	ModTime   time.Time
 	// Probe je nil, když se soubor nezměnil a údaje z ffprobe se ponechávají.
-	Probe     *Probe
-	Subtitles []SubtitleFile
+	Probe *Probe
+	// EmbeddedTitle se uloží, když není nil (zjištěný bez celého ffprobe).
+	EmbeddedTitle *string
+	Subtitles     []SubtitleFile
 }
 
 // SaveMedia založí nebo aktualizuje soubor (podle cesty), jeho stopy a
@@ -384,6 +390,16 @@ func (s *Store) SaveMedia(ctx context.Context, in SaveMediaInput) (uuid.UUID, er
 			if err != nil {
 				return uuid.Nil, fmt.Errorf("save stream: %w", err)
 			}
+		}
+	}
+
+	title := in.EmbeddedTitle
+	if p := in.Probe; p != nil && p.Error == "" {
+		title = &p.Title
+	}
+	if title != nil {
+		if _, err := tx.ExecContext(ctx, `UPDATE sc_media_files SET embedded_title = ?2 WHERE id = ?1`, id, *title); err != nil {
+			return uuid.Nil, fmt.Errorf("save embedded title: %w", err)
 		}
 	}
 

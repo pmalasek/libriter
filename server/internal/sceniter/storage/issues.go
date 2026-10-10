@@ -18,13 +18,15 @@ type EpisodeFileRow struct {
 	Season     int
 	Episode    int
 	FilePath   string
+	// EmbeddedTitle je název vložený v souboru ("" = žádný nebo nezjištěný).
+	EmbeddedTitle string
 }
 
 // EpisodeFiles vrátí všechny soubory dílů seřazené podle seriálu, řady,
 // dílu a cesty. Díly bez souboru se nevracejí.
 func (s *Store) EpisodeFiles(ctx context.Context) ([]EpisodeFileRow, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT sh.id, sh.title, sh.source_key, sh.poster_path, sh.updated_at, se.number, e.number, m.file_path
+		SELECT sh.id, sh.title, sh.source_key, sh.poster_path, sh.updated_at, se.number, e.number, m.file_path, COALESCE(m.embedded_title, '')
 		FROM sc_media_files m
 		JOIN sc_episodes e ON e.id = m.episode_id
 		JOIN sc_seasons se ON se.id = e.season_id
@@ -37,7 +39,7 @@ func (s *Store) EpisodeFiles(ctx context.Context) ([]EpisodeFileRow, error) {
 	var out []EpisodeFileRow
 	for rows.Next() {
 		var r EpisodeFileRow
-		if err := rows.Scan(&r.ShowID, &r.ShowTitle, &r.SourceKey, &r.PosterPath, &r.UpdatedAt, &r.Season, &r.Episode, &r.FilePath); err != nil {
+		if err := rows.Scan(&r.ShowID, &r.ShowTitle, &r.SourceKey, &r.PosterPath, &r.UpdatedAt, &r.Season, &r.Episode, &r.FilePath, &r.EmbeddedTitle); err != nil {
 			return nil, err
 		}
 		out = append(out, r)

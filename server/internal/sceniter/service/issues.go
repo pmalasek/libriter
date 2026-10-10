@@ -2,8 +2,6 @@ package service
 
 import (
 	"context"
-	"path"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -82,18 +80,15 @@ func showIssues(files []storage.EpisodeFileRow) []ShowIssueItem {
 			var paths []string
 			for k < len(files) && files[k].Season == season && files[k].Episode == files[j].Episode {
 				paths = append(paths, files[k].FilePath)
+				if !scanner.EpisodeFromPath(files[k].FilePath, files[k].EmbeddedTitle).OK {
+					positional = append(positional, files[k].FilePath)
+				}
 				k++
 			}
 			number := files[j].Episode
 			numbers = append(numbers, number)
 			if len(paths) > 1 {
 				out = append(out, ShowIssueItem{Kind: IssueDuplicateFiles, Season: season, Episode: number, Files: paths})
-			}
-			for _, p := range paths {
-				stem := strings.TrimSuffix(path.Base(p), path.Ext(p))
-				if !scanner.ParseEpisode(stem).OK {
-					positional = append(positional, p)
-				}
 			}
 			j = k
 		}

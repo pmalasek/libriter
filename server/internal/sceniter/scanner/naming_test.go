@@ -77,6 +77,23 @@ func TestParseEpisode(t *testing.T) {
 		{"Desate-Kralovstvi-3-cz", 0, 3, ""},
 		{"Show 4 720p", 0, 4, ""},
 		{"Show-12-eng", 0, 12, ""},
+		{"Labyrint 06.díl", 0, 6, ""},
+		{"Doktor z vejminku - 3 díl - Láska a úklady", 0, 3, "Láska a úklady"},
+		{"Atentat-4.dil-Pravo-CZ", 0, 4, "Pravo"},
+		{"Hniezdo_11.diel", 0, 11, ""},
+		{"Mentalista S0421 Rubínové střevíčky", 4, 21, "Rubínové střevíčky"},
+		{"cali.s6x01.unforgiven.cz", 6, 1, "unforgiven"},
+		{"01", 0, 1, ""},
+		{"01. Okupace", 0, 1, ""},
+		{"025. Loupeznik", 0, 25, ""},
+		{"Colombo 07.Vražda.podle.plánu.1972", 0, 7, ""},
+		{"Hospoda-47-klientka", 0, 47, ""},
+		{"Svatby v Benátkách (19) - Navždy spolu", 0, 19, ""},
+		{"Hraběnky • 13 • Milionář", 0, 13, ""},
+		{"Pozadí_událostí__3_", 0, 3, ""},
+		{"Případ_pro_exorcistu_2ze3__2015__Detektivové_od_Nejsvětější_trojice", 0, 2, ""},
+		{"Okres na severu 11_13 TV seriál 1981, CZ", 0, 11, ""},
+		{"Vraždy.u.jezera.8.Štvanice.HDTV.CZ", 0, 8, ""},
 	}
 	for _, c := range cases {
 		got := ParseEpisode(c.in)
@@ -89,17 +106,75 @@ func TestParseEpisode(t *testing.T) {
 	}
 }
 
+func TestParseEpisodeIn(t *testing.T) {
+	cases := []struct {
+		name, show      string
+		season, episode int
+	}{
+		{"Babylon 5 - 03 - Návrat", "Babylon 5", 0, 3},
+		{"Desate-Kralovstvi-3-cz", "Desáté království", 1, 3},
+		{"Vodník 2 (2019)", "Vodník", 0, 2},
+		{"Jiný seriál 4", "Babylon 5", 0, 4},
+		{"Kriminálka Anděl 3 (2012) 12 - Tajné pohřby", "Kriminálka Anděl", 3, 12},
+		{"Kriminálka Anděl 3 (2012) 03 - Pohřbená zaživa", "Kriminálka Anděl", 3, 3},
+		{"Dům_na_kopci_1_-_10_-_Skličující_ticho", "Dům na kopci", 1, 10},
+		{"Na_-_vodě_-_8(1)", "Na vode", 1, 8},
+		{"03. Exodus část 1.", "Battlestar Galactica", 3, 3},
+		{"Okres na severu 01_13 TV seriál 1981, CZ", "Okres na severu", 1, 1},
+		{"trp0324", "Terapie", 3, 24},
+		{"0507", "Útěk z vězení", 5, 7},
+		{"Kriminálka Anděl - 0213 - Pistole", "Kriminálka Anděl", 2, 13},
+		{"Gagman IV.", "Gagman", 1, 4},
+		{"08-14.Tajna komora", "Přátelé", 8, 14},
+		{"Pernikovy-tata-04-13-Ztrata-tvare--cz-dabing", "Breaking Bad", 4, 13},
+		{"THE_OUTSIDER_01-05_CZ_dabing_2020", "Outsider", 1, 5},
+		{"Druhy-dech---1.Telecí-léta-(1988)-MONTY-698", "Druhý dech", 1, 1},
+		{"strazmistr-topinka-13-13-zlocin-na-svatbe", "Strážmistr Topinka", 1, 13},
+		{"Česká soda_Díly 12-16 (1995)", "Česká soda", 1, 12},
+		{"Okres na severu 1981", "Okres na severu", 19, 0},
+	}
+	for _, c := range cases {
+		if got := ParseEpisodeIn(c.name, c.show, c.season); got.OK != (c.episode > 0) || got.Episode != c.episode {
+			t.Errorf("ParseEpisodeIn(%q, %q) = %+v, chci díl %d", c.name, c.show, got, c.episode)
+		}
+	}
+}
+
+func TestParseEmbeddedTitle(t *testing.T) {
+	for title, want := range map[string]int{
+		"Gumy.S01E09.1080p.WebRip.x.264.Akim":           9,
+		"Pan casu S03x07 - 42 dvdrip cz (warezfilm.cz)": 7,
+		"p��tel�: 8x14 - tajemn� komora (2002)":         14,
+		"3 díl - Láska a úklady":                        3,
+		"MASH":                                          0,
+		"Ripped by Pulp3 @ Warforum.cz":                 0,
+		"MISTR_A_MARKETKA_1_2.Title1":                   0,
+	} {
+		got := ParseEmbeddedTitle(title)
+		if got.Episode != want || got.OK != (want > 0) {
+			t.Errorf("ParseEmbeddedTitle(%q) = %+v, chci %d", title, got, want)
+		}
+	}
+}
+
 func TestParseSeasonDir(t *testing.T) {
-	ok := map[string]int{"S01": 1, "S3": 3, "Season 2": 2, "Série 4": 4, "2. řada": 2, "Sezóna 10": 10, "season_05": 5}
+	ok := map[string]int{"S01": 1, "S3": 3, "Season 2": 2, "Série 4": 4, "2. řada": 2, "Sezóna 10": 10, "season_05": 5,
+		"ser.04": 4, "S03 (2012)": 3, "S02 (2010-2011)": 2, "Terapie S01": 1, "Battlestar Galactica 1. série": 1}
 	for in, want := range ok {
 		if got, found := ParseSeasonDir(in); !found || got != want {
 			t.Errorf("ParseSeasonDir(%q) = %d,%v, chci %d", in, got, found, want)
 		}
 	}
-	for _, in := range []string{"Extras", "Docent", "S01E01"} {
+	for _, in := range []string{"Extras", "Docent", "S01E01", "Californication 6", "Babylon 5"} {
 		if _, found := ParseSeasonDir(in); found {
 			t.Errorf("ParseSeasonDir(%q) našel řadu", in)
 		}
+	}
+	if n, ok := ParseSeasonDirIn("Californication 6", "Californication"); !ok || n != 6 {
+		t.Errorf("ParseSeasonDirIn(Californication 6) = %d,%v", n, ok)
+	}
+	if _, ok := ParseSeasonDirIn("Extras 2", "Californication"); ok {
+		t.Error("ParseSeasonDirIn(Extras 2) našel řadu")
 	}
 }
 
@@ -179,5 +254,12 @@ func TestMovieKey(t *testing.T) {
 		if key != c.key || info.Title != c.title || info.Year != c.year {
 			t.Errorf("movieKeyOf(%q) = %q, %+v; chci %q, %q, %d", c.rel, key, info, c.key, c.title, c.year)
 		}
+	}
+}
+
+func TestParseProbeTitle(t *testing.T) {
+	p := parseProbe([]byte(`{"streams":[],"format":{"format_name":"avi","tags":{"TITLE":" Pan casu S03x07 "}}}`))
+	if p.Title != "Pan casu S03x07" {
+		t.Errorf("Title = %q", p.Title)
 	}
 }

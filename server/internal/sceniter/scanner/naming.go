@@ -8,6 +8,8 @@ import (
 	"unicode"
 
 	"golang.org/x/text/unicode/norm"
+
+	"mediater/internal/core/textfold"
 )
 
 // VideoExts jsou přípony souborů, které scanner zakládá jako video.
@@ -208,56 +210,213 @@ type EpisodeInfo struct {
 	Episode int
 	Title   string
 	OK      bool
+	// Loose: číslo je jen samostatné číslo v názvu (volné pravidlo), ne
+	// "S01E02" ani "2. díl" – může jít o číslování přes všechny řady.
+	Loose bool
 }
 
 var (
-	sxxexxRe  = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])s(\d{1,2})[\s._-]*e(\d{1,3})(?:$|[^0-9])`)
-	nxnnRe    = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(\d{1,2})x(\d{1,3})(?:$|[^0-9])`)
-	dilRe     = regexp.MustCompile(`(?i)(?:^|[^0-9])(\d{1,3})\.\s*díl(?:$|[^\pL])`)
-	dilWordRe = regexp.MustCompile(`(?i)(?:^|[^\pL])(?:díl|epizoda|episode|ep|e)[\s._-]*(\d{1,3})(?:$|[^0-9])`)
-	// Číslo na konci názvu: "Bitva_o_nebe_nad_Británií_4", "Planeta Země - 03".
-	trailingNumRe = regexp.MustCompile(`[\s._\-](\d{1,3})$`)
-	seasonRe      = regexp.MustCompile(`(?i)^(?:s|season|série|serie|sezóna|sezona|řada|rada)[\s._-]*(\d{1,2})$`)
-	seasonRe2     = regexp.MustCompile(`(?i)^(\d{1,2})\.?\s*(?:série|serie|sezóna|sezona|řada|rada|season)$`)
+	sxxexxRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])s(\d{1,2})[\s._-]*e(\d{1,3})(?:$|[^0-9])`)
+	nxnnRe   = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(\d{1,2})x(\d{1,3})(?:$|[^0-9])`)
+	// "cali.s6x01", "Mentalista S0421".
+	snxnnRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])s(\d{1,2})x(\d{1,3})(?:$|[^0-9])`)
+	snnnnRe = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])s(\d{2})(\d{2})(?:$|[^0-9])`)
+	// "02. díl", "3 díl", "4.dil", "Hniezdo_11.diel".
+	dilRe     = regexp.MustCompile(`(?i)(?:^|[^0-9])(\d{1,3})\.?[\s._-]*(díl|dil|diel)(?:$|[^\pL])`)
+	dilWordRe = regexp.MustCompile(`(?i)(?:^|[^\pL])(?:díl|dil|diel|epizoda|episode|ep|e)[\s._-]*(\d{1,3})(?:$|[^0-9])`)
+	// Řada a díl spojené pomlčkou: "08-14.Tajna komora", "Pernikovy-tata-04-13-Ztrata".
+	pairRe = regexp.MustCompile(`(?:^|[\s._-])(\d{2})-(\d{2,3})(?:$|[\s._\-])`)
+	// Řada a díl jako čtyři číslice: "trp0324", "0501", "Kriminálka Anděl - 0201".
+	ssEERe = regexp.MustCompile(`(?:^|[^0-9])(\d{2})(\d{2})(?:$|[^0-9])`)
+	// Římské číslo dílu hned za názvem seriálu: "Gagman IV.".
+	romanRe = regexp.MustCompile(`^[\s._-]*([IVX]{1,5})(?:$|[\s._-])`)
+	// Díl X z Y: "Případ_pro_exorcistu_2ze3".
+	partOfRe = regexp.MustCompile(`(?i)(?:^|[^0-9])(\d{1,3})[\s._]*(?:ze|of)[\s._]*\d{1,3}(?:$|[^0-9])`)
+	// Samostatné číslo kdekoli v názvu: "Colombo 07.Vražda", "Hospoda-47-klientka",
+	// "025. Loupeznik", "Svatby v Benátkách (19) - Navždy spolu", "Hraběnky • 13 • Milionář".
+	numTokenRe = regexp.MustCompile(`(?:^|[\s._\-(\[•,#])(\d{1,3})(?:$|[\s._\-()\[\]•,!])`)
+
+	seasonWords = `s|season|série|serie|ser|sezóna|sezona|řada|rada`
+	// Řada na konci názvu složky, i za názvem seriálu: "S03", "ser.04",
+	// "Terapie S01", "Season 3", "Battlestar Galactica 1. série", "2. řada".
+	seasonRe  = regexp.MustCompile(`(?i)(?:^|[\s._-])(?:` + seasonWords + `)[\s._-]*(\d{1,2})$`)
+	seasonRe2 = regexp.MustCompile(`(?i)(?:^|[\s._-])(\d{1,2})\.?\s*(?:série|serie|sezóna|sezona|řada|rada|season)$`)
+	// Roky za řadou: "S03 (2012)", "S02 (2010-2011)".
+	trailingParenRe = regexp.MustCompile(`\s*[(\[][^)\]]*[)\]]\s*$`)
 )
 
 // ParseEpisode rozebere název souboru dílu (bez přípony). Rozpozná
 // "S01E02", "1x02", "02. díl" i "Díl 2"; název dílu je text za číslem.
+// Když nic z toho nenajde, vezme číslo, které v názvu stojí samostatně
+// (na konci, "08-14", "2ze3", nebo první takové číslo). Číslo z názvu
+// seriálu ("Babylon 5") odstraní ParseEpisodeIn.
 func ParseEpisode(name string) EpisodeInfo {
-	for _, re := range []*regexp.Regexp{sxxexxRe, nxnnRe} {
+	if ep := parseEpisodeStrict(name); ep.OK {
+		return ep
+	}
+	return parseEpisodeLoose(name, 0, false)
+}
+
+// ParseEpisodeIn je ParseEpisode pro soubor ve složce seriálu show a řady
+// season: volná pravidla hledají číslo až za názvem seriálu, pokud jím název
+// souboru začíná, a číslo řady hned za ním přeskočí ("Kriminálka Anděl 3
+// (2012) 12 - Tajné pohřby", "Dům na kopci 1 - 9 - Hrůzostrašné sny").
+func ParseEpisodeIn(name, show string, season int) EpisodeInfo {
+	if ep := parseEpisodeStrict(name); ep.OK {
+		return ep
+	}
+	if rest := stripShowPrefix(name, show); rest != name {
+		if ep := parseEpisodeLoose(rest, season, true); ep.OK {
+			return ep
+		}
+		if m := romanRe.FindStringSubmatch(rest); m != nil {
+			if e := romanValue(m[1]); e > 0 {
+				return EpisodeInfo{Episode: e, OK: true, Loose: true}
+			}
+		}
+	}
+	return parseEpisodeLoose(name, season, false)
+}
+
+// ParseEmbeddedTitle hledá číslo dílu v názvu vloženém v souboru (tag title).
+// Ten bývá nespolehlivý ("MASH", "Ripped by Pulp3"), proto jen jednoznačné
+// zápisy: "S03x07", "8x14", "3 díl".
+func ParseEmbeddedTitle(title string) EpisodeInfo {
+	return parseEpisodeStrict(title)
+}
+
+func parseEpisodeStrict(name string) EpisodeInfo {
+	for _, re := range []*regexp.Regexp{sxxexxRe, snxnnRe, snnnnRe, nxnnRe} {
 		if m := re.FindStringSubmatchIndex(name); m != nil {
 			s, _ := strconv.Atoi(name[m[2]:m[3]])
 			e, _ := strconv.Atoi(name[m[4]:m[5]])
 			return EpisodeInfo{Season: s, Episode: e, Title: episodeTitle(name[m[5]:]), OK: true}
 		}
 	}
-	for _, re := range []*regexp.Regexp{dilRe, dilWordRe} {
-		if m := re.FindStringSubmatchIndex(name); m != nil {
-			e, _ := strconv.Atoi(name[m[2]:m[3]])
-			rest := name[m[3]:]
-			if re == dilRe {
-				rest = strings.TrimLeft(rest, ". ")
-				rest = strings.TrimPrefix(strings.TrimPrefix(rest, "díl"), "Díl")
-			}
-			return EpisodeInfo{Episode: e, Title: episodeTitle(rest), OK: true}
-		}
+	if m := dilRe.FindStringSubmatchIndex(name); m != nil {
+		e, _ := strconv.Atoi(name[m[2]:m[3]])
+		return EpisodeInfo{Episode: e, Title: episodeTitle(name[m[5]:]), OK: true}
 	}
-	// Poslední možnost: samotné číslo na konci názvu. Bez něj by se díl
-	// čísloval podle pořadí souborů, které se při postupném kopírování mění.
-	// Za číslem bývají ještě značky vydání ("Desate-Kralovstvi-3-cz").
+	if m := dilWordRe.FindStringSubmatchIndex(name); m != nil {
+		e, _ := strconv.Atoi(name[m[2]:m[3]])
+		return EpisodeInfo{Episode: e, Title: episodeTitle(name[m[3]:]), OK: true}
+	}
+	return EpisodeInfo{}
+}
+
+// parseEpisodeLoose hledá samostatné číslo: řadu a díl "08-14", čtyři
+// číslice začínající řadou season ("trp0324"), díl "2ze3", jinak první
+// samostatné číslo. afterShow: name je zbytek za názvem seriálu, takže
+// číslo řady na jeho začátku se přeskočí. Bez něj by se díl čísloval podle
+// pořadí souborů, které se při postupném kopírování mění. Za číslem bývají
+// značky vydání ("Desate-Kralovstvi-3-cz", "AC3 5.1"), proto se nejdřív
+// hledá v názvu bez nich.
+func parseEpisodeLoose(name string, season int, afterShow bool) EpisodeInfo {
 	name = strings.TrimSpace(name)
 	candidates := []string{name}
 	if loc := releaseTagRe.FindStringIndex(name); loc != nil && loc[0] > 0 {
-		candidates = append(candidates, strings.TrimSpace(name[:loc[0]]))
+		candidates = []string{strings.TrimSpace(name[:loc[0]]), name}
+	}
+	// Jen když první číslo je řada ze složky: "Díly 12-16" ani
+	// "topinka-13-13" řadu neurčují.
+	if m := pairRe.FindStringSubmatch(candidates[0]); m != nil {
+		s, _ := strconv.Atoi(m[1])
+		if e, _ := strconv.Atoi(m[2]); s == season && e > 0 {
+			return EpisodeInfo{Season: s, Episode: e, OK: true, Loose: true}
+		}
+	}
+	if season > 0 {
+		for _, m := range ssEERe.FindAllStringSubmatch(candidates[0], -1) {
+			// "1981" je rok, ne 19. řada.
+			if m[1] == "19" || m[1] == "20" {
+				continue
+			}
+			s, _ := strconv.Atoi(m[1])
+			if e, _ := strconv.Atoi(m[2]); s == season && e > 0 {
+				return EpisodeInfo{Season: s, Episode: e, OK: true, Loose: true}
+			}
+		}
 	}
 	for _, c := range candidates {
-		if m := trailingNumRe.FindStringSubmatch(c); m != nil {
+		if m := partOfRe.FindStringSubmatch(c); m != nil {
 			if e, _ := strconv.Atoi(m[1]); e > 0 {
-				return EpisodeInfo{Episode: e, OK: true}
+				return EpisodeInfo{Episode: e, OK: true, Loose: true}
+			}
+		}
+		nums := numTokens(c)
+		// Číslo řady před číslem dílu: "Seriál 3 (2012) 12". Číslo s nulou
+		// na začátku je díl ("Okres na severu 01_13" = díl 1 ze 13), stejně
+		// jako číslo, za kterým je text ("Druhy dech 1.Telecí léta … 698").
+		if afterShow && season > 0 && len(nums) > 1 && nums[0].text == strconv.Itoa(season) &&
+			!hasLetter(c[nums[0].end:nums[1].start]) {
+			nums = nums[1:]
+		}
+		if len(nums) > 0 {
+			if e, _ := strconv.Atoi(nums[0].text); e > 0 {
+				return EpisodeInfo{Episode: e, OK: true, Loose: true}
 			}
 		}
 	}
 	return EpisodeInfo{}
+}
+
+// romanValue převede římské číslo (I–XXXIX) na číslo, 0 = neplatné.
+func romanValue(s string) int {
+	values := map[byte]int{'I': 1, 'V': 5, 'X': 10}
+	n := 0
+	for i := 0; i < len(s); i++ {
+		v := values[s[i]]
+		if i+1 < len(s) && v < values[s[i+1]] {
+			n -= v
+		} else {
+			n += v
+		}
+	}
+	return n
+}
+
+type numToken struct {
+	text       string
+	start, end int
+}
+
+func hasLetter(s string) bool {
+	return strings.IndexFunc(s, unicode.IsLetter) >= 0
+}
+
+// numTokens vrátí samostatná čísla v názvu zleva doprava. Oddělovač mezi
+// dvěma čísly patří oběma ("Seriál 3 12").
+func numTokens(name string) []numToken {
+	var out []numToken
+	for at := 0; at < len(name); {
+		m := numTokenRe.FindStringSubmatchIndex(name[at:])
+		if m == nil {
+			break
+		}
+		out = append(out, numToken{name[at+m[2] : at+m[3]], at + m[2], at + m[3]})
+		at += m[3]
+	}
+	return out
+}
+
+var wordRe = regexp.MustCompile(`[\pL\pN]+`)
+
+// stripShowPrefix odřízne ze začátku názvu název seriálu (bez ohledu na
+// diakritiku, velikost písmen a oddělovače): "Desate-Kralovstvi-3-cz" ve
+// složce "Desáté království" → "-3-cz". Když název seriálem nezačíná nebo
+// by nic nezbylo, vrátí name beze změny.
+func stripShowPrefix(name, show string) string {
+	want := wordRe.FindAllString(show, -1)
+	got := wordRe.FindAllStringIndex(name, -1)
+	if len(want) == 0 || len(got) <= len(want) {
+		return name
+	}
+	for i, w := range want {
+		if textfold.Fold(w) != textfold.Fold(name[got[i][0]:got[i][1]]) {
+			return name
+		}
+	}
+	return name[got[len(want)-1][1]:]
 }
 
 // LooksLikeEpisode řekne, jestli název nese číslo sezóny a dílu (SxxEyy, NxNN).
@@ -278,12 +437,29 @@ func episodeTitle(rest string) string {
 }
 
 // ParseSeasonDir vrátí číslo řady z názvu adresáře ("S03", "Season 3",
-// "Série 2", "2. řada").
+// "Série 2", "2. řada", "ser.04", "S03 (2012)", "Terapie S01",
+// "Battlestar Galactica 1. série").
 func ParseSeasonDir(name string) (int, bool) {
-	name = strings.TrimSpace(name)
+	name = strings.TrimSpace(trailingParenRe.ReplaceAllString(name, ""))
 	for _, re := range []*regexp.Regexp{seasonRe, seasonRe2} {
 		if m := re.FindStringSubmatch(name); m != nil {
 			n, _ := strconv.Atoi(m[1])
+			return n, true
+		}
+	}
+	return 0, false
+}
+
+// ParseSeasonDirIn je ParseSeasonDir pro podsložku seriálu show: pozná
+// i řadu zapsanou jen číslem za názvem seriálu ("Californication 6").
+func ParseSeasonDirIn(name, show string) (int, bool) {
+	if n, ok := ParseSeasonDir(name); ok {
+		return n, true
+	}
+	rest := strings.TrimSpace(trailingParenRe.ReplaceAllString(stripShowPrefix(name, show), ""))
+	if rest != name {
+		rest = strings.Trim(rest, " ._-")
+		if n, err := strconv.Atoi(rest); err == nil && n >= 0 && n < 100 {
 			return n, true
 		}
 	}

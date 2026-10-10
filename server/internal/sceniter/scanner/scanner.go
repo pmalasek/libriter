@@ -378,6 +378,7 @@ func (s *Scanner) processIn(ctx context.Context, lib *model.Library, abs string)
 	if changed && s.ffprobe != "" {
 		in.Probe = Probe(ctx, s.ffprobe, abs)
 	}
+	embedded := s.embeddedTitle(ctx, lib, abs, rel, existing, &in)
 
 	s.ingest.Lock()
 	defer s.ingest.Unlock()
@@ -389,7 +390,7 @@ func (s *Scanner) processIn(ctx context.Context, lib *model.Library, abs string)
 	if existing != nil {
 		in.MovieID, in.EpisodeID = existing.MovieID, existing.EpisodeID
 		if lib.Kind == model.KindShow && in.EpisodeID != nil {
-			if err := s.reassignEpisode(ctx, lib, abs, rel, &in); err != nil {
+			if err := s.reassignEpisode(ctx, lib, abs, rel, embedded, &in); err != nil {
 				return false, err
 			}
 		}
@@ -398,7 +399,7 @@ func (s *Scanner) processIn(ctx context.Context, lib *model.Library, abs string)
 				return false, err
 			}
 		}
-	} else if err := s.classify(ctx, lib, abs, rel, &in); err != nil {
+	} else if err := s.classify(ctx, lib, abs, rel, embedded, &in); err != nil {
 		return false, err
 	}
 	if _, err := s.store.SaveMedia(ctx, in); err != nil {
@@ -409,12 +410,12 @@ func (s *Scanner) processIn(ctx context.Context, lib *model.Library, abs string)
 
 // classify určí film nebo díl, ke kterému soubor patří, a případně ho
 // založí. Typ určuje knihovna; parts[0] je její složka.
-func (s *Scanner) classify(ctx context.Context, lib *model.Library, abs, rel string, in *storage.SaveMediaInput) error {
+func (s *Scanner) classify(ctx context.Context, lib *model.Library, abs, rel, embedded string, in *storage.SaveMediaInput) error {
 	parts := strings.Split(rel, "/")
 	stem := strings.TrimSuffix(parts[len(parts)-1], filepath.Ext(rel))
 
 	if lib.Kind == model.KindShow {
-		return s.asEpisode(ctx, lib, abs, parts[1:], parts[:1], stem, in)
+		return s.asEpisode(ctx, lib, abs, parts[1:], parts[:1], stem, embedded, in)
 	}
 	return s.asMovie(ctx, lib, parts[1:], parts[:1], stem, in)
 }
@@ -551,8 +552,8 @@ func movieKeyOf(rel string) (string, MovieInfo) {
 }
 
 // asEpisode: parts je cesta pod adresářem seriálů, první je adresář seriálu.
-func (s *Scanner) asEpisode(ctx context.Context, lib *model.Library, abs string, parts, prefix []string, stem string, in *storage.SaveMediaInput) error {
-	key, _ := episodeKey(lib, abs, parts, prefix, stem)
+func (s *Scanner) asEpisode(ctx context.Context, lib *model.Library, abs string, parts, prefix []string, stem, embedded string, in *storage.SaveMediaInput) error {
+	key, _ := episodeKey(lib, abs, parts, prefix, stem, embedded)
 	id, err := s.store.EnsureEpisode(ctx, key)
 	if err != nil {
 		return err
@@ -562,10 +563,9 @@ func (s *Scanner) asEpisode(ctx context.Context, lib *model.Library, abs string,
 }
 
 // episodeKey určí seriál, řadu a díl souboru. fromName říká, že číslo dílu
-// je v názvu souboru – jinak je to pořadí v adresáři, které se mění.
-func episodeKey(lib *model.Library, abs string, parts, prefix []string, stem string) (key storage.EpisodeKey, fromName bool) {
-	ep := ParseEpisode(stem)
-
+// je v názvu souboru (nebo v názvu vloženém v souboru) – jinak je to pořadí
+// v adresáři, které se mění.
+func episodeKey(lib *model.Library, abs string, parts, prefix []string, stem, embedded string) (key storage.EpisodeKey, fromName bool) {
 	var showDir string
 	if len(parts) >= 2 {
 		showDir = parts[0]
@@ -589,19 +589,19 @@ func episodeKey(lib *model.Library, abs string, parts, prefix []string, stem str
 	if len(parts) < 2 {
 		showKey = strings.Join(append(append([]string{}, prefix...), "@"+show.Title), "/")
 	}
+	dirSeason := seasonOfDirs(parts, show.Title)
+	ep := fileEpisode(len(parts) >= 2, stem, show.Title, max(dirSeason, 1), embedded)
 
 	season := ep.Season
 	if season == 0 {
-		season = 1
-		for _, dir := range parts[1:max(len(parts)-1, 1)] {
-			if n, ok := ParseSeasonDir(dir); ok {
-				season = n
-			}
-		}
+		season = max(dirSeason, 1)
 	}
 	number := ep.Episode
-	if !ep.OK {
-		number = positionInDir(abs)
+	switch {
+	case !ep.OK:
+		number = positionInDir(abs, show.Title, max(dirSeason, 1))
+	case ep.Loose && ep.Season == 0 && dirSeason > 1:
+		number -= absoluteOffset(abs, show.Title, dirSeason)
 	}
 
 	return storage.EpisodeKey{
@@ -610,13 +610,115 @@ func episodeKey(lib *model.Library, abs string, parts, prefix []string, stem str
 	}, ep.OK
 }
 
+// seasonOfDirs vrátí číslo řady podle podsložek seriálu (parts[0] je složka
+// seriálu, poslední soubor), 0 = žádná složka řady.
+func seasonOfDirs(parts []string, show string) int {
+	season := 0
+	for _, dir := range parts[1:max(len(parts)-1, 1)] {
+		if n, ok := ParseSeasonDirIn(dir, show); ok {
+			season = n
+		}
+	}
+	return season
+}
+
+// absoluteOffset pozná složku řady s díly číslovanými přes celý seriál
+// ("S05/Colombo 32…" až "Colombo 37…") a vrátí, o kolik čísla posunout, aby
+// řada začínala dílem 1 – tak čísluje díly zdroj metadat. Počítá jen soubory
+// s volným číslem ("S03E07" vedle nich nevadí); posouvá, když jsou aspoň dva
+// a nejmenší číslo je větší než jejich počet (u neúplné řady číslované od 1
+// to nenastane).
+func absoluteOffset(abs, show string, season int) int {
+	entries, err := os.ReadDir(filepath.Dir(abs))
+	if err != nil {
+		return 0
+	}
+	files, lowest := 0, 0
+	for _, e := range entries {
+		if e.IsDir() || !IsVideo(e.Name()) || Ignored(e.Name()) {
+			continue
+		}
+		ep := ParseEpisodeIn(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())), show, season)
+		if !ep.OK || !ep.Loose || ep.Season != 0 {
+			continue
+		}
+		files++
+		if lowest == 0 || ep.Episode < lowest {
+			lowest = ep.Episode
+		}
+	}
+	if files < 2 || lowest <= files {
+		return 0
+	}
+	return lowest - 1
+}
+
+// fileEpisode přečte číslo dílu z názvu souboru (ve složce seriálu bez
+// názvu seriálu na začátku), případně z názvu vloženého v souboru.
+func fileEpisode(inShowDir bool, stem, show string, season int, embedded string) EpisodeInfo {
+	var ep EpisodeInfo
+	if inShowDir {
+		ep = ParseEpisodeIn(stem, show, season)
+	} else {
+		ep = ParseEpisode(stem)
+	}
+	if !ep.OK && embedded != "" {
+		ep = ParseEmbeddedTitle(embedded)
+	}
+	return ep
+}
+
+// EpisodeFromPath přečte číslo dílu souboru s cestou rel (relativní k
+// VIDEO_ROOT, první složka je knihovna) stejně jako průchod knihovnou.
+// OK = false znamená, že díl je očíslovaný podle pořadí v adresáři.
+func EpisodeFromPath(rel, embedded string) EpisodeInfo {
+	parts := strings.Split(rel, "/")
+	if len(parts) > 0 {
+		parts = parts[1:]
+	}
+	if len(parts) == 0 {
+		return EpisodeInfo{}
+	}
+	file := parts[len(parts)-1]
+	stem := strings.TrimSuffix(file, path.Ext(file))
+	if len(parts) >= 2 {
+		show := ParseMovie(parts[0]).Title
+		return fileEpisode(true, stem, show, max(seasonOfDirs(parts, show), 1), embedded)
+	}
+	return fileEpisode(false, stem, "", 0, embedded)
+}
+
+// embeddedTitle vrátí název vložený v souboru. U známého souboru seriálu,
+// jehož název číslo dílu nenese a název vložený v souboru se ještě nezjišťoval,
+// ho dočte (rychlý ffprobe jen tagů) a uloží přes in.EmbeddedTitle.
+func (s *Scanner) embeddedTitle(ctx context.Context, lib *model.Library, abs, rel string, existing *storage.MediaRecord, in *storage.SaveMediaInput) string {
+	if in.Probe != nil {
+		return in.Probe.Title
+	}
+	if existing == nil || lib.Kind != model.KindShow {
+		return ""
+	}
+	if existing.EmbeddedTitle != nil {
+		return *existing.EmbeddedTitle
+	}
+	if s.ffprobe == "" || EpisodeFromPath(rel, "").OK {
+		return ""
+	}
+	title, err := ProbeTitle(ctx, s.ffprobe, abs)
+	if err != nil {
+		return ""
+	}
+	in.EmbeddedTitle = &title
+	return title
+}
+
 // reassignEpisode přeřadí známý soubor k jinému dílu, když název souboru
 // jednoznačně určuje jiný díl, než ke kterému patří. Opravuje díly očíslované
 // podle pořadí v adresáři ve chvíli, kdy ještě nebyly zkopírované všechny.
-func (s *Scanner) reassignEpisode(ctx context.Context, lib *model.Library, abs, rel string, in *storage.SaveMediaInput) error {
+func (s *Scanner) reassignEpisode(ctx context.Context, lib *model.Library, abs, rel, embedded string, in *storage.SaveMediaInput) error {
 	parts := strings.Split(rel, "/")
 	stem := strings.TrimSuffix(parts[len(parts)-1], filepath.Ext(rel))
-	key, fromName := episodeKey(lib, abs, parts[1:], parts[:1], stem)
+	key, fromName := episodeKey(lib, abs, parts[1:], parts[:1], stem, embedded)
 	if !fromName {
 		return nil
 	}
@@ -644,7 +746,7 @@ func (s *Scanner) reassignEpisode(ctx context.Context, lib *model.Library, abs, 
 // mezi takovými videi v adresáři (1 = první), přičemž čísla, která sousední
 // soubory nesou v názvu, se přeskočí – soubor bez čísla se tak nesloučí
 // s dílem, který už ve složce je.
-func positionInDir(abs string) int {
+func positionInDir(abs, show string, season int) int {
 	entries, err := os.ReadDir(filepath.Dir(abs))
 	if err != nil {
 		return 1
@@ -655,7 +757,7 @@ func positionInDir(abs string) int {
 		if e.IsDir() || !IsVideo(e.Name()) || Ignored(e.Name()) {
 			continue
 		}
-		if ep := ParseEpisode(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name()))); ep.OK {
+		if ep := ParseEpisodeIn(strings.TrimSuffix(e.Name(), filepath.Ext(e.Name())), show, season); ep.OK {
 			taken[ep.Episode] = true
 			continue
 		}
