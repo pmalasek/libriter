@@ -32,6 +32,8 @@ type ShowIssueItem struct {
 	// Files jsou dotčené soubory (IssueDuplicateFiles, IssuePositional –
 	// u něj všechny takové soubory řady).
 	Files []string `json:"files,omitempty"`
+	// FileIDs jsou ID souborů z Files (IssueDuplicateFiles) – pro smazání z kontroly.
+	FileIDs []uuid.UUID `json:"file_ids,omitempty"`
 	// Dir je složka dotčených souborů (u IssueGap prvního souboru řady) –
 	// odkaz na editor složky, kde se číslování opraví.
 	Dir string `json:"dir,omitempty"`
@@ -83,8 +85,10 @@ func showIssues(files []storage.EpisodeFileRow) []ShowIssueItem {
 		for j < len(files) && files[j].Season == season {
 			k := j
 			var paths []string
+			var ids []uuid.UUID
 			for k < len(files) && files[k].Season == season && files[k].Episode == files[j].Episode {
 				paths = append(paths, files[k].FilePath)
+				ids = append(ids, files[k].MediaID)
 				if !scanner.EpisodeFromPath(files[k].FilePath, files[k].EmbeddedTitle).OK {
 					positional = append(positional, files[k].FilePath)
 				}
@@ -93,7 +97,7 @@ func showIssues(files []storage.EpisodeFileRow) []ShowIssueItem {
 			number := files[j].Episode
 			numbers = append(numbers, number)
 			if len(paths) > 1 {
-				out = append(out, ShowIssueItem{Kind: IssueDuplicateFiles, Season: season, Episode: number, Files: paths, Dir: path.Dir(paths[0])})
+				out = append(out, ShowIssueItem{Kind: IssueDuplicateFiles, Season: season, Episode: number, Files: paths, FileIDs: ids, Dir: path.Dir(paths[0])})
 			}
 			j = k
 		}

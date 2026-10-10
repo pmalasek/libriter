@@ -19,6 +19,7 @@ export default {
     not_found: 'Soubor s videem nenalezen',
     rename_conflict: 'Soubor s novým názvem už existuje',
     primary_file: 'Tento soubor drží film, nelze ho oddělit',
+    last_file: 'Jediný soubor filmu nelze smazat',
   },
   renumber: { invalid: 'Neplatné přečíslování: soubory mimo složku nebo duplicitní čísla dílů' },
   subtitle: {

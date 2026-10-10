@@ -1,4 +1,4 @@
-import { ChevronDownIcon, UnlinkIcon } from 'lucide-react'
+import { ChevronDownIcon, Trash2Icon, UnlinkIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { formatBytes, resolutionLabel, trackLabel, type MediaFile } from 'sceniter-shared'
 import { Button } from 'core-web/src/components/ui/button'
@@ -14,11 +14,16 @@ export function FileInfo({
   detachable = [],
   onDetach,
   detaching = false,
+  deletable = false,
+  onDelete,
 }: {
   files: MediaFile[]
   detachable?: string[]
   onDetach?: (fileId: string) => void
   detaching?: boolean
+  /** Soubory jde přesunout do koše (jen když jich film má víc). */
+  deletable?: boolean
+  onDelete?: (file: MediaFile) => void
 }) {
   const { t } = useTranslation()
   if (files.length === 0) return <p className="mt-8 text-sm text-muted-foreground">{t('video.detail.noFile')}</p>
@@ -64,12 +69,20 @@ export function FileInfo({
                       {t('video.detail.subtitleTracks')}: {[...subs.map(trackLabel), ...f.external_subtitles.map((s) => (s.language ?? s.format).toUpperCase())].join(', ')}
                     </p>
                   ) : null}
-                  {onDetach && detachable.includes(f.id) ? (
-                    <Button size="sm" variant="outline" className="mt-3" disabled={detaching} onClick={() => onDetach(f.id)}>
-                      <UnlinkIcon />
-                      {t('video.detail.detachFile')}
-                    </Button>
-                  ) : null}
+                  <div className="mt-3 flex flex-wrap gap-2 empty:hidden">
+                    {onDetach && detachable.includes(f.id) ? (
+                      <Button size="sm" variant="outline" disabled={detaching} onClick={() => onDetach(f.id)}>
+                        <UnlinkIcon />
+                        {t('video.detail.detachFile')}
+                      </Button>
+                    ) : null}
+                    {onDelete && deletable && files.length > 1 ? (
+                      <Button size="sm" variant="outline" onClick={() => onDelete(f)}>
+                        <Trash2Icon />
+                        {t('video.detail.deleteFile')}
+                      </Button>
+                    ) : null}
+                  </div>
                 </li>
               )
             })}

@@ -37,6 +37,7 @@ const (
 	AuditEdit      = "sceniter.edit"
 	AuditDetach    = "sceniter.detach_file"
 	AuditRenumber  = "sceniter.renumber"
+	AuditTrash     = "sceniter.trash_file"
 	auditTargetLib = "sceniter"
 )
 
@@ -143,6 +144,7 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Put("/movies/{id}/ignore", h.Ignore)
 					r.Put("/shows/{id}/ignore", h.Ignore)
 					r.Post("/media/{id}/detach", h.DetachFile)
+					r.Delete("/media/{id}", h.TrashFile)
 					r.Get("/shows/{id}/folders", h.ShowFolders)
 					r.Post("/shows/{id}/renumber", h.Renumber)
 				})

@@ -14,6 +14,7 @@ import { CastShelf, KeyCrew } from '@/components/CastShelf'
 import { DetailSkeleton, Expandable, GenreChips, SimilarShelf } from '@/components/DetailParts'
 import { EditTitleDialog } from '@/components/EditTitleDialog'
 import { FileInfo } from '@/components/FileInfo'
+import { TrashFileDialog, type TrashTarget } from '@/components/TrashFileDialog'
 import { Hero, MetaLine } from '@/components/Hero'
 import { TitleActions } from '@/components/TitleActions'
 import { MetadataMatch } from '@/components/MetadataMatch'
@@ -29,6 +30,7 @@ export function MovieDetailPage() {
   const detach = useDetachFile()
   const [editing, setEditing] = useState(false)
   const [matching, setMatching] = useState(false)
+  const [trashing, setTrashing] = useState<TrashTarget | null>(null)
 
   // Po oddělení souboru se nový film rovnou páruje (navigate se state.match).
   const matchFromState = (location.state as { match?: boolean } | null)?.match === true
@@ -101,6 +103,8 @@ export function MovieDetailPage() {
       <FileInfo
         files={m.files}
         detachable={canEdit(user) ? m.detachable_files : []}
+        deletable={canEdit(user)}
+        onDelete={setTrashing}
         detaching={detach.isPending}
         onDetach={(fileId) =>
           detach.mutate(fileId, {
@@ -115,6 +119,7 @@ export function MovieDetailPage() {
       <ExternalLinks kind="movie" ids={m.external_ids} />
       <Attribution provider={m.meta_provider ?? null} />
 
+      <TrashFileDialog target={trashing} onOpenChange={(open) => (open ? null : setTrashing(null))} onDone={() => setTrashing(null)} />
       {editing ? <EditTitleDialog kind="movie" title={m} open={editing} onOpenChange={setEditing} /> : null}
       <Dialog open={matchOpen} onOpenChange={setMatchOpen}>
         <DialogContent className="sm:max-w-2xl">

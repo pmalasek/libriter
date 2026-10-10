@@ -9,7 +9,7 @@ import {
 } from '@dnd-kit/core'
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon } from 'lucide-react'
+import { ArrowDownIcon, ArrowUpIcon, GripVerticalIcon, Trash2Icon } from 'lucide-react'
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 import { episodeCode, type ShowFolderFile } from 'sceniter-shared'
@@ -25,11 +25,13 @@ export function EpisodeOrderEditor({
   season,
   start,
   onChange,
+  onTrash,
 }: {
   files: ShowFolderFile[]
   season: number
   start: number
   onChange: (files: ShowFolderFile[]) => void
+  onTrash?: (file: ShowFolderFile) => void
 }) {
   const sensors = useSensors(
     // Bez malé tolerance by každé kliknutí na šipku začínalo přetahování.
@@ -56,7 +58,7 @@ export function EpisodeOrderEditor({
       <SortableContext items={files.map((f) => f.id)} strategy={verticalListSortingStrategy}>
         <ol className="glass inset-shadow-glass divide-y divide-glass-edge rounded-2xl ring-1 ring-glass-edge">
           {files.map((file, index) => (
-            <SortableRow key={file.id} file={file} index={index} count={files.length} target={episodeCode(season, start + index)} onMove={move} />
+            <SortableRow key={file.id} file={file} index={index} count={files.length} target={episodeCode(season, start + index)} onMove={move} onTrash={onTrash} />
           ))}
         </ol>
       </SortableContext>
@@ -70,12 +72,14 @@ function SortableRow({
   count,
   target,
   onMove,
+  onTrash,
 }: {
   file: ShowFolderFile
   index: number
   count: number
   target: string
   onMove: (index: number, direction: -1 | 1) => void
+  onTrash?: (file: ShowFolderFile) => void
 }) {
   const { t } = useTranslation()
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: file.id })
@@ -122,6 +126,11 @@ function SortableRow({
         >
           <ArrowDownIcon />
         </Button>
+        {onTrash ? (
+          <Button variant="ghost" size="icon-sm" className="text-muted-foreground" aria-label={t('video.detail.deleteFile')} title={t('video.detail.deleteFile')} onClick={() => onTrash(file)}>
+            <Trash2Icon />
+          </Button>
+        ) : null}
       </div>
     </li>
   )

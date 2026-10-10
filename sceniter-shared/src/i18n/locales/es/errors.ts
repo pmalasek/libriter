@@ -19,6 +19,7 @@ export default {
     not_found: 'Archivo de vídeo no encontrado',
     rename_conflict: 'Ya existe un archivo con el nuevo nombre',
     primary_file: 'Este archivo sostiene la película y no se puede separar',
+    last_file: 'El único archivo de una película no se puede eliminar',
   },
   renumber: { invalid: 'Renumeración no válida: archivos fuera de la carpeta o números de episodio repetidos' },
   subtitle: {

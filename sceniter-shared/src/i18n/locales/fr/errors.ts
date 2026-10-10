@@ -19,6 +19,7 @@ export default {
     not_found: 'Fichier vidéo introuvable',
     rename_conflict: 'Un fichier portant le nouveau nom existe déjà',
     primary_file: 'Ce fichier porte le film et ne peut pas être séparé',
+    last_file: 'Le seul fichier d\'un film ne peut pas être supprimé',
   },
   renumber: { invalid: 'Renumérotation non valide : fichiers hors du dossier ou numéros d\'épisode en double' },
   subtitle: {

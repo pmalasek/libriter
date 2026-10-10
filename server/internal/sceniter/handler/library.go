@@ -634,6 +634,29 @@ func (h *Handler) ShowIssues(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+// DELETE /sceniter/media/{id} – přesune soubor do koše knihovny (.trash)
+// a odebere ho z knihovny.
+func (h *Handler) TrashFile(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	dest, err := h.Scanner.TrashFile(r.Context(), id)
+	switch {
+	case errors.Is(err, scanner.ErrLastFile):
+		writeError(w, http.StatusConflict, "media.last_file", err.Error())
+		return
+	case errors.Is(err, scanner.ErrRenumberInvalid):
+		writeError(w, http.StatusBadRequest, "media.not_found", err.Error())
+		return
+	case writeStoreError(w, err, "media.not_found"):
+		return
+	}
+	h.Audit.Record(r.Context(), userID(r), coreservice.AuditEvent{Action: AuditTrash, TargetType: "media",
+		TargetID: id.String(), Details: map[string]string{"trash_path": dest}})
+	writeJSON(w, http.StatusOK, map[string]string{"trash_path": dest})
+}
+
 // GET /sceniter/admin/library/movie-issues
 func (h *Handler) MovieIssues(w http.ResponseWriter, r *http.Request) {
 	items, err := h.Library.MovieIssues(r.Context())

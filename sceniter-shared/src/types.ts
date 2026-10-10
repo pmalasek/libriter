@@ -351,6 +351,8 @@ export interface ShowIssueItem {
   missing?: number[]
   /** Dotčené soubory (duplicate_files; positional – všechny takové soubory řady). */
   files?: string[]
+  /** ID souborů z files (duplicate_files) – pro přesun do koše. */
+  file_ids?: string[]
   /** Složka dotčených souborů – odkaz na editor číslování. */
   dir?: string
 }

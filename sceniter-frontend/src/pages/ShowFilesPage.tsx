@@ -23,6 +23,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'c
 import { Skeleton } from 'core-web/src/components/ui/skeleton'
 import { useRenumber, useShow, useShowFolders } from '@/api/hooks'
 import { EpisodeOrderEditor } from '@/components/EpisodeOrderEditor'
+import { TrashFileDialog, type TrashTarget } from '@/components/TrashFileDialog'
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' })
 
@@ -90,16 +91,21 @@ function FolderEditor({ showId, folder, onSaved }: { showId: string; folder: Sho
   const [season, setSeason] = useState(folder.season)
   const [start, setStart] = useState(1)
   const [plan, setPlan] = useState<RenumberPlan | null>(null)
+  const [trashing, setTrashing] = useState<TrashTarget | null>(null)
   const renumber = useRenumber()
+
+  // Soubor přesunutý do koše zmizí ze složky; rozpracované pořadí ostatních zůstane.
+  const present = new Set(folder.files.map((f) => f.id))
+  const visible = order.filter((f) => present.has(f.id))
 
   const request = (dryRun: boolean) => ({
     id: showId,
     dir: folder.dir,
     season,
     dryRun,
-    files: order.map((f, i) => ({ media_id: f.id, episode: start + i })),
+    files: visible.map((f, i) => ({ media_id: f.id, episode: start + i })),
   })
-  const valid = season >= 0 && start >= 1 && order.length > 0
+  const valid = season >= 0 && start >= 1 && visible.length > 0
 
   function preview() {
     renumber.mutate(request(true), {
@@ -133,7 +139,7 @@ function FolderEditor({ showId, folder, onSaved }: { showId: string; folder: Sho
           <Label htmlFor="start">{t('video.files.start')}</Label>
           <Input id="start" type="number" min={1} className="w-24" value={start} onChange={(e) => setStart(Number(e.target.value))} />
         </div>
-        <Button variant="outline" size="sm" onClick={() => setOrder([...order].sort((a, b) => collator.compare(a.name, b.name)))}>
+        <Button variant="outline" size="sm" onClick={() => setOrder([...visible].sort((a, b) => collator.compare(a.name, b.name)))}>
           {t('video.files.sortByName')}
         </Button>
         <Button variant="outline" size="sm" onClick={() => setOrder(folder.files)}>
@@ -141,13 +147,15 @@ function FolderEditor({ showId, folder, onSaved }: { showId: string; folder: Sho
         </Button>
       </div>
 
-      <EpisodeOrderEditor files={order} season={season} start={start} onChange={setOrder} />
+      <EpisodeOrderEditor files={visible} season={season} start={start} onChange={setOrder} onTrash={setTrashing} />
 
       <div>
         <Button disabled={!valid || renumber.isPending} onClick={preview}>
           {renumber.isPending ? t('common.saving') : t('video.files.save')}
         </Button>
       </div>
+
+      <TrashFileDialog target={trashing} onOpenChange={(open) => (open ? null : setTrashing(null))} onDone={() => setTrashing(null)} />
 
       <AlertDialog open={plan !== null} onOpenChange={(open) => (open ? null : setPlan(null))}>
         <AlertDialogContent className="sm:max-w-2xl">

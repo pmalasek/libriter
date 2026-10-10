@@ -21,6 +21,7 @@ export default {
     not_found: 'Video file not found',
     rename_conflict: 'A file with the new name already exists',
     primary_file: 'This file holds the movie and cannot be split off',
+    last_file: 'The only file of a movie cannot be deleted',
   },
   renumber: { invalid: 'Invalid renumbering: files outside the folder or duplicate episode numbers' },
   subtitle: {

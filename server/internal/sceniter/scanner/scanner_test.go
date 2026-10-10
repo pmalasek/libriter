@@ -555,3 +555,55 @@ func TestRenumberFlatKeepsShow(t *testing.T) {
 		t.Errorf("po průchodu seriály %+v", shows)
 	}
 }
+
+// Koš: soubor i titulky se přesunou do .trash knihovny se zachovanou
+// cestou, záznam zmizí a průchod ho nezaloží znovu. Jediný soubor filmu
+// se nemaže.
+func TestTrashFile(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"Serialy/Show/S01/a.mkv", "Serialy/Show/S01/a.cs.srt", "Serialy/Show/S01/b.mkv", "Filmy/Film.mkv"} {
+		touch(t, root, f)
+	}
+	store := newTestStore(t)
+	addLibrary(t, store, "Serialy", "show")
+	addLibrary(t, store, "Filmy", "movie")
+	s := New(root, store)
+	scanOnce(t, s)
+	ctx := context.Background()
+
+	film, _ := store.MediaByPath(ctx, "Filmy/Film.mkv")
+	if _, err := s.TrashFile(ctx, film.ID); !errors.Is(err, ErrLastFile) {
+		t.Errorf("jediný soubor filmu: %v", err)
+	}
+
+	a, _ := store.MediaByPath(ctx, "Serialy/Show/S01/a.mkv")
+	dest, err := s.TrashFile(ctx, a.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dest != "Serialy/.trash/Show/S01/a.mkv" {
+		t.Errorf("cesta v koši %s", dest)
+	}
+	for _, f := range []string{"Serialy/.trash/Show/S01/a.mkv", "Serialy/.trash/Show/S01/a.cs.srt"} {
+		if _, err := os.Stat(filepath.Join(root, f)); err != nil {
+			t.Errorf("v koši chybí %s", f)
+		}
+	}
+	if _, err := store.MediaByPath(ctx, "Serialy/Show/S01/a.mkv"); !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("záznam zůstal: %v", err)
+	}
+	// Stejný název podruhé dostane pořadové číslo.
+	touch(t, root, "Serialy/Show/S01/a.mkv")
+	scanOnce(t, s)
+	a2, _ := store.MediaByPath(ctx, "Serialy/Show/S01/a.mkv")
+	if dest, err := s.TrashFile(ctx, a2.ID); err != nil || dest != "Serialy/.trash/Show/S01/a (2).mkv" {
+		t.Errorf("druhý koš: %s, %v", dest, err)
+	}
+	st := scanOnce(t, s)
+	if st.Added != 0 {
+		t.Errorf("průchod založil soubor z koše: %+v", st)
+	}
+	if shows, _ := store.ListShows(ctx, storage.ShowFilter{}); len(shows) != 1 || shows[0].EpisodeCount != 1 {
+		t.Errorf("seriály %+v", shows)
+	}
+}

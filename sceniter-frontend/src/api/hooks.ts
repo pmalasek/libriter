@@ -329,6 +329,15 @@ export function useDetachFile() {
   })
 }
 
+/** Přesune soubor do koše knihovny (.trash) a odebere ho z knihovny. */
+export function useTrashFile() {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: (mediaId: string) => apiFetch<{ trash_path: string }>(`${BASE}/media/${mediaId}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  })
+}
+
 export function useSetMatchState() {
   const invalidate = useInvalidateAll()
   return useMutation({

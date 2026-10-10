@@ -1,4 +1,5 @@
-import { ChevronDownIcon, FolderPenIcon, UnlinkIcon } from 'lucide-react'
+import { ChevronDownIcon, FolderPenIcon, Trash2Icon, UnlinkIcon } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
@@ -9,6 +10,7 @@ import { Button } from 'core-web/src/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from 'core-web/src/components/ui/collapsible'
 import { useAdminMovieIssues, useAdminShowIssues, useDetachFile } from '@/api/hooks'
 import { Poster } from '@/components/Poster'
+import { TrashFileDialog, type TrashTarget } from '@/components/TrashFileDialog'
 
 /** Odkaz do editoru složky seriálu – tam se číslování opraví. */
 function FixLink({ showId, dir }: { showId: string; dir?: string }) {
@@ -22,7 +24,7 @@ function FixLink({ showId, dir }: { showId: string; dir?: string }) {
   )
 }
 
-function IssueLine({ showId, issue }: { showId: string; issue: ShowIssueItem }) {
+function IssueLine({ showId, issue, onTrash }: { showId: string; issue: ShowIssueItem; onTrash: (file: TrashTarget) => void }) {
   const { t } = useTranslation()
   const season = `S${String(issue.season).padStart(2, '0')}`
   const files = issue.files ?? []
@@ -34,7 +36,7 @@ function IssueLine({ showId, issue }: { showId: string; issue: ShowIssueItem }) 
             {t('video.admin.showIssues.duplicate', { episode: episodeCode(issue.season, issue.episode ?? 0), count: files.length })}
             <FixLink showId={showId} dir={issue.dir} />
           </p>
-          <FileList files={files} />
+          <FileList files={files} ids={issue.file_ids} onTrash={onTrash} />
         </li>
       )
     case 'gap':
@@ -57,14 +59,24 @@ function IssueLine({ showId, issue }: { showId: string; issue: ShowIssueItem }) 
   }
 }
 
-function FileList({ files }: { files: string[] }) {
+/** Seznam cest; s ids a onTrash má každý soubor tlačítko koše. */
+function FileList({ files, ids, onTrash }: { files: string[]; ids?: string[]; onTrash?: (file: TrashTarget) => void }) {
+  const { t } = useTranslation()
   return (
     <ul className="mt-1 mb-2 grid gap-0.5 pl-4">
-      {files.map((f) => (
-        <li key={f} className="font-mono text-xs break-all text-muted-foreground">
-          {f}
-        </li>
-      ))}
+      {files.map((f, i) => {
+        const id = ids?.[i]
+        return (
+          <li key={f} className="flex items-center gap-2 font-mono text-xs break-all text-muted-foreground">
+            <span className="min-w-0 flex-1">{f}</span>
+            {id && onTrash ? (
+              <Button variant="ghost" size="icon-xs" aria-label={t('video.detail.deleteFile')} title={t('video.detail.deleteFile')} onClick={() => onTrash({ id, file_path: f })}>
+                <Trash2Icon />
+              </Button>
+            ) : null}
+          </li>
+        )
+      })}
     </ul>
   )
 }
@@ -114,6 +126,7 @@ function IssueCard({
 
 function ShowIssueRow({ show }: { show: ShowIssue }) {
   const { t } = useTranslation()
+  const [trashing, setTrashing] = useState<TrashTarget | null>(null)
   const count = (kind: ShowIssueItem['kind']) => show.issues.filter((i) => i.kind === kind).length
   const summary = [
     count('duplicate_files') ? t('video.admin.showIssues.summaryDuplicate', { count: count('duplicate_files') }) : null,
@@ -124,9 +137,10 @@ function ShowIssueRow({ show }: { show: ShowIssue }) {
     <IssueCard poster={posterUrl(show, 48)} title={show.title} to={`/shows/${show.id}`} sourceKey={show.source_key} summary={summary.join(' · ')}>
       <ul className="mt-3 grid gap-1 text-sm">
         {show.issues.map((issue, i) => (
-          <IssueLine key={i} showId={show.id} issue={issue} />
+          <IssueLine key={i} showId={show.id} issue={issue} onTrash={setTrashing} />
         ))}
       </ul>
+      <TrashFileDialog target={trashing} onOpenChange={(open) => (open ? null : setTrashing(null))} onDone={() => setTrashing(null)} />
     </IssueCard>
   )
 }
@@ -134,6 +148,7 @@ function ShowIssueRow({ show }: { show: ShowIssue }) {
 function MovieIssueRow({ movie }: { movie: MovieIssue }) {
   const { t } = useTranslation()
   const detach = useDetachFile()
+  const [trashing, setTrashing] = useState<TrashTarget | null>(null)
   return (
     <IssueCard
       poster={posterUrl(movie, 48)}
@@ -162,9 +177,14 @@ function MovieIssueRow({ movie }: { movie: MovieIssue }) {
                 {t('video.detail.detachFile')}
               </Button>
             ) : null}
+            <Button size="sm" variant="outline" onClick={() => setTrashing({ id: f.id, file_path: f.file_path })}>
+              <Trash2Icon />
+              {t('video.detail.deleteFile')}
+            </Button>
           </li>
         ))}
       </ul>
+      <TrashFileDialog target={trashing} onOpenChange={(open) => (open ? null : setTrashing(null))} onDone={() => setTrashing(null)} />
     </IssueCard>
   )
 }
