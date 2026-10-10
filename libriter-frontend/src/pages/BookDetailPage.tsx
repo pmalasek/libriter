@@ -17,15 +17,15 @@ import {
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 import {
   useBook,
+  useBookAt,
+  useBookPage,
   useBookProgress,
-  useBooks,
   useLanguages,
   useSeriesOne,
-  useSeriesTitle,
   useDeleteBook,
   useSessions,
   useSetBookFinished,
@@ -34,7 +34,8 @@ import { useAuth } from '@/auth/AuthContext'
 import { canEdit, isAdmin } from '@/auth/permissions'
 import { BookEditDialog } from '@/components/BookEditDialog'
 import { DeleteBookDialog } from '@/components/DeleteBookDialog'
-import { BookGrid } from '@/components/BookGrid'
+import { StaticBookGrid } from '@/components/BookGrid'
+import type { BookListContext } from '@/components/BookCard'
 import { BookCover, coverUrl } from '@/components/BookCover'
 import { ChapterList } from '@/components/ChapterList'
 import { ErrorState } from '@/components/ErrorState'
@@ -45,8 +46,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Skeleton } from '@/components/ui/skeleton'
 import { chapterCount, formatClock, formatDate, formatDuration, languageLabel } from '@/lib/format'
-import { sortBooks, useBookListPrefs } from '@/lib/sorting'
 import { usePlayer } from '@/player/playerContext'
+
+/** Kolik dalších knih autora detail ukáže. */
+const MORE_BY_AUTHOR = 20
 
 export function BookDetailPage() {
   const { t } = useTranslation()
@@ -54,12 +57,12 @@ export function BookDetailPage() {
   const navigate = useNavigate()
   const book = useBook(id)
   const series = useSeriesOne(book.data?.series_id ?? '')
-  const allBooks = useBooks()
+  const location = useLocation()
+  // Výpis, ze kterého uživatel přišel – „Uložit a další“ v něm pokračuje.
+  const from = (location.state as { from?: BookListContext } | null)?.from
   const { user } = useAuth()
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const { sortKey, sortDir } = useBookListPrefs()
-  const seriesTitle = useSeriesTitle()
   const languages = useLanguages()
   const player = usePlayer()
   const sessions = useSessions()
@@ -115,23 +118,22 @@ export function BookDetailPage() {
   const isOpenBook = player.book?.id === id
   const isPlayingBook = isOpenBook && player.playing
 
-  // Další kniha pro „Uložit a další“ – ve stejném pořadí, jaké má seznam knih.
-  const nextBook = useMemo(() => {
-    const ordered = sortBooks(allBooks.data ?? [], sortKey, sortDir, seriesTitle)
-    const index = ordered.findIndex((b) => b.id === id)
-    return index >= 0 ? ordered[index + 1] : undefined
-  }, [allBooks.data, id, sortKey, sortDir, seriesTitle])
+  // Další kniha pro „Uložit a další“ – ve stejném pořadí jako výpis, ze
+  // kterého uživatel přišel. Bez něj (přímý odkaz) další kniha není.
+  const next = useBookAt(from?.params, (from?.index ?? -2) + 1, editing)
+  const nextBook = next.data ?? undefined
 
   // "Další knihy autora" bereme podle hlavního (prvního) autora knihy.
   const mainAuthor = book.data?.authors?.[0]
-
-  const moreByAuthor = useMemo(() => {
-    if (!book.data || !mainAuthor) return []
-    const byAuthor = (allBooks.data ?? []).filter(
-      (b) => b.id !== book.data.id && b.authors?.some((a) => a.id === mainAuthor.id),
-    )
-    return sortBooks(byAuthor, 'title', 'asc', seriesTitle)
-  }, [allBooks.data, book.data, mainAuthor, seriesTitle])
+  const authorPage = useBookPage(
+    { author_id: mainAuthor?.id, sort: 'title' },
+    MORE_BY_AUTHOR + 1,
+    Boolean(mainAuthor),
+  )
+  const moreByAuthor = useMemo(
+    () => (authorPage.data?.items ?? []).filter((b) => b.id !== id).slice(0, MORE_BY_AUTHOR),
+    [authorPage.data, id],
+  )
 
   if (book.isPending) {
     return (
@@ -385,7 +387,7 @@ export function BookDetailPage() {
             <span className="size-2 rounded-full bg-primary" />
             {t('books.detail.moreByAuthor', { name: mainAuthor.name })}
           </h2>
-          <BookGrid books={moreByAuthor} />
+          <StaticBookGrid books={moreByAuthor} />
         </section>
       ) : null}
 
@@ -395,7 +397,11 @@ export function BookDetailPage() {
         book={data}
         open={editing}
         onOpenChange={setEditing}
-        onSaveAndNext={nextBook ? () => navigate(`/books/${nextBook.id}`) : undefined}
+        onSaveAndNext={
+          nextBook && from
+            ? () => navigate(`/books/${nextBook.id}`, { state: { from: { ...from, index: from.index + 1 } } })
+            : undefined
+        }
       />
 
       <DeleteBookDialog

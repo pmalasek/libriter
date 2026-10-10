@@ -1,8 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type Query } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
+import { usePagedList, type PagedList } from 'core-web/src/lib/paged'
 import {
   apiFetch,
+  listQuery,
   queryKeys,
+  type Page,
   type EpisodeDetail,
   type Home,
   type Library,
@@ -12,6 +15,7 @@ import {
   type MetadataSearchResponse,
   type Movie,
   type MovieDetail,
+  type MovieSummary,
   type PersonDetail,
   type Playback,
   type ProgressRequest,
@@ -19,8 +23,10 @@ import {
   type SceniterConfig,
   type SceniterStats,
   type SearchResults,
+  type Season,
   type Show,
   type ShowDetail,
+  type ShowSummary,
   type TitleKind,
   type TitlePatch,
   type TranscodeSession,
@@ -69,12 +75,17 @@ export interface ListParams extends Record<string, string> {
   sort: string
 }
 
-export function useMovies(p: ListParams) {
-  return useQuery({
-    queryKey: queryKeys.movies(p),
-    queryFn: async () => list(await apiFetch<Movie[] | null>(`${BASE}/movies${params(p)}`)),
-    placeholderData: (prev) => prev,
-  })
+function pageFetcher<T>(path: string, p: Record<string, string | boolean | undefined>) {
+  return (offset: number, limit: number, signal: AbortSignal) =>
+    apiFetch<Page<T>>(`${BASE}${path}?${listQuery({ ...p, limit, offset })}`, { signal })
+}
+
+/**
+ * Filmy podle filtru – stránkovaně. Knihovna může mít desítky tisíc titulů;
+ * v paměti se drží jen stránky kolem viditelné části mřížky.
+ */
+export function useMovies(p: ListParams): PagedList<MovieSummary> {
+  return usePagedList({ queryKey: queryKeys.movies(p), fetchPage: pageFetcher<MovieSummary>('/movies', p) })
 }
 
 export function useMovie(id: string) {
@@ -85,12 +96,9 @@ export function useMovie(id: string) {
   })
 }
 
-export function useShows(p: ListParams) {
-  return useQuery({
-    queryKey: queryKeys.shows(p),
-    queryFn: async () => list(await apiFetch<Show[] | null>(`${BASE}/shows${params(p)}`)),
-    placeholderData: (prev) => prev,
-  })
+/** Seriály podle filtru – stránkovaně. */
+export function useShows(p: ListParams): PagedList<ShowSummary> {
+  return usePagedList({ queryKey: queryKeys.shows(p), fetchPage: pageFetcher<ShowSummary>('/shows', p) })
 }
 
 export function useShow(id: string) {
@@ -98,6 +106,18 @@ export function useShow(id: string) {
     queryKey: queryKeys.show(id),
     queryFn: () => apiFetch<ShowDetail>(`${BASE}/shows/${id}`),
     enabled: Boolean(id),
+  })
+}
+
+/** Díly jedné řady s rozkoukaností – detail seriálu je načítá po řadách. */
+export function useSeason(showId: string, number: number | undefined) {
+  return useQuery({
+    queryKey: queryKeys.season(showId, number ?? -1),
+    queryFn: async () => {
+      const s = await apiFetch<Season>(`${BASE}/shows/${showId}/seasons/${number}`)
+      return { ...s, episodes: list(s.episodes) }
+    },
+    enabled: Boolean(showId) && number !== undefined,
   })
 }
 
@@ -179,8 +199,28 @@ export function usePlayback(mediaId: string | undefined, profile: string, audio?
   })
 }
 
-/** Po změně stavu uživatele (seznam, hodnocení, zhlédnutí) se obnoví výpisy. */
+/**
+ * Části cache, které stav uživatele (seznam, hodnocení, zhlédnutí) nemění:
+ * výpisy titulů nesou jen metadata, ne rozkoukanost. Velké stránkované
+ * výpisy se tak po označení dílu jako zhlédnutého znovu nestahují.
+ */
+const USER_STATE_INDEPENDENT = new Set(['movies', 'shows', 'genres', 'libraries', 'config', 'admin', 'metadata', 'playback'])
+
+function dependsOnUserState(query: Query): boolean {
+  const key = query.queryKey
+  return key[0] === 'sceniter' && !USER_STATE_INDEPENDENT.has(String(key[1]))
+}
+
+/** Po změně stavu uživatele se obnoví detaily, domovská stránka a seznam ke zhlédnutí. */
 function useInvalidateUserState() {
+  const qc = useQueryClient()
+  return () => {
+    void qc.invalidateQueries({ predicate: dependsOnUserState })
+  }
+}
+
+/** Po změně titulu (metadata, párování, knihovny) zestárne všechno, i výpisy. */
+function useInvalidateAll() {
   const qc = useQueryClient()
   return () => {
     void qc.invalidateQueries({ queryKey: ['sceniter'] })
@@ -225,7 +265,7 @@ export function saveProgress(body: ProgressRequest, keepalive = false): Promise<
 }
 
 export function usePatchTitle(kind: TitleKind, id: string) {
-  const invalidate = useInvalidateUserState()
+  const invalidate = useInvalidateAll()
   return useMutation({
     mutationFn: (patch: TitlePatch) =>
       apiFetch<void>(`${BASE}/${kind === 'movie' ? 'movies' : 'shows'}/${id}`, { method: 'PATCH', json: patch }),
@@ -264,7 +304,7 @@ export function useMetadataSearch(kind: TitleKind, provider: string, q: string, 
 }
 
 export function useMatchTitle() {
-  const invalidate = useInvalidateUserState()
+  const invalidate = useInvalidateAll()
   return useMutation({
     mutationFn: ({ kind, id, provider, metaId }: { kind: TitleKind; id: string; provider: string; metaId: string }) =>
       apiFetch<{ id: string }>(`${BASE}/${kind === 'movie' ? 'movies' : 'shows'}/${id}/match`, {
@@ -276,7 +316,7 @@ export function useMatchTitle() {
 }
 
 export function useSetMatchState() {
-  const invalidate = useInvalidateUserState()
+  const invalidate = useInvalidateAll()
   return useMutation({
     mutationFn: ({ kind, id, state }: { kind: TitleKind; id: string; state: 'unmatched' | 'ignored' }) =>
       apiFetch<void>(`${BASE}/${kind === 'movie' ? 'movies' : 'shows'}/${id}/${state === 'ignored' ? 'ignore' : 'match'}`, {
@@ -297,13 +337,18 @@ export function useAdminStats() {
   })
 }
 
-export function useAdminUnmatched() {
-  return useQuery({
-    queryKey: queryKeys.adminUnmatched,
-    queryFn: async () => {
-      const r = await apiFetch<{ movies: Movie[] | null; shows: Show[] | null }>(`${BASE}/admin/library/unmatched`)
-      return { movies: list(r.movies), shows: list(r.shows) }
-    },
+/**
+ * Nespárované tituly jednoho druhu – stránkovaně. attempted: true jsou ty,
+ * pro které žádný zdroj nenašel jistou shodu, false ty, na které párování
+ * ještě nedošlo.
+ */
+export function useAdminUnmatched<K extends TitleKind>(
+  kind: K,
+  attempted: boolean,
+): PagedList<K extends 'movie' ? MovieSummary : ShowSummary> {
+  return usePagedList({
+    queryKey: queryKeys.adminUnmatchedList(kind, attempted),
+    fetchPage: pageFetcher('/admin/library/unmatched', { kind, attempted: attempted ? '1' : '0' }),
   })
 }
 
@@ -343,12 +388,14 @@ export function useAdminTranscodes() {
   return useQuery({
     queryKey: queryKeys.adminTranscode,
     queryFn: async () => list(await apiFetch<TranscodeSession[] | null>(`${BASE}/admin/transcode`)),
-    refetchInterval: 5000,
+    // Jen když něco běží – nečinná administrace server nezatěžuje.
+    refetchInterval: (query) => ((query.state.data?.length ?? 0) > 0 ? 5000 : 30_000),
+    refetchIntervalInBackground: false,
   })
 }
 
 export function useAdminAction() {
-  const invalidate = useInvalidateUserState()
+  const invalidate = useInvalidateAll()
   return useMutation({
     mutationFn: ({ path, method = 'POST' }: { path: string; method?: 'POST' | 'DELETE' }) =>
       apiFetch<unknown>(`${BASE}${path}`, { method }),
@@ -374,7 +421,7 @@ export function useLibraryCandidates(enabled: boolean) {
 }
 
 export function useSaveLibrary() {
-  const invalidate = useInvalidateUserState()
+  const invalidate = useInvalidateAll()
   return useMutation({
     mutationFn: ({ id, body }: { id?: string; body: LibraryRequest }) =>
       apiFetch<Library>(id ? `${BASE}/admin/libraries/${id}` : `${BASE}/admin/libraries`, {
@@ -386,7 +433,7 @@ export function useSaveLibrary() {
 }
 
 export function useDeleteLibrary() {
-  const invalidate = useInvalidateUserState()
+  const invalidate = useInvalidateAll()
   return useMutation({
     mutationFn: (id: string) => apiFetch<void>(`${BASE}/admin/libraries/${id}`, { method: 'DELETE' }),
     onSuccess: invalidate,
@@ -394,7 +441,7 @@ export function useDeleteLibrary() {
 }
 
 export function useReorderLibraries() {
-  const invalidate = useInvalidateUserState()
+  const invalidate = useInvalidateAll()
   return useMutation({
     mutationFn: (ids: string[]) =>
       apiFetch<Library[]>(`${BASE}/admin/libraries/order`, { method: 'PUT', json: { ids } }),

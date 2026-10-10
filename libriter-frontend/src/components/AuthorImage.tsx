@@ -2,16 +2,19 @@ import { UserRoundIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { API_PREFIX } from '@/api/client'
-import type { Author } from '@/api/types'
+import { thumbUrl, type Author } from '@/api/types'
 import { cn } from '@/lib/utils'
 
 /**
  * URL fotky autora. Endpoint je veřejný (<img> neumí poslat token),
  * ?v= podle image_path obchází cache prohlížeče po výměně fotky.
  */
-function imageUrl(author: Author) {
-  return `${API_PREFIX}/authors/${author.id}/image?v=${encodeURIComponent(author.image_path ?? '')}`
+function imageUrl(author: ImageAuthor, width?: number) {
+  return thumbUrl(`${API_PREFIX}/authors/${author.id}/image?v=${encodeURIComponent(author.image_path ?? '')}`, width)
 }
+
+/** Co fotka potřebuje vědět o autorovi – plný záznam i záznam výpisu. */
+type ImageAuthor = Pick<Author, 'id' | 'name' | 'image_path'>
 
 // Portréty jsou skoro vždy na výšku, ale poměry se liší – čtvercový rám
 // drží mřížku zarovnanou stejně jako u obálek knih.
@@ -22,7 +25,16 @@ const box =
  * Fotka autora. Bez image_path nebo při chybě načtení zobrazí zástupnou ikonu.
  * Používat s key={author.id}, aby se stav při přechodu mezi autory resetoval.
  */
-export function AuthorImage({ author, className }: { author: Author; className?: string }) {
+export function AuthorImage({
+  author,
+  className,
+  width,
+}: {
+  author: ImageAuthor
+  className?: string
+  /** Největší zobrazená šířka v CSS px – načte se zmenšenina. Bez ní originál. */
+  width?: number
+}) {
   const { t } = useTranslation()
   const [failed, setFailed] = useState(false)
 
@@ -40,7 +52,7 @@ export function AuthorImage({ author, className }: { author: Author; className?:
   return (
     <div className={cn(box, className)}>
       <img
-        src={imageUrl(author)}
+        src={imageUrl(author, width)}
         alt={t('authors.image.alt', { name: author.name })}
         loading="lazy"
         decoding="async"

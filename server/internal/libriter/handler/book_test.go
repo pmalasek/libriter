@@ -13,6 +13,7 @@ import (
 
 	"mediater/internal/core/config"
 	"mediater/internal/core/db"
+	"mediater/internal/libriter/migrations"
 	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/scanner"
 	"mediater/internal/libriter/service"
@@ -33,6 +34,9 @@ func newCoverTestEnv(t *testing.T) (*storage.Store, http.Handler, string) {
 		t.Fatalf("otevření databáze: %v", err)
 	}
 	t.Cleanup(func() { conn.Close() })
+	if err := migrations.Apply(context.Background(), conn); err != nil {
+		t.Fatalf("migrace knihovny: %v", err)
+	}
 
 	store := storage.New(conn)
 	coverRoot := t.TempDir()

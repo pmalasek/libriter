@@ -1,11 +1,11 @@
 import { SearchIcon } from 'lucide-react'
-import { useDeferredValue } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router'
 import { profileUrl } from 'sceniter-shared'
 import { EmptyState } from 'core-web/src/components/EmptyState'
 import { PageHeader } from 'core-web/src/components/PageHeader'
 import { Input } from 'core-web/src/components/ui/input'
+import { useDebouncedValue } from 'core-web/src/lib/paged'
 import { useSearch } from '@/api/hooks'
 import { PersonCard } from '@/components/PersonCard'
 import { PosterCard, PosterGrid } from '@/components/PosterCard'
@@ -15,7 +15,8 @@ export function SearchPage() {
   const { t } = useTranslation()
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
-  const query = useDeferredValue(q)
+  // Hledá se až po chvíli klidu, ne po každé klávese.
+  const query = useDebouncedValue(q.trim())
   const results = useSearch(query)
   const data = results.data
   const total = (data?.movies.length ?? 0) + (data?.shows.length ?? 0) + (data?.people.length ?? 0)
@@ -45,7 +46,7 @@ export function SearchPage() {
         <Shelf title={t('video.search.people')} className="mt-0 mb-10">
           {data.people.map((p) => (
             <ShelfItem key={p.id}>
-              <PersonCard id={p.id} name={p.name} photo={profileUrl(p)} />
+              <PersonCard id={p.id} name={p.name} photo={profileUrl(p, 160)} />
             </ShelfItem>
           ))}
         </Shelf>

@@ -4,6 +4,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"fmt"
 	"net/url"
 	"os"
@@ -15,15 +16,20 @@ import (
 	"modernc.org/sqlite"
 
 	"mediater/internal/core/config"
+	"mediater/internal/core/textfold"
 )
 
 // CollationCzech je název vlastní kolace registrované v driveru.
 // Používá se ve schématu (COLLATE czech) pro správné řazení českých textů.
 const CollationCzech = "czech"
 
+// FuncFold je název SQL funkce fold(text): text bez diakritiky a malými
+// písmeny (textfold.Fold). Slouží hledání – `fold(title) LIKE ?`.
+const FuncFold = "fold"
+
 var registerOnce sync.Once
 
-// registerCollations zaregistruje české řazení do SQLite driveru.
+// registerCollations zaregistruje české řazení a funkci fold do SQLite driveru.
 // Musí proběhnout před otevřením prvního spojení.
 func registerCollations() {
 	registerOnce.Do(func() {
@@ -34,6 +40,19 @@ func registerCollations() {
 			defer mu.Unlock()
 			return czech.CompareString(a, b)
 		})
+		_ = sqlite.RegisterDeterministicScalarFunction(FuncFold, 1,
+			func(_ *sqlite.FunctionContext, args []driver.Value) (driver.Value, error) {
+				switch v := args[0].(type) {
+				case string:
+					return textfold.Fold(v), nil
+				case []byte:
+					return textfold.Fold(string(v)), nil
+				case nil:
+					return nil, nil
+				default:
+					return v, nil
+				}
+			})
 	})
 }
 

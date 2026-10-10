@@ -2,8 +2,8 @@ import { CheckCircle2Icon, HeadphonesIcon, PauseIcon, PlayIcon, RotateCcwIcon, T
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { useBooks, useSeriesById, useSessions } from '@/api/hooks'
-import type { Book, PlaySession } from '@/api/types'
+import { useBooksByIds, useSeriesByIds, useSessions } from '@/api/hooks'
+import { sessionBookIds, sessionSeriesIds, type BookSummary, type PlaySession } from '@/api/types'
 import { BookCover } from '@/components/BookCover'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
@@ -40,15 +40,12 @@ import {
 export function SessionsPage() {
   const { t } = useTranslation()
   const sessions = useSessions()
-  const books = useBooks()
-  const { map: seriesById } = useSeriesById()
   const [toRemove, setToRemove] = useState<PlaySession | null>(null)
   const player = usePlayer()
 
-  const bookById = useMemo(
-    () => new Map((books.data ?? []).map((book) => [book.id, book])),
-    [books.data],
-  )
+  // Z knihovny se stahují jen knihy a série, které poslechy obsahují.
+  const { map: bookById } = useBooksByIds(useMemo(() => sessionBookIds(sessions.data), [sessions.data]))
+  const { map: seriesById } = useSeriesByIds(useMemo(() => sessionSeriesIds(sessions.data), [sessions.data]))
 
   const { open, finished } = useMemo(() => {
     const all = sessions.data ?? []
@@ -164,8 +161,8 @@ function SessionCard({
 }: {
   session: PlaySession
   title: string
-  books: Book[]
-  bookById: Map<string, Book>
+  books: BookSummary[]
+  bookById: ReadonlyMap<string, BookSummary>
   onRemove: () => void
 }) {
   const { t } = useTranslation()
@@ -195,7 +192,7 @@ function SessionCard({
           <SeriesCoverStack books={books} />
         ) : currentBook ? (
           <Link to={`/books/${currentBook.id}`} className="shrink-0">
-            <BookCover book={currentBook} key={currentBook.id} lift={false} className="size-14" />
+            <BookCover book={currentBook} key={currentBook.id} lift={false} width={56} className="size-14" />
           </Link>
         ) : (
           <div className="size-14 shrink-0 rounded-2xl bg-foreground/8" />

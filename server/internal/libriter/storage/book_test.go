@@ -9,6 +9,7 @@ import (
 
 	"mediater/internal/core/config"
 	"mediater/internal/core/db"
+	"mediater/internal/libriter/migrations"
 	"mediater/internal/libriter/model"
 
 	"github.com/google/uuid"
@@ -24,6 +25,9 @@ func newTestStore(t *testing.T) *Store {
 		t.Fatalf("otevření databáze: %v", err)
 	}
 	t.Cleanup(func() { conn.Close() })
+	if err := migrations.Apply(context.Background(), conn); err != nil {
+		t.Fatalf("migrace knihovny: %v", err)
+	}
 	return New(conn)
 }
 

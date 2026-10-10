@@ -1,8 +1,11 @@
 import { HeadphonesIcon, LibraryBigIcon, ListPlusIcon, SquareCheckBigIcon, XIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useBooks, useSeriesTitle } from '@/api/hooks'
-import { currentLanguage } from '@/api/types'
+import { toast } from 'sonner'
+import { useDebouncedValue } from 'core-web/src/lib/paged'
+import { apiFetch } from '@/api/client'
+import { useBookList, useBooksByIds } from '@/api/hooks'
+import { listQuery, type BookSummary, type Page } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { canEdit } from '@/auth/permissions'
 import { AddToSeriesDialog } from '@/components/AddToSeriesDialog'
@@ -13,81 +16,72 @@ import { LoadingGrid } from '@/components/LoadingGrid'
 import { PageHeader } from '@/components/PageHeader'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { authorNames, bookCount } from '@/lib/format'
-import { bookSortOptions, sortBooks, useBookListPrefs } from '@/lib/sorting'
+import { bookCount } from '@/lib/format'
+import { bookSortOptions, useBookListPrefs } from '@/lib/sorting'
 import { usePlayer } from '@/player/playerContext'
+
+/** Nejvíc knih, které jde vybrat najednou tlačítkem „Vybrat vše“ (stránka serveru). */
+const SELECT_ALL_LIMIT = 500
 
 export function BooksPage() {
   const { t } = useTranslation()
   const [query, setQuery] = useState('')
-  const books = useBooks()
+  const q = useDebouncedValue(query.trim())
   const { user } = useAuth()
   const prefs = useBookListPrefs()
-  const seriesTitle = useSeriesTitle()
   const player = usePlayer()
 
-  // Hromadný výběr: null = vypnuto, jinak množina ID vybraných knih.
-  const [selected, setSelected] = useState<Set<string> | null>(null)
+  // Hledání a řazení dělá server; prohlížeč drží jen stránky kolem
+  // viditelné části výpisu. Série stojí pod svým názvem, díly pohromadě.
+  const params = { q, sort: prefs.sortKey, dir: prefs.sortDir }
+  const books = useBookList(params)
+
+  // Hromadný výběr: null = vypnuto, jinak ID vybraných knih a jejich pozice
+  // ve výpisu – podle ní se drží pořadí (v tom se předvyplní díly série).
+  const [selected, setSelected] = useState<Map<string, number> | null>(null)
   const [seriesDialog, setSeriesDialog] = useState(false)
+  const [selectingAll, setSelectingAll] = useState(false)
 
-  const sorted = useMemo(
-    () => sortBooks(books.data ?? [], prefs.sortKey, prefs.sortDir, seriesTitle),
-    [books.data, prefs.sortKey, prefs.sortDir, seriesTitle],
+  const orderedIds = useMemo(
+    () => (selected ? [...selected.entries()].sort((a, b) => a[1] - b[1]).map(([id]) => id) : []),
+    [selected],
   )
-
-  const filtered = useMemo(() => {
-    const locale = currentLanguage()
-    const needle = query.trim().toLocaleLowerCase(locale)
-    if (!needle) return sorted
-
-    return sorted.filter(
-      (book) =>
-        book.title.toLocaleLowerCase(locale).includes(needle) ||
-        authorNames(book.authors).toLocaleLowerCase(locale).includes(needle),
-    )
-  }, [sorted, query])
-
-  // Vybrané knihy v pořadí seznamu – v tom pořadí se předvyplní díly série.
-  const selectedBooks = useMemo(
-    () => (selected ? sorted.filter((book) => selected.has(book.id)) : []),
-    [selected, sorted],
+  // Vybrané knihy pro dialog série – dotahují se jen ty vybrané.
+  const selectedBooks = useBooksByIds(seriesDialog ? orderedIds : [])
+  const dialogBooks = useMemo(
+    () => orderedIds.flatMap((id) => selectedBooks.map.get(id) ?? []),
+    [orderedIds, selectedBooks.map],
   )
+  const selectedSet = useMemo(() => new Set(selected?.keys() ?? []), [selected])
 
-  function toggle(id: string) {
+  function toggle(id: string, index: number) {
     setSelected((prev) => {
-      const next = new Set(prev)
+      const next = new Map(prev)
       if (next.has(id)) next.delete(id)
-      else next.add(id)
+      else next.set(id, index)
       return next
     })
   }
 
-  function selectAllFiltered() {
-    setSelected((prev) => {
-      const next = new Set(prev)
-      for (const book of filtered) next.add(book.id)
-      return next
-    })
+  async function selectAllFiltered() {
+    setSelectingAll(true)
+    try {
+      const page = await apiFetch<Page<BookSummary>>(
+        `/books?${listQuery({ ...params, limit: SELECT_ALL_LIMIT, offset: 0 })}`,
+      )
+      setSelected((prev) => {
+        const next = new Map(prev)
+        page.items.forEach((book, index) => next.set(book.id, index))
+        return next
+      })
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error))
+    } finally {
+      setSelectingAll(false)
+    }
   }
 
-  if (books.isPending) {
-    return (
-      <>
-        <PageHeader title={t('books.list.title')} />
-        <LoadingGrid view={prefs.view} />
-      </>
-    )
-  }
-
-  if (books.isError) {
-    return (
-      <>
-        <PageHeader title={t('books.list.title')} />
-        <ErrorState error={books.error} onRetry={() => void books.refetch()} />
-      </>
-    )
-  }
-
+  const total = books.total ?? 0
   const selecting = selected !== null
 
   return (
@@ -95,7 +89,7 @@ export function BooksPage() {
       <PageHeader
         sticky
         title={t('books.list.title')}
-        description={bookCount(books.data.length)}
+        description={books.total === undefined ? undefined : bookCount(total)}
         actions={
           <>
             <Input
@@ -116,7 +110,7 @@ export function BooksPage() {
             {/* Výběr slouží i k poskládání poslechu, takže ho má i čtenář;
                 zásahy do knihovny uvnitř zůstávají editorovi. */}
             {!selecting ? (
-              <Button variant="outline" onClick={() => setSelected(new Set())}>
+              <Button variant="outline" onClick={() => setSelected(new Map())}>
                 <SquareCheckBigIcon />
                 {t('books.list.select')}
               </Button>
@@ -134,13 +128,22 @@ export function BooksPage() {
                 : t('books.list.selectedCount', { books: bookCount(selected.size) })}
             </p>
             <div className="flex-1" />
-            <Button variant="ghost" size="sm" onClick={selectAllFiltered} disabled={filtered.length === 0}>
-              {query ? t('books.list.selectAllFound') : t('books.list.selectAll')}
-            </Button>
+            {/* Vybrat najednou jde jen rozumně velký výpis – desítky tisíc knih
+                do poslechu ani do série nikdo nedává. */}
+            {total <= SELECT_ALL_LIMIT ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => void selectAllFiltered()}
+                disabled={total === 0 || selectingAll}
+              >
+                {q ? t('books.list.selectAllFound') : t('books.list.selectAll')}
+              </Button>
+            ) : null}
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setSelected(new Set())}
+              onClick={() => setSelected(new Map())}
               disabled={selected.size === 0}
             >
               {t('books.list.clearSelection')}
@@ -150,7 +153,7 @@ export function BooksPage() {
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  player.addToSession({ bookIds: selectedBooks.map((book) => book.id) })
+                  player.addToSession({ bookIds: orderedIds })
                   setSelected(null)
                 }}
                 disabled={selected.size === 0}
@@ -163,7 +166,7 @@ export function BooksPage() {
             <Button
               size="sm"
               onClick={() => {
-                player.playList({ bookIds: selectedBooks.map((book) => book.id) })
+                player.playList({ bookIds: orderedIds })
                 setSelected(null)
               }}
               disabled={selected.size === 0}
@@ -190,22 +193,30 @@ export function BooksPage() {
         ) : null}
       </PageHeader>
 
-      <BookGrid
-        books={filtered}
-        view={prefs.view}
-        selection={selected ? { selected, onToggle: toggle } : undefined}
-        emptyTitle={query ? t('books.list.noResults') : t('books.list.empty')}
-        emptyDescription={
-          query
-            ? t('books.list.noResultsHint')
-            : t('books.list.emptyHint')
-        }
-      />
+      {books.total === undefined ? (
+        books.isError ? (
+          <ErrorState error={books.error} onRetry={books.refetch} />
+        ) : (
+          <LoadingGrid view={prefs.view} />
+        )
+      ) : (
+        <BookGrid
+          list={books}
+          params={params}
+          view={prefs.view}
+          selection={selected ? { selected: selectedSet, onToggle: toggle } : undefined}
+          emptyTitle={q ? t('books.list.noResults') : t('books.list.empty')}
+          emptyDescription={
+            q
+              ? t('books.list.noResultsHint')
+              : t('books.list.emptyHint')
+          }
+        />
+      )}
 
-      {selected ? (
+      {selected && seriesDialog && selectedBooks.data ? (
         <AddToSeriesDialog
-          books={selectedBooks}
-          allBooks={books.data}
+          books={dialogBooks}
           open={seriesDialog}
           onOpenChange={setSeriesDialog}
           onDone={() => setSelected(null)}

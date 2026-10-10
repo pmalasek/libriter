@@ -6,7 +6,9 @@ import (
 	"strings"
 	"time"
 
+	"mediater/internal/core/httpx"
 	"mediater/internal/core/imagestore"
+	"mediater/internal/core/imgthumb"
 	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/service"
 	"mediater/internal/libriter/storage"
@@ -20,6 +22,14 @@ type AuthorHandler struct {
 	images *service.AuthorImageService
 	// audit je volitelný (nil = mazání se nezaznamenává).
 	audit *service.AuditService
+	// thumbs vytváří zmenšeniny fotek (?w=); nil = jen originály.
+	thumbs *imgthumb.Cache
+}
+
+// WithThumbs zapne zmenšeniny fotek pro mřížky (?w=).
+func (h *AuthorHandler) WithThumbs(thumbs *imgthumb.Cache) *AuthorHandler {
+	h.thumbs = thumbs
+	return h
 }
 
 func NewAuthor(
@@ -32,7 +42,25 @@ func NewAuthor(
 }
 
 // GET /api/v1/authors
+//
+// S ?limit= vrací stránku štíhlých záznamů (viz authorFilter), bez něj celý
+// seznam jako dřív – kvůli vydaným verzím mobilní aplikace.
 func (h *AuthorHandler) List(w http.ResponseWriter, r *http.Request) {
+	if page, paged := httpx.ParsePage(r); paged {
+		f, err := authorFilter(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
+			return
+		}
+		items, total, err := h.svc.ListPage(r.Context(), f, page.Limit, page.Offset)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání autorů")
+			return
+		}
+		writeJSON(w, http.StatusOK, httpx.NewPage(items, total, page))
+		return
+	}
+
 	authors, err := h.svc.List(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání autorů")
@@ -163,7 +191,8 @@ func (h *AuthorHandler) Image(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	author, err := h.svc.GetByID(r.Context(), id)
+	// Jen cesta k fotce – mřížka autorů jich načítá desítky naráz.
+	imagePath, err := h.svc.ImagePath(r.Context(), id)
 	if errors.Is(err, service.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "author.not_found", "autor nenalezen")
 		return
@@ -173,21 +202,22 @@ func (h *AuthorHandler) Image(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if author.ImagePath == nil {
+	if imagePath == nil {
 		writeError(w, http.StatusNotFound, "image.not_found", "autor nemá obrázek")
 		return
 	}
 
 	// image_path může editor nastavit přes PUT na cokoliv, proto validujeme.
-	abs, ok := imagestore.Resolve(h.imageRoot, *author.ImagePath)
-	if !ok || !imagestore.Exists(h.imageRoot, *author.ImagePath) {
+	abs, ok := imagestore.Resolve(h.imageRoot, *imagePath)
+	if !ok || !imagestore.Exists(h.imageRoot, *imagePath) {
 		writeError(w, http.StatusNotFound, "image.not_found", "obrázek nenalezen")
 		return
 	}
 
 	// Frontend přidává ?v=<image_path>, takže dlouhá cache je bezpečná.
+	// ?w= pošle zmenšeninu pro mřížku.
 	w.Header().Set("Cache-Control", "public, max-age=2592000")
-	http.ServeFile(w, r, abs)
+	h.thumbs.ServeFile(w, r, abs)
 }
 
 // PUT /api/v1/authors/{id}/image  (editor+)
@@ -356,7 +386,25 @@ func NewSeries(svc *service.SeriesService, audit *service.AuditService) *SeriesH
 }
 
 // GET /api/v1/series
+//
+// S ?limit= vrací stránku sérií i s počtem dílů, autory a obálkami prvních
+// dílů (viz seriesFilter); bez něj celý seznam jako dřív.
 func (h *SeriesHandler) List(w http.ResponseWriter, r *http.Request) {
+	if page, paged := httpx.ParsePage(r); paged {
+		f, err := seriesFilter(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
+			return
+		}
+		items, total, err := h.svc.ListPage(r.Context(), f, page.Limit, page.Offset)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání sérií")
+			return
+		}
+		writeJSON(w, http.StatusOK, httpx.NewPage(items, total, page))
+		return
+	}
+
 	list, err := h.svc.List(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání sérií")

@@ -35,8 +35,11 @@ export function viewModeLabel(mode: ViewMode): string {
 
 // --- autoři ---
 
+/** Části jména autora – plný záznam i záznam výpisu. */
+type AuthorNameParts = Pick<Author, 'first_name' | 'middle_name' | 'last_name' | 'name'>
+
 /** Katalogové řazení: příjmení, křestní jméno, prostřední jméno. */
-export function compareAuthorNames(a: Author, b: Author): number {
+export function compareAuthorNames(a: AuthorNameParts, b: AuthorNameParts): number {
   return (
     compareText(a.last_name, b.last_name) ||
     compareText(a.first_name, b.first_name) ||
@@ -45,7 +48,7 @@ export function compareAuthorNames(a: Author, b: Author): number {
 }
 
 /** Jméno v katalogovém tvaru „Čapek, Karel“; jednoslovné jméno beze změny. */
-export function catalogName(author: Author): string {
+export function catalogName(author: AuthorNameParts): string {
   const given = [author.first_name, author.middle_name].filter(Boolean).join(' ')
   if (!author.last_name) return author.name
   return given ? `${author.last_name}, ${given}` : author.last_name

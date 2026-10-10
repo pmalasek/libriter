@@ -13,7 +13,7 @@ if [ "$1" = "configure" ]; then
 
     for dir in "$DATA_DIR" "$DATA_DIR/books" "$DATA_DIR/covers" \
                "$DATA_DIR/author-images" "$DATA_DIR/import" \
-               "$DATA_DIR/sceniter-images"; do
+               "$DATA_DIR/sceniter-images" "$DATA_DIR/thumbs"; do
         mkdir -p "$dir"
         chown libriter:libriter "$dir"
     done

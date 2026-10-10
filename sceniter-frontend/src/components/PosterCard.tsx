@@ -1,9 +1,12 @@
 import { CheckCircle2Icon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { posterUrl, progressRatio, type Movie, type Show, type WatchProgress } from 'sceniter-shared'
+import { posterUrl, progressRatio, type MovieSummary, type ShowSummary, type WatchProgress } from 'sceniter-shared'
 import { Poster } from './Poster'
 import { ProgressBar } from './ProgressBar'
+
+/** Největší šířka plakátu v mřížce (CSS px) – načte se zmenšenina. */
+const POSTER_WIDTH = 240
 
 /** Dlaždice filmu nebo seriálu: plakát, název, rok, případně rozkoukanost. */
 export function PosterCard({
@@ -12,8 +15,8 @@ export function PosterCard({
   progress,
   caption,
 }: {
-  movie?: Movie
-  show?: Show
+  movie?: MovieSummary
+  show?: ShowSummary
   progress?: WatchProgress
   /** Popisek pod názvem místo roku / počtu dílů (např. role ve filmografii). */
   caption?: string
@@ -32,7 +35,7 @@ export function PosterCard({
   return (
     <Link to={to} className="group block outline-none">
       <div className="relative transition-transform duration-200 group-hover:-translate-y-0.5 group-focus-visible:ring-3 group-focus-visible:ring-ring/50 rounded-2xl">
-        <Poster src={posterUrl(title)} title={title.title} />
+        <Poster src={posterUrl(title, POSTER_WIDTH)} title={title.title} />
         {progress?.completed ? (
           <span
             role="img"

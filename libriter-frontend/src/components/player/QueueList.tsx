@@ -1,9 +1,9 @@
 import { useQueries } from '@tanstack/react-query'
 import { AudioLinesIcon, ChevronDownIcon, PauseIcon, PlayIcon } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { chaptersQuery, useBooks } from '@/api/hooks'
-import type { Book, Chapter } from '@/api/types'
+import { chaptersQuery, useBooksByIds } from '@/api/hooks'
+import type { BookSummary, Chapter } from '@/api/types'
 import { BookCover } from '@/components/BookCover'
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -29,15 +29,16 @@ export function QueueList({
   autoScroll?: boolean
 }) {
   const player = usePlayer()
-  const books = useBooks()
-
-  const items = player.session?.items ?? []
+  const sessionItems = player.session?.items
+  const items = sessionItems ?? []
+  // Jen knihy otevřeného poslechu, ne celá knihovna.
+  const { map: bookById } = useBooksByIds(
+    useMemo(() => (sessionItems ?? []).map((item) => item.book_id), [sessionItems]),
+  )
 
   const chapterQueries = useQueries({
     queries: items.map((item) => ({ ...chaptersQuery(item.book_id), enabled })),
   })
-
-  const bookById = new Map((books.data ?? []).map((book) => [book.id, book]))
 
   return (
     <>
@@ -68,7 +69,7 @@ function QueueBook({
   autoScroll,
   onPlay,
 }: {
-  book: Book | undefined
+  book: BookSummary | undefined
   order: number
   showOrder: boolean
   chapters: Chapter[]
@@ -114,7 +115,7 @@ function QueueBook({
             isCurrent && 'bg-primary/10',
           )}
         >
-          <BookCover book={book} key={book.id} lift={false} className="size-11 rounded-lg" />
+          <BookCover book={book} key={book.id} lift={false} width={44} className="size-11 rounded-lg" />
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-2">
               <span className="truncate font-medium">

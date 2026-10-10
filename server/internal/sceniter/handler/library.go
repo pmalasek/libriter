@@ -3,11 +3,13 @@ package handler
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"mediater/internal/core/httpx"
 	"mediater/internal/core/imagestore"
 	"mediater/internal/core/plugin"
 	coreservice "mediater/internal/core/service"
@@ -25,8 +27,9 @@ func (h *Handler) Image(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Název obrázku se při změně nemění, klient přidává ?v=updated_at.
+	// ?w= pošle zmenšeninu pro mřížku.
 	w.Header().Set("Cache-Control", "public, max-age=604800")
-	http.ServeFile(w, r, path)
+	h.Thumbs.ServeFile(w, r, path)
 }
 
 // GET /sceniter/home
@@ -52,18 +55,57 @@ func libraryQuery(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
 	return id, true
 }
 
-// GET /sceniter/movies?library=&q=&genre=&sort=title|year|added|rating
+// listPage přečte ?limit=&offset=; bez limitu platí výchozí velikost stránky.
+func listPage(r *http.Request) httpx.PageParams {
+	p, paged := httpx.ParsePage(r)
+	if !paged {
+		p = httpx.PageParams{Limit: httpx.DefaultPageLimit}
+	}
+	return p
+}
+
+// GET /sceniter/movies?library=&q=&genre=&sort=title|year|added|rating&limit=&offset=
+//
+// Stránka štíhlých záznamů (model.MovieSummary) a celkový počet.
 func (h *Handler) Movies(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	lib, ok := libraryQuery(w, r)
 	if !ok {
 		return
 	}
-	movies, err := h.Store.ListMovies(r.Context(), storage.MovieFilter{Library: lib, Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort")})
+	page := listPage(r)
+	f := storage.MovieFilter{Library: lib, Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort")}
+	h.writeMoviePage(w, r, f, page)
+}
+
+func (h *Handler) writeMoviePage(w http.ResponseWriter, r *http.Request, f storage.MovieFilter, page httpx.PageParams) {
+	total, err := h.Store.CountMovies(r.Context(), f)
 	if writeStoreError(w, err, "movie.not_found") {
 		return
 	}
-	writeJSON(w, http.StatusOK, movies)
+	f.Limit, f.Offset = page.Limit, page.Offset
+	movies := []model.Movie{}
+	if page.Offset < total {
+		if movies, err = h.Store.ListMovies(r.Context(), f); writeStoreError(w, err, "movie.not_found") {
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, httpx.NewPage(model.MovieSummaries(movies), total, page))
+}
+
+func (h *Handler) writeShowPage(w http.ResponseWriter, r *http.Request, f storage.ShowFilter, page httpx.PageParams) {
+	total, err := h.Store.CountShows(r.Context(), f)
+	if writeStoreError(w, err, "show.not_found") {
+		return
+	}
+	f.Limit, f.Offset = page.Limit, page.Offset
+	shows := []model.Show{}
+	if page.Offset < total {
+		if shows, err = h.Store.ListShows(r.Context(), f); writeStoreError(w, err, "show.not_found") {
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, httpx.NewPage(model.ShowSummaries(shows), total, page))
 }
 
 // GET /sceniter/movies/{id}
@@ -79,18 +121,17 @@ func (h *Handler) Movie(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, m)
 }
 
-// GET /sceniter/shows?library=&q=&genre=&sort=
+// GET /sceniter/shows?library=&q=&genre=&sort=&limit=&offset=
+//
+// Stránka štíhlých záznamů (model.ShowSummary) a celkový počet.
 func (h *Handler) Shows(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	lib, ok := libraryQuery(w, r)
 	if !ok {
 		return
 	}
-	shows, err := h.Store.ListShows(r.Context(), storage.ShowFilter{Library: lib, Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort")})
-	if writeStoreError(w, err, "show.not_found") {
-		return
-	}
-	writeJSON(w, http.StatusOK, shows)
+	f := storage.ShowFilter{Library: lib, Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort")}
+	h.writeShowPage(w, r, f, listPage(r))
 }
 
 // GET /sceniter/shows/{id}
@@ -104,6 +145,24 @@ func (h *Handler) Show(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s)
+}
+
+// GET /sceniter/shows/{id}/seasons/{number} – díly jedné řady s rozkoukaností.
+func (h *Handler) Season(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	number, err := strconv.Atoi(chi.URLParam(r, "number"))
+	if err != nil || number < 0 {
+		writeError(w, http.StatusBadRequest, "request.invalid_id", "neplatné číslo řady")
+		return
+	}
+	season, err := h.Library.Season(r.Context(), userID(r), id, number)
+	if writeStoreError(w, err, "show.not_found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, season)
 }
 
 // GET /sceniter/episodes/{id} – díl se soubory, rozkoukaností a dalším dílem.
@@ -519,17 +578,31 @@ func (h *Handler) MatchStatus(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, h.Matcher.MatchStatusNow())
 }
 
-// GET /sceniter/admin/library/unmatched
+// GET /sceniter/admin/library/unmatched?kind=movie|show&attempted=1|0&limit=&offset=
+//
+// Stránka nespárovaných titulů jednoho druhu. attempted=1 jsou tituly, pro
+// které žádný zdroj nenašel jistou shodu, attempted=0 ty, na které párování
+// ještě nedošlo; bez parametru obojí.
 func (h *Handler) Unmatched(w http.ResponseWriter, r *http.Request) {
-	movies, err := h.Store.ListMovies(r.Context(), storage.MovieFilter{MatchState: model.MatchUnmatched})
-	if writeStoreError(w, err, "sceniter.not_found") {
-		return
+	q := r.URL.Query()
+	var attempted *bool
+	switch q.Get("attempted") {
+	case "1":
+		v := true
+		attempted = &v
+	case "0":
+		v := false
+		attempted = &v
 	}
-	shows, err := h.Store.ListShows(r.Context(), storage.ShowFilter{MatchState: model.MatchUnmatched})
-	if writeStoreError(w, err, "sceniter.not_found") {
-		return
+	page := listPage(r)
+	switch q.Get("kind") {
+	case "show":
+		h.writeShowPage(w, r, storage.ShowFilter{MatchState: model.MatchUnmatched, Attempted: attempted}, page)
+	case "movie", "":
+		h.writeMoviePage(w, r, storage.MovieFilter{MatchState: model.MatchUnmatched, Attempted: attempted}, page)
+	default:
+		writeError(w, http.StatusBadRequest, "validation.invalid", "kind musí být movie nebo show")
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"movies": movies, "shows": shows})
 }
 
 // GET /sceniter/admin/stats

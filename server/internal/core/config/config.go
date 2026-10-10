@@ -75,7 +75,10 @@ type StorageConfig struct {
 	// ImportRoot je staging pro nahrávané knihy. Musí ležet mimo AudioRoot
 	// (jinak by rozpracované soubory ingestoval scanner) a ideálně na stejném
 	// disku, aby se knihy do knihovny jen přejmenovaly, ne kopírovaly.
-	ImportRoot  string
+	ImportRoot string
+	// ThumbRoot je cache zmenšenin obálek, fotek a plakátů (imgthumb).
+	// Obsah lze kdykoli smazat, vytvoří se znovu.
+	ThumbRoot   string
 	MaxUploadMB int64 // limit jednoho importu (součet nahraných souborů)
 }
 
@@ -88,6 +91,7 @@ func (s StorageConfig) EnsureDirs() error {
 		{"COVER_ROOT", s.CoverRoot},
 		{"AUTHOR_IMAGE_ROOT", s.AuthorImageRoot},
 		{"IMPORT_ROOT", s.ImportRoot},
+		{"THUMB_ROOT", s.ThumbRoot},
 	}
 	if !filepath.IsAbs(s.AudioRoot) {
 		dirs = append(dirs, struct{ name, path string }{"AUDIO_ROOT", s.AudioRoot})
@@ -174,6 +178,7 @@ func load() *Config {
 			CoverRoot:       env.path("COVER_ROOT", "/var/lib/libriter/covers"),
 			AuthorImageRoot: env.path("AUTHOR_IMAGE_ROOT", ""),
 			ImportRoot:      env.path("IMPORT_ROOT", ""),
+			ThumbRoot:       env.path("THUMB_ROOT", ""),
 			MaxUploadMB:     int64(envInt("MAX_UPLOAD_MB", 3072)),
 		},
 		Metadata: MetadataConfig{
@@ -193,6 +198,10 @@ func load() *Config {
 	// autorů jinde než ostatní obrázky.
 	if cfg.Storage.AuthorImageRoot == "" {
 		cfg.Storage.AuthorImageRoot = filepath.Join(filepath.Dir(cfg.Storage.CoverRoot), "author-images")
+	}
+	// Zmenšeniny obrázků vedle obálek, stejně jako fotky autorů.
+	if cfg.Storage.ThumbRoot == "" {
+		cfg.Storage.ThumbRoot = filepath.Join(filepath.Dir(cfg.Storage.CoverRoot), "thumbs")
 	}
 	// Staging importu vedle knihovny: mimo ni, ale nejspíš na stejném disku.
 	if cfg.Storage.ImportRoot == "" {

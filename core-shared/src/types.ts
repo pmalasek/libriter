@@ -197,3 +197,31 @@ export interface PluginsResponse {
   dir: string
   plugins: PluginInfo[]
 }
+
+// --- stránkované výpisy (?limit=&offset=) ---
+
+/**
+ * Jedna stránka výpisu. `total` je počet všech položek odpovídajících
+ * filtru – klient podle něj nastaví výšku seznamu a dotahuje jen stránky
+ * kolem viditelné části.
+ */
+export interface Page<T> {
+  items: T[]
+  total: number
+  offset: number
+  limit: number
+}
+
+/** Parametry dotazu výpisu; prázdné a nedefinované hodnoty se vynechají. */
+export type ListParams = Record<string, string | number | boolean | readonly string[] | undefined | null>
+
+/** Složí query string výpisu (bez úvodního „?“). Pole se spojí čárkou. */
+export function listQuery(params: ListParams): string {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value === undefined || value === null || value === '' || value === false) continue
+    if (Array.isArray(value)) search.set(key, value.join(','))
+    else search.set(key, String(value === true ? 1 : value))
+  }
+  return search.toString()
+}

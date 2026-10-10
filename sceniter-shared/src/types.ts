@@ -111,6 +111,29 @@ export interface Movie {
   media_id?: string
 }
 
+/**
+ * Film ve stránkovaném výpisu – jen to, co potřebuje dlaždice nebo řádek.
+ * Plný `Movie` mu vyhovuje taky.
+ */
+export type MovieSummary = Pick<
+  Movie,
+  | 'id'
+  | 'library_id'
+  | 'title'
+  | 'original_title'
+  | 'year'
+  | 'poster_path'
+  | 'backdrop_path'
+  | 'rating'
+  | 'match_state'
+  | 'match_attempted_at'
+  | 'source_key'
+  | 'created_at'
+  | 'updated_at'
+  | 'duration_sec'
+  | 'media_id'
+>
+
 export interface Show {
   id: string
   library_id: string
@@ -137,6 +160,26 @@ export interface Show {
   season_count: number
   episode_count: number
 }
+
+/** Seriál ve stránkovaném výpisu. */
+export type ShowSummary = Pick<
+  Show,
+  | 'id'
+  | 'library_id'
+  | 'title'
+  | 'original_title'
+  | 'year'
+  | 'poster_path'
+  | 'backdrop_path'
+  | 'rating'
+  | 'match_state'
+  | 'match_attempted_at'
+  | 'source_key'
+  | 'created_at'
+  | 'updated_at'
+  | 'season_count'
+  | 'episode_count'
+>
 
 export interface Episode {
   id: string
@@ -172,6 +215,7 @@ export interface EpisodeWithProgress extends Episode {
   progress?: WatchProgress
 }
 
+/** Řada s díly a jejich rozkoukaností (GET /sceniter/shows/{id}/seasons/{number}). */
 export interface Season {
   id: string
   show_id: string
@@ -180,6 +224,17 @@ export interface Season {
   overview?: string
   poster_path?: string
   episodes: EpisodeWithProgress[]
+}
+
+/** Řada v detailu seriálu – bez dílů, ty se načítají po řadách. */
+export interface SeasonInfo {
+  id: string
+  number: number
+  title?: string
+  poster_path?: string
+  /** Díly se souborem a kolik z nich je dokoukaných. */
+  episode_count: number
+  watched_count: number
 }
 
 export interface Stream {
@@ -232,7 +287,7 @@ export interface MovieDetail extends Movie {
 }
 
 export interface ShowDetail extends Show {
-  seasons: Season[]
+  seasons: SeasonInfo[]
   user: UserState
   up_next?: EpisodeWithProgress
 }

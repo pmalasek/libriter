@@ -1,6 +1,5 @@
 import { LayersIcon } from 'lucide-react'
-import type { Book } from '@/api/types'
-import { BookCover } from '@/components/BookCover'
+import { BookCover, type CoverBook } from '@/components/BookCover'
 import { cn } from '@/lib/utils'
 
 /**
@@ -12,6 +11,7 @@ const VARIANTS = {
   sm: {
     frame: 'h-14 w-26',
     cover: 'size-14',
+    px: 56,
     offsets: ['left-0', 'left-6', 'left-12'],
     tilts: ['-rotate-6', 'rotate-0', 'rotate-6'],
     icon: 'size-7',
@@ -19,6 +19,7 @@ const VARIANTS = {
   lg: {
     frame: 'h-24 w-44',
     cover: 'size-24',
+    px: 96,
     offsets: ['left-0', 'left-10', 'left-20'],
     tilts: ['-rotate-6', 'rotate-0', 'rotate-6'],
     icon: 'size-12',
@@ -34,7 +35,7 @@ export function SeriesCoverStack({
   className,
   variant = 'sm',
 }: {
-  books: Book[]
+  books: CoverBook[]
   className?: string
   variant?: keyof typeof VARIANTS
 }) {
@@ -58,7 +59,7 @@ export function SeriesCoverStack({
             key={book.id}
             className={cn('absolute top-0', style.cover, style.offsets[index], style.tilts[index])}
           >
-            <BookCover book={book} lift={false} className="rounded-xl shadow-glass" />
+            <BookCover book={book} lift={false} width={style.px} className="rounded-xl shadow-glass" />
           </div>
         ))
       )}

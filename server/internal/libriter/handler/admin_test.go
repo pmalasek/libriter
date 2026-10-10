@@ -15,6 +15,7 @@ import (
 	corehandler "mediater/internal/core/handler"
 	"mediater/internal/core/middleware"
 	"mediater/internal/libriter/metadata"
+	"mediater/internal/libriter/migrations"
 	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/scanner"
 	"mediater/internal/libriter/service"
@@ -116,6 +117,9 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 		t.Fatalf("otevření databáze: %v", err)
 	}
 	t.Cleanup(func() { conn.Close() })
+	if err := migrations.Apply(context.Background(), conn); err != nil {
+		t.Fatalf("migrace knihovny: %v", err)
+	}
 
 	store := storage.New(conn)
 	authSvc := service.NewAuth(store.Core(), config.JWTConfig{Secret: "test-secret", ExpiryHours: time.Hour})

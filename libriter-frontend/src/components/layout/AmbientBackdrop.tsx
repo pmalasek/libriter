@@ -26,7 +26,8 @@ export function AmbientBackdrop() {
 
   // Obálka drží, dokud přehrávač poslech nezavře: při přechodu na další knihu
   // je `book` chvíli null a pozadí by jinak probliklo aurorou.
-  const target = session && book?.cover_path ? coverUrl(book) : null
+  // Rozmazané pozadí si vystačí se zmenšeninou.
+  const target = session && book?.cover_path ? coverUrl(book, 160) : null
 
   return <AmbientLayers target={target} />
 }

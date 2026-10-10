@@ -55,20 +55,20 @@ export function chapterCount(count: number): string {
 }
 
 /** Autoři série; delší seznam se zkrátí, ať se popisek vejde na řádek. */
-export function authorsLabel(authors: Author[]): string {
+export function authorsLabel(authors: readonly Pick<Author, 'name'>[]): string {
   if (authors.length <= 2) return authors.map((author) => author.name).join(', ')
   const [first, second] = authors
   return t('format.authorsMore', { first: first.name, second: second.name, count: authors.length - 2 })
 }
 
 /** Jména autorů knihy oddělená čárkou. */
-export function authorNames(authors: Author[] | undefined): string {
+export function authorNames(authors: readonly Pick<Author, 'name'>[] | undefined): string {
   if (!authors || authors.length === 0) return t('format.unknownAuthor')
   return authors.map((author) => author.name).join(', ')
 }
 
 /** Roky života pro popisek – "1890–1938", "* 1890" nebo prázdno. */
-export function lifeYears(author: Author): string {
+export function lifeYears(author: Pick<Author, 'birth_year' | 'death_year'>): string {
   if (author.birth_year && author.death_year) return `${author.birth_year}–${author.death_year}`
   if (author.birth_year) return `* ${author.birth_year}`
   if (author.death_year) return `† ${author.death_year}`

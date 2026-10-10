@@ -62,10 +62,22 @@ type SeasonDetail struct {
 	Episodes []EpisodeWithProgress `json:"episodes"`
 }
 
+// SeasonInfo je řada v detailu seriálu. Díly nenese – u dlouhých seriálů
+// jde o stovky dílů s popisy; načítají se po řadách (Library.Season).
+type SeasonInfo struct {
+	ID         uuid.UUID `json:"id"`
+	Number     int       `json:"number"`
+	Title      *string   `json:"title,omitempty"`
+	PosterPath *string   `json:"poster_path,omitempty"`
+	// EpisodeCount je počet dílů se souborem, WatchedCount z nich dokoukaných.
+	EpisodeCount int `json:"episode_count"`
+	WatchedCount int `json:"watched_count"`
+}
+
 // ShowDetail je seriál s řadami, stavem uživatele a dílem, který je na řadě.
 type ShowDetail struct {
 	model.Show
-	Seasons []SeasonDetail  `json:"seasons"`
+	Seasons []SeasonInfo    `json:"seasons"`
 	User    model.UserState `json:"user"`
 	// UpNext je díl, kterým má uživatel pokračovat (rozkoukaný, nebo další
 	// po naposledy dokoukaném, nebo první díl).
@@ -97,17 +109,18 @@ func (l *Library) Show(ctx context.Context, userID, id uuid.UUID) (*ShowDetail, 
 		}
 	}
 
-	out := &ShowDetail{Show: *sh, Seasons: []SeasonDetail{}}
+	out := &ShowDetail{Show: *sh, Seasons: []SeasonInfo{}}
 	var flat []EpisodeWithProgress
 	for _, se := range seasons {
-		sd := SeasonDetail{Season: se, Episodes: []EpisodeWithProgress{}}
-		sd.Season.Episodes = nil
+		info := SeasonInfo{ID: se.ID, Number: se.Number, Title: se.Title, PosterPath: se.PosterPath, EpisodeCount: len(se.Episodes)}
 		for _, e := range se.Episodes {
 			ep := EpisodeWithProgress{Episode: e, Progress: byEpisode[e.ID]}
-			sd.Episodes = append(sd.Episodes, ep)
+			if ep.Progress != nil && ep.Progress.Completed {
+				info.WatchedCount++
+			}
 			flat = append(flat, ep)
 		}
-		out.Seasons = append(out.Seasons, sd)
+		out.Seasons = append(out.Seasons, info)
 	}
 	out.UpNext = upNext(flat, latest)
 
@@ -117,6 +130,36 @@ func (l *Library) Show(ctx context.Context, userID, id uuid.UUID) (*ShowDetail, 
 	}
 	out.User = st
 	return out, nil
+}
+
+// Season vrátí jednu řadu seriálu s díly a jejich rozkoukaností.
+func (l *Library) Season(ctx context.Context, userID, showID uuid.UUID, number int) (*SeasonDetail, error) {
+	seasons, err := l.store.ListSeasons(ctx, showID)
+	if err != nil {
+		return nil, err
+	}
+	for _, se := range seasons {
+		if se.Number != number {
+			continue
+		}
+		progress, err := l.store.ListProgress(ctx, userID, storage.ProgressFilter{ShowID: &showID})
+		if err != nil {
+			return nil, err
+		}
+		byEpisode := map[uuid.UUID]*model.WatchProgress{}
+		for i := range progress {
+			if p := &progress[i]; p.EpisodeID != nil {
+				byEpisode[*p.EpisodeID] = p
+			}
+		}
+		sd := &SeasonDetail{Season: se, Episodes: make([]EpisodeWithProgress, 0, len(se.Episodes))}
+		sd.Season.Episodes = nil
+		for _, e := range se.Episodes {
+			sd.Episodes = append(sd.Episodes, EpisodeWithProgress{Episode: e, Progress: byEpisode[e.ID]})
+		}
+		return sd, nil
+	}
+	return nil, storage.ErrNotFound
 }
 
 // upNext vybere díl, kterým uživatel pokračuje: naposledy sledovaný, pokud

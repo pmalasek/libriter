@@ -143,21 +143,41 @@ func TestSceniterEndToEnd(t *testing.T) {
 	}
 
 	// Počáteční průchod knihovnou běží na pozadí.
-	var movies []struct {
-		ID      string  `json:"id"`
-		Title   string  `json:"title"`
-		MediaID *string `json:"media_id"`
+	var page struct {
+		Items []struct {
+			ID      string  `json:"id"`
+			Title   string  `json:"title"`
+			MediaID *string `json:"media_id"`
+		} `json:"items"`
+		Total int `json:"total"`
 	}
 	deadline := time.Now().Add(30 * time.Second)
 	for {
-		e.json("GET", "/api/v1/sceniter/movies", nil, &movies)
-		if len(movies) == 2 || time.Now().After(deadline) {
+		e.json("GET", "/api/v1/sceniter/movies", nil, &page)
+		if page.Total == 2 || time.Now().After(deadline) {
 			break
 		}
 		time.Sleep(200 * time.Millisecond)
 	}
+	movies := page.Items
 	if len(movies) != 2 {
-		t.Fatalf("filmy: %+v", movies)
+		t.Fatalf("filmy: %+v", page)
+	}
+	// Stránkování: druhý film abecedně je na druhé stránce po jednom.
+	var other struct {
+		Items []struct {
+			Title string `json:"title"`
+		} `json:"items"`
+		Total int `json:"total"`
+	}
+	e.json("GET", "/api/v1/sceniter/movies?limit=1&offset=1", nil, &other)
+	if other.Total != 2 || len(other.Items) != 1 || other.Items[0].Title != "Pelíšky" {
+		t.Errorf("druhá stránka: %+v", other)
+	}
+	other.Items = nil
+	e.json("GET", "/api/v1/sceniter/movies?q=PELISKY", nil, &other)
+	if other.Total != 1 {
+		t.Errorf("hledání bez diakritiky: %+v", other)
 	}
 	byTitle := map[string]string{}
 	mediaOf := map[string]string{}

@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"mediater/internal/core/config"
+	"mediater/internal/core/imgthumb"
 	"mediater/internal/core/plugin"
 	"mediater/internal/core/service"
 )
@@ -30,7 +31,10 @@ type Deps struct {
 	// Plugins spouští zdroje metadat; PluginSettings drží jejich konfiguraci.
 	Plugins        *plugin.Host
 	PluginSettings *plugin.Settings
-	StartedAt      time.Time
+	// Thumbs vytváří zmenšeniny obrázků pro mřížky (?w= u obrázkových
+	// endpointů). Nil = posílají se jen originály.
+	Thumbs    *imgthumb.Cache
+	StartedAt time.Time
 }
 
 // Product je jeden produkt nad společnými účty.

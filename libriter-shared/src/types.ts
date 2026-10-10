@@ -57,6 +57,94 @@ export interface Book {
   updated_at: string
 }
 
+// --- stránkované výpisy (GET /books|/authors|/series?limit=…) ---
+// Štíhlé záznamy: jen to, co potřebuje dlaždice nebo řádek. Popisy,
+// životopisy a cesty k souborům se čtou až v detailu.
+
+/** Autor knihy ve výpisu. */
+export interface AuthorRef {
+  id: string
+  name: string
+}
+
+/** Kniha ve výpisu. Plná `Book` mu vyhovuje taky (bez názvu série). */
+export interface BookSummary {
+  id: string
+  title: string
+  authors: AuthorRef[]
+  series_id?: string
+  series_position?: number
+  /** Název série – doplňuje ho server, kniha z detailu ho nemá. */
+  series_title?: string
+  duration_seconds: number
+  /** Počet kapitol (audio souborů) knihy. */
+  chapter_count: number
+  cover_path?: string
+  language: string
+  published_year?: number
+  created_at: string
+  updated_at: string
+}
+
+/** Autor ve výpisu i s počtem knih v knihovně. */
+export interface AuthorSummary {
+  id: string
+  first_name: string
+  middle_name: string
+  last_name: string
+  name: string
+  image_path?: string
+  birth_year?: number
+  death_year?: number
+  book_count: number
+}
+
+/** Díl série, jehož obálka se ukazuje ve stohu na kartě série. */
+export interface SeriesCover {
+  id: string
+  title: string
+  series_position?: number
+  cover_path?: string
+  updated_at: string
+}
+
+/** Série ve výpisu: počet dílů, autoři (nejčastější první) a první díly. */
+export interface SeriesSummary {
+  id: string
+  title: string
+  book_count: number
+  authors: AuthorRef[]
+  covers: SeriesCover[]
+}
+
+/** Parametry výpisu knih (GET /books?limit=…). */
+export interface BookListParams {
+  q?: string
+  sort?: BookSortParam
+  dir?: 'asc' | 'desc'
+  author_id?: string
+  series_id?: string
+  language?: string
+}
+
+export type BookSortParam = 'title' | 'author' | 'added' | 'published'
+
+/** Parametry výpisu autorů (GET /authors?limit=…). */
+export interface AuthorListParams {
+  q?: string
+  sort?: 'last_name' | 'first_name' | 'books'
+  dir?: 'asc' | 'desc'
+  /** I autoři bez knih – výběr autora při úpravě knihy. */
+  all?: boolean
+}
+
+/** Parametry výpisu sérií (GET /series?limit=…). */
+export interface SeriesListParams {
+  q?: string
+  /** I prázdné série – výběr série při úpravě knihy. */
+  all?: boolean
+}
+
 /** Kapitola knihy = jeden audio soubor (GET /books/{id}/chapters). */
 export interface Chapter {
   id: string

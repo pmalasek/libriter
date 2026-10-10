@@ -1,4 +1,4 @@
-import { apiUrl, currentLanguage, formatClock, t } from 'core-shared'
+import { apiUrl, currentLanguage, formatClock, t, thumbUrl } from 'core-shared'
 import type { Credit, CreditRole, Episode, Movie, Person, Show, Stream, WatchProgress } from './types'
 
 /** „S01E02“ – kód dílu do výpisů. */
@@ -12,20 +12,24 @@ export function episodeLabel(e: Pick<Episode, 'season' | 'number' | 'title'>): s
   return `${episodeCode(e.season, e.number)} · ${title}`
 }
 
-/** Adresa obrázku ze SCENITER_IMAGE_ROOT; v (updated_at) obchází cache po změně. */
-export function imageUrl(name: string | undefined, version?: string): string | undefined {
+/**
+ * Adresa obrázku ze SCENITER_IMAGE_ROOT; v (updated_at) obchází cache po změně.
+ * S `width` (zobrazená šířka v CSS px) jde o zmenšeninu ze serveru.
+ */
+export function imageUrl(name: string | undefined, version?: string, width?: number): string | undefined {
   if (!name) return undefined
   const v = version ? `?v=${encodeURIComponent(version)}` : ''
-  return apiUrl(`/sceniter/images/${encodeURIComponent(name)}`) + v
+  return thumbUrl(apiUrl(`/sceniter/images/${encodeURIComponent(name)}`) + v, width)
 }
 
-export function posterUrl(title: Pick<Movie | Show, 'poster_path' | 'updated_at'>): string | undefined {
-  return imageUrl(title.poster_path, title.updated_at)
+/** Plakát titulu; `width` viz imageUrl – mřížky chtějí zmenšeninu. */
+export function posterUrl(title: Pick<Movie | Show, 'poster_path' | 'updated_at'>, width?: number): string | undefined {
+  return imageUrl(title.poster_path, title.updated_at, width)
 }
 
 /** Fotka osoby (z detailu titulu nebo stránky osoby). */
-export function profileUrl(p: Pick<Person | Credit, 'profile_path' | 'updated_at'>): string | undefined {
-  return imageUrl(p.profile_path, p.updated_at)
+export function profileUrl(p: Pick<Person | Credit, 'profile_path' | 'updated_at'>, width?: number): string | undefined {
+  return imageUrl(p.profile_path, p.updated_at, width)
 }
 
 /** Osoby titulu s danou rolí, bez opakování téže osoby. */

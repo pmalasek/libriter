@@ -2,15 +2,25 @@ import { BookHeadphonesIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { API_PREFIX } from '@/api/client'
-import type { Book } from '@/api/types'
+import { thumbUrl } from '@/api/types'
 import { cn } from '@/lib/utils'
+
+/** Co obálka potřebuje vědět o knize – plná kniha i záznam výpisu. */
+export interface CoverBook {
+  id: string
+  title: string
+  cover_path?: string
+  updated_at: string
+}
 
 /**
  * URL obálky knihy. Endpoint je veřejný (<img> neumí poslat token),
  * ?v= podle updated_at obchází cache prohlížeče po změně obálky.
+ * S `width` (zobrazená šířka v CSS px) jde o zmenšeninu ze serveru –
+ * mřížka tak nestahuje originály o několika megabajtech.
  */
-export function coverUrl(book: Book) {
-  return `${API_PREFIX}/books/${book.id}/cover?v=${encodeURIComponent(book.updated_at)}`
+export function coverUrl(book: CoverBook, width?: number) {
+  return thumbUrl(`${API_PREFIX}/books/${book.id}/cover?v=${encodeURIComponent(book.updated_at)}`, width)
 }
 
 // Obálky mají různé poměry stran (zhruba 60 % čtverec, 30 % portrét, zbytek na šířku),
@@ -34,11 +44,14 @@ export function BookCover({
   book,
   className,
   lift = true,
+  width,
 }: {
-  book: Book
+  book: CoverBook
   className?: string
   /** Nadzvednutí při najetí na kartu; vypnout v seznamu a v hlavičce detailu. */
   lift?: boolean
+  /** Největší zobrazená šířka v CSS px – načte se zmenšenina. Bez ní originál. */
+  width?: number
 }) {
   const { t } = useTranslation()
   const [failed, setFailed] = useState(false)
@@ -59,7 +72,7 @@ export function BookCover({
     )
   }
 
-  const src = coverUrl(book)
+  const src = coverUrl(book, width)
 
   return (
     <div className={cn(box, lift && lifted, className)}>

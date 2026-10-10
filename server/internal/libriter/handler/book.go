@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"mediater/internal/core/httpx"
 	"mediater/internal/core/imagestore"
+	"mediater/internal/core/imgthumb"
 	"mediater/internal/libriter/service"
 	"mediater/internal/libriter/storage"
 
@@ -22,6 +24,14 @@ type BookHandler struct {
 	audit *service.AuditService
 	// covers stahuje obálky ze zdrojů metadat; nil = PUT /cover odpoví 404.
 	covers *service.BookCoverService
+	// thumbs vytváří zmenšeniny obálek (?w=); nil = jen originály.
+	thumbs *imgthumb.Cache
+}
+
+// WithThumbs zapne zmenšeniny obálek pro mřížky (?w=).
+func (h *BookHandler) WithThumbs(thumbs *imgthumb.Cache) *BookHandler {
+	h.thumbs = thumbs
+	return h
 }
 
 func NewBook(svc *service.BookService, coverRoot string, audit *service.AuditService) *BookHandler {
@@ -35,7 +45,26 @@ func (h *BookHandler) WithCovers(covers *service.BookCoverService) *BookHandler 
 }
 
 // GET /api/v1/books
+//
+// S ?limit= vrací stránku štíhlých záznamů seřazenou a filtrovanou na
+// serveru (viz bookFilter); bez něj celou knihovnu jako dřív – kvůli vydaným
+// verzím mobilní aplikace.
 func (h *BookHandler) List(w http.ResponseWriter, r *http.Request) {
+	if page, paged := httpx.ParsePage(r); paged {
+		f, err := bookFilter(r)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
+			return
+		}
+		items, total, err := h.svc.ListPage(r.Context(), f, page.Limit, page.Offset)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání knih")
+			return
+		}
+		writeJSON(w, http.StatusOK, httpx.NewPage(items, total, page))
+		return
+	}
+
 	books, err := h.svc.List(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání knih")
@@ -150,7 +179,8 @@ func (h *BookHandler) Cover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	book, err := h.svc.GetByID(r.Context(), id)
+	// Jen cesta k obálce – mřížka jich načítá desítky naráz.
+	coverPath, err := h.svc.CoverPath(r.Context(), id)
 	if errors.Is(err, service.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 		return
@@ -160,13 +190,13 @@ func (h *BookHandler) Cover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if book.CoverPath == nil {
+	if coverPath == nil {
 		writeError(w, http.StatusNotFound, "cover.not_found", "kniha nemá obálku")
 		return
 	}
 
 	// cover_path může editor nastavit přes PUT na cokoliv, proto validujeme.
-	abs, ok := imagestore.Resolve(h.coverRoot, *book.CoverPath)
+	abs, ok := imagestore.Resolve(h.coverRoot, *coverPath)
 	if !ok {
 		writeError(w, http.StatusNotFound, "cover.not_found", "obálka nenalezena")
 		return
@@ -179,8 +209,9 @@ func (h *BookHandler) Cover(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Obálky se mění zřídka a frontend přidává ?v=<updated_at>, takže dlouhá cache je bezpečná.
+	// ?w= pošle zmenšeninu pro mřížku.
 	w.Header().Set("Cache-Control", "public, max-age=2592000")
-	http.ServeFile(w, r, abs)
+	h.thumbs.ServeFile(w, r, abs)
 }
 
 // POST /api/v1/books  (editor+)

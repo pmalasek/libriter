@@ -17,6 +17,7 @@ import (
 	"mediater/internal/libriter/handler"
 	"mediater/internal/libriter/importer"
 	"mediater/internal/libriter/metadata"
+	"mediater/internal/libriter/migrations"
 	"mediater/internal/libriter/scanner"
 	"mediater/internal/libriter/service"
 	"mediater/internal/libriter/storage"
@@ -35,15 +36,16 @@ type Product struct {
 	sessionH  *handler.PlaySessionHandler
 	audioH    *handler.AudioHandler
 	importH   *handler.ImportHandler
+	syncH     *handler.SyncHandler
 }
 
 func New() *Product { return &Product{} }
 
 func (p *Product) Name() string { return "libriter" }
 
-// Migrations: schéma Libriteru je zatím celé v základní řadě 001–017 jádra
-// (vzniklo dřív než rozdělení na produkty). Nové knižní migrace patří sem.
-func (p *Product) Migrations() fs.FS { return nil }
+// Migrations: starší schéma Libriteru je v základní řadě 001–017 jádra
+// (vzniklo dřív než rozdělení na produkty); novější knižní migrace jsou tady.
+func (p *Product) Migrations() fs.FS { return migrations.FS }
 
 func (p *Product) Web() fs.FS { return web.FS() }
 
@@ -107,8 +109,11 @@ func (p *Product) Init(d product.Deps) error {
 	listeningSvc := service.NewListening(store)
 
 	p.bookH = handler.NewBook(bookSvc, cfg.Storage.CoverRoot, d.Audit).
-		WithCovers(service.NewBookCover(store, registry, cfg.Storage.CoverRoot))
-	p.authorH = handler.NewAuthor(authorSvc, cfg.Storage.AuthorImageRoot, authorImageSvc, d.Audit)
+		WithCovers(service.NewBookCover(store, registry, cfg.Storage.CoverRoot)).
+		WithThumbs(d.Thumbs)
+	p.authorH = handler.NewAuthor(authorSvc, cfg.Storage.AuthorImageRoot, authorImageSvc, d.Audit).
+		WithThumbs(d.Thumbs)
+	p.syncH = handler.NewSync(service.NewLibrarySync(store))
 	p.seriesH = handler.NewSeries(seriesSvc, d.Audit)
 	p.metadataH = handler.NewMetadata(registry)
 	p.adminH = handler.NewAdmin(d.Users, settingsSvc, registry, scn, systemSvc, d.Audit, listeningSvc)
@@ -163,6 +168,9 @@ func (p *Product) RegisterRoutes(r chi.Router) {
 			r.Get("/series", seriesH.List)
 			r.Get("/languages", bookH.Languages)
 			r.Get("/series/{id}", seriesH.Get)
+
+			// Změny knihovny od posledního rev zařízení (mobil s lokální kopií).
+			r.Get("/sync/changes", p.syncH.Changes)
 
 			// Poslechové session – vlastní data přihlášeného uživatele
 			r.Get("/sessions", sessionH.List)

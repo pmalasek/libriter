@@ -1,9 +1,9 @@
 import { CheckIcon, HeadphonesIcon, Trash2Icon } from 'lucide-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { useBooks, useSeriesById, useSessions } from '@/api/hooks'
-import type { PlaySession } from '@/api/types'
+import { useBooksByIds, useSeriesByIds, useSessions } from '@/api/hooks'
+import { currentBookId, sessionSeriesIds, type PlaySession } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -31,10 +31,11 @@ export function SessionMenu({ triggerClassName }: { triggerClassName?: string })
   const [open, setOpen] = useState(false)
   const [toRemove, setToRemove] = useState<PlaySession | null>(null)
   const sessions = useSessions(open)
-  const books = useBooks()
-  const { map: seriesById } = useSeriesById()
-
-  const bookById = new Map((books.data ?? []).map((book) => [book.id, book]))
+  // Pro popisky stačí aktuální kniha každého poslechu a názvy sérií.
+  const { map: bookById } = useBooksByIds(
+    useMemo(() => (sessions.data ?? []).map((item) => currentBookId(item)), [sessions.data]),
+  )
+  const { map: seriesById } = useSeriesByIds(useMemo(() => sessionSeriesIds(sessions.data), [sessions.data]))
   const title = (item: PlaySession) => sessionTitle(item, bookById, seriesById)
 
   function subtitle(item: PlaySession): string {

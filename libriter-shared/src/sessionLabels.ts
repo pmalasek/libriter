@@ -1,5 +1,10 @@
 import { t } from 'core-shared'
-import type { Book, PlaySession, Series } from './types'
+import type { PlaySession } from './types'
+
+/** Kniha nebo série tak, jak ji popisky potřebují – plný záznam i štíhlý z výpisu. */
+interface Titled {
+  title: string
+}
 
 /**
  * Popisky poslechu pro lištu i stránku Poslechy.
@@ -10,8 +15,8 @@ import type { Book, PlaySession, Series } from './types'
  */
 export function sessionTitle(
   session: PlaySession,
-  bookById: Map<string, Book>,
-  seriesById: Map<string, Series>,
+  bookById: ReadonlyMap<string, Titled>,
+  seriesById: ReadonlyMap<string, Titled>,
 ): string {
   if (session.title) return session.title
 
@@ -30,10 +35,10 @@ export function sessionKindLabel(session: PlaySession): string {
 }
 
 /** Knihy poslechu v pořadí přehrávání; smazané z knihovny se vynechají. */
-export function sessionBooks(session: PlaySession, bookById: Map<string, Book>): Book[] {
+export function sessionBooks<B>(session: PlaySession, bookById: ReadonlyMap<string, B>): B[] {
   return session.items
     .map((item) => bookById.get(item.book_id))
-    .filter((book): book is Book => book !== undefined)
+    .filter((book): book is B => book !== undefined)
 }
 
 /** Kde poslech stojí: kolikátá kniha a jak daleko je v ní rozposlouchaná. */
@@ -46,4 +51,16 @@ export function sessionProgress(session: PlaySession) {
     positionSeconds: current?.position_seconds ?? 0,
     bookId: current?.book_id,
   }
+}
+
+/** ID knih ze všech poslechů – kvůli dotažení jen těchhle knih z knihovny. */
+export function sessionBookIds(sessions: readonly PlaySession[] | undefined): string[] {
+  return (sessions ?? []).flatMap((session) => session.items.map((item) => item.book_id))
+}
+
+/** ID sérií, ze kterých poslechy vznikly – kvůli jejich názvům. */
+export function sessionSeriesIds(sessions: readonly PlaySession[] | undefined): string[] {
+  return (sessions ?? []).flatMap((session) =>
+    session.kind === 'series' && session.source_id ? [session.source_id] : [],
+  )
 }

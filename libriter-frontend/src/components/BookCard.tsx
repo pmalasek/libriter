@@ -1,10 +1,19 @@
 import { CheckCircle2Icon, CheckIcon, HeadphonesIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { bookStatusLabel, type Book, type BookStatus } from '@/api/types'
+import { bookStatusLabel, type BookListParams, type BookStatus, type BookSummary } from '@/api/types'
 import { BookCover } from '@/components/BookCover'
 import { authorNames, formatDate, formatDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
+
+/**
+ * Odkud kniha v detailu přišla: filtr výpisu a pozice v něm. Podle toho
+ * „Uložit a další“ v detailu pokračuje na následující knihu výpisu.
+ */
+export interface BookListContext {
+  params: BookListParams
+  index: number
+}
 
 /** Ovládání hromadného výběru; když chybí, karta je odkaz na detail. */
 export interface CardSelection {
@@ -64,11 +73,13 @@ function BookStatusMark({ status, className }: { status: BookStatus; className?:
 function CardShell({
   book,
   selection,
+  listContext,
   className,
   children,
 }: {
-  book: Book
+  book: BookSummary
   selection?: CardSelection
+  listContext?: BookListContext
   className?: string
   children: React.ReactNode
 }) {
@@ -97,7 +108,7 @@ function CardShell({
   }
 
   return (
-    <Link to={`/books/${book.id}`} className={base}>
+    <Link to={`/books/${book.id}`} state={listContext ? { from: listContext } : undefined} className={base}>
       {children}
     </Link>
   )
@@ -109,9 +120,11 @@ export function BookCard({
   size = 'tiles',
   series,
   selection,
+  listContext,
   status = 'none',
 }: {
-  book: Book
+  book: BookSummary
+  listContext?: BookListContext
   size?: 'tiles' | 'small'
   /** Popisek série („Atomové šelmy · 2. díl“); prázdný u knihy mimo sérii. */
   series?: string
@@ -127,11 +140,12 @@ export function BookCard({
     .join(' · ')
 
   return (
-    <CardShell book={book} selection={selection}>
+    <CardShell book={book} selection={selection} listContext={listContext}>
       <div className="relative">
         <BookCover
           key={book.id}
           book={book}
+          width={small ? 160 : 280}
           className={cn(
             selection?.selected && 'ring-3 ring-primary ring-offset-2 ring-offset-background',
           )}
@@ -192,9 +206,11 @@ export function BookRow({
   book,
   series,
   selection,
+  listContext,
   status = 'none',
 }: {
-  book: Book
+  book: BookSummary
+  listContext?: BookListContext
   /** Popisek série; v řádku stojí za autory, aby řádek nezvýšil. */
   series?: string
   selection?: CardSelection
@@ -205,6 +221,7 @@ export function BookRow({
     <CardShell
       book={book}
       selection={selection}
+      listContext={listContext}
       className={cn(
         'flex items-center gap-3 rounded-none px-3 py-2 transition-colors hover:bg-primary/5',
         selection?.selected && 'bg-primary/10',
@@ -212,7 +229,7 @@ export function BookRow({
     >
       {selection ? <SelectionMark selected={selection.selected} className="shrink-0" /> : null}
       <div className="relative shrink-0">
-        <BookCover key={book.id} book={book} lift={false} className="size-12 rounded-lg" />
+        <BookCover key={book.id} book={book} lift={false} width={48} className="size-12 rounded-lg" />
         <BookStatusMark status={status} className="absolute -top-1 -right-1 size-5" />
       </div>
       <div className="min-w-0 flex-1">

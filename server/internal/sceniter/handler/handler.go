@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"mediater/internal/core/httpx"
+	"mediater/internal/core/imgthumb"
 	"mediater/internal/core/middleware"
 	coremodel "mediater/internal/core/model"
 	coreservice "mediater/internal/core/service"
@@ -51,6 +52,8 @@ type Deps struct {
 	VideoRoot string
 	ImageRoot string
 	MaxHeight int
+	// Thumbs vytváří zmenšeniny plakátů a obrázků (?w=); nil = jen originály.
+	Thumbs *imgthumb.Cache
 }
 
 // Handler obsluhuje API Sceniteru.
@@ -105,6 +108,7 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Get("/movies/{id}/similar", h.SimilarMovies)
 					r.Get("/shows", h.Shows)
 					r.Get("/shows/{id}", h.Show)
+					r.Get("/shows/{id}/seasons/{number}", h.Season)
 					r.Get("/shows/{id}/similar", h.SimilarShows)
 					r.Get("/people/{id}", h.Person)
 					r.Get("/episodes/{id}", h.Episode)

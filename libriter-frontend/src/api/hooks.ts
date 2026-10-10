@@ -1,6 +1,14 @@
-import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+  type UseQueryResult,
+} from '@tanstack/react-query'
 import { useCallback, useMemo } from 'react'
-import { bookStatus, progressMap, queryKeys } from 'libriter-shared'
+import { usePagedList, type PagedList } from 'core-web/src/lib/paged'
+import { bookStatus, listQuery, progressMap, queryKeys, sameName, type ListParams, type Page } from 'libriter-shared'
 import { apiFetch, apiUpload, asList } from './client'
 
 // Hooky účtu (přihlášení, profil) jsou sdílené s ostatními produkty.
@@ -9,8 +17,12 @@ import type {
   Author,
   AuthorMetadata,
   AuthorRequest,
+  AuthorListParams,
   AuthorSearchResult,
+  AuthorSummary,
   Book,
+  BookListParams,
+  BookSummary,
   BookDeleteResult,
   BookMetadata,
   BookPatchRequest,
@@ -23,7 +35,9 @@ import type {
   PlaySession,
   ReorderChaptersRequest,
   Series,
+  SeriesListParams,
   SeriesRequest,
+  SeriesSummary,
 } from './types'
 
 // Klíče cache se sdílí s mobilní aplikací (libriter-shared/src/queryKeys.ts);
@@ -32,11 +46,137 @@ export { queryKeys }
 
 // --- čtení ---
 
-export function useBooks(): UseQueryResult<Book[], Error> {
-  return useQuery({
-    queryKey: queryKeys.books,
-    queryFn: async () => asList(await apiFetch<Book[] | null>('/books')),
+// Výpisy knihovny se stránkují na serveru – knihovna může mít desítky tisíc
+// knih a v paměti prohlížeče se drží jen stránky kolem viditelné části
+// (usePagedList). Celé seznamy (GET /books bez limitu) zůstávají jen pro
+// vydané verze mobilní aplikace.
+
+/** Nejvíc ID v jednom dotazu ?ids= (limit stránky na serveru). */
+const IDS_CHUNK = 500
+
+function pageFetcher<T>(path: string, params: object) {
+  return (offset: number, limit: number, signal: AbortSignal) =>
+    apiFetch<Page<T>>(`${path}?${listQuery({ ...(params as ListParams), limit, offset })}`, { signal })
+}
+
+/** Knihy podle filtru a řazení – stránkovaně pro virtualizovanou mřížku. */
+export function useBookList(params: BookListParams, enabled = true): PagedList<BookSummary> {
+  return usePagedList({
+    queryKey: queryKeys.bookList(params),
+    fetchPage: pageFetcher<BookSummary>('/books', params),
+    enabled,
   })
+}
+
+/** První `limit` knih podle filtru – police na úvodní stránce, krátké výpisy. */
+export function useBookPage(params: BookListParams, limit: number, enabled = true) {
+  return useQuery({
+    queryKey: [...queryKeys.bookList(params), 'first', limit],
+    queryFn: ({ signal }) => pageFetcher<BookSummary>('/books', params)(0, limit, signal),
+    enabled,
+  })
+}
+
+/**
+ * Kniha na pozici `index` výpisu podle filtru – „Uložit a další“ v detailu
+ * knihy pokračuje ve stejném pořadí, v jakém uživatel přišel ze seznamu.
+ */
+export function useBookAt(params: BookListParams | undefined, index: number, enabled = true) {
+  return useQuery({
+    queryKey: [...queryKeys.bookList(params ?? {}), 'at', index],
+    queryFn: async ({ signal }) => {
+      const page = await pageFetcher<BookSummary>('/books', params ?? {})(index, 1, signal)
+      return page.items[0] ?? null
+    },
+    enabled: enabled && params !== undefined && index >= 0,
+  })
+}
+
+/** Autoři podle filtru a řazení – stránkovaně. */
+export function useAuthorList(params: AuthorListParams): PagedList<AuthorSummary> {
+  return usePagedList({
+    queryKey: queryKeys.authorList(params),
+    fetchPage: pageFetcher<AuthorSummary>('/authors', params),
+  })
+}
+
+/** První `limit` autorů podle filtru – našeptávač při úpravě knihy. */
+export function useAuthorPage(params: AuthorListParams, limit: number, enabled = true) {
+  return useQuery({
+    queryKey: [...queryKeys.authorList(params), 'first', limit],
+    queryFn: ({ signal }) => pageFetcher<AuthorSummary>('/authors', params)(0, limit, signal),
+    enabled,
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** Série podle filtru – stránkovaně. */
+export function useSeriesPagedList(params: SeriesListParams): PagedList<SeriesSummary> {
+  return usePagedList({
+    queryKey: queryKeys.seriesList(params),
+    fetchPage: pageFetcher<SeriesSummary>('/series', params),
+  })
+}
+
+/** První `limit` sérií podle filtru – police, výběr série. */
+export function useSeriesPage(params: SeriesListParams, limit: number, enabled = true) {
+  return useQuery({
+    queryKey: [...queryKeys.seriesList(params), 'first', limit],
+    queryFn: ({ signal }) => pageFetcher<SeriesSummary>('/series', params)(0, limit, signal),
+    enabled,
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** Stáhne záznamy podle ID po dávkách (?ids= má limit stránky). */
+async function fetchByIds<T>(path: string, ids: readonly string[], signal: AbortSignal): Promise<T[]> {
+  const out: T[] = []
+  for (let i = 0; i < ids.length; i += IDS_CHUNK) {
+    const chunk = ids.slice(i, i + IDS_CHUNK)
+    const page = await apiFetch<Page<T>>(`${path}?${listQuery({ ids: chunk, limit: chunk.length })}`, { signal })
+    out.push(...page.items)
+  }
+  return out
+}
+
+/** ID bez duplicit a seřazená – stejná množina má stejný klíč cache. */
+function idSet(ids: readonly (string | undefined | null)[]): string[] {
+  return [...new Set(ids.filter((id): id is string => Boolean(id)))].sort()
+}
+
+/**
+ * Konkrétní knihy podle ID (poslechy, fronta, historie) jako mapa. Při
+ * změně množiny zůstávají vidět předchozí data, ať popisky neblikají.
+ */
+export function useBooksByIds(ids: readonly (string | undefined | null)[]) {
+  const unique = useMemo(() => idSet(ids), [ids])
+  const query = useQuery({
+    queryKey: queryKeys.booksByIds(unique),
+    queryFn: ({ signal }) => fetchByIds<BookSummary>('/books', unique, signal),
+    enabled: unique.length > 0,
+    placeholderData: keepPreviousData,
+  })
+  const map = useMemo(
+    () => new Map((query.data ?? []).map((book) => [book.id, book] as const)),
+    [query.data],
+  )
+  return { ...query, map }
+}
+
+/** Konkrétní série podle ID (názvy poslechů) jako mapa. */
+export function useSeriesByIds(ids: readonly (string | undefined | null)[]) {
+  const unique = useMemo(() => idSet(ids), [ids])
+  const query = useQuery({
+    queryKey: queryKeys.seriesByIds(unique),
+    queryFn: ({ signal }) => fetchByIds<SeriesSummary>('/series', unique, signal),
+    enabled: unique.length > 0,
+    placeholderData: keepPreviousData,
+  })
+  const map = useMemo(
+    () => new Map((query.data ?? []).map((series) => [series.id, series] as const)),
+    [query.data],
+  )
+  return { ...query, map }
 }
 
 export function useBook(id: string) {
@@ -45,11 +185,31 @@ export function useBook(id: string) {
     queryKey: queryKeys.book(id),
     queryFn: () => apiFetch<Book>(`/books/${id}`),
     enabled: Boolean(id),
-    // Seznam knih nese stejné záznamy jako detail, takže při přechodu mezi
-    // knihami (např. „Uložit a další“) není třeba čekat na server.
-    placeholderData: () =>
-      queryClient.getQueryData<Book[]>(queryKeys.books)?.find((book) => book.id === id),
+    // Při přechodu ze seznamu se hlavička ukáže hned ze štíhlého záznamu
+    // výpisu; zbytek detailu (popis, kapitoly) se doplní, až dorazí.
+    placeholderData: () => summaryFromLists(queryClient, id),
   })
+}
+
+/**
+ * Štíhlý záznam knihy z načtených stránek výpisů jako zástupce detailu.
+ * Chybějící pole detailu se doplní prázdnými hodnotami.
+ */
+function summaryFromLists(queryClient: QueryClient, id: string): Book | undefined {
+  for (const [, data] of queryClient.getQueriesData<Page<BookSummary> | BookSummary[]>({
+    queryKey: queryKeys.bookLists,
+  })) {
+    const items = Array.isArray(data) ? data : data?.items
+    const book = items?.find((item) => item.id === id)
+    if (book) {
+      return {
+        ...book,
+        authors: book.authors.map((a) => ({ ...a, first_name: '', middle_name: '', last_name: '', created_at: '' })),
+        file_path: '',
+      }
+    }
+  }
+  return undefined
 }
 
 /**
@@ -76,25 +236,11 @@ export function useChapters(bookId: string, enabled = true): UseQueryResult<Chap
   })
 }
 
-export function useAuthors(): UseQueryResult<Author[], Error> {
-  return useQuery({
-    queryKey: queryKeys.authors,
-    queryFn: async () => asList(await apiFetch<Author[] | null>('/authors')),
-  })
-}
-
 export function useAuthor(id: string) {
   return useQuery({
     queryKey: queryKeys.author(id),
     queryFn: () => apiFetch<Author>(`/authors/${id}`),
     enabled: Boolean(id),
-  })
-}
-
-export function useSeriesList(): UseQueryResult<Series[], Error> {
-  return useQuery({
-    queryKey: queryKeys.series,
-    queryFn: async () => asList(await apiFetch<Series[] | null>('/series')),
   })
 }
 
@@ -146,29 +292,18 @@ export function useBookProgress() {
   return { ...query, map, status }
 }
 
-// --- pomocné mapy pro spojení na klientovi ---
-// Knihy nesou jen series_id, název série si doplňujeme sami.
-
-export function useSeriesById() {
-  const query = useSeriesList()
-  const map = useMemo(() => {
-    const m = new Map<string, Series>()
-    for (const s of query.data ?? []) m.set(s.id, s)
-    return m
-  }, [query.data])
-  return { ...query, map }
-}
+// --- mutace ---
 
 /**
- * Vyhledání názvu série podle ID – knihy nesou jen `series_id`, řazení výpisů
- * (`sortBooks`) potřebuje název. Bez načteného seznamu sérií vrací undefined.
+ * Po změně knihy zestárnou výpisy knih, autorů (počty) i sérií (díly,
+ * obálky). Znovu se stáhnou jen zobrazené stránky; detaily ostatních knih
+ * zůstávají.
  */
-export function useSeriesTitle() {
-  const { map } = useSeriesById()
-  return useCallback((id: string) => map.get(id)?.title, [map])
+function invalidateLists(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.bookLists })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.authorLists })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.seriesLists })
 }
-
-// --- mutace ---
 
 /**
  * Ruční změna stavu knihy – označení za doposlechnutou a zrušení označení.
@@ -201,7 +336,7 @@ export function useCreateAuthor() {
     mutationFn: (body: AuthorRequest) =>
       apiFetch<Author>('/authors', { method: 'POST', json: body }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.authors })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.authorLists })
     },
   })
 }
@@ -225,8 +360,9 @@ function refreshAuthor(
   author: Author,
 ) {
   queryClient.setQueryData(queryKeys.author(authorId), author)
-  void queryClient.invalidateQueries({ queryKey: queryKeys.authors })
-  void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.authorLists })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.bookLists })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.seriesLists })
 }
 
 /** Částečná aktualizace knihy – v těle smí být jen skutečně změněná pole. */
@@ -237,7 +373,7 @@ export function usePatchBook(bookId: string) {
       apiFetch<Book>(`/books/${bookId}`, { method: 'PATCH', json: body }),
     onSuccess: (book) => {
       queryClient.setQueryData(queryKeys.book(bookId), book)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+      invalidateLists(queryClient)
     },
   })
 }
@@ -250,7 +386,7 @@ export function useSetBookCover(bookId: string) {
       apiFetch<Book>(`/books/${bookId}/cover`, { method: 'PUT', json: { url } }),
     onSuccess: (book) => {
       queryClient.setQueryData(queryKeys.book(bookId), book)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+      invalidateLists(queryClient)
     },
   })
 }
@@ -262,7 +398,7 @@ export function useUploadBookCover(bookId: string) {
     mutationFn: (file: File) => apiUpload<Book>(`/books/${bookId}/cover`, file, { method: 'POST' }),
     onSuccess: (book) => {
       queryClient.setQueryData(queryKeys.book(bookId), book)
-      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
+      invalidateLists(queryClient)
     },
   })
 }
@@ -280,8 +416,7 @@ export function useDeleteBook(bookId: string) {
       }),
     onSuccess: () => {
       queryClient.removeQueries({ queryKey: queryKeys.book(bookId) })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.series })
+      invalidateLists(queryClient)
       // Přehled i hlášení duplicit počítají z knihovny. Klíč se píše přímo:
       // adminKeys leží v adminHooks.ts, který importuje odsud.
       void queryClient.invalidateQueries({ queryKey: ['admin'] })
@@ -317,7 +452,7 @@ export function useCreateSeries() {
     mutationFn: (body: SeriesRequest) =>
       apiFetch<Series>('/series', { method: 'POST', json: body }),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.series })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.seriesLists })
     },
   })
 }
@@ -353,11 +488,11 @@ export function useAssignBooksToSeries() {
       }
       return { series: target, books: updated }
     },
-    // Invalidace i po chybě – část knih už může být zařazená.
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: queryKeys.books })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.series })
+    onSuccess: ({ books }) => {
+      for (const book of books) queryClient.setQueryData(queryKeys.book(book.id), book)
     },
+    // Invalidace i po chybě – část knih už může být zařazená.
+    onSettled: () => invalidateLists(queryClient),
   })
 }
 
@@ -458,4 +593,20 @@ export function useFetchMetadata() {
     mutationFn: (url: string) =>
       apiFetch<BookMetadata>(`/metadata/book?url=${encodeURIComponent(url)}`),
   })
+}
+
+/**
+ * Autor knihovny se stejným jménem (bez ohledu na diakritiku a velikost
+ * písmen) – import metadat podle něj vybere známého autora. Hledá server,
+ * celý seznam autorů se nestahuje.
+ */
+export async function findAuthorByName(name: string): Promise<AuthorSummary | undefined> {
+  const page = await apiFetch<Page<AuthorSummary>>(`/authors?${listQuery({ q: name, all: true, limit: 20 })}`)
+  return page.items.find((author) => sameName(author.name, name))
+}
+
+/** Série knihovny se stejným názvem – obdoba findAuthorByName. */
+export async function findSeriesByTitle(title: string): Promise<SeriesSummary | undefined> {
+  const page = await apiFetch<Page<SeriesSummary>>(`/series?${listQuery({ q: title, all: true, limit: 20 })}`)
+  return page.items.find((series) => sameName(series.title, title))
 }

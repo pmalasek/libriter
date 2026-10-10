@@ -3,13 +3,14 @@ import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
 import { useListeningUser } from '@/api/adminHooks'
-import { useBooks, useSeriesById } from '@/api/hooks'
+import { useBooksByIds, useSeriesByIds } from '@/api/hooks'
 import {
   roleLabel,
-  type Book,
+  sessionSeriesIds,
+  type BookSummary,
   type ListeningDay,
   type PlaySession,
-  type Series,
+  type SeriesSummary,
 } from '@/api/types'
 import { ListeningSessionRow } from '@/components/admin/ListeningSessionRow'
 import { BookCover } from '@/components/BookCover'
@@ -59,12 +60,20 @@ export function AdminListeningUserPage() {
   const { t } = useTranslation()
   const { userId = '' } = useParams()
   const detail = useListeningUser(userId)
-  const books = useBooks()
-  const { map: seriesById } = useSeriesById()
-
-  const bookById = useMemo(
-    () => new Map((books.data ?? []).map((book) => [book.id, book])),
-    [books.data],
+  // Z knihovny se stahují jen knihy, které uživatel poslouchal.
+  const bookIds = useMemo(() => {
+    const data = detail.data
+    if (!data) return []
+    return [
+      ...data.books.map((total) => total.book_id),
+      ...data.progress.map((p) => p.book_id),
+      ...data.sessions.flatMap((session) => session.items.map((item) => item.book_id)),
+      ...data.days.map((day) => day.book_id),
+    ]
+  }, [detail.data])
+  const { map: bookById } = useBooksByIds(bookIds)
+  const { map: seriesById } = useSeriesByIds(
+    useMemo(() => sessionSeriesIds(detail.data?.sessions), [detail.data]),
   )
 
   const sessions = detail.data?.sessions ?? []
@@ -248,7 +257,7 @@ export function AdminListeningUserPage() {
   )
 }
 
-function BookTitle({ book }: { book: Book | undefined }) {
+function BookTitle({ book }: { book: BookSummary | undefined }) {
   const { t } = useTranslation()
   if (!book) {
     return <span className="text-sm text-muted-foreground">{t('admin.listening.bookMissing')}</span>
@@ -273,8 +282,8 @@ function SessionSection({
   title: string
   empty: string
   sessions: PlaySession[]
-  bookById: Map<string, Book>
-  seriesById: Map<string, Series>
+  bookById: ReadonlyMap<string, BookSummary>
+  seriesById: ReadonlyMap<string, SeriesSummary>
 }) {
   return (
     <>

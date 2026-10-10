@@ -45,6 +45,7 @@ export function PlayerCapsule() {
                 book={book}
                 key={book.id}
                 lift={false}
+                width={48}
                 className="size-12 shrink-0 rounded-full"
               />
             ) : (

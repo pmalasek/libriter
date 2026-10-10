@@ -1,9 +1,10 @@
 import { LayersIcon } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { useBooks, useSeriesList } from '@/api/hooks'
-import type { Author, Book } from '@/api/types'
+import { columnsByWidth, VirtualGrid } from 'core-web/src/components/VirtualGrid'
+import { useDebouncedValue } from 'core-web/src/lib/paged'
+import { useSeriesPagedList } from '@/api/hooks'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorState } from '@/components/ErrorState'
 import { LoadingList } from '@/components/LoadingGrid'
@@ -12,96 +13,27 @@ import { SeriesCoverStack } from '@/components/SeriesCoverStack'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { authorsLabel, bookCount, foldName } from '@/lib/format'
-import { seriesAuthors } from '@/lib/sorting'
-
-/** Co o sérii víme z knih – počet dílů, autoři a obálky prvních dílů. */
-interface SeriesInfo {
-  count: number
-  authors: Author[]
-  covers: Book[]
-}
-
-const EMPTY: SeriesInfo = { count: 0, authors: [], covers: [] }
+import { Skeleton } from '@/components/ui/skeleton'
+import { authorsLabel, bookCount } from '@/lib/format'
 
 export function SeriesPage() {
   const { t } = useTranslation()
-  const series = useSeriesList()
-  const books = useBooks()
   const [query, setQuery] = useState('')
+  const q = useDebouncedValue(query.trim())
 
-  // Série nesou jen název; počet dílů i autory dopočítáváme z knih.
-  const infoBySeries = useMemo(() => {
-    const bySeries = new Map<string, Book[]>()
-    for (const book of books.data ?? []) {
-      if (!book.series_id) continue
-      const group = bySeries.get(book.series_id)
-      if (group) group.push(book)
-      else bySeries.set(book.series_id, [book])
-    }
+  // Počet dílů, autory i obálky prvních dílů počítá server. Prázdné série
+  // (po přesunu knih jinam nebo po importu metadat) se nevypisují; hledá se
+  // podle názvu série i podle jmen autorů („weaver“ → David Raker).
+  const series = useSeriesPagedList({ q })
 
-    const info = new Map<string, SeriesInfo>()
-    for (const [id, group] of bySeries) {
-      // Na kartě série ukazujeme obálky prvních tří dílů; knihy bez pořadí jdou na konec.
-      const covers = [...group]
-        .sort(
-          (a, b) =>
-            (a.series_position ?? Number.MAX_SAFE_INTEGER) -
-            (b.series_position ?? Number.MAX_SAFE_INTEGER),
-        )
-        .slice(0, 3)
-      info.set(id, { count: group.length, authors: seriesAuthors(group), covers })
-    }
-    return info
-  }, [books.data])
-
-  // Prázdné série v seznamu jen překážejí – zůstávají po přesunu knih jinam
-  // nebo po importu metadat. Stejně jako u autorů je schováváme; založit
-  // a naplnit sérii jde dál přes výběr knih.
-  const withBooks = useMemo(
-    () => (series.data ?? []).filter((item) => (infoBySeries.get(item.id)?.count ?? 0) > 0),
-    [series.data, infoBySeries],
-  )
-
-  const filtered = useMemo(() => {
-    const needle = foldName(query)
-    if (!needle) return withBooks
-
-    // Hledá se podle názvu série i podle jmen autorů, ať se série najde
-    // i pod autorem („weaver“ → David Raker).
-    return withBooks.filter((item) => {
-      const info = infoBySeries.get(item.id) ?? EMPTY
-      return (
-        foldName(item.title).includes(needle) ||
-        info.authors.some((author) => foldName(author.name).includes(needle))
-      )
-    })
-  }, [withBooks, infoBySeries, query])
-
-  if (series.isPending) {
-    return (
-      <>
-        <PageHeader title={t('series.list.title')} />
-        <LoadingList />
-      </>
-    )
-  }
-
-  if (series.isError) {
-    return (
-      <>
-        <PageHeader title={t('series.list.title')} />
-        <ErrorState error={series.error} onRetry={() => void series.refetch()} />
-      </>
-    )
-  }
+  const total = series.total ?? 0
 
   return (
     <>
       <PageHeader
         sticky
         title={t('series.list.title')}
-        description={t('series.list.total', { count: withBooks.length })}
+        description={q || series.total === undefined ? undefined : t('series.list.total', { count: total })}
         actions={
           <Input
             type="search"
@@ -113,50 +45,61 @@ export function SeriesPage() {
         }
       />
 
-      {filtered.length === 0 ? (
+      {series.total === undefined ? (
+        series.isError ? (
+          <ErrorState error={series.error} onRetry={series.refetch} />
+        ) : (
+          <LoadingList />
+        )
+      ) : total === 0 ? (
         <EmptyState
           icon={LayersIcon}
-          title={query ? t('series.list.noResults') : t('series.list.empty')}
+          title={q ? t('series.list.noResults') : t('series.list.empty')}
           description={
-            query
+            q
               ? t('series.list.noResultsHint')
               : t('series.list.emptyHint')
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 @2xl:grid-cols-2 @4xl:grid-cols-3">
-          {filtered.map((item) => {
-            const info = infoBySeries.get(item.id) ?? EMPTY
+        <VirtualGrid
+          count={total}
+          columns={columnsByWidth(340, 16, 1)}
+          estimateRowHeight={() => 104}
+          onRangeChange={series.setRange}
+          renderItem={(index) => {
+            const item = series.getItem(index)
+            if (!item) return <Skeleton className="h-26 rounded-2xl" />
             return (
-              <Link key={item.id} to={`/series/${item.id}`} className="group rounded-2xl">
+              <Link to={`/series/${item.id}`} className="group rounded-2xl">
                 <Card className="@container h-full transition duration-200 group-hover:-translate-y-0.5 group-hover:shadow-glass-lg group-hover:ring-primary/30 motion-reduce:transition-none">
                   <CardContent className="flex items-center gap-3">
-                    <SeriesCoverStack books={info.covers} />
+                    <SeriesCoverStack books={item.covers} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-semibold transition-colors group-hover:text-primary">
                         {item.title}
                       </p>
                       <p className="mt-0.5 truncate text-sm text-muted-foreground">
-                        {authorsLabel(info.authors)}
+                        {authorsLabel(item.authors)}
                       </p>
                       {/* Na úzké kartě by štítek vedle textu ukrojil název,
                           počet dílů se proto přesune pod něj. */}
                       <p className="mt-0.5 text-xs text-muted-foreground @min-[24rem]:hidden">
-                        {bookCount(info.count)}
+                        {bookCount(item.book_count)}
                       </p>
                     </div>
                     <Badge
                       variant="highlight"
                       className="hidden shrink-0 @min-[24rem]:inline-flex"
                     >
-                      {bookCount(info.count)}
+                      {bookCount(item.book_count)}
                     </Badge>
                   </CardContent>
                 </Card>
               </Link>
             )
-          })}
-        </div>
+          }}
+        />
       )}
     </>
   )

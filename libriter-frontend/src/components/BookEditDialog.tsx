@@ -3,18 +3,19 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import {
-  useAuthors,
+  findAuthorByName,
+  findSeriesByTitle,
   useCreateAuthor,
   useCreateSeries,
   useLanguages,
   usePatchBook,
-  useSeriesList,
+  useSeriesOne,
   useSetBookCover,
   useUploadBookCover,
 } from '@/api/hooks'
 import {
   METADATA_SOURCE_LABELS,
-  type Author,
+  type AuthorRef,
   type Book,
   type BookMetadataAuthor,
   type BookPatchRequest,
@@ -24,6 +25,7 @@ import { BookCover } from '@/components/BookCover'
 import { ImageUploadButton } from '@/components/ImageUploadButton'
 import { LanguageSelect } from '@/components/LanguageSelect'
 import { MetadataImport } from '@/components/MetadataImport'
+import { SeriesPicker } from '@/components/SeriesPicker'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -44,7 +46,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { joinDuration, languageLabel, sameName, splitDuration } from '@/lib/format'
+import { joinDuration, languageLabel, splitDuration } from '@/lib/format'
 
 /** Hodnota Selectu pro „nic nevybráno“ – Radix nedovolí prázdný řetězec. */
 const NONE = 'none'
@@ -97,9 +99,11 @@ function BookEditForm({
   const initialDuration = splitDuration(book.duration_seconds)
 
   const [title, setTitle] = useState(book.title)
-  const [authors, setAuthors] = useState<Author[]>(book.authors ?? [])
+  const [authors, setAuthors] = useState<AuthorRef[]>(book.authors ?? [])
   const [newAuthors, setNewAuthors] = useState<NewAuthor[]>([])
   const [seriesId, setSeriesId] = useState(book.series_id ?? NONE)
+  // Název série vybrané v našeptávači; původní série knihy se dočte zvlášť.
+  const [pickedSeriesTitle, setPickedSeriesTitle] = useState<string | null>(null)
   const [newSeriesTitle, setNewSeriesTitle] = useState('')
   const [seriesPosition, setSeriesPosition] = useState(String(book.series_position ?? ''))
   const [narrator, setNarrator] = useState(book.narrator ?? '')
@@ -117,9 +121,8 @@ function BookEditForm({
   const [publishedYear, setPublishedYear] = useState(String(book.published_year ?? ''))
   const [description, setDescription] = useState(book.description ?? '')
 
-  const authorList = useAuthors()
   const languages = useLanguages()
-  const seriesList = useSeriesList()
+  const bookSeries = useSeriesOne(book.series_id ?? '')
   const createAuthor = useCreateAuthor()
   const createSeries = useCreateSeries()
   const patchBook = usePatchBook(book.id)
@@ -152,14 +155,18 @@ function BookEditForm({
    * založí až při uložení a vrátí se na místo, kde ho uvádí zdroj (první autor
    * je hlavní). Seznam je vidět před uložením, takže jde ručně doplnit zpátky.
    */
-  function applyAuthors(imported: BookMetadataAuthor[]) {
-    const known: Author[] = []
+  async function applyAuthors(imported: BookMetadataAuthor[]) {
+    const known: AuthorRef[] = []
     const missing: NewAuthor[] = []
 
+    // Knihovna může mít tisíce autorů – každé jméno se dohledá na serveru.
+    const matches = await Promise.all(
+      imported.map((author) => findAuthorByName(author.name).catch(() => undefined)),
+    )
     imported.forEach((author, index) => {
-      const match = (authorList.data ?? []).find((a) => sameName(a.name, author.name))
+      const match = matches[index]
       if (match) {
-        known.push(match)
+        known.push({ id: match.id, name: match.name })
       } else {
         missing.push({ ...author, index })
       }
@@ -174,12 +181,22 @@ function BookEditForm({
    * jinak přepne na „Nová série…“ s předvyplněným názvem. Nic se nezakládá,
    * dokud uživatel neuloží – import zůstává jen předvyplněním formuláře.
    */
-  function applySeries(name: string, position: number) {
-    const known = (seriesList.data ?? []).find((series) => sameName(series.title, name))
-    setSeriesId(known ? known.id : NEW)
-    if (!known) setNewSeriesTitle(name)
+  async function applySeries(name: string, position: number) {
     if (position > 0) setSeriesPosition(String(position))
+    const known = await findSeriesByTitle(name).catch(() => undefined)
+    setSeriesId(known ? known.id : NEW)
+    if (known) setPickedSeriesTitle(known.title)
+    else setNewSeriesTitle(name)
   }
+
+  const seriesLabel =
+    seriesId === NONE
+      ? t('books.editDialog.noSeries')
+      : seriesId === NEW
+        ? t('books.editDialog.newSeries')
+        : (pickedSeriesTitle ??
+          (seriesId === book.series_id ? bookSeries.data?.title : undefined) ??
+          t('common.loading'))
 
   /**
    * Tělo požadavku vzniká porovnáním s načtenou knihou – PATCH nese jen to, co
@@ -367,10 +384,10 @@ function BookEditForm({
         onApply={(meta) => {
           if (meta.title) setTitle(meta.title)
           if (meta.narrator) setNarrator(meta.narrator)
-          if (meta.authors?.length) applyAuthors(meta.authors)
+          if (meta.authors?.length) void applyAuthors(meta.authors)
           if (meta.description) setDescription(meta.description)
           if (meta.year) setPublishedYear(String(meta.year))
-          if (meta.series) applySeries(meta.series, meta.series_position)
+          if (meta.series) void applySeries(meta.series, meta.series_position)
           setSourceLanguage(meta.language || null)
           setSourceCover(meta.cover_url || null)
           setUseSourceCover(Boolean(meta.cover_url) && !book.cover_path)
@@ -473,20 +490,19 @@ function BookEditForm({
       <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
         <div className="space-y-2">
           <Label htmlFor="book_series">{t('books.editDialog.series')}</Label>
-          <Select value={seriesId} onValueChange={setSeriesId}>
-            <SelectTrigger id="book_series" className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={NONE}>{t('books.editDialog.noSeries')}</SelectItem>
-              <SelectItem value={NEW}>{t('books.editDialog.newSeries')}</SelectItem>
-              {(seriesList.data ?? []).map((series) => (
-                <SelectItem key={series.id} value={series.id}>
-                  {series.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <SeriesPicker
+            id="book_series"
+            value={seriesId}
+            label={seriesLabel}
+            extra={[
+              { value: NONE, label: t('books.editDialog.noSeries') },
+              { value: NEW, label: t('books.editDialog.newSeries') },
+            ]}
+            onChange={(value, label) => {
+              setSeriesId(value)
+              setPickedSeriesTitle(value === NONE || value === NEW ? null : label)
+            }}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="book_series_position">{t('books.editDialog.position')}</Label>

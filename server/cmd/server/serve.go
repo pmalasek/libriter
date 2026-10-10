@@ -18,6 +18,7 @@ import (
 	"mediater/internal/core/db"
 	corehandler "mediater/internal/core/handler"
 	"mediater/internal/core/httpx"
+	"mediater/internal/core/imgthumb"
 	"mediater/internal/core/middleware"
 	"mediater/internal/core/plugin"
 	"mediater/internal/core/product"
@@ -95,6 +96,7 @@ func runServe() error {
 		Audit:          service.NewAudit(coreStore),
 		Plugins:        pluginHost,
 		PluginSettings: pluginSettings,
+		Thumbs:         imgthumb.New(cfg.Storage.ThumbRoot),
 		StartedAt:      startedAt,
 	}
 
@@ -157,6 +159,9 @@ func newRouter(cfg *config.Config, deps product.Deps, prods []product.Product) h
 		// Neznámé API cesty musí vracet JSON, ne index.html z SPA handleru níže.
 		r.NotFound(httpx.NotFoundJSON)
 		r.MethodNotAllowed(httpx.MethodNotAllowedJSON)
+		// Výpisy velkých knihoven jsou stovky kB JSONu; komprimuje se jen
+		// JSON, audio, video a obrázky jdou beze změny (a s Range).
+		r.Use(chimw.Compress(5, "application/json"))
 
 		corehandler.RegisterRoutes(r, deps.Auth, corehandler.Handlers{
 			Auth:    corehandler.NewAuth(deps.Auth, deps.Registration),

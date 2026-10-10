@@ -145,3 +145,16 @@ export function initials(name: string): string {
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
+
+/**
+ * Adresa zmenšeniny obrázku pro zobrazení široké `cssWidth` px. Server
+ * vybere nejbližší vyšší podporovanou šířku (160/320/640) a drží ji v cache;
+ * bez šířky (nebo na velkých plochách) se pošle originál.
+ */
+export function thumbUrl(url: string, cssWidth?: number): string {
+  if (!cssWidth) return url
+  const dpr = typeof window !== 'undefined' && window.devicePixelRatio ? window.devicePixelRatio : 1
+  const width = Math.ceil(cssWidth * Math.min(dpr, 2))
+  if (width > 640) return url
+  return `${url}${url.includes('?') ? '&' : '?'}w=${width}`
+}

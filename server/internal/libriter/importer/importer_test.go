@@ -11,6 +11,7 @@ import (
 
 	"mediater/internal/core/config"
 	"mediater/internal/core/db"
+	"mediater/internal/libriter/migrations"
 	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/scanner"
 	"mediater/internal/libriter/storage"
@@ -305,6 +306,9 @@ func TestImportEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
+	if err := migrations.Apply(ctx, conn); err != nil {
+		t.Fatal(err)
+	}
 	store := storage.New(conn)
 
 	base := t.TempDir()

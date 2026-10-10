@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
+	"mediater/internal/core/textfold"
 	"mediater/internal/sceniter/model"
 )
 
@@ -48,62 +50,118 @@ func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, e
 type MovieFilter struct {
 	// Library omezí výpis na jednu knihovnu (uuid.Nil = všechny zapnuté).
 	Library uuid.UUID
-	Query   string // podřetězec názvu nebo původního názvu
+	Query   string // podřetězec názvu nebo původního názvu (bez ohledu na diakritiku)
 	Genre   string
 	Sort    string // title | year | added | rating
 	Limit   int    // 0 = bez omezení
+	Offset  int
 	// WithoutFiles zahrne i filmy bez souborů – pro administraci párování.
 	WithoutFiles bool
 	MatchState   string
 	// RetryDays vynechá tituly, jejichž automatické párování se nepovedlo
 	// před méně než RetryDays dny (0 = nevynechávat).
 	RetryDays int
+	// Attempted rozdělí nespárované tituly: true = párování se nepovedlo,
+	// false = ještě se nezkoušelo, nil = obojí.
+	Attempted *bool
+}
+
+// titleWhere složí podmínky výpisu filmů nebo seriálů (alias tabulky t).
+// Podmínka „má soubor“ je v WHERE, ne v JOINu, aby SQLite mohl procházet
+// titulky v pořadí indexu a nemusel třídit celou knihovnu.
+func titleWhere(kind string, library uuid.UUID, query, genre, matchState string, retryDays int, attempted *bool, withoutFiles bool) (string, []any) {
+	args := []any{}
+	add := func(v any) string {
+		args = append(args, v)
+		return fmt.Sprintf("?%d", len(args))
+	}
+	conds := []string{"l.enabled = 1"}
+	if library != uuid.Nil {
+		conds = append(conds, "t.library_id = "+add(library))
+	}
+	if !withoutFiles {
+		if kind == "show" {
+			conds = append(conds, `EXISTS (SELECT 1 FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
+				JOIN sc_media_files mf ON mf.episode_id = e.id WHERE se.show_id = t.id)`)
+		} else {
+			conds = append(conds, "EXISTS (SELECT 1 FROM sc_media_files f WHERE f.movie_id = t.id)")
+		}
+	}
+	if query != "" {
+		p := add(textfold.LikePattern(query))
+		conds = append(conds, fmt.Sprintf(`(fold(t.title) LIKE %[1]s ESCAPE '\' OR fold(t.original_title) LIKE %[1]s ESCAPE '\')`, p))
+	}
+	if genre != "" {
+		table, col := "sc_movie_genres", "movie_id"
+		if kind == "show" {
+			table, col = "sc_show_genres", "show_id"
+		}
+		conds = append(conds, fmt.Sprintf(`EXISTS (SELECT 1 FROM %s x JOIN sc_genres g ON g.id = x.genre_id
+			WHERE x.%s = t.id AND g.name = %s)`, table, col, add(genre)))
+	}
+	if matchState != "" {
+		conds = append(conds, "t.match_state = "+add(matchState))
+	}
+	if retryDays > 0 {
+		conds = append(conds, fmt.Sprintf(`(t.match_attempted_at IS NULL OR t.match_attempted_at < datetime('now', %s))`,
+			add(fmt.Sprintf("-%d days", retryDays))))
+	}
+	if attempted != nil {
+		if *attempted {
+			conds = append(conds, "t.match_attempted_at IS NOT NULL")
+		} else {
+			conds = append(conds, "t.match_attempted_at IS NULL")
+		}
+	}
+	return strings.Join(conds, " AND "), args
+}
+
+// titleOrder je řazení výpisu; vždy končí jedinečným id, aby stránky na
+// sebe navazovaly. Rok a hodnocení sestupně dávají NULL na konec samy.
+func titleOrder(sort string) string {
+	switch sort {
+	case "year":
+		return ` ORDER BY t.year DESC, t.title, t.id`
+	case "added":
+		return ` ORDER BY t.created_at DESC, t.title, t.id`
+	case "rating":
+		return ` ORDER BY t.rating DESC, t.title, t.id`
+	default:
+		return ` ORDER BY t.title, t.id`
+	}
+}
+
+func limitOffset(limit, offset int) string {
+	if limit <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(` LIMIT %d OFFSET %d`, limit, max(offset, 0))
+}
+
+func (f MovieFilter) where() (string, []any) {
+	return titleWhere("movie", f.Library, f.Query, f.Genre, f.MatchState, f.RetryDays, f.Attempted, f.WithoutFiles)
+}
+
+// CountMovies vrátí počet filmů odpovídajících filtru (Limit a Offset se nepoužijí).
+func (s *Store) CountMovies(ctx context.Context, f MovieFilter) (int, error) {
+	where, args := f.where()
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sc_movies t JOIN sc_libraries l ON l.id = t.library_id WHERE `+where, args...).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count movies: %w", err)
+	}
+	return n, nil
 }
 
 // ListMovies vrátí filmy, které mají aspoň jeden soubor.
 func (s *Store) ListMovies(ctx context.Context, f MovieFilter) ([]model.Movie, error) {
-	q := `SELECT ` + movieCols + `, mf.id, mf.duration_sec FROM sc_movies m `
-	if f.WithoutFiles {
-		q += `LEFT JOIN sc_media_files mf ON mf.id = ` + mainMovieFile
-	} else {
-		q += `JOIN sc_media_files mf ON mf.id = ` + mainMovieFile
-	}
-	q += ` JOIN sc_libraries l ON l.id = m.library_id WHERE l.enabled = 1`
-	args := []any{}
-	if f.Library != uuid.Nil {
-		args = append(args, f.Library)
-		q += fmt.Sprintf(` AND m.library_id = ?%d`, len(args))
-	}
-	if f.Query != "" {
-		args = append(args, likePattern(f.Query))
-		q += fmt.Sprintf(` AND (m.title LIKE ?%d ESCAPE '\' OR m.original_title LIKE ?%[1]d ESCAPE '\')`, len(args))
-	}
-	if f.Genre != "" {
-		args = append(args, f.Genre)
-		q += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM sc_movie_genres mg JOIN sc_genres g ON g.id = mg.genre_id
-			WHERE mg.movie_id = m.id AND g.name = ?%d)`, len(args))
-	}
-	if f.MatchState != "" {
-		args = append(args, f.MatchState)
-		q += fmt.Sprintf(` AND m.match_state = ?%d`, len(args))
-	}
-	if f.RetryDays > 0 {
-		args = append(args, fmt.Sprintf("-%d days", f.RetryDays))
-		q += fmt.Sprintf(` AND (m.match_attempted_at IS NULL OR m.match_attempted_at < datetime('now', ?%d))`, len(args))
-	}
-	switch f.Sort {
-	case "year":
-		q += ` ORDER BY m.year DESC NULLS LAST, m.title`
-	case "added":
-		q += ` ORDER BY m.created_at DESC, m.title`
-	case "rating":
-		q += ` ORDER BY m.rating DESC NULLS LAST, m.title`
-	default:
-		q += ` ORDER BY m.title`
-	}
-	if f.Limit > 0 {
-		q += fmt.Sprintf(` LIMIT %d`, f.Limit)
-	}
+	where, args := f.where()
+	// Hlavní soubor se dohledá až pro řádky na stránce.
+	q := `SELECT ` + strings.ReplaceAll(movieCols, "m.", "t.") + `,
+		(SELECT id FROM sc_media_files WHERE movie_id = t.id ORDER BY size_bytes DESC, file_path LIMIT 1),
+		(SELECT duration_sec FROM sc_media_files WHERE movie_id = t.id ORDER BY size_bytes DESC, file_path LIMIT 1)
+		FROM sc_movies t JOIN sc_libraries l ON l.id = t.library_id
+		WHERE ` + where + titleOrder(f.Sort) + limitOffset(f.Limit, f.Offset)
 
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -127,7 +185,11 @@ func (s *Store) ListMovies(ctx context.Context, f MovieFilter) ([]model.Movie, e
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	genres, err := s.genresByID(ctx, "movie")
+	ids := make([]uuid.UUID, len(out))
+	for i := range out {
+		ids[i] = out[i].ID
+	}
+	genres, err := s.genresByID(ctx, "movie", ids)
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +217,7 @@ func (s *Store) GetMovie(ctx context.Context, id uuid.UUID) (*model.Movie, error
 		return nil, fmt.Errorf("get movie: %w", err)
 	}
 	m.MediaID, m.DurationSec = mediaID, ptrFloat(duration)
-	genres, err := s.genresByID(ctx, "movie")
+	genres, err := s.genresByID(ctx, "movie", []uuid.UUID{m.ID})
 	if err != nil {
 		return nil, err
 	}
@@ -168,18 +230,28 @@ func (s *Store) GetMovie(ctx context.Context, id uuid.UUID) (*model.Movie, error
 	return &m, nil
 }
 
-// genresByID vrátí žánry všech filmů (kind "movie") nebo seriálů ("show").
-func (s *Store) genresByID(ctx context.Context, kind string) (map[uuid.UUID][]string, error) {
+// genresByID vrátí žánry zadaných filmů (kind "movie") nebo seriálů ("show").
+func (s *Store) genresByID(ctx context.Context, kind string, ids []uuid.UUID) (map[uuid.UUID][]string, error) {
+	byID := map[uuid.UUID][]string{}
+	if len(ids) == 0 {
+		return byID, nil
+	}
 	table, col := "sc_movie_genres", "movie_id"
 	if kind == "show" {
 		table, col = "sc_show_genres", "show_id"
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT x.`+col+`, g.name FROM `+table+` x JOIN sc_genres g ON g.id = x.genre_id ORDER BY g.name`)
+	args := make([]any, len(ids))
+	marks := make([]string, len(ids))
+	for i, id := range ids {
+		args[i] = id
+		marks[i] = fmt.Sprintf("?%d", i+1)
+	}
+	rows, err := s.db.QueryContext(ctx, `SELECT x.`+col+`, g.name FROM `+table+` x JOIN sc_genres g ON g.id = x.genre_id
+		WHERE x.`+col+` IN (`+strings.Join(marks, ", ")+`) ORDER BY g.name`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("genres: %w", err)
 	}
 	defer rows.Close()
-	byID := map[uuid.UUID][]string{}
 	for rows.Next() {
 		var (
 			id   uuid.UUID
@@ -240,54 +312,34 @@ type ShowFilter struct {
 	Genre        string
 	Sort         string // title | year | added | rating
 	Limit        int
+	Offset       int
 	WithoutFiles bool
 	MatchState   string
-	RetryDays    int // viz MovieFilter.RetryDays
+	RetryDays    int   // viz MovieFilter.RetryDays
+	Attempted    *bool // viz MovieFilter.Attempted
+}
+
+func (f ShowFilter) where() (string, []any) {
+	return titleWhere("show", f.Library, f.Query, f.Genre, f.MatchState, f.RetryDays, f.Attempted, f.WithoutFiles)
+}
+
+// CountShows vrátí počet seriálů odpovídajících filtru (Limit a Offset se nepoužijí).
+func (s *Store) CountShows(ctx context.Context, f ShowFilter) (int, error) {
+	where, args := f.where()
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM sc_shows t JOIN sc_libraries l ON l.id = t.library_id WHERE `+where, args...).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("count shows: %w", err)
+	}
+	return n, nil
 }
 
 // ListShows vrátí seriály, které mají aspoň jeden díl se souborem.
 func (s *Store) ListShows(ctx context.Context, f ShowFilter) ([]model.Show, error) {
-	q := `SELECT ` + showCols + `, ` + showCounts + ` FROM sc_shows s
-		JOIN sc_libraries l ON l.id = s.library_id WHERE l.enabled = 1`
-	args := []any{}
-	if f.Library != uuid.Nil {
-		args = append(args, f.Library)
-		q += fmt.Sprintf(` AND s.library_id = ?%d`, len(args))
-	}
-	if !f.WithoutFiles {
-		q += ` AND EXISTS (SELECT 1 FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
-			JOIN sc_media_files mf ON mf.episode_id = e.id WHERE se.show_id = s.id)`
-	}
-	if f.Query != "" {
-		args = append(args, likePattern(f.Query))
-		q += fmt.Sprintf(` AND (s.title LIKE ?%d ESCAPE '\' OR s.original_title LIKE ?%[1]d ESCAPE '\')`, len(args))
-	}
-	if f.Genre != "" {
-		args = append(args, f.Genre)
-		q += fmt.Sprintf(` AND EXISTS (SELECT 1 FROM sc_show_genres sg JOIN sc_genres g ON g.id = sg.genre_id
-			WHERE sg.show_id = s.id AND g.name = ?%d)`, len(args))
-	}
-	if f.MatchState != "" {
-		args = append(args, f.MatchState)
-		q += fmt.Sprintf(` AND s.match_state = ?%d`, len(args))
-	}
-	if f.RetryDays > 0 {
-		args = append(args, fmt.Sprintf("-%d days", f.RetryDays))
-		q += fmt.Sprintf(` AND (s.match_attempted_at IS NULL OR s.match_attempted_at < datetime('now', ?%d))`, len(args))
-	}
-	switch f.Sort {
-	case "year":
-		q += ` ORDER BY s.year DESC NULLS LAST, s.title`
-	case "added":
-		q += ` ORDER BY s.updated_at DESC, s.title`
-	case "rating":
-		q += ` ORDER BY s.rating DESC NULLS LAST, s.title`
-	default:
-		q += ` ORDER BY s.title`
-	}
-	if f.Limit > 0 {
-		q += fmt.Sprintf(` LIMIT %d`, f.Limit)
-	}
+	where, args := f.where()
+	cols := strings.ReplaceAll(showCols, "s.", "t.") + `, ` + strings.ReplaceAll(showCounts, "= s.id", "= t.id")
+	q := `SELECT ` + cols + ` FROM sc_shows t JOIN sc_libraries l ON l.id = t.library_id
+		WHERE ` + where + titleOrder(f.Sort) + limitOffset(f.Limit, f.Offset)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list shows: %w", err)
@@ -304,7 +356,11 @@ func (s *Store) ListShows(ctx context.Context, f ShowFilter) ([]model.Show, erro
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	genres, err := s.genresByID(ctx, "show")
+	ids := make([]uuid.UUID, len(out))
+	for i := range out {
+		ids[i] = out[i].ID
+	}
+	genres, err := s.genresByID(ctx, "show", ids)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +382,7 @@ func (s *Store) GetShow(ctx context.Context, id uuid.UUID) (*model.Show, error) 
 	if err != nil {
 		return nil, fmt.Errorf("get show: %w", err)
 	}
-	genres, err := s.genresByID(ctx, "show")
+	genres, err := s.genresByID(ctx, "show", []uuid.UUID{sh.ID})
 	if err != nil {
 		return nil, err
 	}

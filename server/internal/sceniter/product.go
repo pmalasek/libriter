@@ -65,6 +65,7 @@ func (p *Product) Init(d product.Deps) error {
 		Subs: stream.NewSubtitles(filepath.Join(cfg.TranscodeRoot, "subs")),
 		Auth: d.Auth, Audit: d.Audit,
 		VideoRoot: cfg.VideoRoot, ImageRoot: cfg.ImageRoot, MaxHeight: cfg.TranscodeMaxHeight,
+		Thumbs: d.Thumbs,
 	}
 
 	if cfg.Enabled() {

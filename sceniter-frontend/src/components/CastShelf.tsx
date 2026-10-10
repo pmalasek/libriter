@@ -50,7 +50,7 @@ export function CastShelf({ credits }: { credits: Credit[] }) {
         <Shelf title={t('video.detail.castSection')} className="mt-0">
           {cast.map((c) => (
             <ShelfItem key={c.person_id}>
-              <PersonCard id={c.person_id} name={c.name} photo={profileUrl(c)} caption={c.character} />
+              <PersonCard id={c.person_id} name={c.name} photo={profileUrl(c, 160)} caption={c.character} />
             </ShelfItem>
           ))}
         </Shelf>

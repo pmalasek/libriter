@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import type { Book } from '@/api/types'
+import type { BookSummary } from '@/api/types'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,8 +22,8 @@ export function ContinueSeriesDialog({
   onContinue,
   onDismiss,
 }: {
-  book: Book | null
-  onContinue: (book: Book) => void
+  book: BookSummary | null
+  onContinue: (book: BookSummary) => void
   onDismiss: () => void
 }) {
   const { t } = useTranslation()

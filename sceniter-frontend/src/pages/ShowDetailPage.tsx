@@ -16,9 +16,10 @@ import {
 import { useAuth } from 'core-web/src/auth/AuthContext'
 import { ErrorState } from 'core-web/src/components/ErrorState'
 import { Button } from 'core-web/src/components/ui/button'
+import { Skeleton } from 'core-web/src/components/ui/skeleton'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from 'core-web/src/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'core-web/src/components/ui/select'
-import { useSetWatched, useShow } from '@/api/hooks'
+import { useSeason, useSetWatched, useShow } from '@/api/hooks'
 import { Attribution } from '@/components/Attribution'
 import { CastShelf, KeyCrew } from '@/components/CastShelf'
 import { DetailSkeleton, Expandable, GenreChips, SimilarShelf } from '@/components/DetailParts'
@@ -30,6 +31,9 @@ import { TitleActions } from '@/components/TitleActions'
 import { MetadataMatch } from '@/components/MetadataMatch'
 import { ExternalLinks, SourceRating } from '@/components/MetaSource'
 
+/** Největší šířka náhledu dílu v řádku (CSS px). */
+const STILL_WIDTH = 192
+
 function EpisodeRow({ e }: { e: EpisodeWithProgress }) {
   const { t } = useTranslation()
   const setWatched = useSetWatched()
@@ -37,7 +41,12 @@ function EpisodeRow({ e }: { e: EpisodeWithProgress }) {
   return (
     <li className="glass inset-shadow-glass flex gap-4 rounded-2xl p-3 ring-1 ring-glass-edge">
       <Link to={`/watch/episode/${e.id}`} className="group relative w-36 shrink-0 sm:w-48" aria-label={t('video.detail.play')}>
-        <Poster src={imageUrl(e.still_path) ?? imageUrl(e.show_backdrop_path)} title={t('video.detail.episode', { number: e.number })} aspect="still" className="rounded-xl" />
+        <Poster
+          src={imageUrl(e.still_path, undefined, STILL_WIDTH) ?? imageUrl(e.show_backdrop_path, undefined, STILL_WIDTH)}
+          title={t('video.detail.episode', { number: e.number })}
+          aspect="still"
+          className="rounded-xl"
+        />
         <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/0 text-white opacity-0 transition group-hover:bg-black/30 group-hover:opacity-100">
           <PlayIcon className="size-8" />
         </span>
@@ -78,12 +87,16 @@ export function ShowDetailPage() {
   const [editing, setEditing] = useState(false)
   const [matching, setMatching] = useState(false)
 
-  if (show.isError) return <ErrorState error={show.error} onRetry={() => void show.refetch()} />
   const s = show.data
-  if (!s) return <DetailSkeleton />
+  const up = s?.up_next
+  const current = s
+    ? (s.seasons.find((x) => x.number === (season ?? up?.season ?? s.seasons[0]?.number)) ?? s.seasons[0])
+    : undefined
+  // Díly se načítají po řadách – seriál o stovkách dílů nepřijde najednou.
+  const episodes = useSeason(id, current?.number)
 
-  const up = s.up_next
-  const current = s.seasons.find((x) => x.number === (season ?? up?.season ?? s.seasons[0]?.number)) ?? s.seasons[0]
+  if (show.isError) return <ErrorState error={show.error} onRetry={() => void show.refetch()} />
+  if (!s) return <DetailSkeleton />
   const seasonLabel = (n: number) => (n === 0 ? t('video.detail.specials') : t('video.detail.season', { number: n }))
 
   return (
@@ -148,11 +161,16 @@ export function ShowDetailPage() {
               </Select>
             ) : null}
           </div>
-          {current.overview ? <p className="mb-4 max-w-3xl text-sm text-muted-foreground">{current.overview}</p> : null}
+          {episodes.data?.overview ? (
+            <p className="mb-4 max-w-3xl text-sm text-muted-foreground">{episodes.data.overview}</p>
+          ) : null}
+          {episodes.isError ? <ErrorState error={episodes.error} onRetry={() => void episodes.refetch()} /> : null}
           <ul className="grid gap-3">
-            {current.episodes.map((e) => (
-              <EpisodeRow key={e.id} e={e} />
-            ))}
+            {episodes.data
+              ? episodes.data.episodes.map((e) => <EpisodeRow key={e.id} e={e} />)
+              : Array.from({ length: Math.min(current.episode_count, 6) }, (_, i) => (
+                  <Skeleton key={i} className="h-28 rounded-2xl sm:h-32" />
+                ))}
           </ul>
         </section>
       ) : null}

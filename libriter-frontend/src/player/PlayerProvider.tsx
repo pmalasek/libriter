@@ -2,11 +2,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { API_PREFIX, ApiError, apiFetch } from '@/api/client'
-import { chaptersQuery, queryKeys, useBooks } from '@/api/hooks'
+import { chaptersQuery, queryKeys, useBook } from '@/api/hooks'
 import {
   t,
+  listQuery,
   type Book,
   type BookProgress,
+  type BookSummary,
+  type Page,
   type Chapter,
   type CreateSessionRequest,
   type PlaySession,
@@ -64,6 +67,9 @@ const streamTokenQuery = {
 /** Rozdíl pozice, od kterého se přebírá stav z jiného zařízení. */
 const REMOTE_DRIFT_SECONDS = 3
 
+/** Kolik dílů série se načte při hledání dalšího dílu (víc série nemívá). */
+const SERIES_PARTS_LIMIT = 500
+
 interface Track {
   bookId: string
   chapterId: string
@@ -85,7 +91,6 @@ export function PlayerProvider({ children }: { children: React.ReactNode }) {
 
 function ActivePlayer({ children }: { children: React.ReactNode }) {
   const queryClient = useQueryClient()
-  const books = useBooks()
 
   const [session, setSession] = useState<PlaySession | null>(null)
   const [track, setTrack] = useState<Track | null>(null)
@@ -100,7 +105,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
   // ikona pak sedí a jedno kliknutí zvuk vrátí.
   const [muted, setMuted] = useState(() => volume === 0)
   // Další díl série nabízený po doposlechnutí knihy, která poslech uzavřela.
-  const [seriesOffer, setSeriesOffer] = useState<Book | null>(null)
+  const [seriesOffer, setSeriesOffer] = useState<BookSummary | null>(null)
 
   // Zvuk musí přežít překreslení, proto element i vše, co se čte v jeho
   // událostech, drží ref – z posluchače by uzávěr viděl starý stav.
@@ -125,15 +130,38 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
     return audioRef.current
   }
 
-  const book = useMemo(() => {
-    if (!track) return null
-    return (books.data ?? []).find((b) => b.id === track.bookId) ?? null
-  }, [books.data, track])
+  // Jen hrající kniha – celá knihovna se kvůli přehrávači nestahuje.
+  const bookQuery = useBook(track?.bookId ?? '')
+  const book = track && bookQuery.data?.id === track.bookId ? bookQuery.data : null
 
   const chapter = useMemo(() => {
     if (!track) return null
     return chapters.find((c) => c.id === track.chapterId) ?? null
   }, [chapters, track])
+
+  /**
+   * Nabídne další díl série po doposlechnuté knize. Díly série se dotáhnou
+   * ze serveru (jedna stránka výpisu) – knihovna se kvůli tomu nedrží v paměti.
+   */
+  const offerNextInSeries = useCallback(async (bookId: string) => {
+    try {
+      const finished = await queryClient.fetchQuery({
+        queryKey: queryKeys.book(bookId),
+        queryFn: () => apiFetch<Book>(`/books/${bookId}`),
+      })
+      if (!finished.series_id) return
+      const params = { series_id: finished.series_id, sort: 'title' }
+      const parts = await queryClient.fetchQuery({
+        queryKey: [...queryKeys.bookList(params), 'first', SERIES_PARTS_LIMIT],
+        queryFn: () =>
+          apiFetch<Page<BookSummary>>(`/books?${listQuery({ ...params, limit: SERIES_PARTS_LIMIT })}`),
+      })
+      const next = nextInSeries(parts.items, finished)
+      if (next) setSeriesOffer(next)
+    } catch {
+      // Bez nabídky dalšího dílu se poslech prostě zastaví.
+    }
+  }, [queryClient])
 
   // --- ukládání pozice ---
 
@@ -598,10 +626,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
       }
       // Kniha ze série uzavřela poslech: nabídne se její další díl.
       if (lastChapter && !hasNext && openTrack) {
-        const library = queryClient.getQueryData<Book[]>(queryKeys.books) ?? []
-        const finished = library.find((b) => b.id === openTrack.bookId)
-        const next = finished ? nextInSeries(library, finished) : undefined
-        if (next) setSeriesOffer(next)
+        void offerNextInSeries(openTrack.bookId)
       }
 
       step(1)
@@ -639,7 +664,7 @@ function ActivePlayer({ children }: { children: React.ReactNode }) {
       audio.removeEventListener('ended', onEnded)
       audio.removeEventListener('error', onError)
     }
-  }, [load, queryClient, savePosition, step, stepTarget])
+  }, [load, offerNextInSeries, queryClient, savePosition, step, stepTarget])
 
   // Pravidelný zápis během poslechu; v pauze není co ukládat.
   useEffect(() => {

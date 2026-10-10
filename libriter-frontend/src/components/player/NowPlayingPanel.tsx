@@ -36,7 +36,7 @@ export function NowPlayingPanel({
       {/* Záře z obálky nad panelem; maska ji nechá vyznít do ztracena. */}
       {book?.cover_path ? (
         <img
-          src={coverUrl(book)}
+          src={coverUrl(book, 160)}
           alt=""
           aria-hidden
           decoding="async"
@@ -52,6 +52,7 @@ export function NowPlayingPanel({
               book={book}
               key={book.id}
               lift={false}
+              width={208}
               className="w-44 shadow-glass-lg sm:w-52"
             />
           </Link>

@@ -1,7 +1,7 @@
 import { CheckCircle2Icon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import type { Book, PlaySession, Series } from '@/api/types'
+import type { BookSummary, PlaySession, SeriesSummary } from '@/api/types'
 import { BookCover } from '@/components/BookCover'
 import { SeriesCoverStack } from '@/components/SeriesCoverStack'
 import { Badge } from '@/components/ui/badge'
@@ -25,8 +25,8 @@ export function ListeningSessionRow({
   seriesById,
 }: {
   session: PlaySession
-  bookById: Map<string, Book>
-  seriesById: Map<string, Series>
+  bookById: ReadonlyMap<string, BookSummary>
+  seriesById: ReadonlyMap<string, SeriesSummary>
 }) {
   const { t } = useTranslation()
   const title = sessionTitle(session, bookById, seriesById)
@@ -41,7 +41,7 @@ export function ListeningSessionRow({
           <SeriesCoverStack books={books} />
         ) : currentBook ? (
           <Link to={`/books/${currentBook.id}`} className="shrink-0">
-            <BookCover book={currentBook} key={currentBook.id} lift={false} className="size-14" />
+            <BookCover book={currentBook} key={currentBook.id} lift={false} width={56} className="size-14" />
           </Link>
         ) : (
           <div className="size-14 shrink-0 rounded-2xl bg-muted" />

@@ -1,14 +1,14 @@
 import { ArrowUpIcon, ChevronsUpDownIcon, XIcon } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useAuthors } from '@/api/hooks'
-import type { Author } from '@/api/types'
+import { useDebouncedValue } from 'core-web/src/lib/paged'
+import { useAuthorPage } from '@/api/hooks'
+import type { AuthorRef, AuthorSummary } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { foldName } from '@/lib/format'
-import { catalogName, compareAuthorNames } from '@/lib/sorting'
+import { catalogName } from '@/lib/sorting'
 import { cn } from '@/lib/utils'
 
 /** Malé kulaté tlačítko uvnitř jmenovky autora. */
@@ -34,33 +34,35 @@ function ChipButton({
   )
 }
 
+/** Kolik autorů našeptávač ukáže – zbytek se dohledá psaním. */
+const SUGGESTIONS = 50
+
 /**
  * Výběr autora z knihovny: seznam je seřazený podle příjmení a jména se v něm
  * píšou katalogově („Čapek, Karel“), aby hledání podle příjmení sedělo
- * s pořadím. Filtruje se bez ohledu na diakritiku a velikost písmen.
+ * s pořadím. Hledá server bez ohledu na diakritiku a velikost písmen –
+ * knihovna může mít tisíce autorů, načítají se jen první shody.
  */
 function AuthorPicker({
-  available,
+  exclude,
   onPick,
 }: {
-  available: Author[]
-  onPick: (author: Author) => void
+  /** Už vybraní autoři – v nabídce se neopakují. */
+  exclude: ReadonlySet<string>
+  onPick: (author: AuthorSummary) => void
 }) {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const q = useDebouncedValue(query.trim())
+  const authors = useAuthorPage({ q, all: true }, SUGGESTIONS, open)
 
-  const sorted = useMemo(() => [...available].sort(compareAuthorNames), [available])
+  const matches = useMemo(
+    () => (authors.data?.items ?? []).filter((a) => !exclude.has(a.id)),
+    [authors.data, exclude],
+  )
 
-  const matches = useMemo(() => {
-    const q = foldName(query)
-    if (!q) return sorted
-    return sorted.filter(
-      (a) => foldName(catalogName(a)).includes(q) || foldName(a.name).includes(q),
-    )
-  }, [sorted, query])
-
-  function pick(author: Author) {
+  function pick(author: AuthorSummary) {
     onPick(author)
     setOpen(false)
     setQuery('')
@@ -80,10 +82,9 @@ function AuthorPicker({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          disabled={available.length === 0}
           className="w-full justify-between font-normal"
         >
-          {available.length ? t('books.authorsField.add') : t('books.authorsField.noMore')}
+          {t('books.authorsField.add')}
           <ChevronsUpDownIcon className="opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -118,8 +119,12 @@ function AuthorPicker({
               </li>
             ))}
           </ul>
+        ) : authors.isError ? (
+          <p className="px-2 py-1.5 text-sm text-destructive">{t('books.authorsField.loadFailed')}</p>
         ) : (
-          <p className="px-2 py-1.5 text-sm text-muted-foreground">{t('books.authorsField.noResults')}</p>
+          <p className="px-2 py-1.5 text-sm text-muted-foreground">
+            {authors.isPending ? t('common.loading') : t('books.authorsField.noResults')}
+          </p>
         )}
       </PopoverContent>
     </Popover>
@@ -128,8 +133,8 @@ function AuthorPicker({
 
 interface Props {
   /** Vybraní autoři v pořadí, ve kterém se uloží; první je hlavní. */
-  value: Author[]
-  onChange: (authors: Author[]) => void
+  value: AuthorRef[]
+  onChange: (authors: AuthorRef[]) => void
   /**
    * Zdroj metadat uvedl autory, které knihovna nezná – založí se při uložení
    * knihy. Prázdný výběr pak není chyba, na kterou se má upozorňovat.
@@ -143,12 +148,7 @@ interface Props {
  */
 export function BookAuthorsField({ value, onChange, hasPending = false }: Props) {
   const { t } = useTranslation()
-  const authors = useAuthors()
-
-  const available = useMemo(() => {
-    const selected = new Set(value.map((a) => a.id))
-    return (authors.data ?? []).filter((a) => !selected.has(a.id))
-  }, [authors.data, value])
+  const selected = useMemo(() => new Set(value.map((a) => a.id)), [value])
 
   function remove(id: string) {
     onChange(value.filter((a) => a.id !== id))
@@ -200,11 +200,10 @@ export function BookAuthorsField({ value, onChange, hasPending = false }: Props)
         <p className="text-sm text-destructive">{t('books.authorsField.required')}</p>
       )}
 
-      <AuthorPicker available={available} onPick={(author) => onChange([...value, author])} />
-
-      {authors.isError ? (
-        <p className="text-sm text-destructive">{t('books.authorsField.loadFailed')}</p>
-      ) : null}
+      <AuthorPicker
+        exclude={selected}
+        onPick={(author) => onChange([...value, { id: author.id, name: author.name }])}
+      />
     </div>
   )
 }

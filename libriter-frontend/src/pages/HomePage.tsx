@@ -9,8 +9,15 @@ import {
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { useBookProgress, useBooks, useSeriesById, useSeriesList, useSessions } from '@/api/hooks'
-import type { Book, PlaySession } from '@/api/types'
+import {
+  useBookPage,
+  useBookProgress,
+  useBooksByIds,
+  useSeriesByIds,
+  useSeriesPage,
+  useSessions,
+} from '@/api/hooks'
+import type { BookSummary, PlaySession } from '@/api/types'
 import { useAuth } from '@/auth/AuthContext'
 import { BookCard } from '@/components/BookCard'
 import { BookCover, coverUrl } from '@/components/BookCover'
@@ -40,15 +47,10 @@ export function HomePage() {
   const { t } = useTranslation()
   const { user } = useAuth()
   const sessions = useSessions()
-  const books = useBooks()
-  const seriesList = useSeriesList()
-  const { map: seriesById } = useSeriesById()
   const progress = useBookProgress()
-
-  const bookById = useMemo(
-    () => new Map((books.data ?? []).map((book) => [book.id, book])),
-    [books.data],
-  )
+  // Police jsou první stránky výpisů – celá knihovna se kvůli nim nestahuje.
+  const newestPage = useBookPage({ sort: 'added', dir: 'desc' }, SHELF_SIZE)
+  const seriesPage = useSeriesPage({}, SHELF_SIZE)
 
   // Rozposlouchané poslechy od naposledy otevřeného; ten první jde do hlavičky.
   const open = useMemo(
@@ -59,18 +61,40 @@ export function HomePage() {
     [sessions.data],
   )
 
-  const newest = useMemo(
+  const finishedIds = useMemo(
     () =>
-      [...(books.data ?? [])]
-        .sort((a, b) => b.created_at.localeCompare(a.created_at))
-        .slice(0, SHELF_SIZE),
-    [books.data],
+      [...progress.map.values()]
+        .filter((item) => item.finished_at)
+        .sort((a, b) => (b.finished_at ?? '').localeCompare(a.finished_at ?? ''))
+        .slice(0, SHELF_SIZE)
+        .map((item) => item.book_id),
+    [progress.map],
   )
+
+  // Knihy, které stránka ukazuje mimo police: poslech v hlavičce, aktuální
+  // knihy ostatních poslechů a doposlechnuté. Stahují se jen tyhle.
+  const neededIds = useMemo(
+    () => [
+      ...(open[0]?.items.map((item) => item.book_id) ?? []),
+      ...open.slice(1).map((session) => sessionProgress(session).bookId),
+      ...finishedIds,
+    ],
+    [open, finishedIds],
+  )
+  const { map: bookById } = useBooksByIds(neededIds)
+  const seriesIds = useMemo(
+    () => open.filter((session) => session.kind === 'series').map((session) => session.source_id),
+    [open],
+  )
+  const { map: seriesById } = useSeriesByIds(seriesIds)
+
+  const newest = newestPage.data?.items ?? []
+  const libraryCount = newestPage.data?.total ?? 0
 
   // Knihy z ostatních rozposlouchaných poslechů – ta z hlavičky se neopakuje.
   const continues = useMemo(() => {
     const seen = new Set<string>()
-    const list: Book[] = []
+    const list: BookSummary[] = []
     for (const session of open.slice(1)) {
       const current = sessionProgress(session).bookId
       const book = current ? bookById.get(current) : undefined
@@ -82,41 +106,13 @@ export function HomePage() {
   }, [open, bookById])
 
   const finished = useMemo(
-    () =>
-      [...progress.map.values()]
-        .filter((item) => item.finished_at)
-        .sort((a, b) => (b.finished_at ?? '').localeCompare(a.finished_at ?? ''))
-        .slice(0, SHELF_SIZE)
-        .flatMap((item) => {
-          const book = bookById.get(item.book_id)
-          return book ? [book] : []
-        }),
-    [progress.map, bookById],
+    () => finishedIds.flatMap((id) => bookById.get(id) ?? []),
+    [finishedIds, bookById],
   )
 
-  const seriesBooksById = useMemo(() => {
-    const m = new Map<string, Book[]>()
-    for (const book of books.data ?? []) {
-      if (!book.series_id) continue
-      const list = m.get(book.series_id) ?? []
-      list.push(book)
-      m.set(book.series_id, list)
-    }
-    // Ve stohu mají stát první díly, ne náhodné.
-    for (const list of m.values()) {
-      list.sort((a, b) => (a.series_position ?? 0) - (b.series_position ?? 0))
-    }
-    return m
-  }, [books.data])
+  const series = seriesPage.data?.items ?? []
 
-  // Série bez jediné knihy se neukazují – stejně jako v seznamu sérií. Prázdný
-  // stoh obálek by na polici nic neřekl.
-  const series = useMemo(
-    () => (seriesList.data ?? []).filter((item) => seriesBooksById.has(item.id)).slice(0, SHELF_SIZE),
-    [seriesList.data, seriesBooksById],
-  )
-
-  if (sessions.isPending || books.isPending) {
+  if (sessions.isPending || newestPage.isPending) {
     return (
       <>
         <Skeleton className="h-64 w-full rounded-3xl" />
@@ -141,7 +137,7 @@ export function HomePage() {
           bookById={bookById}
         />
       ) : (
-        <StartHero greeting={greeting} book={newest[0]} count={(books.data ?? []).length} />
+        <StartHero greeting={greeting} book={newest[0]} count={libraryCount} />
       )}
 
       <AndroidTestingLink />
@@ -172,12 +168,12 @@ export function HomePage() {
             <div key={item.id} className="w-44 shrink-0 snap-start">
               <Link to={`/series/${item.id}`} className="group block">
                 {/* Stoh v „lg“ má šířku police – menší by se vedle obálek knih ztratil. */}
-                <SeriesCoverStack books={seriesBooksById.get(item.id) ?? []} variant="lg" />
+                <SeriesCoverStack books={item.covers} variant="lg" />
                 <p className="mt-3 line-clamp-2 font-heading text-sm font-semibold tracking-tight transition-colors group-hover:text-primary">
                   {item.title}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {bookCount((seriesBooksById.get(item.id) ?? []).length)}
+                  {bookCount(item.book_count)}
                 </p>
               </Link>
             </div>
@@ -195,7 +191,7 @@ export function HomePage() {
         </Shelf>
       ) : null}
 
-      {(books.data ?? []).length === 0 ? (
+      {libraryCount === 0 ? (
         <EmptyState
           icon={LibraryIcon}
           title={t('layout.home.emptyTitle')}
@@ -215,8 +211,8 @@ function ContinueHero({
 }: {
   session: PlaySession
   title: string
-  books: Book[]
-  bookById: Map<string, Book>
+  books: BookSummary[]
+  bookById: ReadonlyMap<string, BookSummary>
 }) {
   const { t } = useTranslation()
   const player = usePlayer()
@@ -232,7 +228,7 @@ function ContinueHero({
     <section className="glass inset-shadow-glass relative isolate overflow-hidden rounded-3xl bg-brand-glow p-6 shadow-glass ring-1 ring-glass-edge md:p-8">
       {currentBook?.cover_path ? (
         <img
-          src={coverUrl(currentBook)}
+          src={coverUrl(currentBook, 160)}
           alt=""
           aria-hidden
           decoding="async"
@@ -250,6 +246,7 @@ function ContinueHero({
                 book={currentBook}
                 key={currentBook.id}
                 lift={false}
+                width={192}
                 className="shadow-glass-lg"
               />
             </Link>
@@ -316,7 +313,7 @@ function StartHero({
   count,
 }: {
   greeting: string
-  book: Book | undefined
+  book: BookSummary | undefined
   count: number
 }) {
   const { t } = useTranslation()
@@ -326,7 +323,7 @@ function StartHero({
     <section className="glass inset-shadow-glass relative isolate overflow-hidden rounded-3xl bg-brand-glow p-6 shadow-glass ring-1 ring-glass-edge md:p-8">
       {book?.cover_path ? (
         <img
-          src={coverUrl(book)}
+          src={coverUrl(book, 160)}
           alt=""
           aria-hidden
           decoding="async"
@@ -338,7 +335,7 @@ function StartHero({
         {book ? (
           <div className="w-32 shrink-0 sm:w-40 md:w-48">
             <Link to={`/books/${book.id}`}>
-              <BookCover book={book} key={book.id} lift={false} className="shadow-glass-lg" />
+              <BookCover book={book} key={book.id} lift={false} width={192} className="shadow-glass-lg" />
             </Link>
           </div>
         ) : null}

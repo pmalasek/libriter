@@ -14,6 +14,7 @@ import (
 	"mediater/internal/core/db"
 	"mediater/internal/core/imagestore"
 	"mediater/internal/libriter/metadata"
+	"mediater/internal/libriter/migrations"
 	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/scanner"
 	"mediater/internal/libriter/service"
@@ -30,6 +31,9 @@ func newUploadTestStore(t *testing.T) *storage.Store {
 		t.Fatalf("otevření databáze: %v", err)
 	}
 	t.Cleanup(func() { conn.Close() })
+	if err := migrations.Apply(context.Background(), conn); err != nil {
+		t.Fatalf("migrace knihovny: %v", err)
+	}
 	return storage.New(conn)
 }
 

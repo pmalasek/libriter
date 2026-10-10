@@ -168,8 +168,18 @@ func TestContinueAndUpNext(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.UpNext == nil || d.UpNext.ID != e2 || len(d.Seasons) != 2 || d.Seasons[0].Episodes[0].Progress == nil {
+	if d.UpNext == nil || d.UpNext.ID != e2 || len(d.Seasons) != 2 || d.Seasons[0].WatchedCount != 1 {
 		t.Fatalf("show detail %+v", d)
+	}
+	season, err := e.lib.Season(ctx, e.userID, shows[0].ID, d.Seasons[0].Number)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(season.Episodes) != d.Seasons[0].EpisodeCount || season.Episodes[0].Progress == nil {
+		t.Fatalf("řada %+v", season)
+	}
+	if _, err := e.lib.Season(ctx, e.userID, shows[0].ID, 99); !errors.Is(err, storage.ErrNotFound) {
+		t.Errorf("neexistující řada: %v", err)
 	}
 
 	// Poslední díl dokoukaný → seriál z „pokračovat“ zmizí.

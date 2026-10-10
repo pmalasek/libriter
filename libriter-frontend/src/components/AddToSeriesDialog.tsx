@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import { useAssignBooksToSeries, useSeriesList } from '@/api/hooks'
-import type { Book } from '@/api/types'
+import { useAssignBooksToSeries, useBookPage } from '@/api/hooks'
+import type { BookSummary } from '@/api/types'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -14,37 +14,31 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { SeriesPicker } from '@/components/SeriesPicker'
 import { authorNames, bookCount } from '@/lib/format'
 
-/** Hodnota Selectu pro založení nové série – Radix nedovolí prázdný řetězec. */
+/** Hodnota výběru pro založení nové série. */
 const NEW = 'new'
+
+/** Kolik dílů série se načte kvůli navázání číslování (víc série nemívá). */
+const SERIES_PARTS_LIMIT = 500
 
 interface Props {
   /** Vybrané knihy v pořadí, ve kterém se předvyplní díly. */
-  books: Book[]
-  /** Všechny knihy – kvůli navázání na díly, které už série má. */
-  allBooks: Book[]
+  books: BookSummary[]
   open: boolean
   onOpenChange: (open: boolean) => void
   /** Zavolá se po úspěšném zařazení (stránka zruší výběr). */
   onDone: () => void
 }
 
-export function AddToSeriesDialog({ books, allBooks, open, onOpenChange, onDone }: Props) {
+export function AddToSeriesDialog({ books, open, onOpenChange, onDone }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
         {open ? (
           <AddToSeriesForm
             books={books}
-            allBooks={allBooks}
             onCancel={() => onOpenChange(false)}
             onDone={() => {
               onOpenChange(false)
@@ -61,11 +55,11 @@ export function AddToSeriesDialog({ books, allBooks, open, onOpenChange, onDone 
  * Předvyplní díly: kniha, která už v cílové sérii je, si díl nechá; ostatní
  * dostanou čísla za posledním obsazeným dílem série, v pořadí výběru.
  */
-function defaultPositions(books: Book[], allBooks: Book[], seriesId: string | null) {
+function defaultPositions(books: BookSummary[], seriesBooks: BookSummary[], seriesId: string | null) {
   const selected = new Set(books.map((b) => b.id))
   let next = 0
   if (seriesId) {
-    for (const book of allBooks) {
+    for (const book of seriesBooks) {
       if (book.series_id === seriesId && !selected.has(book.id) && book.series_position != null) {
         next = Math.max(next, book.series_position)
       }
@@ -87,34 +81,45 @@ function defaultPositions(books: Book[], allBooks: Book[], seriesId: string | nu
 
 function AddToSeriesForm({
   books,
-  allBooks,
   onCancel,
   onDone,
 }: {
-  books: Book[]
-  allBooks: Book[]
+  books: BookSummary[]
   onCancel: () => void
   onDone: () => void
 }) {
   const { t } = useTranslation()
-  const seriesList = useSeriesList()
   const assign = useAssignBooksToSeries()
 
   const [seriesId, setSeriesId] = useState(NEW)
+  const [seriesTitle, setSeriesTitle] = useState('')
   const [newTitle, setNewTitle] = useState('')
-  const [positions, setPositions] = useState(() => defaultPositions(books, allBooks, null))
+  // Ručně přepsané díly; ostatní se předvyplní podle série.
+  const [edited, setEdited] = useState<Record<string, string>>({})
+
+  // Díly vybrané série – číslování nových navazuje na poslední obsazený díl.
+  const seriesBooks = useBookPage({ series_id: seriesId }, SERIES_PARTS_LIMIT, seriesId !== NEW)
+  const positions = useMemo(
+    () => ({
+      ...defaultPositions(books, seriesBooks.data?.items ?? [], seriesId === NEW ? null : seriesId),
+      ...edited,
+    }),
+    [books, seriesBooks.data, seriesId, edited],
+  )
 
   // Série, které vybrané knihy opustí – ať editor ví, že je přesouvá.
   const leaving = useMemo(() => {
-    const ids = new Set(
-      books.map((b) => b.series_id).filter((id): id is string => Boolean(id) && id !== seriesId),
-    )
-    return (seriesList.data ?? []).filter((s) => ids.has(s.id)).map((s) => s.title)
-  }, [books, seriesId, seriesList.data])
+    const titles = new Set<string>()
+    for (const book of books) {
+      if (book.series_id && book.series_id !== seriesId && book.series_title) titles.add(book.series_title)
+    }
+    return [...titles]
+  }, [books, seriesId])
 
-  function pickSeries(value: string) {
+  function pickSeries(value: string, label: string) {
     setSeriesId(value)
-    setPositions(defaultPositions(books, allBooks, value === NEW ? null : value))
+    setSeriesTitle(value === NEW ? '' : label)
+    setEdited({})
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -164,20 +169,14 @@ function AddToSeriesForm({
 
       <div className="space-y-2">
         <Label htmlFor="series_pick">{t('series.addDialog.series')}</Label>
-        <Select value={seriesId} onValueChange={pickSeries}>
-          <SelectTrigger id="series_pick" className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NEW}>{t('series.addDialog.newSeries')}</SelectItem>
-            {(seriesList.data ?? []).map((series) => (
-              <SelectItem key={series.id} value={series.id}>
-                {series.title}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        {seriesList.isError ? (
+        <SeriesPicker
+          id="series_pick"
+          value={seriesId}
+          label={seriesId === NEW ? t('series.addDialog.newSeries') : seriesTitle}
+          extra={[{ value: NEW, label: t('series.addDialog.newSeries') }]}
+          onChange={pickSeries}
+        />
+        {seriesBooks.isError ? (
           <p className="text-sm text-destructive">{t('series.addDialog.loadFailed')}</p>
         ) : null}
       </div>
@@ -221,7 +220,7 @@ function AddToSeriesForm({
                 aria-label={t('series.addDialog.partLabel', { title: book.title })}
                 className="w-20"
                 value={positions[book.id] ?? ''}
-                onChange={(e) => setPositions({ ...positions, [book.id]: e.target.value })}
+                onChange={(e) => setEdited({ ...edited, [book.id]: e.target.value })}
               />
             </li>
           ))}

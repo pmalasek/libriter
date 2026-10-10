@@ -14,6 +14,9 @@ import { PosterCard } from '@/components/PosterCard'
 import { ProgressBar } from '@/components/ProgressBar'
 import { Shelf, ShelfItem } from '@/components/Shelf'
 
+/** Největší šířka obrázku dílu na polici (CSS px) – načte se zmenšenina. */
+const STILL_WIDTH = 320
+
 /** Karta „Pokračovat“: obrázek dílu nebo pozadí filmu, název a zbývající čas. */
 function ContinueCard({ item }: { item: ContinueItem }) {
   const { t } = useTranslation()
@@ -21,8 +24,10 @@ function ContinueCard({ item }: { item: ContinueItem }) {
   const episode = item.episode
   const to = movie ? `/watch/movie/${movie.id}` : `/watch/episode/${episode!.id}`
   const still = movie
-    ? imageUrl(movie.backdrop_path, movie.updated_at) ?? posterUrl(movie)
-    : imageUrl(episode!.still_path) ?? imageUrl(episode!.show_backdrop_path) ?? (item.show ? imageUrl(item.show.backdrop_path, item.show.updated_at) : undefined)
+    ? imageUrl(movie.backdrop_path, movie.updated_at, STILL_WIDTH) ?? posterUrl(movie, STILL_WIDTH)
+    : imageUrl(episode!.still_path, undefined, STILL_WIDTH) ??
+      imageUrl(episode!.show_backdrop_path, undefined, STILL_WIDTH) ??
+      (item.show ? imageUrl(item.show.backdrop_path, item.show.updated_at, STILL_WIDTH) : undefined)
   const title = movie ? movie.title : (item.show?.title ?? episode!.show_title ?? '')
   const sub = movie ? remainingLabel(item.progress, movie.duration_sec) : episodeLabel(episode!)
   const ratio = progressRatio(item.progress, movie?.duration_sec ?? episode?.duration_sec)
@@ -58,7 +63,12 @@ function LibraryShelf({ row }: { row: HomeLibrary }) {
       {row.episodes.map((e) => (
         <ShelfItem key={e.id} wide>
           <Link to={`/shows/${e.show_id}`} className="group block outline-none">
-            <Poster src={imageUrl(e.still_path) ?? imageUrl(e.show_backdrop_path)} title={e.show_title ?? ''} aspect="still" className="transition-transform duration-200 group-hover:-translate-y-0.5" />
+            <Poster
+              src={imageUrl(e.still_path, undefined, STILL_WIDTH) ?? imageUrl(e.show_backdrop_path, undefined, STILL_WIDTH)}
+              title={e.show_title ?? ''}
+              aspect="still"
+              className="transition-transform duration-200 group-hover:-translate-y-0.5"
+            />
             <p className="mt-2 truncate text-sm font-medium">{e.show_title}</p>
             <p className="truncate text-xs text-muted-foreground">{episodeLabel(e)}</p>
           </Link>

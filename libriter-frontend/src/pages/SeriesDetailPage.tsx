@@ -2,7 +2,7 @@ import { ArrowLeftIcon, ListPlusIcon, PauseIcon, PlayIcon } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useParams } from 'react-router'
-import { useBooks, useSeriesOne, useSessions } from '@/api/hooks'
+import { useBookList, useSeriesByIds, useSeriesOne, useSessions } from '@/api/hooks'
 import { BookGrid } from '@/components/BookGrid'
 import { ErrorState } from '@/components/ErrorState'
 import { ExpandableText } from '@/components/ExpandableText'
@@ -11,14 +11,16 @@ import { PageHeader } from '@/components/PageHeader'
 import { SeriesCoverStack } from '@/components/SeriesCoverStack'
 import { Button } from '@/components/ui/button'
 import { authorsLabel, bookCount } from '@/lib/format'
-import { seriesAuthors } from '@/lib/sorting'
 import { usePlayer } from '@/player/playerContext'
 
 export function SeriesDetailPage() {
   const { t } = useTranslation()
   const { id = '' } = useParams()
   const series = useSeriesOne(id)
-  const books = useBooks()
+  // Díly v pořadí série; počet, autoři a první obálky přijdou ze souhrnu série.
+  const params = useMemo(() => ({ series_id: id, sort: 'title' as const }), [id])
+  const books = useBookList(params, Boolean(id))
+  const summary = useSeriesByIds(useMemo(() => [id], [id])).map.get(id)
   const player = usePlayer()
   const sessions = useSessions()
 
@@ -32,12 +34,7 @@ export function SeriesDetailPage() {
   const playingFromSeries = player.book?.series_id === id
   const isPlayingSeries = playingFromSeries && player.playing
 
-  // V sérii řadíme podle pořadí dílu; knihy bez pozice jdou na konec.
-  const seriesBooks = useMemo(() => {
-    return (books.data ?? [])
-      .filter((book) => book.series_id === id)
-      .sort((a, b) => (a.series_position ?? Number.MAX_SAFE_INTEGER) - (b.series_position ?? Number.MAX_SAFE_INTEGER))
-  }, [books.data, id])
+  const bookTotal = books.total ?? summary?.book_count ?? 0
 
   if (series.isPending) return <LoadingGrid count={4} />
   if (series.isError) {
@@ -57,13 +54,13 @@ export function SeriesDetailPage() {
         {/* Na úzkém obsahu stojí obálky nad textem: vedle sebe by na název ani
             na tlačítka nezbylo místo a obojí by se ořízlo. */}
         <div className="flex flex-col items-start gap-6 @md:flex-row @md:items-center">
-          <SeriesCoverStack books={seriesBooks} variant="lg" />
+          <SeriesCoverStack books={summary?.covers ?? []} variant="lg" />
           <div className="min-w-0 flex-1">
             <PageHeader
               className="mb-0"
               eyebrow={t('series.detail.eyebrow')}
               title={series.data.title}
-              description={[authorsLabel(seriesAuthors(seriesBooks)), bookCount(seriesBooks.length)]
+              description={[authorsLabel(summary?.authors ?? []), bookCount(bookTotal)]
                 .filter(Boolean)
                 .join(' · ')}
             />
@@ -71,7 +68,7 @@ export function SeriesDetailPage() {
               <ExpandableText text={series.data.description} className="mt-4 max-w-3xl" />
             ) : null}
 
-            {seriesBooks.length > 0 ? (
+            {bookTotal > 0 ? (
               <div className="mt-5 flex flex-wrap items-center gap-2">
                 {/* Když přehrávač drží některý díl téhle série, tlačítko ho
                     ovládá; jinak sérii otevře nebo v ní pokračuje. */}
@@ -107,7 +104,8 @@ export function SeriesDetailPage() {
       </section>
 
       <BookGrid
-        books={seriesBooks}
+        list={books}
+        params={params}
         seriesContext={id}
         emptyTitle={t('series.detail.noBooks')}
       />
