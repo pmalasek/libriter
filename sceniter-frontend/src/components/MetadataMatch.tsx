@@ -80,7 +80,8 @@ export function MetadataMatch({
         <p className="text-sm text-muted-foreground">{t('video.admin.match.noResults')}</p>
       ) : null}
 
-      <ul className="grid gap-2">
+      {/* Výsledky rolují uvnitř dialogu – jinak by dialog přerostl obrazovku. */}
+      <ul className="-mr-2 grid max-h-[min(60dvh,40rem)] gap-2 overflow-y-auto overscroll-contain pr-2">
         {(results.data?.results ?? []).slice(0, 10).map((r) => (
           <li key={r.id} className="flex items-start gap-3 rounded-2xl bg-foreground/4 p-2">
             {r.image_url ? (
