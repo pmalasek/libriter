@@ -89,6 +89,7 @@ export default {
     detachFile: 'Oddělit do samostatného filmu',
     detached: 'Soubor oddělen – spárujte nový film.',
     noFile: 'Soubor s videem není k dispozici.',
+    folder: 'Složka',
     season: '{{number}}. řada',
     specials: 'Speciály',
     episode: '{{number}}. díl',

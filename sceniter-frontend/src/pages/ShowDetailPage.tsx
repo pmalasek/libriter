@@ -178,6 +178,13 @@ export function ShowDetailPage() {
       <CastShelf credits={s.credits} />
       <SimilarShelf kind="show" id={s.id} />
       <ExternalLinks kind="show" ids={s.external_ids} />
+      <section className="mt-8">
+        <h2 className="font-heading text-lg font-semibold tracking-tight">{t('video.detail.folder')}</h2>
+        {/* Díly ležící naplocho mají klíč „složka/@Název" – ukážeme jen složku. */}
+        <p className="mt-1 font-mono text-xs break-all text-muted-foreground">
+          {s.source_key.replace(/(^|\/)@[^/]*$/, '') || '/'}
+        </p>
+      </section>
       <Attribution provider={s.meta_provider ?? null} />
 
       {editing ? <EditTitleDialog kind="show" title={s} open={editing} onOpenChange={setEditing} /> : null}

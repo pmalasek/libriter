@@ -83,6 +83,7 @@ export default {
     detachFile: 'Separar en una película aparte',
     detached: 'Archivo separado: empareja la nueva película.',
     noFile: 'El archivo de vídeo no está disponible.',
+    folder: 'Carpeta',
     season: 'Temporada {{number}}',
     specials: 'Especiales',
     episode: 'Episodio {{number}}',

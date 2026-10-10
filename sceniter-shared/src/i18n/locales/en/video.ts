@@ -83,6 +83,7 @@ export default {
     detachFile: 'Split into a separate movie',
     detached: 'File split off – match the new movie.',
     noFile: 'The video file is not available.',
+    folder: 'Folder',
     season: 'Season {{number}}',
     specials: 'Specials',
     episode: 'Episode {{number}}',

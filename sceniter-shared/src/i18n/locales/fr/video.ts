@@ -83,6 +83,7 @@ export default {
     detachFile: 'Séparer en un film distinct',
     detached: 'Fichier séparé – associez le nouveau film.',
     noFile: 'Le fichier vidéo n’est pas disponible.',
+    folder: 'Dossier',
     season: 'Saison {{number}}',
     specials: 'Épisodes spéciaux',
     episode: 'Épisode {{number}}',
