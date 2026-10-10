@@ -120,6 +120,8 @@ export interface Episode {
   duration_sec?: number
   media_id?: string
   show_title?: string
+  /** Pozadí seriálu – náhrada za chybějící obrázek dílu. */
+  show_backdrop_path?: string
 }
 
 export interface WatchProgress {

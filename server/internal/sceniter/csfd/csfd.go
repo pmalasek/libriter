@@ -42,6 +42,9 @@ const (
 	minDelay = time.Second
 	maxBody  = 4 << 20
 	maxCast  = 15
+	// episodeBudget je čas na stránky dílů v jednom volání season – server
+	// volání ukončí po 60 s, díly nad limit zůstanou jen s názvem.
+	episodeBudget = 40 * time.Second
 )
 
 // ErrNotFound vrací ČSFD na neexistující záznam.
@@ -54,6 +57,14 @@ var (
 	episodeRe    = regexp.MustCompile(`\(S(\d+)E(\d+)\)|\(E(\d+)\)`)
 	seasonNameRe = regexp.MustCompile(`(?i)^(?:série|season|řada|sezóna)\s*(\d+)`)
 	durationRe   = regexp.MustCompile(`PT(?:(\d+)H)?(?:(\d+)M)?`)
+	// Velikost v adrese obrázku z galerie (…/cache/resized/w663/…).
+	resizedRe = regexp.MustCompile(`/cache/resized/w\d+/`)
+)
+
+// Šířky obrázků z galerie: pozadí seriálu/filmu a obrázek dílu.
+const (
+	backdropWidth = "w1326"
+	stillWidth    = "w663"
 )
 
 // Client čte ČSFD.
@@ -213,7 +224,7 @@ func parseSearchSection(doc *html.Node, section, base string) []plugin.SearchRes
 
 func absURL(src string) string {
 	switch {
-	case src == "" || strings.HasPrefix(src, "data:"):
+	case src == "" || strings.HasPrefix(src, "data:") || strings.Contains(src, "empty-image"):
 		return ""
 	case strings.HasPrefix(src, "//"):
 		return "https:" + src
@@ -307,6 +318,9 @@ func ParseFilm(doc *html.Node) *plugin.VideoMetadata {
 			}
 			d.Rating = int(math.Round(r.RatingValue * 100 / best))
 		}
+	}
+	if photo := galleryPhoto(doc); photo != "" {
+		d.BackdropURL = resizedRe.ReplaceAllString(photo, "/cache/resized/"+backdropWidth+"/")
 	}
 	header := htmlutil.Find(doc, func(n *html.Node) bool { return htmlutil.HasClass(n, "film-header-name") })
 	if d.Title == "" && header != nil {
@@ -403,6 +417,23 @@ func ParseFilm(doc *html.Node) *plugin.VideoMetadata {
 	return d
 }
 
+// galleryPhoto vrátí první fotku z galerie na stránce (box „Galerie“), nebo "".
+func galleryPhoto(doc *html.Node) string {
+	item := htmlutil.Find(doc, func(n *html.Node) bool { return htmlutil.HasClass(n, "gallery-item") })
+	if item == nil {
+		return ""
+	}
+	img := htmlutil.Element(item, "img")
+	if img == nil {
+		return ""
+	}
+	src := absURL(htmlutil.Attr(img, "src"))
+	if !strings.Contains(src, "/images/film/photos/") {
+		return ""
+	}
+	return src
+}
+
 // originalTitle najde v ul.film-names název pro zemi původu.
 func originalTitle(header *html.Node, country string) string {
 	out := ""
@@ -481,32 +512,53 @@ func (c *Client) Season(ctx context.Context, showID string, number int) (*plugin
 		return nil, err
 	}
 	out := &plugin.SeasonMetadata{Number: number, Episodes: []plugin.EpisodeMetadata{}}
-	var seasonHref string
+	var (
+		seasonHref string
+		episodes   []listEntry
+	)
 	for _, e := range parseEpisodeList(doc) {
 		switch {
 		case e.episode == 0 && e.season == number:
 			seasonHref, out.Name = e.href, e.title
 		case e.episode > 0 && e.season == number:
-			out.Episodes = append(out.Episodes, plugin.EpisodeMetadata{Number: e.episode, Title: e.title})
+			episodes = append(episodes, e)
 		}
 	}
-	if seasonHref == "" {
-		if len(out.Episodes) == 0 {
-			return nil, ErrNotFound
+	if seasonHref != "" {
+		sdoc, err := c.get(ctx, seasonHref)
+		if err != nil {
+			return nil, err
 		}
-		return out, nil
+		sd := ParseFilm(sdoc)
+		out.Overview, out.PosterURL = sd.Overview, sd.PosterURL
+		for _, e := range parseEpisodeList(sdoc) {
+			if e.episode > 0 {
+				episodes = append(episodes, e)
+			}
+		}
+	}
+	if len(episodes) == 0 {
+		return nil, ErrNotFound
 	}
 
-	sdoc, err := c.get(ctx, seasonHref)
-	if err != nil {
-		return nil, err
-	}
-	sd := ParseFilm(sdoc)
-	out.Overview, out.PosterURL = sd.Overview, sd.PosterURL
-	for _, e := range parseEpisodeList(sdoc) {
-		if e.episode > 0 {
-			out.Episodes = append(out.Episodes, plugin.EpisodeMetadata{Number: e.episode, Title: e.title})
+	// Popis a obrázek dílu jsou jen na jeho stránce. Co se nestihne, zůstane
+	// jen s názvem (doplní se při příštím spárování).
+	deadline := time.Now().Add(episodeBudget)
+	for _, e := range episodes {
+		ep := plugin.EpisodeMetadata{Number: e.episode, Title: e.title}
+		if e.href != "" && time.Now().Before(deadline) && ctx.Err() == nil {
+			if edoc, err := c.get(ctx, e.href); err == nil {
+				ed := ParseFilm(edoc)
+				ep.Overview = ed.Overview
+				if photo := galleryPhoto(edoc); photo != "" {
+					ep.StillURL = resizedRe.ReplaceAllString(photo, "/cache/resized/"+stillWidth+"/")
+				}
+				if ed.RuntimeMin > 0 {
+					ep.RuntimeMin = ed.RuntimeMin
+				}
+			}
 		}
+		out.Episodes = append(out.Episodes, ep)
 	}
 	return out, nil
 }

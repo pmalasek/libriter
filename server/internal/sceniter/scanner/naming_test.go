@@ -49,6 +49,8 @@ func TestParseEpisode(t *testing.T) {
 		{"Show.Name.S03E07.Episode.Title.720p.WEB-DL", 3, 7, "Episode Title"},
 		{"show_name_s1e10", 1, 10, ""},
 		{"Nemocnice na kraji města - Díl 4", 0, 4, ""},
+		{"Bitva_o_nebe_nad_Británií_4", 0, 4, ""},
+		{"Planeta Země - 03", 0, 3, ""},
 	}
 	for _, c := range cases {
 		got := ParseEpisode(c.in)

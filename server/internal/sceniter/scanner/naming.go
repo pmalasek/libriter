@@ -147,8 +147,10 @@ var (
 	nxnnRe    = regexp.MustCompile(`(?i)(?:^|[^a-z0-9])(\d{1,2})x(\d{1,3})(?:$|[^0-9])`)
 	dilRe     = regexp.MustCompile(`(?i)(?:^|[^0-9])(\d{1,3})\.\s*díl(?:$|[^\pL])`)
 	dilWordRe = regexp.MustCompile(`(?i)(?:^|[^\pL])(?:díl|epizoda|episode|ep|e)[\s._-]*(\d{1,3})(?:$|[^0-9])`)
-	seasonRe  = regexp.MustCompile(`(?i)^(?:s|season|série|serie|sezóna|sezona|řada|rada)[\s._-]*(\d{1,2})$`)
-	seasonRe2 = regexp.MustCompile(`(?i)^(\d{1,2})\.?\s*(?:série|serie|sezóna|sezona|řada|rada|season)$`)
+	// Číslo na konci názvu: "Bitva_o_nebe_nad_Británií_4", "Planeta Země - 03".
+	trailingNumRe = regexp.MustCompile(`[\s._\-](\d{1,3})$`)
+	seasonRe      = regexp.MustCompile(`(?i)^(?:s|season|série|serie|sezóna|sezona|řada|rada)[\s._-]*(\d{1,2})$`)
+	seasonRe2     = regexp.MustCompile(`(?i)^(\d{1,2})\.?\s*(?:série|serie|sezóna|sezona|řada|rada|season)$`)
 )
 
 // ParseEpisode rozebere název souboru dílu (bez přípony). Rozpozná
@@ -170,6 +172,13 @@ func ParseEpisode(name string) EpisodeInfo {
 				rest = strings.TrimPrefix(strings.TrimPrefix(rest, "díl"), "Díl")
 			}
 			return EpisodeInfo{Episode: e, Title: episodeTitle(rest), OK: true}
+		}
+	}
+	// Poslední možnost: samotné číslo na konci názvu. Bez něj by se díl
+	// čísloval podle pořadí souborů, které se při postupném kopírování mění.
+	if m := trailingNumRe.FindStringSubmatch(strings.TrimSpace(name)); m != nil {
+		if e, _ := strconv.Atoi(m[1]); e > 0 {
+			return EpisodeInfo{Episode: e, OK: true}
 		}
 	}
 	return EpisodeInfo{}

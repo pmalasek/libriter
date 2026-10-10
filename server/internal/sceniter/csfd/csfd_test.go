@@ -107,12 +107,16 @@ func TestParseShowSeasons(t *testing.T) {
 	if d.Title != "Docent" || len(d.Seasons) != 3 || d.Seasons[0] != 1 || d.Seasons[2] != 3 {
 		t.Errorf("seriál %+v", d)
 	}
+	if !strings.Contains(d.BackdropURL, "/cache/resized/w1326/files/images/film/photos/") {
+		t.Errorf("pozadí z galerie: %q", d.BackdropURL)
+	}
 }
 
 func TestSeason(t *testing.T) {
 	pages := map[string]string{
-		"/film/1024280/prehled/":                        "show-docent.html",
-		"/film/1024280-docent/1239640-serie-1/prehled/": "season-docent-1.html",
+		"/film/1024280/prehled/":                             "show-docent.html",
+		"/film/1024280-docent/1239640-serie-1/prehled/":      "season-docent-1.html",
+		"/film/1024280-docent/1239641-lesni-vrazda/prehled/": "episode-docent-1-1.html",
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("User-Agent") != userAgent {
@@ -134,6 +138,14 @@ func TestSeason(t *testing.T) {
 	}
 	if s.Name != "Série 1" || len(s.Episodes) != 3 || s.Episodes[0].Number != 1 || s.Episodes[0].Title != "Lesní vražda" {
 		t.Fatalf("řada %+v", s)
+	}
+	// Popis a obrázek dílu jsou z jeho stránky; díl bez stránky zůstane jen s názvem.
+	e1 := s.Episodes[0]
+	if !strings.HasPrefix(e1.Overview, "Docent Stehlík") || !strings.Contains(e1.StillURL, "/cache/resized/w663/files/images/film/photos/") {
+		t.Errorf("díl 1: %+v", e1)
+	}
+	if s.Episodes[1].Overview != "" || s.Episodes[1].StillURL != "" {
+		t.Errorf("díl 2 bez stránky: %+v", s.Episodes[1])
 	}
 	if _, err := c.Season(context.Background(), "1024280", 9); err != ErrNotFound {
 		t.Fatalf("neexistující řada: %v", err)

@@ -314,7 +314,7 @@ func (s *Store) GetShow(ctx context.Context, id uuid.UUID) (*model.Show, error) 
 
 const episodeCols = `
 	e.id, e.season_id, se.show_id, se.number, e.number, e.title, e.overview, e.air_date,
-	e.still_path, e.runtime_min, e.created_at, sh.title,
+	e.still_path, e.runtime_min, e.created_at, sh.title, sh.backdrop_path,
 	(SELECT id FROM sc_media_files WHERE episode_id = e.id ORDER BY size_bytes DESC, file_path LIMIT 1),
 	(SELECT duration_sec FROM sc_media_files WHERE episode_id = e.id ORDER BY size_bytes DESC, file_path LIMIT 1)`
 
@@ -324,17 +324,19 @@ func scanEpisode(sc interface{ Scan(...any) error }) (model.Episode, error) {
 	var (
 		e                               model.Episode
 		title, overview, airDate, still sql.NullString
+		showBackdrop                    sql.NullString
 		runtime                         sql.NullInt64
 		duration                        sql.NullFloat64
 		mediaID                         *uuid.UUID
 	)
 	err := sc.Scan(&e.ID, &e.SeasonID, &e.ShowID, &e.Season, &e.Number, &title, &overview, &airDate,
-		&still, &runtime, &e.CreatedAt, &e.ShowTitle, &mediaID, &duration)
+		&still, &runtime, &e.CreatedAt, &e.ShowTitle, &showBackdrop, &mediaID, &duration)
 	if err != nil {
 		return e, err
 	}
 	e.Title, e.Overview, e.AirDate, e.StillPath = ptrString(title), ptrString(overview), ptrString(airDate), ptrString(still)
 	e.RuntimeMin, e.MediaID, e.DurationSec = ptrInt(runtime), mediaID, ptrFloat(duration)
+	e.ShowBackdropPath = ptrString(showBackdrop)
 	return e, nil
 }
 

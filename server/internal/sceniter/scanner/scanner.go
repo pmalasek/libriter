@@ -353,10 +353,16 @@ func (s *Scanner) processIn(ctx context.Context, lib *model.Library, abs string)
 	s.ingest.Lock()
 	defer s.ingest.Unlock()
 
-	// Vlastník (film nebo díl) se u známého souboru nemění – mohl ho ručně
-	// přeřadit editor. Nový soubor se zařadí podle cesty.
+	// Nový soubor se zařadí podle cesty. Známý soubor zůstává u svého filmu
+	// nebo dílu; jen díl, jehož číslo je v názvu souboru, se opraví, když
+	// soubor patří jinam (číslování podle pořadí při postupném kopírování).
 	if existing != nil {
 		in.MovieID, in.EpisodeID = existing.MovieID, existing.EpisodeID
+		if lib.Kind == model.KindShow && in.EpisodeID != nil {
+			if err := s.reassignEpisode(ctx, lib, abs, rel, &in); err != nil {
+				return false, err
+			}
+		}
 	} else if err := s.classify(ctx, lib, abs, rel, &in); err != nil {
 		return false, err
 	}
@@ -403,6 +409,18 @@ func (s *Scanner) asMovie(ctx context.Context, lib *model.Library, parts, prefix
 
 // asEpisode: parts je cesta pod adresářem seriálů, první je adresář seriálu.
 func (s *Scanner) asEpisode(ctx context.Context, lib *model.Library, abs string, parts, prefix []string, stem string, in *storage.SaveMediaInput) error {
+	key, _ := episodeKey(lib, abs, parts, prefix, stem)
+	id, err := s.store.EnsureEpisode(ctx, key)
+	if err != nil {
+		return err
+	}
+	in.EpisodeID = &id
+	return nil
+}
+
+// episodeKey určí seriál, řadu a díl souboru. fromName říká, že číslo dílu
+// je v názvu souboru – jinak je to pořadí v adresáři, které se mění.
+func episodeKey(lib *model.Library, abs string, parts, prefix []string, stem string) (key storage.EpisodeKey, fromName bool) {
 	ep := ParseEpisode(stem)
 
 	var showDir string
@@ -424,9 +442,9 @@ func (s *Scanner) asEpisode(ctx context.Context, lib *model.Library, abs string,
 		// Rok seriálu často nese jen název dílu ("Seriál.e01.1999.PDTV").
 		show.Year = ParseMovie(stem).Year
 	}
-	key := strings.Join(append(append([]string{}, prefix...), showDir), "/")
+	showKey := strings.Join(append(append([]string{}, prefix...), showDir), "/")
 	if len(parts) < 2 {
-		key = strings.Join(append(append([]string{}, prefix...), "@"+show.Title), "/")
+		showKey = strings.Join(append(append([]string{}, prefix...), "@"+show.Title), "/")
 	}
 
 	season := ep.Season
@@ -443,13 +461,38 @@ func (s *Scanner) asEpisode(ctx context.Context, lib *model.Library, abs string,
 		number = positionInDir(abs)
 	}
 
-	id, err := s.store.EnsureEpisode(ctx, storage.EpisodeKey{
-		LibraryID: lib.ID, ShowKey: key, ShowTitle: show.Title, ShowYear: show.Year,
+	return storage.EpisodeKey{
+		LibraryID: lib.ID, ShowKey: showKey, ShowTitle: show.Title, ShowYear: show.Year,
 		Season: season, Episode: number, Title: ep.Title,
-	})
+	}, ep.OK
+}
+
+// reassignEpisode přeřadí známý soubor k jinému dílu, když název souboru
+// jednoznačně určuje jiný díl, než ke kterému patří. Opravuje díly očíslované
+// podle pořadí v adresáři ve chvíli, kdy ještě nebyly zkopírované všechny.
+func (s *Scanner) reassignEpisode(ctx context.Context, lib *model.Library, abs, rel string, in *storage.SaveMediaInput) error {
+	parts := strings.Split(rel, "/")
+	stem := strings.TrimSuffix(parts[len(parts)-1], filepath.Ext(rel))
+	key, fromName := episodeKey(lib, abs, parts[1:], parts[:1], stem)
+	if !fromName {
+		return nil
+	}
+	cur, err := s.store.GetEpisode(ctx, *in.EpisodeID)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}
+	if cur.Season == key.Season && cur.Number == key.Episode {
+		return nil
+	}
+	id, err := s.store.EnsureEpisode(ctx, key)
+	if err != nil {
+		return err
+	}
+	s.log.Info("soubor přeřazen k jinému dílu", "path", rel,
+		"z", fmt.Sprintf("S%02dE%02d", cur.Season, cur.Number), "na", fmt.Sprintf("S%02dE%02d", key.Season, key.Episode))
 	in.EpisodeID = &id
 	return nil
 }

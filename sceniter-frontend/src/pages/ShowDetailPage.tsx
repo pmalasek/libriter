@@ -36,7 +36,7 @@ function EpisodeRow({ e }: { e: EpisodeWithProgress }) {
   return (
     <li className="glass inset-shadow-glass flex gap-4 rounded-2xl p-3 ring-1 ring-glass-edge">
       <Link to={`/watch/episode/${e.id}`} className="group relative w-36 shrink-0 sm:w-48" aria-label={t('video.detail.play')}>
-        <Poster src={imageUrl(e.still_path)} title={t('video.detail.episode', { number: e.number })} aspect="still" className="rounded-xl" />
+        <Poster src={imageUrl(e.still_path) ?? imageUrl(e.show_backdrop_path)} title={t('video.detail.episode', { number: e.number })} aspect="still" className="rounded-xl" />
         <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/0 text-white opacity-0 transition group-hover:bg-black/30 group-hover:opacity-100">
           <PlayIcon className="size-8" />
         </span>

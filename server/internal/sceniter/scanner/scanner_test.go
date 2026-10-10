@@ -2,9 +2,11 @@ package scanner
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"mediater/internal/core/config"
 	"mediater/internal/core/db"
@@ -239,5 +241,44 @@ func TestDeleteLibraryRemovesItems(t *testing.T) {
 	movies, _ := store.ListMovies(ctx, storage.MovieFilter{WithoutFiles: true})
 	if len(paths) != 0 || len(movies) != 0 {
 		t.Fatalf("po smazání knihovny zbylo %d souborů a %d filmů", len(paths), len(movies))
+	}
+}
+
+// Díl očíslovaný podle pořadí v adresáři (soubory se kopírovaly postupně)
+// se při další kontrole přeřadí podle čísla v názvu souboru.
+func TestScanReassignsEpisodeByName(t *testing.T) {
+	root := t.TempDir()
+	for i := 1; i <= 4; i++ {
+		touch(t, root, fmt.Sprintf("Cykly/Bitva o nebe nad Británii/Bitva_o_nebe_nad_Británií_%d.avi", i))
+	}
+	store := newTestStore(t)
+	addLibrary(t, store, "Cykly", "show")
+	s := New(root, store)
+	scanOnce(t, s)
+	ctx := context.Background()
+
+	shows, _ := store.ListShows(ctx, storage.ShowFilter{})
+	if len(shows) != 1 || shows[0].EpisodeCount != 4 {
+		t.Fatalf("seriály %+v", shows)
+	}
+
+	// Stav z databáze uživatele: díl _4 je omylem u 3. dílu.
+	seasons, _ := store.ListSeasons(ctx, shows[0].ID)
+	third := seasons[0].Episodes[2].ID
+	paths, _ := store.ListMediaPaths(ctx)
+	p4 := "Cykly/Bitva o nebe nad Británii/Bitva_o_nebe_nad_Británií_4.avi"
+	if _, ok := paths[p4]; !ok {
+		t.Fatalf("soubor chybí: %v", paths)
+	}
+	if _, err := store.SaveMedia(ctx, storage.SaveMediaInput{FilePath: p4, EpisodeID: &third, SizeBytes: 18, ModTime: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if shows, _ := store.ListShows(ctx, storage.ShowFilter{}); shows[0].EpisodeCount != 3 {
+		t.Fatalf("příprava: %d dílů", shows[0].EpisodeCount)
+	}
+
+	scanOnce(t, s)
+	if shows, _ := store.ListShows(ctx, storage.ShowFilter{}); shows[0].EpisodeCount != 4 {
+		t.Fatalf("po kontrole %d dílů, chci 4", shows[0].EpisodeCount)
 	}
 }

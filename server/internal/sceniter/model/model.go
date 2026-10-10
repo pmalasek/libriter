@@ -137,6 +137,8 @@ type Episode struct {
 	DurationSec *float64   `json:"duration_sec,omitempty"`
 	MediaID     *uuid.UUID `json:"media_id,omitempty"`
 	ShowTitle   string     `json:"show_title,omitempty"`
+	// ShowBackdropPath je pozadí seriálu – náhrada za chybějící obrázek dílu.
+	ShowBackdropPath *string `json:"show_backdrop_path,omitempty"`
 }
 
 // MediaFile je fyzický soubor s videem.
