@@ -4,6 +4,43 @@
 export type MatchState = 'unmatched' | 'auto' | 'manual' | 'ignored'
 export type TitleKind = 'movie' | 'show'
 
+/** Knihovna – podsložka VIDEO_ROOT s typem obsahu a zdrojem metadat. */
+export interface Library {
+  id: string
+  dir: string
+  name: string
+  kind: TitleKind
+  /** Jazyk metadat (ISO 639-1). */
+  language: string
+  /** Výchozí zdroj metadat (jméno pluginu). */
+  provider?: string
+  position: number
+  enabled: boolean
+  created_at: string
+  updated_at: string
+  /** Filmy nebo seriály se soubory. */
+  item_count: number
+}
+
+/** POST/PATCH /sceniter/admin/libraries – dir a kind jen při založení. */
+export interface LibraryRequest {
+  dir?: string
+  name?: string
+  kind?: TitleKind
+  language?: string
+  /** '' = bez automatického párování. */
+  provider?: string
+  enabled?: boolean
+}
+
+/** Zdroj video metadat (plugin). */
+export interface MetadataProvider {
+  name: string
+  title: string
+  kinds: TitleKind[]
+  languages: string[]
+}
+
 export interface Credit {
   name: string
   role: 'cast' | 'director' | 'writer' | 'creator'
@@ -12,17 +49,22 @@ export interface Credit {
 
 export interface Movie {
   id: string
+  library_id: string
   title: string
   original_title?: string
   year?: number
   overview?: string
   tagline?: string
   runtime_min?: number
-  tmdb_id?: number
-  imdb_id?: string
+  /** Zdroj (plugin) a ID titulu u něj; chybí u nespárovaného titulu. */
+  meta_provider?: string
+  meta_id?: string
+  /** ID u ostatních databází: { imdb: 'tt…', tmdb: '603', csfd: '9499' }. */
+  external_ids: Record<string, string>
   poster_path?: string
   backdrop_path?: string
-  tmdb_rating?: number
+  /** Hodnocení zdroje v procentech (0–100). */
+  rating?: number
   credits: Credit[]
   genres: string[]
   match_state: MatchState
@@ -37,15 +79,18 @@ export interface Movie {
 
 export interface Show {
   id: string
+  library_id: string
   title: string
   original_title?: string
   year?: number
   overview?: string
   status?: string
-  tmdb_id?: number
+  meta_provider?: string
+  meta_id?: string
+  external_ids: Record<string, string>
   poster_path?: string
   backdrop_path?: string
-  tmdb_rating?: number
+  rating?: number
   credits: Credit[]
   genres: string[]
   match_state: MatchState
@@ -178,10 +223,16 @@ export interface WatchlistItem {
   added_at: string
 }
 
+/** Řádek domovské stránky za jednu knihovnu (nově přidané). */
+export interface HomeLibrary {
+  library: Library
+  movies: Movie[]
+  episodes: Episode[]
+}
+
 export interface Home {
   continue: ContinueItem[]
-  recent_movies: Movie[]
-  recent_episodes: Episode[]
+  libraries: HomeLibrary[]
   watchlist: WatchlistItem[]
 }
 
@@ -233,7 +284,7 @@ export interface ProgressRequest {
 
 export interface SceniterConfig {
   enabled: boolean
-  tmdb_enabled: boolean
+  metadata_providers: MetadataProvider[]
   transcoding: boolean
   profiles: string[]
 }
@@ -266,17 +317,24 @@ export interface SceniterStats {
   }
   scanner: SceniterScannerStatus
   transcodes: number
-  tmdb: boolean
+  /** Je nainstalovaný aspoň jeden zdroj video metadat. */
+  metadata: boolean
 }
 
-export interface TmdbResult {
-  id: number
+/** Výsledek hledání u zdroje metadat (pro ruční párování). */
+export interface MetadataResult {
+  id: string
+  url?: string
   title: string
-  original_title: string
+  original_title?: string
   year?: number
-  overview: string
-  poster_path?: string
-  popularity: number
+  note?: string
+  image_url?: string
+}
+
+export interface MetadataSearchResponse {
+  provider: string
+  results: MetadataResult[]
 }
 
 export interface TranscodeSession {

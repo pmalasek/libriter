@@ -122,7 +122,7 @@ deb="$DIST/$deb_name.deb"
 info "Balím $deb_name.deb"
 rm -rf "$root"
 install -d "$root/DEBIAN" "$root/usr/bin" "$root/lib/systemd/system" "$root/etc/libriter" \
-  "$root/usr/share/libriter"
+  "$root/usr/share/libriter" "$root/usr/lib/mediater/plugins"
 
 sed -e "s/@VERSION@/$deb_version/" -e "s/@ARCH@/$ARCH/" \
   "$PKG_SRC/control.in" >"$root/DEBIAN/control"
@@ -132,6 +132,9 @@ install -m 755 "$PKG_SRC/postinst" "$PKG_SRC/prerm" "$PKG_SRC/postrm" "$root/DEB
 install -m 755 bin/mediater "$root/usr/bin/mediater"
 # Příkazy z dokumentace (libriter user add …) fungují dál.
 ln -s mediater "$root/usr/bin/libriter"
+# Pluginy metadat (PLUGIN_DIR=/usr/lib/mediater/plugins). Vlastník root a 755:
+# server nespustí plugin, do kterého smí zapisovat někdo další.
+install -m 755 bin/plugins/mediater-meta-* "$root/usr/lib/mediater/plugins/"
 install -m 644 "$PKG_SRC/env-additions" "$root/usr/share/libriter/env-additions"
 install -m 644 "$PKG_SRC/libriter.service" "$root/lib/systemd/system/libriter.service"
 install -m 640 "$PKG_SRC/libriter.env" "$root/etc/libriter/libriter.env"

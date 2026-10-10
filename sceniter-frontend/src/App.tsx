@@ -13,6 +13,7 @@ const lazyPage = <K extends string>(load: () => Promise<Record<K, React.Componen
 const HomePage = lazyPage(() => import('@/pages/HomePage'), 'HomePage')
 const MoviesPage = lazyPage(() => import('@/pages/ListPage'), 'MoviesPage')
 const ShowsPage = lazyPage(() => import('@/pages/ListPage'), 'ShowsPage')
+const LibraryPage = lazyPage(() => import('@/pages/ListPage'), 'LibraryPage')
 const MovieDetailPage = lazyPage(() => import('@/pages/MovieDetailPage'), 'MovieDetailPage')
 const ShowDetailPage = lazyPage(() => import('@/pages/ShowDetailPage'), 'ShowDetailPage')
 const WatchPage = lazyPage(() => import('@/pages/WatchPage'), 'WatchPage')
@@ -22,6 +23,8 @@ const NotFoundPage = lazyPage(() => import('@/pages/NotFoundPage'), 'NotFoundPag
 const ProfilePage = lazyPage(() => import('core-web/src/pages/ProfilePage'), 'ProfilePage')
 const AdminLayout = lazyPage(() => import('@/pages/admin/AdminLayout'), 'AdminLayout')
 const AdminOverviewPage = lazyPage(() => import('@/pages/admin/AdminOverviewPage'), 'AdminOverviewPage')
+const AdminLibrariesPage = lazyPage(() => import('@/pages/admin/AdminLibrariesPage'), 'AdminLibrariesPage')
+const AdminSourcesPage = lazyPage(() => import('@/pages/admin/AdminSourcesPage'), 'AdminSourcesPage')
 const AdminMatchPage = lazyPage(() => import('@/pages/admin/AdminMatchPage'), 'AdminMatchPage')
 const AdminTranscodePage = lazyPage(() => import('@/pages/admin/AdminTranscodePage'), 'AdminTranscodePage')
 
@@ -47,12 +50,15 @@ export function App() {
             <Route path="movies/:id" element={<MovieDetailPage />} />
             <Route path="shows" element={<ShowsPage />} />
             <Route path="shows/:id" element={<ShowDetailPage />} />
+            <Route path="library/:id" element={<LibraryPage />} />
             <Route path="watchlist" element={<WatchlistPage />} />
             <Route path="search" element={<SearchPage />} />
 
             <Route element={<RequireRole role="admin" />}>
               <Route path="admin" element={<AdminLayout />}>
                 <Route index element={<AdminOverviewPage />} />
+                <Route path="libraries" element={<AdminLibrariesPage />} />
+                <Route path="sources" element={<AdminSourcesPage />} />
                 <Route path="match" element={<AdminMatchPage />} />
                 <Route path="transcode" element={<AdminTranscodePage />} />
               </Route>

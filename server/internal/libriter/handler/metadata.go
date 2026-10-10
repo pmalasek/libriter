@@ -51,13 +51,19 @@ func (h *MetadataHandler) chainFor(r *http.Request) *metadata.Chain {
 // dkClient vrátí klienta databazeknih.cz, pokud je tento zdroj zapnutý.
 // Ostatní zdroje číselné ID knihy nesdílejí, takže endpoint /metadata/book/{id}
 // bez něj obsloužit nejde.
-func (h *MetadataHandler) dkClient() (*databazeknih.Client, bool) {
+func (h *MetadataHandler) dkClient() (dkProvider, bool) {
 	p, ok := h.chain().Provider(databazeknih.ProviderName)
 	if !ok {
 		return nil, false
 	}
-	dk, ok := p.(*databazeknih.Client)
+	dk, ok := p.(dkProvider)
 	return dk, ok
+}
+
+// dkProvider je zdroj databazeknih.cz – vestavěný klient nebo plugin.
+type dkProvider interface {
+	metadata.Provider
+	metadata.IDProvider
 }
 
 // GET /api/v1/metadata/search?q=<název>&author=<autor>&language=<kód>
@@ -180,7 +186,7 @@ func (h *MetadataHandler) FetchByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta, err := dk.FetchBook(r.Context(), id)
+	meta, err := dk.FetchByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, r.Context().Err()) {
 			writeError(w, http.StatusGatewayTimeout, "request.timeout", "vypršel čas požadavku")

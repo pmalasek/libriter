@@ -150,6 +150,8 @@ const AUDIT_ACTIONS = [
   'settings.metadata_update',
   'settings.registration_update',
   'settings.library_update',
+  'settings.plugin_update',
+  'plugins.reload',
   'book.delete',
   'author.delete',
   'series.delete',
@@ -163,4 +165,35 @@ export function auditActionLabel(action: string): string {
   return (AUDIT_ACTIONS as readonly string[]).includes(action)
     ? t(`labels.auditAction.${action as (typeof AUDIT_ACTIONS)[number]}`)
     : action
+}
+
+// --- pluginy metadat (GET /admin/plugins) ---
+
+export type PluginKind = 'book' | 'author' | 'movie' | 'show'
+
+/** Položka konfigurace pluginu; tajná hodnota se nevrací, jen is_set. */
+export interface PluginConfigField {
+  key: string
+  label: string
+  secret?: boolean
+  required?: boolean
+  env?: string
+  value?: string
+  is_set: boolean
+  from_env: boolean
+}
+
+export interface PluginInfo {
+  name: string
+  title: string
+  version: string
+  kinds: PluginKind[]
+  languages: string[]
+  path: string
+  config: PluginConfigField[]
+}
+
+export interface PluginsResponse {
+  dir: string
+  plugins: PluginInfo[]
 }

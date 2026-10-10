@@ -37,6 +37,15 @@ func touch(t *testing.T, root, rel string) {
 	}
 }
 
+func addLibrary(t *testing.T, store *storage.Store, dir, kind string) {
+	t.Helper()
+	if _, err := store.CreateLibrary(context.Background(), storage.LibraryInput{
+		Dir: dir, Name: dir, Kind: kind, Language: "cs", Enabled: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func scanOnce(t *testing.T, s *Scanner) Status {
 	t.Helper()
 	if !s.begin("test") {
@@ -59,18 +68,34 @@ func TestScanLibrary(t *testing.T) {
 		"Seriály/Docent/S03/Docent - 01. díl - Únos.mkv",
 		"Seriály/Docent/S03/Docent - 02. díl - Příliš mnoho podezřelých.mkv",
 		"Seriály/Docent/S03/@eaDir/Docent - 01. díl - Únos.mkv",
-		"Ostatní/Show.Name.S02E05.720p.mkv",
+		"Dokumentární cykly/Show.Name.S02E05.720p.mkv",
+		// Mimo knihovny – ignoruje se.
+		"Ostatní/Jiný film (2001).mkv",
+		"Volně ležící (2002).mkv",
 	} {
 		touch(t, root, f)
 	}
 
 	store := newTestStore(t)
-	s := New(root, []string{"Filmy"}, []string{"Seriály"}, store)
+	addLibrary(t, store, "Filmy", "movie")
+	addLibrary(t, store, "Seriály", "show")
+	addLibrary(t, store, "Dokumentární cykly", "show")
+	s := New(root, store)
 	ctx := context.Background()
 
 	st := scanOnce(t, s)
 	if st.Processed != 8 || st.Added != 8 {
-		t.Fatalf("status %+v, chci 8 zpracovaných i přidaných (soubor v @eaDir se přeskočí)", st)
+		t.Fatalf("status %+v, chci 8 zpracovaných i přidaných (soubor v @eaDir a mimo knihovny se přeskočí)", st)
+	}
+	libs, err := store.ListLibraries(ctx, false)
+	if err != nil || len(libs) != 3 {
+		t.Fatalf("knihovny %+v %v", libs, err)
+	}
+	if libs[0].ItemCount != 3 || libs[1].ItemCount != 1 || libs[2].ItemCount != 1 {
+		t.Errorf("počty položek %d/%d/%d, chci 3/1/1", libs[0].ItemCount, libs[1].ItemCount, libs[2].ItemCount)
+	}
+	if shows, _ := store.ListShows(ctx, storage.ShowFilter{Library: libs[2].ID}); len(shows) != 1 || shows[0].Title != "Show Name" {
+		t.Errorf("seriály v knihovně dokumentů: %+v", shows)
 	}
 
 	movies, err := store.ListMovies(ctx, storage.MovieFilter{})
@@ -157,7 +182,8 @@ func TestScanMissingRootDeletesNothing(t *testing.T) {
 	root := t.TempDir()
 	touch(t, root, "Filmy/Pelíšky (1999).mkv")
 	store := newTestStore(t)
-	s := New(root, []string{"Filmy"}, nil, store)
+	addLibrary(t, store, "Filmy", "movie")
+	s := New(root, store)
 	scanOnce(t, s)
 
 	// Nepřipojený disk: kořen zmizí. Knihovna musí zůstat.
@@ -169,5 +195,49 @@ func TestScanMissingRootDeletesNothing(t *testing.T) {
 	paths, err := store.ListMediaPaths(context.Background())
 	if err != nil || len(paths) != 1 {
 		t.Fatalf("paths %v, err %v", paths, err)
+	}
+}
+
+func TestScanMissingLibraryDirDeletesNothing(t *testing.T) {
+	root := t.TempDir()
+	touch(t, root, "Filmy/Pelíšky (1999).mkv")
+	touch(t, root, "Seriály/Docent/S01E01.mkv")
+	store := newTestStore(t)
+	addLibrary(t, store, "Filmy", "movie")
+	addLibrary(t, store, "Seriály", "show")
+	s := New(root, store)
+	scanOnce(t, s)
+
+	// Složka jedné knihovny zmizí (přejmenovaná) – její soubory zůstanou,
+	// druhá knihovna se projde normálně.
+	if err := os.Rename(filepath.Join(root, "Seriály"), filepath.Join(root, "Serialy")); err != nil {
+		t.Fatal(err)
+	}
+	st := scanOnce(t, s)
+	if st.Errors != 1 || st.Removed != 0 {
+		t.Fatalf("status %+v", st)
+	}
+	paths, err := store.ListMediaPaths(context.Background())
+	if err != nil || len(paths) != 2 {
+		t.Fatalf("paths %v, err %v", paths, err)
+	}
+}
+
+func TestDeleteLibraryRemovesItems(t *testing.T) {
+	root := t.TempDir()
+	touch(t, root, "Filmy/Pelíšky (1999).mkv")
+	store := newTestStore(t)
+	addLibrary(t, store, "Filmy", "movie")
+	s := New(root, store)
+	scanOnce(t, s)
+	ctx := context.Background()
+	libs, _ := store.ListLibraries(ctx, false)
+	if err := store.DeleteLibrary(ctx, libs[0].ID); err != nil {
+		t.Fatal(err)
+	}
+	paths, _ := store.ListMediaPaths(ctx)
+	movies, _ := store.ListMovies(ctx, storage.MovieFilter{WithoutFiles: true})
+	if len(paths) != 0 || len(movies) != 0 {
+		t.Fatalf("po smazání knihovny zbylo %d souborů a %d filmů", len(paths), len(movies))
 	}
 }

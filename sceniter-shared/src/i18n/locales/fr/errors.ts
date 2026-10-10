@@ -1,11 +1,16 @@
 export default {
   sceniter: {
     disabled: 'La vidéothèque n’est pas configurée sur le serveur',
+    metadata_disabled: 'Aucune source de métadonnées configurée ou installée',
+    metadata_not_found: 'Titre introuvable auprès de la source',
+    metadata_conflict: 'Ce titre est déjà dans la bibliothèque',
+    metadata_failed: 'La source de métadonnées ne répond pas',
     not_found: 'Introuvable',
-    tmdb_disabled: 'Les métadonnées TMDB ne sont pas configurées (TMDB_API_KEY)',
-    tmdb_not_found: 'Titre introuvable dans TMDB',
-    tmdb_conflict: 'Ce titre est déjà dans la bibliothèque',
-    tmdb_failed: 'TMDB ne répond pas',
+  },
+  library: {
+    not_found: 'Bibliothèque introuvable',
+    conflict: 'Ce dossier est déjà une bibliothèque',
+    root_unavailable: 'Le dossier VIDEO_ROOT n’est pas disponible',
   },
   movie: { not_found: 'Film introuvable' },
   show: { not_found: 'Série introuvable' },

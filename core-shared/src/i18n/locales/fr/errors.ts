@@ -21,6 +21,10 @@ export default {
     stream_token_invalid: 'Jeton de lecture invalide ou expiré',
     mobile_token_refresh: 'Un jeton mobile ne peut pas être renouvelé avec un jeton mobile. Veuillez vous reconnecter',
   },
+  plugin: {
+    not_found: 'Le plugin n’est pas installé',
+    discover_failed: 'Impossible de charger les plugins',
+  },
   user: {
     not_found: 'Utilisateur introuvable',
     email_taken: 'Cette adresse e-mail est déjà utilisée',

@@ -15,18 +15,20 @@ import (
 	"golang.org/x/text/unicode/norm"
 
 	"mediater/internal/core/imagestore"
+	"mediater/internal/core/plugin"
 	"mediater/internal/sceniter/model"
 	"mediater/internal/sceniter/storage"
-	"mediater/internal/sceniter/tmdb"
 )
 
-// ErrMetadataDisabled znamená, že TMDB_API_KEY není nastaven.
-var ErrMetadataDisabled = errors.New("metadata z TMDB nejsou nastavena")
+// ErrMetadataDisabled znamená, že pro titul není k dispozici žádný zdroj
+// metadat (knihovna nemá výchozí zdroj, nebo plugin není nainstalovaný).
+var ErrMetadataDisabled = errors.New("zdroj metadat není nastaven")
 
-// Matcher páruje filmy a seriály s TMDB a stahuje jejich obrázky.
+// Matcher páruje filmy a seriály se zdroji metadat (pluginy) a stahuje
+// jejich obrázky. Zdroj a jazyk pro automatické párování určuje knihovna.
 type Matcher struct {
 	store     *storage.Store
-	tmdb      *tmdb.Client
+	plugins   *plugin.Host
 	imageRoot string
 	log       *slog.Logger
 
@@ -36,16 +38,43 @@ type Matcher struct {
 	appCtx  context.Context
 }
 
-func NewMatcher(store *storage.Store, client *tmdb.Client, imageRoot string) *Matcher {
-	return &Matcher{store: store, tmdb: client, imageRoot: imageRoot,
+func NewMatcher(store *storage.Store, plugins *plugin.Host, imageRoot string) *Matcher {
+	return &Matcher{store: store, plugins: plugins, imageRoot: imageRoot,
 		log: slog.Default().With("component", "sceniter-match"), appCtx: context.Background()}
 }
 
 // Start nastaví kontext života aplikace pro párování na pozadí.
 func (m *Matcher) Start(ctx context.Context) { m.appCtx = ctx }
 
-// Enabled řekne, jestli je TMDB nastavené.
-func (m *Matcher) Enabled() bool { return m.tmdb.Enabled() }
+// Providers vrátí pluginy, které umí filmy nebo seriály.
+func (m *Matcher) Providers() []*plugin.Plugin {
+	if m.plugins == nil {
+		return nil
+	}
+	seen := map[string]bool{}
+	var out []*plugin.Plugin
+	for _, kind := range []string{plugin.KindMovie, plugin.KindShow} {
+		for _, p := range m.plugins.ByKind(kind) {
+			if !seen[p.Name()] {
+				seen[p.Name()] = true
+				out = append(out, p)
+			}
+		}
+	}
+	return out
+}
+
+// Enabled řekne, jestli je nainstalovaný aspoň jeden zdroj video metadat.
+func (m *Matcher) Enabled() bool { return len(m.Providers()) > 0 }
+
+// supports řekne, jestli plugin existuje a umí daný druh.
+func (m *Matcher) supports(provider, kind string) bool {
+	if m.plugins == nil || provider == "" {
+		return false
+	}
+	p, ok := m.plugins.Get(provider)
+	return ok && p.Manifest.Supports(kind)
+}
 
 // Kick spustí automatické párování nespárovaných titulů na pozadí. Když už
 // běží, proběhne po jeho skončení ještě jednou (mezitím přibyly soubory).
@@ -78,87 +107,110 @@ func (m *Matcher) Kick() {
 }
 
 func (m *Matcher) autoMatch(ctx context.Context) {
-	movies, err := m.store.ListMovies(ctx, storage.MovieFilter{MatchState: model.MatchUnmatched, WithoutFiles: true})
+	libs, err := m.store.ListLibraries(ctx, true)
 	if err != nil {
-		m.log.Warn("nespárované filmy", "err", err)
+		m.log.Warn("knihovny", "err", err)
+		return
+	}
+	for _, lib := range libs {
+		if ctx.Err() != nil {
+			return
+		}
+		provider := ""
+		if lib.Provider != nil {
+			provider = *lib.Provider
+		}
+		if !m.supports(provider, lib.Kind) {
+			continue
+		}
+		if lib.Kind == model.KindShow {
+			m.autoMatchShows(ctx, lib, provider)
+		} else {
+			m.autoMatchMovies(ctx, lib, provider)
+		}
+	}
+}
+
+func (m *Matcher) autoMatchMovies(ctx context.Context, lib model.Library, provider string) {
+	movies, err := m.store.ListMovies(ctx, storage.MovieFilter{Library: lib.ID, MatchState: model.MatchUnmatched, WithoutFiles: true})
+	if err != nil {
+		m.log.Warn("nespárované filmy", "knihovna", lib.Name, "err", err)
 		return
 	}
 	for _, mv := range movies {
 		if ctx.Err() != nil {
 			return
 		}
-		year := 0
-		if mv.Year != nil {
-			year = *mv.Year
-		}
-		orig := ""
-		if mv.OriginalTitle != nil {
-			orig = *mv.OriginalTitle
-		}
-		id, ok := m.pick(ctx, model.KindMovie, mv.Title, orig, year)
+		id, ok := m.pick(ctx, provider, lib.Language, model.KindMovie, mv.Title, deref(mv.OriginalTitle), derefInt(mv.Year))
 		if !ok {
 			continue
 		}
-		if _, err := m.MatchMovie(ctx, mv.ID, id, model.MatchAuto); err != nil {
-			m.log.Warn("párování filmu", "title", mv.Title, "err", err)
+		if _, err := m.MatchMovie(ctx, mv.ID, provider, id, model.MatchAuto); err != nil {
+			m.log.Warn("párování filmu", "title", mv.Title, "zdroj", provider, "err", err)
 		}
 	}
+}
 
-	shows, err := m.store.ListShows(ctx, storage.ShowFilter{MatchState: model.MatchUnmatched, WithoutFiles: true})
+func (m *Matcher) autoMatchShows(ctx context.Context, lib model.Library, provider string) {
+	shows, err := m.store.ListShows(ctx, storage.ShowFilter{Library: lib.ID, MatchState: model.MatchUnmatched, WithoutFiles: true})
 	if err != nil {
-		m.log.Warn("nespárované seriály", "err", err)
+		m.log.Warn("nespárované seriály", "knihovna", lib.Name, "err", err)
 		return
 	}
 	for _, sh := range shows {
 		if ctx.Err() != nil {
 			return
 		}
-		year := 0
-		if sh.Year != nil {
-			year = *sh.Year
-		}
-		id, ok := m.pick(ctx, model.KindShow, sh.Title, "", year)
+		id, ok := m.pick(ctx, provider, lib.Language, model.KindShow, sh.Title, deref(sh.OriginalTitle), derefInt(sh.Year))
 		if !ok {
 			continue
 		}
-		if err := m.MatchShow(ctx, sh.ID, id, model.MatchAuto); err != nil {
-			m.log.Warn("párování seriálu", "title", sh.Title, "err", err)
+		if err := m.MatchShow(ctx, sh.ID, provider, id, model.MatchAuto); err != nil {
+			m.log.Warn("párování seriálu", "title", sh.Title, "zdroj", provider, "err", err)
 		}
 	}
 }
 
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+func derefInt(n *int) int {
+	if n == nil {
+		return 0
+	}
+	return *n
+}
+
 // pick vybere výsledek hledání, kterému lze věřit bez člověka: shoda roku
 // ±1 a názvu, nebo jediný výsledek se shodným názvem. Jinak nic – titul
-// zůstane nespárovaný a admin ho spáruje ručně.
-func (m *Matcher) pick(ctx context.Context, kind, title, original string, year int) (int, bool) {
+// zůstane nespárovaný a editor ho spáruje ručně.
+func (m *Matcher) pick(ctx context.Context, provider, lang, kind, title, original string, year int) (string, bool) {
 	for _, q := range []string{title, original} {
 		if strings.TrimSpace(q) == "" {
 			continue
 		}
-		var (
-			res []tmdb.SearchResult
-			err error
-		)
-		if kind == model.KindShow {
-			res, err = m.tmdb.SearchTV(ctx, q, 0)
-		} else {
-			res, err = m.tmdb.SearchMovie(ctx, q, 0)
-		}
+		res, err := m.plugins.Search(ctx, provider, plugin.Request{
+			Kind: kind, Language: lang, Query: &plugin.Query{Title: q, OriginalTitle: original},
+		})
 		if err != nil {
-			m.log.Warn("hledání v TMDB", "query", q, "err", err)
-			return 0, false
+			m.log.Warn("hledání metadat", "zdroj", provider, "query", q, "err", err)
+			return "", false
 		}
 		if id, ok := pickResult(res, title, original, year); ok {
 			return id, true
 		}
 	}
-	return 0, false
+	return "", false
 }
 
 // pickResult je čistá část výběru (testovatelná bez sítě).
-func pickResult(res []tmdb.SearchResult, title, original string, year int) (int, bool) {
+func pickResult(res []plugin.SearchResult, title, original string, year int) (string, bool) {
 	names := []string{fold(title), fold(original)}
-	sameName := func(r tmdb.SearchResult) bool {
+	sameName := func(r plugin.SearchResult) bool {
 		for _, n := range names {
 			if n != "" && (n == fold(r.Title) || n == fold(r.OriginalTitle)) {
 				return true
@@ -169,20 +221,20 @@ func pickResult(res []tmdb.SearchResult, title, original string, year int) (int,
 	if year > 0 {
 		for _, r := range res {
 			if r.Year != 0 && abs(r.Year-year) <= 1 && sameName(r) {
-				return r.ID, true
+				return r.ID, r.ID != ""
 			}
 		}
 		// Rok sedí přesně a výsledek je první (nejrelevantnější) – název se
 		// může lišit diakritikou nebo podtitulem.
 		if len(res) > 0 && res[0].Year == year {
-			return res[0].ID, true
+			return res[0].ID, res[0].ID != ""
 		}
-		return 0, false
+		return "", false
 	}
 	if len(res) == 1 && sameName(res[0]) {
-		return res[0].ID, true
+		return res[0].ID, res[0].ID != ""
 	}
-	return 0, false
+	return "", false
 }
 
 // fold převede název na tvar pro porovnání: bez diakritiky, interpunkce a
@@ -206,53 +258,76 @@ func abs(n int) int {
 	return n
 }
 
-// Search hledá v TMDB pro ruční párování.
-func (m *Matcher) Search(ctx context.Context, kind, query string, year int) ([]tmdb.SearchResult, error) {
-	if !m.Enabled() {
+// Search hledá u zdroje pro ruční párování. Prázdný provider = výchozí
+// zdroj knihovny, ve které titul leží; jazyk je vždy jazyk knihovny
+// (lang ho může přebít).
+func (m *Matcher) Search(ctx context.Context, provider, kind, lang, query string, year int) ([]plugin.SearchResult, error) {
+	if !m.supports(provider, kind) {
 		return nil, ErrMetadataDisabled
 	}
-	if kind == model.KindShow {
-		return m.tmdb.SearchTV(ctx, query, year)
+	res, err := m.plugins.Search(ctx, provider, plugin.Request{
+		Kind: kind, Language: lang, Query: &plugin.Query{Title: query, Year: year},
+	})
+	if res == nil {
+		res = []plugin.SearchResult{}
 	}
-	return m.tmdb.SearchMovie(ctx, query, year)
+	return res, err
 }
 
-// MatchMovie spáruje film s TMDB a uloží metadata i obrázky. Vrací ID filmu
-// (jiné, když se sloučil s jinou verzí téhož filmu).
-func (m *Matcher) MatchMovie(ctx context.Context, id uuid.UUID, tmdbID int, state string) (uuid.UUID, error) {
-	if !m.Enabled() {
+// LibraryOf vrátí knihovnu titulu.
+func (m *Matcher) LibraryOf(ctx context.Context, kind string, id uuid.UUID) (*model.Library, error) {
+	var libID uuid.UUID
+	if kind == model.KindShow {
+		sh, err := m.store.GetShow(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		libID = sh.LibraryID
+	} else {
+		mv, err := m.store.GetMovie(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		libID = mv.LibraryID
+	}
+	return m.store.GetLibrary(ctx, libID)
+}
+
+// MatchMovie spáruje film s titulem metaID u zdroje provider a uloží metadata
+// i obrázky. Vrací ID filmu (jiné, když se sloučil s jinou verzí téhož filmu).
+func (m *Matcher) MatchMovie(ctx context.Context, id uuid.UUID, provider, metaID string, state string) (uuid.UUID, error) {
+	if !m.supports(provider, model.KindMovie) {
 		return uuid.Nil, ErrMetadataDisabled
 	}
-	if _, err := m.store.GetMovie(ctx, id); err != nil {
-		return uuid.Nil, err
-	}
-	d, err := m.tmdb.Movie(ctx, tmdbID)
+	lib, err := m.LibraryOf(ctx, model.KindMovie, id)
 	if err != nil {
 		return uuid.Nil, err
 	}
-	meta := m.titleMeta(ctx, d, "movie-"+id.String())
+	var d plugin.VideoMetadata
+	if err := m.plugins.Fetch(ctx, provider, plugin.Request{Kind: plugin.KindMovie, ID: metaID, Language: lib.Language}, &d); err != nil {
+		return uuid.Nil, err
+	}
+	meta := m.titleMeta(ctx, provider, metaID, &d, "movie-"+id.String())
 	return m.store.ApplyMovieMeta(ctx, id, meta, state)
 }
 
-// MatchShow spáruje seriál s TMDB včetně metadat řad a dílů, které jsou na disku.
-func (m *Matcher) MatchShow(ctx context.Context, id uuid.UUID, tmdbID int, state string) error {
-	if !m.Enabled() {
+// MatchShow spáruje seriál včetně metadat řad a dílů, které jsou na disku.
+func (m *Matcher) MatchShow(ctx context.Context, id uuid.UUID, provider, metaID string, state string) error {
+	if !m.supports(provider, model.KindShow) {
 		return ErrMetadataDisabled
 	}
-	if _, err := m.store.GetShow(ctx, id); err != nil {
-		return err
-	}
-	d, err := m.tmdb.TV(ctx, tmdbID)
+	lib, err := m.LibraryOf(ctx, model.KindShow, id)
 	if err != nil {
 		return err
 	}
-	meta := m.titleMeta(ctx, d, "show-"+id.String())
-	for _, c := range d.Creators {
-		meta.Credits = append(meta.Credits, model.Credit{Name: c, Role: "creator"})
+	var d plugin.VideoMetadata
+	if err := m.plugins.Fetch(ctx, provider, plugin.Request{Kind: plugin.KindShow, ID: metaID, Language: lib.Language}, &d); err != nil {
+		return err
 	}
+	meta := m.titleMeta(ctx, provider, metaID, &d, "show-"+id.String())
 	if err := m.store.ApplyShowMeta(ctx, id, meta, state); err != nil {
 		if errors.Is(err, storage.ErrConflict) {
-			return fmt.Errorf("seriál s TMDB ID %d už v knihovně je: %w", tmdbID, err)
+			return fmt.Errorf("seriál %s/%s už v knihovně je: %w", provider, metaID, err)
 		}
 		return err
 	}
@@ -262,25 +337,25 @@ func (m *Matcher) MatchShow(ctx context.Context, id uuid.UUID, tmdbID int, state
 		return err
 	}
 	for _, se := range seasons {
-		s, err := m.tmdb.Season(ctx, tmdbID, se.Number)
-		if errors.Is(err, tmdb.ErrNotFound) {
+		s, err := m.plugins.Season(ctx, provider, plugin.Request{ID: metaID, Season: se.Number, Language: lib.Language})
+		if plugin.IsNotFound(err) {
 			continue
 		}
 		if err != nil {
-			m.log.Warn("řada z TMDB", "show", id, "season", se.Number, "err", err)
+			m.log.Warn("řada ze zdroje", "zdroj", provider, "show", id, "season", se.Number, "err", err)
 			continue
 		}
 		sm := storage.SeasonMeta{Number: se.Number, Title: s.Name, Overview: s.Overview,
-			PosterPath: m.download(ctx, tmdb.SizePoster, s.PosterPath, fmt.Sprintf("season-%s-s%02d", id, se.Number))}
+			PosterPath: m.download(ctx, provider, s.PosterURL, fmt.Sprintf("season-%s-s%02d", id, se.Number))}
 		onDisk := map[int]bool{}
 		for _, e := range se.Episodes {
 			onDisk[e.Number] = true
 		}
 		for _, e := range s.Episodes {
-			em := storage.EpisodeMeta{Number: e.Number, Title: e.Name, Overview: e.Overview,
-				AirDate: e.AirDate, RuntimeMin: e.Runtime}
+			em := storage.EpisodeMeta{Number: e.Number, Title: e.Title, Overview: e.Overview,
+				AirDate: e.AirDate, RuntimeMin: e.RuntimeMin}
 			if onDisk[e.Number] {
-				em.StillPath = m.download(ctx, tmdb.SizeStill, e.StillPath, fmt.Sprintf("still-%s-s%02de%02d", id, se.Number, e.Number))
+				em.StillPath = m.download(ctx, provider, e.StillURL, fmt.Sprintf("still-%s-s%02de%02d", id, se.Number, e.Number))
 			}
 			sm.Episodes = append(sm.Episodes, em)
 		}
@@ -291,39 +366,45 @@ func (m *Matcher) MatchShow(ctx context.Context, id uuid.UUID, tmdbID int, state
 	return nil
 }
 
-func (m *Matcher) titleMeta(ctx context.Context, d *tmdb.Details, imagePrefix string) storage.TitleMeta {
+func (m *Matcher) titleMeta(ctx context.Context, provider, metaID string, d *plugin.VideoMetadata, imagePrefix string) storage.TitleMeta {
+	ids := map[string]string{}
+	for k, v := range d.ExternalIDs {
+		ids[k] = v
+	}
+	ids[provider] = metaID
 	meta := storage.TitleMeta{
-		TMDBID: d.ID, IMDBID: d.IMDBID, Title: d.Title, OriginalTitle: d.OriginalTitle,
+		Provider: provider, ID: metaID, ExternalIDs: ids,
+		Title: d.Title, OriginalTitle: d.OriginalTitle,
 		Overview: d.Overview, Tagline: d.Tagline, Status: d.Status, Year: d.Year,
 		RuntimeMin: d.RuntimeMin, Rating: d.Rating,
-		PosterPath:   m.download(ctx, tmdb.SizePoster, d.PosterPath, "poster-"+imagePrefix),
-		BackdropPath: m.download(ctx, tmdb.SizeBackdrop, d.BackdropPath, "backdrop-"+imagePrefix),
-		Genres:       []storage.Genre{},
+		PosterPath:   m.download(ctx, provider, d.PosterURL, "poster-"+imagePrefix),
+		BackdropPath: m.download(ctx, provider, d.BackdropURL, "backdrop-"+imagePrefix),
+		Genres:       append([]string{}, d.Genres...),
 	}
-	for _, g := range d.Genres {
-		meta.Genres = append(meta.Genres, storage.Genre{TMDBID: g.ID, Name: g.Name})
-	}
-	for _, n := range d.Directors {
+	for _, n := range d.Credits.Directors {
 		meta.Credits = append(meta.Credits, model.Credit{Name: n, Role: "director"})
 	}
-	for _, n := range d.Writers {
+	for _, n := range d.Credits.Writers {
 		meta.Credits = append(meta.Credits, model.Credit{Name: n, Role: "writer"})
 	}
-	for _, p := range d.Cast {
+	for _, n := range d.Credits.Creators {
+		meta.Credits = append(meta.Credits, model.Credit{Name: n, Role: "creator"})
+	}
+	for _, p := range d.Credits.Cast {
 		meta.Credits = append(meta.Credits, model.Credit{Name: p.Name, Role: "cast", Character: p.Character})
 	}
 	return meta
 }
 
-// download stáhne obrázek do SCENITER_IMAGE_ROOT a vrátí název souboru;
-// při chybě prázdný řetězec (titul se uloží bez obrázku).
-func (m *Matcher) download(ctx context.Context, size, path, name string) string {
-	if path == "" || m.imageRoot == "" {
+// download stáhne obrázek ze zdroje do SCENITER_IMAGE_ROOT a vrátí název
+// souboru; při chybě prázdný řetězec (titul se uloží bez obrázku).
+func (m *Matcher) download(ctx context.Context, provider, url, name string) string {
+	if url == "" || m.imageRoot == "" {
 		return ""
 	}
-	data, contentType, err := m.tmdb.Image(ctx, size, path)
+	data, contentType, err := m.plugins.DownloadImage(ctx, provider, url)
 	if err != nil {
-		m.log.Warn("obrázek z TMDB", "path", path, "err", err)
+		m.log.Warn("obrázek ze zdroje", "zdroj", provider, "url", url, "err", err)
 		return ""
 	}
 	ext := imagestore.ExtForContentType(contentType)

@@ -1,11 +1,14 @@
 // Package scanner sleduje VIDEO_ROOT a udržuje knihovnu filmů a seriálů.
 //
-// Zařazení souboru:
-//   - pod adresářem filmů (SCENITER_MOVIES_DIRS) je film: soubor ležící
-//     naplocho je film sám, soubor v podadresáři patří filmu toho adresáře;
-//   - pod adresářem seriálů (SCENITER_SHOWS_DIRS) je díl: první podadresář je
-//     seriál, další úroveň může být řada ("S01", "Season 1", "2. řada");
-//   - jinde rozhoduje název: SxxEyy nebo NxNN je díl, jinak film.
+// Prochází jen podsložky VIDEO_ROOT, ze kterých admin udělal knihovnu
+// (sc_libraries). Typ obsahu určuje knihovna:
+//   - v knihovně filmů je soubor ležící naplocho film sám, soubor
+//     v podadresáři patří filmu toho adresáře;
+//   - v knihovně seriálů je první podadresář seriál, další úroveň může být
+//     řada ("S01", "Season 1", "2. řada"); díl ležící naplocho patří seriálu
+//     podle textu před číslem dílu ("Show.S01E02").
+//
+// Soubory mimo knihovny se ignorují.
 //
 // ffprobe běží mimo databázovou transakci; zápis souboru je pak krátký.
 package scanner
@@ -13,6 +16,7 @@ package scanner
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"os"
@@ -25,6 +29,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
+	"mediater/internal/sceniter/model"
 	"mediater/internal/sceniter/storage"
 )
 
@@ -58,15 +63,13 @@ type Status struct {
 
 // Scanner udržuje knihovnu v souladu s diskem.
 type Scanner struct {
-	root      string
-	movieDirs []string
-	showDirs  []string
-	store     *storage.Store
-	ffprobe   string
-	log       *slog.Logger
+	root    string
+	store   *storage.Store
+	ffprobe string
+	log     *slog.Logger
 
 	// OnChange se zavolá po průchodu knihovnou nebo po přidání souboru
-	// (spouští párování s TMDB). Nastavuje se před Start.
+	// (spouští párování metadat). Nastavuje se před Start.
 	OnChange func()
 
 	appCtx  context.Context
@@ -76,25 +79,26 @@ type Scanner struct {
 
 	statusMu sync.Mutex
 	status   Status
+	// queued: průchod vyžádaný během běžícího průchodu (změna knihoven) –
+	// spustí se hned po něm.
+	queued bool
 }
 
 // New vytvoří scanner. ffprobe se hledá v PATH; bez něj se soubory založí
 // bez údajů o stopách a přehrávání se rozhoduje jen podle přípony.
-func New(root string, movieDirs, showDirs []string, store *storage.Store) *Scanner {
+func New(root string, store *storage.Store) *Scanner {
 	ffprobe, err := exec.LookPath("ffprobe")
 	if err != nil {
 		slog.Warn("ffprobe nenalezen – videa se založí bez údajů o stopách")
 		ffprobe = ""
 	}
 	s := &Scanner{
-		root:      root,
-		movieDirs: movieDirs,
-		showDirs:  showDirs,
-		store:     store,
-		ffprobe:   ffprobe,
-		log:       slog.Default().With("component", "sceniter-scanner"),
-		appCtx:    context.Background(),
-		pending:   map[string]struct{}{},
+		root:    root,
+		store:   store,
+		ffprobe: ffprobe,
+		log:     slog.Default().With("component", "sceniter-scanner"),
+		appCtx:  context.Background(),
+		pending: map[string]struct{}{},
 	}
 	s.status.FFprobe = ffprobe != ""
 	return s
@@ -134,6 +138,18 @@ func (s *Scanner) Rescan() error {
 	return nil
 }
 
+// RescanSoon spustí průchod; když už běží, naplánuje další hned po něm.
+// Volá se po změně knihoven, kdy běžící průchod pracuje se starým seznamem.
+func (s *Scanner) RescanSoon() {
+	if s.begin("libraries") {
+		go s.run(s.appCtx)
+		return
+	}
+	s.statusMu.Lock()
+	s.queued = true
+	s.statusMu.Unlock()
+}
+
 // Status vrátí snímek stavu.
 func (s *Scanner) Status() Status {
 	s.statusMu.Lock()
@@ -158,9 +174,14 @@ func (s *Scanner) end() {
 	now := time.Now()
 	s.status.Running = false
 	s.status.FinishedAt = &now
+	queued := s.queued
+	s.queued = false
 	s.statusMu.Unlock()
 	if s.OnChange != nil {
 		s.OnChange()
+	}
+	if queued && s.appCtx.Err() == nil && s.begin("libraries") {
+		go s.run(s.appCtx)
 	}
 }
 
@@ -184,7 +205,7 @@ func (s *Scanner) fail(err error) {
 	s.status.LastError = err.Error()
 }
 
-// run projde VIDEO_ROOT, založí nové a změněné soubory a smaže zmizelé.
+// run projde knihovny, založí nové a změněné soubory a smaže zmizelé.
 func (s *Scanner) run(ctx context.Context) {
 	defer s.end()
 
@@ -193,33 +214,54 @@ func (s *Scanner) run(ctx context.Context) {
 		s.fail(ErrRootMissing)
 		return
 	}
+	libs, err := s.store.ListLibraries(ctx, true)
+	if err != nil {
+		s.fail(err)
+		return
+	}
 
-	s.log.Info("spouštím průchod videoknihovnou", "root", s.root)
+	s.log.Info("spouštím průchod videoknihovnou", "root", s.root, "knihovny", len(libs))
 	seen := map[string]bool{}
-	walkErr := filepath.WalkDir(s.root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // nečitelný adresář přeskočit, zbytek projít
+	// walked jsou knihovny, které se prošly celé – jen v nich se smí mazat
+	// zmizelé soubory. Chybějící složka (přejmenovaná, nepřipojená) nesmaže nic.
+	walked := map[string]bool{}
+	for i := range libs {
+		lib := &libs[i]
+		root := filepath.Join(s.root, lib.Dir)
+		if info, err := os.Stat(root); err != nil || !info.IsDir() {
+			s.log.Warn("složka knihovny neexistuje", "knihovna", lib.Name, "dir", root)
+			s.fail(fmt.Errorf("složka knihovny %s neexistuje", lib.Dir))
+			continue
 		}
-		if path != s.root && Ignored(d.Name()) {
-			if d.IsDir() {
-				return filepath.SkipDir
+		walkErr := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil // nečitelný adresář přeskočit, zbytek projít
 			}
+			if path != root && Ignored(d.Name()) {
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			if d.IsDir() || !IsVideo(path) {
+				return nil
+			}
+			seen[s.rel(path)] = true
+			added, perr := s.processIn(ctx, lib, path)
+			s.count(added, perr)
 			return nil
+		})
+		if walkErr != nil {
+			s.log.Warn("průchod knihovnou přerušen", "knihovna", lib.Name, "err", walkErr)
+			if ctx.Err() != nil {
+				return // neúplný průchod nesmí mazat
+			}
+			continue
 		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if d.IsDir() || !IsVideo(path) {
-			return nil
-		}
-		seen[s.rel(path)] = true
-		added, perr := s.process(ctx, path)
-		s.count(added, perr)
-		return nil
-	})
-	if walkErr != nil {
-		s.log.Warn("průchod videoknihovnou přerušen", "err", walkErr)
-		return // neúplný průchod nesmí mazat
+		walked[lib.Dir] = true
 	}
 
 	paths, err := s.store.ListMediaPaths(ctx)
@@ -229,7 +271,8 @@ func (s *Scanner) run(ctx context.Context) {
 	}
 	removed := 0
 	for p, id := range paths {
-		if seen[p] {
+		top, _, _ := strings.Cut(p, "/")
+		if seen[p] || !walked[top] {
 			continue
 		}
 		if err := s.store.DeleteMedia(ctx, id); err != nil {
@@ -252,8 +295,38 @@ func (s *Scanner) rel(abs string) string {
 	return filepath.ToSlash(r)
 }
 
-// process založí nebo aktualizuje jeden soubor. Vrací true u nového souboru.
+// libraryFor najde zapnutou knihovnu, do které soubor patří (podle první
+// složky cesty), nebo nil.
+func (s *Scanner) libraryFor(ctx context.Context, rel string) (*model.Library, error) {
+	top, _, ok := strings.Cut(rel, "/")
+	if !ok {
+		return nil, nil // soubor přímo ve VIDEO_ROOT nepatří žádné knihovně
+	}
+	libs, err := s.store.ListLibraries(ctx, true)
+	if err != nil {
+		return nil, err
+	}
+	for i := range libs {
+		if libs[i].Dir == top {
+			return &libs[i], nil
+		}
+	}
+	return nil, nil
+}
+
+// process založí nebo aktualizuje jeden soubor (sledování změn). Soubor
+// mimo knihovny se ignoruje.
 func (s *Scanner) process(ctx context.Context, abs string) (bool, error) {
+	lib, err := s.libraryFor(ctx, s.rel(abs))
+	if err != nil || lib == nil {
+		return false, err
+	}
+	return s.processIn(ctx, lib, abs)
+}
+
+// processIn založí nebo aktualizuje jeden soubor knihovny. Vrací true
+// u nového souboru.
+func (s *Scanner) processIn(ctx context.Context, lib *model.Library, abs string) (bool, error) {
 	info, err := os.Stat(abs)
 	if err != nil || !info.Mode().IsRegular() {
 		return false, nil
@@ -284,7 +357,7 @@ func (s *Scanner) process(ctx context.Context, abs string) (bool, error) {
 	// přeřadit editor. Nový soubor se zařadí podle cesty.
 	if existing != nil {
 		in.MovieID, in.EpisodeID = existing.MovieID, existing.EpisodeID
-	} else if err := s.classify(ctx, abs, rel, &in); err != nil {
+	} else if err := s.classify(ctx, lib, abs, rel, &in); err != nil {
 		return false, err
 	}
 	if _, err := s.store.SaveMedia(ctx, in); err != nil {
@@ -293,25 +366,20 @@ func (s *Scanner) process(ctx context.Context, abs string) (bool, error) {
 	return existing == nil, nil
 }
 
-// classify určí film nebo díl, ke kterému soubor patří, a případně ho založí.
-func (s *Scanner) classify(ctx context.Context, abs, rel string, in *storage.SaveMediaInput) error {
+// classify určí film nebo díl, ke kterému soubor patří, a případně ho
+// založí. Typ určuje knihovna; parts[0] je její složka.
+func (s *Scanner) classify(ctx context.Context, lib *model.Library, abs, rel string, in *storage.SaveMediaInput) error {
 	parts := strings.Split(rel, "/")
 	stem := strings.TrimSuffix(parts[len(parts)-1], filepath.Ext(rel))
 
-	switch {
-	case len(parts) >= 2 && containsFold(s.movieDirs, parts[0]):
-		return s.asMovie(ctx, parts[1:], parts[:1], stem, in)
-	case len(parts) >= 2 && containsFold(s.showDirs, parts[0]):
-		return s.asEpisode(ctx, abs, parts[1:], parts[:1], stem, in)
-	case LooksLikeEpisode(stem):
-		return s.asEpisode(ctx, abs, parts, nil, stem, in)
-	default:
-		return s.asMovie(ctx, parts, nil, stem, in)
+	if lib.Kind == model.KindShow {
+		return s.asEpisode(ctx, lib, abs, parts[1:], parts[:1], stem, in)
 	}
+	return s.asMovie(ctx, lib, parts[1:], parts[:1], stem, in)
 }
 
 // asMovie: parts je cesta pod adresářem filmů (prefix), poslední je soubor.
-func (s *Scanner) asMovie(ctx context.Context, parts, prefix []string, stem string, in *storage.SaveMediaInput) error {
+func (s *Scanner) asMovie(ctx context.Context, lib *model.Library, parts, prefix []string, stem string, in *storage.SaveMediaInput) error {
 	var key string
 	info := ParseMovie(stem)
 	if len(parts) == 1 {
@@ -324,7 +392,7 @@ func (s *Scanner) asMovie(ctx context.Context, parts, prefix []string, stem stri
 		}
 	}
 	id, err := s.store.EnsureMovie(ctx, storage.MovieKey{
-		SourceKey: key, Title: info.Title, OriginalTitle: info.OriginalTitle, Year: info.Year,
+		LibraryID: lib.ID, SourceKey: key, Title: info.Title, OriginalTitle: info.OriginalTitle, Year: info.Year,
 	})
 	if err != nil {
 		return err
@@ -334,7 +402,7 @@ func (s *Scanner) asMovie(ctx context.Context, parts, prefix []string, stem stri
 }
 
 // asEpisode: parts je cesta pod adresářem seriálů, první je adresář seriálu.
-func (s *Scanner) asEpisode(ctx context.Context, abs string, parts, prefix []string, stem string, in *storage.SaveMediaInput) error {
+func (s *Scanner) asEpisode(ctx context.Context, lib *model.Library, abs string, parts, prefix []string, stem string, in *storage.SaveMediaInput) error {
 	ep := ParseEpisode(stem)
 
 	var showDir string
@@ -352,6 +420,10 @@ func (s *Scanner) asEpisode(ctx context.Context, abs string, parts, prefix []str
 		}
 	}
 	show := ParseMovie(showDir)
+	if show.Year == 0 {
+		// Rok seriálu často nese jen název dílu ("Seriál.e01.1999.PDTV").
+		show.Year = ParseMovie(stem).Year
+	}
 	key := strings.Join(append(append([]string{}, prefix...), showDir), "/")
 	if len(parts) < 2 {
 		key = strings.Join(append(append([]string{}, prefix...), "@"+show.Title), "/")
@@ -372,7 +444,7 @@ func (s *Scanner) asEpisode(ctx context.Context, abs string, parts, prefix []str
 	}
 
 	id, err := s.store.EnsureEpisode(ctx, storage.EpisodeKey{
-		ShowKey: key, ShowTitle: show.Title, ShowYear: show.Year,
+		LibraryID: lib.ID, ShowKey: key, ShowTitle: show.Title, ShowYear: show.Year,
 		Season: season, Episode: number, Title: ep.Title,
 	})
 	if err != nil {
@@ -429,15 +501,6 @@ func (s *Scanner) subtitlesFor(abs string) []storage.SubtitleFile {
 		})
 	}
 	return out
-}
-
-func containsFold(list []string, s string) bool {
-	for _, v := range list {
-		if strings.EqualFold(v, s) {
-			return true
-		}
-	}
-	return false
 }
 
 // ---- sledování změn ----

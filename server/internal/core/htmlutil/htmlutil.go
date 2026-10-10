@@ -1,5 +1,5 @@
 // Package htmlutil obsahuje drobné pomocníky pro scrapery, které čtou HTML
-// cizích webů (databazeknih.cz, cbdb.cz).
+// cizích webů (databazeknih.cz, cbdb.cz, csfd.cz).
 package htmlutil
 
 import (

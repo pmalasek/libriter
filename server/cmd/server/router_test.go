@@ -15,6 +15,7 @@ import (
 
 	"mediater/internal/core/config"
 	"mediater/internal/core/db"
+	"mediater/internal/core/plugin"
 	"mediater/internal/core/product"
 	"mediater/internal/core/service"
 	"mediater/internal/core/storage"
@@ -22,6 +23,13 @@ import (
 
 // testRouter sestaví router přesně jako runServe, nad dočasnou databází.
 func testRouter(t *testing.T) http.Handler {
+	t.Helper()
+	r, _ := testRouterDeps(t)
+	return r
+}
+
+// testRouterDeps je testRouter, který vrátí i závislosti (zakládání účtů).
+func testRouterDeps(t *testing.T) (http.Handler, product.Deps) {
 	t.Helper()
 	dir := t.TempDir()
 	cfg := &config.Config{
@@ -61,19 +69,24 @@ func testRouter(t *testing.T) http.Handler {
 	}
 	store := storage.New(conn)
 	auth := service.NewAuth(store, cfg.JWT)
+	pluginSettings := plugin.NewSettings(store, storage.ErrNotFound)
+	pluginHost := plugin.NewHost(filepath.Join(dir, "plugins"))
+	pluginHost.SetConfigSource(pluginSettings)
 	deps := product.Deps{
 		Ctx: ctx, Cfg: cfg, DB: conn, Auth: auth,
-		Users:        service.NewUser(store, auth),
-		Registration: service.NewRegistration(store),
-		Audit:        service.NewAudit(store),
-		StartedAt:    time.Now(),
+		Users:          service.NewUser(store, auth),
+		Registration:   service.NewRegistration(store),
+		Audit:          service.NewAudit(store),
+		Plugins:        pluginHost,
+		PluginSettings: pluginSettings,
+		StartedAt:      time.Now(),
 	}
 	for _, p := range prods {
 		if err := p.Init(deps); err != nil {
 			t.Fatalf("%s.Init: %v", p.Name(), err)
 		}
 	}
-	return newRouter(cfg, deps, prods)
+	return newRouter(cfg, deps, prods), deps
 }
 
 // Vydaná mobilní aplikace volá API Libriteru na pevných cestách. Každá cesta

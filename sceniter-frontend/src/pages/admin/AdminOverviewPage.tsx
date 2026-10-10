@@ -71,12 +71,12 @@ export function AdminOverviewPage() {
         <Card>
           <CardHeader>
             <CardTitle>{t('video.admin.metadata.title')}</CardTitle>
-            <CardDescription>{s.tmdb ? t('video.admin.metadata.enabled') : t('video.admin.metadata.disabled')}</CardDescription>
+            <CardDescription>{s.metadata ? t('video.admin.metadata.enabled') : t('video.admin.metadata.disabled')}</CardDescription>
           </CardHeader>
           <CardContent>
             <Button
               variant="outline"
-              disabled={!s.tmdb || action.isPending}
+              disabled={!s.metadata || action.isPending}
               onClick={() =>
                 action.mutate(
                   { path: '/admin/metadata/match-all' },

@@ -21,6 +21,10 @@ export default {
     stream_token_invalid: 'Neplatný nebo vypršelý token pro přehrávání',
     mobile_token_refresh: 'Mobilní token nelze obnovit mobilním tokenem – přihlaste se znovu',
   },
+  plugin: {
+    not_found: 'Plugin není nainstalovaný',
+    discover_failed: 'Pluginy se nepodařilo načíst',
+  },
   user: {
     not_found: 'Uživatel nenalezen',
     email_taken: 'E-mail je již použit',

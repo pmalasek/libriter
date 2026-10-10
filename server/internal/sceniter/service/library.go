@@ -1,5 +1,5 @@
 // Package service skládá data videoknihovny pro API: detaily titulů se
-// stavem uživatele, domovskou stránku, rozkoukanost a párování s TMDB.
+// stavem uživatele, domovskou stránku a rozkoukanost.
 package service
 
 import (
@@ -145,10 +145,18 @@ func upNext(episodes []EpisodeWithProgress, latest *model.WatchProgress) *Episod
 
 // Home je obsah domovské stránky.
 type Home struct {
-	Continue       []model.ContinueItem `json:"continue"`
-	RecentMovies   []model.Movie        `json:"recent_movies"`
-	RecentEpisodes []model.Episode      `json:"recent_episodes"`
-	Watchlist      []WatchlistItem      `json:"watchlist"`
+	Continue []model.ContinueItem `json:"continue"`
+	// Libraries jsou řádky „nově přidané“ – jeden za každou zapnutou knihovnu
+	// v nastaveném pořadí; knihovna filmů plní Movies, seriálů Episodes.
+	Libraries []HomeLibrary   `json:"libraries"`
+	Watchlist []WatchlistItem `json:"watchlist"`
+}
+
+// HomeLibrary je řádek domovské stránky za jednu knihovnu.
+type HomeLibrary struct {
+	Library  model.Library   `json:"library"`
+	Movies   []model.Movie   `json:"movies"`
+	Episodes []model.Episode `json:"episodes"`
 }
 
 func (l *Library) Home(ctx context.Context, userID uuid.UUID) (*Home, error) {
@@ -156,19 +164,30 @@ func (l *Library) Home(ctx context.Context, userID uuid.UUID) (*Home, error) {
 	if err != nil {
 		return nil, err
 	}
-	movies, err := l.store.ListMovies(ctx, storage.MovieFilter{Sort: "added", Limit: 20})
+	libs, err := l.store.ListLibraries(ctx, true)
 	if err != nil {
 		return nil, err
 	}
-	episodes, err := l.store.RecentEpisodes(ctx, 20)
-	if err != nil {
-		return nil, err
+	rows := make([]HomeLibrary, 0, len(libs))
+	for _, lib := range libs {
+		row := HomeLibrary{Library: lib, Movies: []model.Movie{}, Episodes: []model.Episode{}}
+		if lib.Kind == model.KindShow {
+			row.Episodes, err = l.store.RecentEpisodes(ctx, lib.ID, 20)
+		} else {
+			row.Movies, err = l.store.ListMovies(ctx, storage.MovieFilter{Library: lib.ID, Sort: "added", Limit: 20})
+		}
+		if err != nil {
+			return nil, err
+		}
+		if len(row.Movies)+len(row.Episodes) > 0 {
+			rows = append(rows, row)
+		}
 	}
 	wl, err := l.Watchlist(ctx, userID)
 	if err != nil {
 		return nil, err
 	}
-	return &Home{Continue: cont, RecentMovies: movies, RecentEpisodes: episodes, Watchlist: wl}, nil
+	return &Home{Continue: cont, Libraries: rows, Watchlist: wl}, nil
 }
 
 // Continue vrátí „Pokračovat ve sledování“: rozkoukané filmy a díly a u

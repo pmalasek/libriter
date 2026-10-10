@@ -61,6 +61,11 @@ var (
 	}, "|") + `)(?:$|[\s._\-\])])`)
 	separatorsRe = regexp.MustCompile(`[._]+`)
 	spacesRe     = regexp.MustCompile(`\s+`)
+	// Úvodní značky bez roku: "!(Dokument)-Název", "[CZ] Název", "_ Název".
+	leadingTagRe  = regexp.MustCompile(`^[^\pL\pN(\[]*(?:[(\[][^)\]\d]*[)\]][^\pL\pN(\[]*)+`)
+	leadingJunkRe = regexp.MustCompile(`^[^\pL\pN(\[]+`)
+	// Pořadové číslo složky ve sbírce: "02. Putování s dinosaury".
+	ordinalRe = regexp.MustCompile(`^0\d{1,2}[.)]\s+`)
 )
 
 // ParseMovie rozebere název souboru nebo adresáře filmu (bez přípony) na
@@ -68,6 +73,9 @@ var (
 // "Český název - Original Title (rok)" i scénové "Název.2018.720p.x264…".
 func ParseMovie(name string) MovieInfo {
 	name = strings.TrimSpace(name)
+	name = leadingTagRe.ReplaceAllString(name, "")
+	name = leadingJunkRe.ReplaceAllString(name, "")
+	name = ordinalRe.ReplaceAllString(name, "")
 	var info MovieInfo
 	title := name
 
@@ -113,8 +121,13 @@ func firstYearToken(name string) []int {
 }
 
 // cleanTitle převede oddělovače na mezery a ořízne zbytky na okrajích.
+// Pomlčky jsou oddělovač jen v názvu bez mezer s víc pomlčkami
+// ("Nigel-Marven-a-Invaze") – "Spider-Man" zůstane.
 func cleanTitle(s string) string {
 	s = separatorsRe.ReplaceAllString(s, " ")
+	if !strings.ContainsAny(strings.TrimSpace(s), " ") && strings.Count(s, "-") >= 2 {
+		s = strings.ReplaceAll(s, "-", " ")
+	}
 	s = spacesRe.ReplaceAllString(s, " ")
 	return strings.TrimFunc(s, func(r rune) bool {
 		return unicode.IsSpace(r) || r == '-' || r == '(' || r == '[' || r == ','

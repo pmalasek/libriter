@@ -6,6 +6,8 @@ import {
   type AuthResponse,
   type ChangePasswordRequest,
   type LoginRequest,
+  type PluginInfo,
+  type PluginsResponse,
   type RegisterRequest,
   type UpdateUserRequest,
   type User,
@@ -63,5 +65,40 @@ export function useChangePassword(userId: string) {
   return useMutation({
     mutationFn: (body: ChangePasswordRequest) =>
       apiFetch<{ status: string }>(`/users/${userId}/password`, { method: 'PUT', json: body }),
+  })
+}
+
+// ---- pluginy metadat (admin, společné všem produktům) ----
+
+export function usePlugins() {
+  return useQuery({
+    queryKey: queryKeys.adminPlugins,
+    queryFn: () => apiFetch<PluginsResponse>('/admin/plugins'),
+  })
+}
+
+export function useReloadPlugins() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => apiFetch<PluginsResponse>('/admin/plugins/reload', { method: 'POST' }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(queryKeys.adminPlugins, data)
+      // Seznamy zdrojů v produktech (výběr zdroje u knihovny, pořadí zdrojů).
+      void queryClient.invalidateQueries()
+    },
+  })
+}
+
+/** Uloží konfiguraci pluginu; null = beze změny, '' = smazat. */
+export function useSetPluginConfig(name: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (values: Record<string, string | null>) =>
+      apiFetch<PluginInfo>(`/admin/plugins/${name}/config`, { method: 'PUT', json: values }),
+    onSuccess: (info) => {
+      queryClient.setQueryData<PluginsResponse>(queryKeys.adminPlugins, (prev) =>
+        prev ? { ...prev, plugins: prev.plugins.map((p) => (p.name === info.name ? info : p)) } : prev,
+      )
+    },
   })
 }

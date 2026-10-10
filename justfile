@@ -16,8 +16,8 @@ sceniter_dist := backend_dir / "internal/sceniter/web/dist"
 default:
     @just --list
 
-# Sestaví oba weby i backend do bin/mediater
-build: frontend backend
+# Sestaví oba weby, backend do bin/mediater a pluginy metadat do bin/plugins
+build: frontend backend plugins
 
 # Závislosti se instalují v kořeni: weby, mobil i sdílené balíčky jsou npm
 # workspaces s jedním společným package-lock.json.
@@ -37,10 +37,28 @@ backend:
         -ldflags "-X mediater/internal/core/version.Version=${MEDIATER_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}" \
         -o ../{{bin}} ./cmd/server
 
-# Vývojový server na :8080
+# Server najde pluginy v plugins/ vedle binárky (nebo v PLUGIN_DIR). chmod 755:
+# soubor zapisovatelný pro skupinu (umask 002) server nespustí.
+#
+# Pluginy metadat (server/cmd/plugins/*) do bin/plugins/mediater-meta-<jméno>
+plugins:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="${MEDIATER_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
+    mkdir -p bin/plugins
+    cd {{backend_dir}}
+    for dir in cmd/plugins/*/; do
+        name=$(basename "$dir")
+        out="../bin/plugins/mediater-meta-$name"
+        CGO_ENABLED=0 go build -ldflags "-X mediater/internal/core/version.Version=$version" -o "$out" "./$dir"
+        chmod 755 "$out"
+    done
+    ls ../bin/plugins
+
+# Vývojový server na :8080 (pluginy metadat z bin/plugins)
 [working-directory('server')]
-dev-backend:
-    go run ./cmd/server
+dev-backend: plugins
+    PLUGIN_DIR="${PLUGIN_DIR:-../bin/plugins}" go run ./cmd/server
 
 # Vite na :5173, proxy /api na :8080
 [working-directory('libriter-frontend')]

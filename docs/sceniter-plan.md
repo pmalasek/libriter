@@ -340,6 +340,17 @@ sudo nginx -t && curl -sI https://video.helpdesk24.works/health
 | Katalogy jádra jen s obecnými texty | Jádro dostalo celé jmenné prostory `common, format, labels, errors, language, auth, layout, profile, admin` | Dělit pětijazyčné katalogy po klíčích by bylo křehké; několik knižních popisků v jádru je zapsané v README `core-shared`. |
 | Správa uživatelů ve webu Sceniteru (`core-web`) | Administrace Sceniteru odkazuje na správu účtů v Libriteru | Stránky uživatelů v Libriteru závisí na knižních hookách; účty jsou stejně společné. |
 
+## Navazující změny (2026-10-10)
+
+- **Knihovny místo pevných složek:** `SCENITER_MOVIES_DIRS`/`SCENITER_SHOWS_DIRS`
+  a odhad podle názvu nahradily knihovny v administraci (typ, název, jazyk
+  a výchozí zdroj metadat pro každou podsložku `VIDEO_ROOT`). Migrace
+  `sceniter/002` tabulky `sc_*` přestavěla a dříve načtená data smazala.
+- **Metadata z pluginů:** TMDB už není vestavěné; zdroje metadat Libriteru
+  i Sceniteru jsou samostatné programy (`tmdb`, `csfd`, `tvmaze` + knižní
+  zdroje), viz [plugins.md](plugins.md). `TMDB_LANGUAGE` zrušeno – jazyk je
+  vlastnost knihovny.
+
 ## Zbývá
 
 - **Repo na GitHubu** přejmenovat na `mediater` (`gh repo rename`) a upravit

@@ -80,6 +80,7 @@ func (s *Store) DeleteMedia(ctx context.Context, id uuid.UUID) error {
 
 // MovieKey identifikuje film na disku a nese údaje z názvu souboru.
 type MovieKey struct {
+	LibraryID     uuid.UUID
 	SourceKey     string
 	Title         string
 	OriginalTitle string
@@ -87,7 +88,7 @@ type MovieKey struct {
 }
 
 // EnsureMovie vrátí ID filmu se source_key, případně ho založí s údaji
-// z názvu souboru. Existující film se nemění – mohl ho upravit editor nebo TMDB.
+// z názvu souboru. Existující film se nemění – mohl ho upravit editor nebo zdroj metadat.
 func (s *Store) EnsureMovie(ctx context.Context, k MovieKey) (uuid.UUID, error) {
 	var id uuid.UUID
 	err := s.db.QueryRowContext(ctx, `SELECT id FROM sc_movies WHERE source_key = ?1`, k.SourceKey).Scan(&id)
@@ -99,9 +100,9 @@ func (s *Store) EnsureMovie(ctx context.Context, k MovieKey) (uuid.UUID, error) 
 	}
 	id = uuid.New()
 	const ins = `
-		INSERT INTO sc_movies (id, source_key, title, original_title, year)
-		VALUES (?1, ?2, ?3, ?4, ?5)`
-	if _, err := s.db.ExecContext(ctx, ins, id, k.SourceKey, k.Title, nullStr(k.OriginalTitle), nullInt(k.Year)); err != nil {
+		INSERT INTO sc_movies (id, library_id, source_key, title, original_title, year)
+		VALUES (?1, ?2, ?3, ?4, ?5, ?6)`
+	if _, err := s.db.ExecContext(ctx, ins, id, k.LibraryID, k.SourceKey, k.Title, nullStr(k.OriginalTitle), nullInt(k.Year)); err != nil {
 		return uuid.Nil, fmt.Errorf("ensure movie: %w", err)
 	}
 	return id, nil
@@ -109,6 +110,7 @@ func (s *Store) EnsureMovie(ctx context.Context, k MovieKey) (uuid.UUID, error) 
 
 // EpisodeKey identifikuje díl na disku.
 type EpisodeKey struct {
+	LibraryID uuid.UUID
 	ShowKey   string // adresář seriálu (source_key)
 	ShowTitle string
 	ShowYear  int
@@ -130,8 +132,8 @@ func (s *Store) EnsureEpisode(ctx context.Context, k EpisodeKey) (uuid.UUID, err
 	err = tx.QueryRowContext(ctx, `SELECT id FROM sc_shows WHERE source_key = ?1`, k.ShowKey).Scan(&showID)
 	if errors.Is(err, sql.ErrNoRows) {
 		showID = uuid.New()
-		_, err = tx.ExecContext(ctx, `INSERT INTO sc_shows (id, source_key, title, year) VALUES (?1, ?2, ?3, ?4)`,
-			showID, k.ShowKey, k.ShowTitle, nullInt(k.ShowYear))
+		_, err = tx.ExecContext(ctx, `INSERT INTO sc_shows (id, library_id, source_key, title, year) VALUES (?1, ?2, ?3, ?4, ?5)`,
+			showID, k.LibraryID, k.ShowKey, k.ShowTitle, nullInt(k.ShowYear))
 	}
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("ensure show: %w", err)

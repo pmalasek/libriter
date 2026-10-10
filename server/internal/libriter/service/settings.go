@@ -93,15 +93,37 @@ type SettingsService struct {
 	*coreservice.RegistrationService
 
 	store *storage.Store
-	// known jsou jména všech zdrojů, které binárka umí (i vypnutých).
-	known []string
-	// envDefaults je nastavení odvozené z konfigurace při startu.
-	envDefaults MetadataSettings
+	// knownFn vrací jména všech nainstalovaných zdrojů (i vypnutých). Mění
+	// se, když admin znovu načte pluginy.
+	knownFn func() []string
+	// cfg je nastavení zdrojů z konfigurace při startu (výchozí hodnoty).
+	cfg config.MetadataConfig
+	// googleKey ukládá klíč Google Books do konfigurace pluginu googlebooks;
+	// nil = dřívější samostatné nastavení (testy).
+	googleKey GoogleKeyStore
 	// libraryDefaults je nastavení knihovny z konfigurace.
 	libraryDefaults LibrarySettings
 }
 
+// GoogleKeyStore čte a ukládá klíč Google Books v konfiguraci pluginu.
+type GoogleKeyStore interface {
+	Value(ctx context.Context, plugin, key string) (string, error)
+	SetValue(ctx context.Context, plugin, key, value string) error
+}
+
+// Plugin a klíč, pod kterým má plugin googlebooks API klíč.
+const (
+	googleBooksPlugin = "googlebooks"
+	googleBooksKey    = "api_key"
+)
+
 func NewSettings(store *storage.Store, cfg config.MetadataConfig, library config.LibraryConfig, known []string) *SettingsService {
+	return NewSettingsFunc(store, cfg, library, func() []string { return known })
+}
+
+// NewSettingsFunc je NewSettings se seznamem zdrojů, který se může měnit
+// (pluginy načtené znovu za běhu).
+func NewSettingsFunc(store *storage.Store, cfg config.MetadataConfig, library config.LibraryConfig, known func() []string) *SettingsService {
 	lang := library.DefaultLanguage
 	if lang == "" {
 		lang = "cs"
@@ -109,11 +131,44 @@ func NewSettings(store *storage.Store, cfg config.MetadataConfig, library config
 	return &SettingsService{
 		RegistrationService: coreservice.NewRegistration(store.Core()),
 		store:               store,
-		known:               known,
-		envDefaults:         defaultMetadata(cfg, known),
+		knownFn:             known,
+		cfg:                 cfg,
 		libraryDefaults:     LibrarySettings{DefaultLanguage: lang},
 	}
 }
+
+// WithGoogleKeyStore přesměruje klíč Google Books do konfigurace pluginu.
+// Klíč uložený dřív v samostatném nastavení se při čtení použije jako záloha.
+func (s *SettingsService) WithGoogleKeyStore(ks GoogleKeyStore) *SettingsService {
+	s.googleKey = ks
+	return s
+}
+
+// MigrateGoogleKey převezme klíč Google Books uložený dřív v samostatném
+// nastavení do konfigurace pluginu googlebooks, pokud tam ještě žádný není.
+func (s *SettingsService) MigrateGoogleKey(ctx context.Context) error {
+	if s.googleKey == nil {
+		return nil
+	}
+	current, err := s.googleKey.Value(ctx, googleBooksPlugin, googleBooksKey)
+	if err != nil || current != "" {
+		return err
+	}
+	raw, err := s.store.GetSetting(ctx, SettingGoogleBooksAPIKey)
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var legacy string
+	if err := json.Unmarshal(raw, &legacy); err != nil || strings.TrimSpace(legacy) == "" {
+		return nil
+	}
+	return s.googleKey.SetValue(ctx, googleBooksPlugin, googleBooksKey, legacy)
+}
+
+func (s *SettingsService) known() []string { return s.knownFn() }
 
 // defaultMetadata sestaví výchozí nastavení: zdroje z konfigurace v jejím
 // pořadí jako zapnuté, zbytek známých zdrojů vypnutý. Stejně vzniknou
@@ -165,11 +220,7 @@ func defaultProviders(enabled, known []string) []ProviderSetting {
 
 // Metadata vrátí nastavení zdrojů – z databáze, jinak výchozí z konfigurace.
 func (s *SettingsService) Metadata(ctx context.Context) (MetadataSettings, error) {
-	out := MetadataSettings{
-		Providers:         append([]ProviderSetting(nil), s.envDefaults.Providers...),
-		Languages:         append([]LanguageProfile(nil), s.envDefaults.Languages...),
-		GoogleBooksAPIKey: s.envDefaults.GoogleBooksAPIKey,
-	}
+	out := defaultMetadata(s.cfg, s.known())
 
 	raw, err := s.store.GetSetting(ctx, SettingMetadataProviders)
 	switch {
@@ -205,6 +256,16 @@ func (s *SettingsService) Metadata(ctx context.Context) (MetadataSettings, error
 		out.GoogleBooksAPIKey = key
 	case !errors.Is(err, storage.ErrNotFound):
 		return MetadataSettings{}, err
+	}
+
+	if s.googleKey != nil {
+		key, err := s.googleKey.Value(ctx, googleBooksPlugin, googleBooksKey)
+		if err != nil {
+			return MetadataSettings{}, err
+		}
+		if key != "" {
+			out.GoogleBooksAPIKey = key
+		}
 	}
 
 	return out, nil
@@ -252,6 +313,11 @@ func (s *SettingsService) SetMetadata(ctx context.Context, in MetadataSettings) 
 	key := strings.TrimSpace(in.GoogleBooksAPIKey)
 	if err := s.setJSON(ctx, SettingGoogleBooksAPIKey, key); err != nil {
 		return MetadataSettings{}, err
+	}
+	if s.googleKey != nil {
+		if err := s.googleKey.SetValue(ctx, googleBooksPlugin, googleBooksKey, key); err != nil {
+			return MetadataSettings{}, err
+		}
 	}
 
 	return MetadataSettings{Providers: providers, Languages: languages, GoogleBooksAPIKey: key}, nil
@@ -346,8 +412,9 @@ func (s *SettingsService) DefaultLanguage(ctx context.Context) string {
 // normalize zahodí zdroje, které binárka nezná (zbyly po downgradu), a doplní
 // chybějící známé jako vypnuté. Pořadí uložených zdrojů zůstává.
 func (s *SettingsService) normalize(in []ProviderSetting) []ProviderSetting {
-	out := make([]ProviderSetting, 0, len(s.known))
-	seen := make(map[string]bool, len(s.known))
+	known := s.known()
+	out := make([]ProviderSetting, 0, len(known))
+	seen := make(map[string]bool, len(known))
 
 	for _, p := range in {
 		name := strings.ToLower(strings.TrimSpace(p.Name))
@@ -357,7 +424,7 @@ func (s *SettingsService) normalize(in []ProviderSetting) []ProviderSetting {
 		seen[name] = true
 		out = append(out, ProviderSetting{Name: name, Enabled: p.Enabled})
 	}
-	for _, name := range s.known {
+	for _, name := range known {
 		if !seen[name] {
 			out = append(out, ProviderSetting{Name: name, Enabled: false})
 		}
@@ -384,7 +451,7 @@ func (s *SettingsService) normalizeLanguages(in []LanguageProfile) []LanguagePro
 }
 
 func (s *SettingsService) isKnown(name string) bool {
-	for _, known := range s.known {
+	for _, known := range s.known() {
 		if known == name {
 			return true
 		}

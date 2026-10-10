@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sort"
+	"sync"
 	"sync/atomic"
 )
 
@@ -80,6 +81,7 @@ type chainSet struct {
 // Řetězce jsou neměnné a mění se jen ukazatel na ně, takže rozpracovaný
 // požadavek dojede na tom řetězci, se kterým začal – žádné zamykání.
 type Registry struct {
+	mu        sync.RWMutex
 	factories map[string]Factory
 	info      []ProviderInfo
 	chains    atomic.Pointer[chainSet]
@@ -88,25 +90,34 @@ type Registry struct {
 // NewRegistry zjistí schopnosti všech známých zdrojů a začne s prázdnými
 // řetězci; ty se naplní prvním voláním Rebuild.
 func NewRegistry(factories map[string]Factory) *Registry {
-	r := &Registry{factories: factories}
+	r := &Registry{}
+	r.SetFactories(factories)
+	r.chains.Store(&chainSet{def: NewChain(), all: NewChain()})
+	return r
+}
 
+// SetFactories vymění sadu známých zdrojů (pluginy načtené znovu). Řetězce
+// zůstávají, dokud je nepřestaví Rebuild.
+func (r *Registry) SetFactories(factories map[string]Factory) {
 	names := make([]string, 0, len(factories))
 	for name := range factories {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 
+	info := make([]ProviderInfo, 0, len(names))
 	for _, name := range names {
 		_, isAuthorProvider := factories[name](ProviderConfig{}).(AuthorProvider)
-		r.info = append(r.info, ProviderInfo{
+		info = append(info, ProviderInfo{
 			Name:            name,
 			SupportsAuthors: isAuthorProvider,
 			SupportsImages:  isAuthorProvider,
 		})
 	}
 
-	r.chains.Store(&chainSet{def: NewChain(), all: NewChain()})
-	return r
+	r.mu.Lock()
+	r.factories, r.info = factories, info
+	r.mu.Unlock()
 }
 
 // Chain vrátí řetězec všech zapnutých zdrojů. Volá se při každém požadavku,
@@ -146,6 +157,10 @@ func (r *Registry) AuthorChainFor(uiLanguage string) *Chain {
 // vznikne jen jednou a profily ho sdílejí – klient si drží odstup mezi
 // požadavky na svůj web a ten musí platit napříč jazyky.
 func (r *Registry) Rebuild(p Profiles, cfg ProviderConfig) *Chain {
+	r.mu.RLock()
+	factories := r.factories
+	r.mu.RUnlock()
+
 	instances := make(map[string]Provider)
 	build := func(names []string) *Chain {
 		providers := make([]Provider, 0, len(names))
@@ -154,9 +169,9 @@ func (r *Registry) Rebuild(p Profiles, cfg ProviderConfig) *Chain {
 			if used[name] {
 				continue // stejný zdroj uvedený dvakrát nemá smysl volat dvakrát
 			}
-			factory, ok := r.factories[name]
+			factory, ok := factories[name]
 			if !ok {
-				slog.Warn("neznámý zdroj metadat", "zdroj", name, "známé", knownNames(r.factories))
+				slog.Warn("neznámý zdroj metadat", "zdroj", name, "známé", knownNames(factories))
 				continue
 			}
 			used[name] = true
@@ -189,6 +204,8 @@ func (r *Registry) Rebuild(p Profiles, cfg ProviderConfig) *Chain {
 
 // Known vrací všechny známé zdroje (i vypnuté) seřazené podle jména.
 func (r *Registry) Known() []ProviderInfo {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	out := make([]ProviderInfo, len(r.info))
 	copy(out, r.info)
 	return out
@@ -196,6 +213,8 @@ func (r *Registry) Known() []ProviderInfo {
 
 // KnownNames vrací jména všech známých zdrojů.
 func (r *Registry) KnownNames() []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	names := make([]string, 0, len(r.info))
 	for _, i := range r.info {
 		names = append(names, i.Name)
@@ -205,6 +224,8 @@ func (r *Registry) KnownNames() []string {
 
 // IsKnown říká, jestli zdroj tohoto jména vůbec existuje.
 func (r *Registry) IsKnown(name string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	_, ok := r.factories[name]
 	return ok
 }

@@ -3,7 +3,6 @@ package sceniter
 import (
 	"os"
 	"path/filepath"
-	"strings"
 
 	"mediater/internal/core/config"
 )
@@ -12,13 +11,10 @@ import (
 // z prostředí (a .env) přes pomocníky jádra.
 type Config struct {
 	// VideoRoot je kořen videoknihovny. Prázdný = Sceniter je vypnutý:
-	// API vrací sceniter.disabled a scanner neběží.
+	// API vrací sceniter.disabled a scanner neběží. Které podsložky se
+	// procházejí a jako co, nastavuje admin v knihovnách (sc_libraries).
 	VideoRoot string
-	// MovieDirs a ShowDirs jsou podadresáře VideoRoot s filmy a seriály.
-	// Soubor mimo ně se zařadí podle názvu (SxxEyy = díl seriálu).
-	MovieDirs []string
-	ShowDirs  []string
-	// ImageRoot je adresář plakátů a obrázků z TMDB.
+	// ImageRoot je adresář plakátů a obrázků ze zdrojů metadat.
 	ImageRoot string
 	// TranscodeRoot je pracovní adresář HLS převodů; obsah je dočasný.
 	TranscodeRoot string
@@ -28,9 +24,6 @@ type Config struct {
 	TranscodeIdleSeconds int
 	// TranscodeMaxHeight je strop výšky obrazu při plném převodu.
 	TranscodeMaxHeight int
-
-	TMDBAPIKey   string
-	TMDBLanguage string
 	// RescanMinutes > 0 zapne pravidelný průchod knihovnou (síťové disky, na
 	// kterých fsnotify nefunguje).
 	RescanMinutes int
@@ -40,15 +33,11 @@ type Config struct {
 func LoadConfig(c *config.Config) Config {
 	cfg := Config{
 		VideoRoot:            c.EnvPath("VIDEO_ROOT", ""),
-		MovieDirs:            c.EnvList("SCENITER_MOVIES_DIRS", []string{"Filmy", "Movies"}),
-		ShowDirs:             c.EnvList("SCENITER_SHOWS_DIRS", []string{"Seriály", "Serialy", "Shows", "Series", "TV"}),
 		ImageRoot:            c.EnvPath("SCENITER_IMAGE_ROOT", ""),
 		TranscodeRoot:        c.EnvPath("TRANSCODE_ROOT", ""),
 		TranscodeMaxSessions: c.EnvInt("TRANSCODE_MAX_SESSIONS", 2),
 		TranscodeIdleSeconds: c.EnvInt("TRANSCODE_IDLE_SECONDS", 60),
 		TranscodeMaxHeight:   c.EnvInt("TRANSCODE_MAX_HEIGHT", 1080),
-		TMDBAPIKey:           strings.TrimSpace(c.EnvStr("TMDB_API_KEY", "")),
-		TMDBLanguage:         c.EnvStr("TMDB_LANGUAGE", "cs-CZ"),
 		RescanMinutes:        c.EnvInt("SCENITER_RESCAN_MINUTES", 0),
 	}
 	// Obrázky vedle obálek knih – kdo nastaví jen COVER_ROOT, chce data pohromadě.

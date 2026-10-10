@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -78,8 +79,38 @@ func TestSceniterEndToEnd(t *testing.T) {
 	t.Setenv("SCENITER_IMAGE_ROOT", t.TempDir())
 	t.Setenv("TMDB_API_KEY", "")
 
-	r := testRouter(t)
+	r, deps := testRouterDeps(t)
 	e := &sceniterEnv{t: t, router: r}
+
+	// Knihovny zakládá admin: Filmy jako filmy, Seriály jako seriály.
+	if _, err := deps.Users.Create(context.Background(), "Správce", "admin@example.com", "", "tajneheslo", "admin"); err != nil {
+		t.Fatal(err)
+	}
+	var adminLogin struct{ Token string }
+	if rec := e.do("POST", "/api/v1/auth/login", "", map[string]string{"login": "admin@example.com", "password": "tajneheslo"}); json.Unmarshal(rec.Body.Bytes(), &adminLogin) != nil || adminLogin.Token == "" {
+		t.Fatalf("admin login: %d %s", rec.Code, rec.Body.String())
+	}
+	e.token = adminLogin.Token
+	var candidates struct{ Dirs []string }
+	if code := e.json("GET", "/api/v1/sceniter/admin/libraries/candidates", nil, &candidates); code != 200 ||
+		strings.Join(candidates.Dirs, ",") != "Filmy,Seriály" {
+		t.Fatalf("kandidáti: %d %v", code, candidates.Dirs)
+	}
+	for _, lib := range []map[string]string{
+		{"dir": "Filmy", "kind": "movie", "name": "Filmy", "language": "cs"},
+		{"dir": "Seriály", "kind": "show", "name": "Seriály", "language": "cs"},
+	} {
+		if code := e.json("POST", "/api/v1/sceniter/admin/libraries", lib, nil); code != http.StatusCreated {
+			t.Fatalf("knihovna %s: %d", lib["dir"], code)
+		}
+	}
+	if code := e.json("POST", "/api/v1/sceniter/admin/libraries", map[string]string{"dir": "../etc", "kind": "movie"}, nil); code != http.StatusBadRequest {
+		t.Fatalf("složka mimo VIDEO_ROOT: %d", code)
+	}
+	if code := e.json("POST", "/api/v1/sceniter/admin/libraries", map[string]string{"dir": "Filmy", "kind": "movie", "provider": "neni"}, nil); code != http.StatusBadRequest {
+		t.Fatalf("neznámý zdroj: %d", code)
+	}
+	e.token = ""
 
 	// Účet je společný: uživatel z jádra se přihlásí stejně jako do Libriteru.
 	if rec := e.do("POST", "/api/v1/auth/register", "", map[string]string{
@@ -93,6 +124,14 @@ func TestSceniterEndToEnd(t *testing.T) {
 		t.Fatalf("login: %d %s", rec.Code, rec.Body.String())
 	}
 	e.token = login.Token
+
+	var libs []struct {
+		Name string `json:"name"`
+		Kind string `json:"kind"`
+	}
+	if code := e.json("GET", "/api/v1/sceniter/libraries", nil, &libs); code != 200 || len(libs) != 2 || libs[1].Kind != "show" {
+		t.Fatalf("knihovny: %d %+v", code, libs)
+	}
 
 	if rec := e.do("GET", "/api/v1/sceniter/movies", "", nil); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("bez tokenu: %d", rec.Code)
@@ -212,10 +251,14 @@ func TestSceniterEndToEnd(t *testing.T) {
 				ID string `json:"id"`
 			} `json:"movie"`
 		} `json:"continue"`
-		RecentEpisodes []any `json:"recent_episodes"`
+		Libraries []struct {
+			Movies   []any `json:"movies"`
+			Episodes []any `json:"episodes"`
+		} `json:"libraries"`
 	}
 	e.json("GET", "/api/v1/sceniter/home", nil, &home)
-	if len(home.Continue) != 1 || home.Continue[0].Movie.ID != movieID || len(home.RecentEpisodes) != 1 {
+	if len(home.Continue) != 1 || home.Continue[0].Movie.ID != movieID || len(home.Libraries) != 2 ||
+		len(home.Libraries[0].Movies) != 2 || len(home.Libraries[1].Episodes) != 1 {
 		t.Fatalf("home: %+v", home)
 	}
 	if code := e.json("PUT", "/api/v1/sceniter/watchlist/movie/"+byTitle["Pelíšky"], nil, nil); code != http.StatusNoContent {

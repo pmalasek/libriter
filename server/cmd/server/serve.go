@@ -19,6 +19,7 @@ import (
 	corehandler "mediater/internal/core/handler"
 	"mediater/internal/core/httpx"
 	"mediater/internal/core/middleware"
+	"mediater/internal/core/plugin"
 	"mediater/internal/core/product"
 	"mediater/internal/core/service"
 	"mediater/internal/core/storage"
@@ -74,15 +75,27 @@ func runServe() error {
 	// --- jádro ---
 	coreStore := storage.New(sqlDB)
 	authSvc := service.NewAuth(coreStore, cfg.JWT)
+
+	// Pluginy metadat musí být načtené dřív než produkty – ty si z nich
+	// skládají seznamy zdrojů.
+	pluginSettings := plugin.NewSettings(coreStore, storage.ErrNotFound)
+	pluginHost := plugin.NewHost(cfg.PluginDir)
+	pluginHost.SetConfigSource(pluginSettings)
+	if err := pluginHost.Discover(ctx); err != nil {
+		slog.Warn("pluginy metadat", "err", err)
+	}
+	slog.Info("pluginy metadat", "dir", cfg.PluginDir, "počet", len(pluginHost.Plugins()))
 	deps := product.Deps{
-		Ctx:          appCtx,
-		Cfg:          cfg,
-		DB:           sqlDB,
-		Auth:         authSvc,
-		Users:        service.NewUser(coreStore, authSvc),
-		Registration: service.NewRegistration(coreStore),
-		Audit:        service.NewAudit(coreStore),
-		StartedAt:    startedAt,
+		Ctx:            appCtx,
+		Cfg:            cfg,
+		DB:             sqlDB,
+		Auth:           authSvc,
+		Users:          service.NewUser(coreStore, authSvc),
+		Registration:   service.NewRegistration(coreStore),
+		Audit:          service.NewAudit(coreStore),
+		Plugins:        pluginHost,
+		PluginSettings: pluginSettings,
+		StartedAt:      startedAt,
 	}
 
 	for _, p := range prods {
@@ -146,9 +159,10 @@ func newRouter(cfg *config.Config, deps product.Deps, prods []product.Product) h
 		r.MethodNotAllowed(httpx.MethodNotAllowedJSON)
 
 		corehandler.RegisterRoutes(r, deps.Auth, corehandler.Handlers{
-			Auth:  corehandler.NewAuth(deps.Auth, deps.Registration),
-			Users: corehandler.NewUser(deps.Users, deps.Audit),
-			Admin: corehandler.NewAdmin(deps.Users, deps.Registration, deps.Audit),
+			Auth:    corehandler.NewAuth(deps.Auth, deps.Registration),
+			Users:   corehandler.NewUser(deps.Users, deps.Audit),
+			Admin:   corehandler.NewAdmin(deps.Users, deps.Registration, deps.Audit),
+			Plugins: corehandler.NewPlugins(deps.Plugins, deps.PluginSettings, deps.Audit),
 		})
 		for _, p := range prods {
 			p.RegisterRoutes(r)

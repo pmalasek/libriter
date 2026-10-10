@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Stavy spárování titulu s TMDB.
+// Stavy spárování titulu se zdrojem metadat.
 const (
 	MatchUnmatched = "unmatched" // nespárováno – čeká na ruční zásah
 	MatchAuto      = "auto"      // spárováno automaticky po skenu
@@ -24,6 +24,26 @@ const (
 	KindEpisode = "episode"
 )
 
+// Library je knihovna: podsložka VIDEO_ROOT s typem obsahu a zdrojem metadat.
+type Library struct {
+	ID   uuid.UUID `json:"id"`
+	Dir  string    `json:"dir"`
+	Name string    `json:"name"`
+	// Kind je KindMovie nebo KindShow.
+	Kind string `json:"kind"`
+	// Language je jazyk metadat (ISO 639-1).
+	Language string `json:"language"`
+	// Provider je jméno pluginu, se kterým se tituly párují automaticky.
+	Provider  *string   `json:"provider,omitempty"`
+	Position  int       `json:"position"`
+	Enabled   bool      `json:"enabled"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+
+	// ItemCount je počet filmů nebo seriálů se soubory.
+	ItemCount int `json:"item_count"`
+}
+
 // Credit je osoba z obsazení nebo štábu.
 type Credit struct {
 	Name      string `json:"name"`
@@ -33,24 +53,26 @@ type Credit struct {
 
 // Movie je film v knihovně.
 type Movie struct {
-	ID            uuid.UUID `json:"id"`
-	Title         string    `json:"title"`
-	OriginalTitle *string   `json:"original_title,omitempty"`
-	Year          *int      `json:"year,omitempty"`
-	Overview      *string   `json:"overview,omitempty"`
-	Tagline       *string   `json:"tagline,omitempty"`
-	RuntimeMin    *int      `json:"runtime_min,omitempty"`
-	TMDBID        *int      `json:"tmdb_id,omitempty"`
-	IMDBID        *string   `json:"imdb_id,omitempty"`
-	PosterPath    *string   `json:"poster_path,omitempty"`
-	BackdropPath  *string   `json:"backdrop_path,omitempty"`
-	TMDBRating    *float64  `json:"tmdb_rating,omitempty"`
-	Credits       []Credit  `json:"credits"`
-	Genres        []string  `json:"genres"`
-	MatchState    string    `json:"match_state"`
-	SourceKey     string    `json:"source_key"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            uuid.UUID         `json:"id"`
+	LibraryID     uuid.UUID         `json:"library_id"`
+	Title         string            `json:"title"`
+	OriginalTitle *string           `json:"original_title,omitempty"`
+	Year          *int              `json:"year,omitempty"`
+	Overview      *string           `json:"overview,omitempty"`
+	Tagline       *string           `json:"tagline,omitempty"`
+	RuntimeMin    *int              `json:"runtime_min,omitempty"`
+	MetaProvider  *string           `json:"meta_provider,omitempty"`
+	MetaID        *string           `json:"meta_id,omitempty"`
+	ExternalIDs   map[string]string `json:"external_ids"`
+	PosterPath    *string           `json:"poster_path,omitempty"`
+	BackdropPath  *string           `json:"backdrop_path,omitempty"`
+	Rating        *int              `json:"rating,omitempty"`
+	Credits       []Credit          `json:"credits"`
+	Genres        []string          `json:"genres"`
+	MatchState    string            `json:"match_state"`
+	SourceKey     string            `json:"source_key"`
+	CreatedAt     time.Time         `json:"created_at"`
+	UpdatedAt     time.Time         `json:"updated_at"`
 
 	// Odvozené pro výpisy: délka hlavního souboru a jeho ID.
 	DurationSec *float64   `json:"duration_sec,omitempty"`
@@ -59,22 +81,25 @@ type Movie struct {
 
 // Show je seriál.
 type Show struct {
-	ID            uuid.UUID `json:"id"`
-	Title         string    `json:"title"`
-	OriginalTitle *string   `json:"original_title,omitempty"`
-	Year          *int      `json:"year,omitempty"`
-	Overview      *string   `json:"overview,omitempty"`
-	Status        *string   `json:"status,omitempty"`
-	TMDBID        *int      `json:"tmdb_id,omitempty"`
-	PosterPath    *string   `json:"poster_path,omitempty"`
-	BackdropPath  *string   `json:"backdrop_path,omitempty"`
-	TMDBRating    *float64  `json:"tmdb_rating,omitempty"`
-	Credits       []Credit  `json:"credits"`
-	Genres        []string  `json:"genres"`
-	MatchState    string    `json:"match_state"`
-	SourceKey     string    `json:"source_key"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	ID            uuid.UUID         `json:"id"`
+	LibraryID     uuid.UUID         `json:"library_id"`
+	Title         string            `json:"title"`
+	OriginalTitle *string           `json:"original_title,omitempty"`
+	Year          *int              `json:"year,omitempty"`
+	Overview      *string           `json:"overview,omitempty"`
+	Status        *string           `json:"status,omitempty"`
+	MetaProvider  *string           `json:"meta_provider,omitempty"`
+	MetaID        *string           `json:"meta_id,omitempty"`
+	ExternalIDs   map[string]string `json:"external_ids"`
+	PosterPath    *string           `json:"poster_path,omitempty"`
+	BackdropPath  *string           `json:"backdrop_path,omitempty"`
+	Rating        *int              `json:"rating,omitempty"`
+	Credits       []Credit          `json:"credits"`
+	Genres        []string          `json:"genres"`
+	MatchState    string            `json:"match_state"`
+	SourceKey     string            `json:"source_key"`
+	CreatedAt     time.Time         `json:"created_at"`
+	UpdatedAt     time.Time         `json:"updated_at"`
 
 	// Odvozené pro výpisy.
 	SeasonCount  int `json:"season_count"`
@@ -201,6 +226,29 @@ func MarshalCredits(c []Credit) *string {
 
 func UnmarshalCredits(s *string) []Credit {
 	out := []Credit{}
+	if s == nil || *s == "" {
+		return out
+	}
+	_ = json.Unmarshal([]byte(*s), &out)
+	return out
+}
+
+// MarshalExternalIDs a UnmarshalExternalIDs převádí ID u jiných databází do
+// sloupce external_ids_json.
+func MarshalExternalIDs(ids map[string]string) *string {
+	if len(ids) == 0 {
+		return nil
+	}
+	b, err := json.Marshal(ids)
+	if err != nil {
+		return nil
+	}
+	s := string(b)
+	return &s
+}
+
+func UnmarshalExternalIDs(s *string) map[string]string {
+	out := map[string]string{}
 	if s == nil || *s == "" {
 		return out
 	}

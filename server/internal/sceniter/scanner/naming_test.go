@@ -22,6 +22,10 @@ func TestParseMovie(t *testing.T) {
 		{"Spider-Man (2002)", "Spider-Man", "", 2002},
 		{"Vesničko má středisková", "Vesničko má středisková", "", 0},
 		{"Obecná škola CZ Dabing 720p", "Obecná škola", "", 0},
+		{"!(Dokument)-Nigel-Marven-a-Invaze-Obřích-Hadů-cz", "Nigel Marven a Invaze Obřích Hadů", "", 0},
+		{"02. Putovani s dinosaury", "Putovani s dinosaury", "", 0},
+		{"[Dokument] Planeta Země (2006)", "Planeta Země", "", 2006},
+		{"Putovani.s.dinosaury.e01.1999.PDTV.XviD.CZ", "Putovani s dinosaury e01", "", 1999},
 	}
 	for _, c := range cases {
 		got := ParseMovie(c.in)

@@ -1,11 +1,16 @@
 export default {
   sceniter: {
     disabled: 'Videoknihovna na serveru není nastavená',
+    metadata_disabled: 'Zdroj metadat není nastaven nebo nainstalován',
+    metadata_not_found: 'Titul u zdroje nenalezen',
+    metadata_conflict: 'Tento titul už v knihovně je',
+    metadata_failed: 'Zdroj metadat neodpovídá',
     not_found: 'Nenalezeno',
-    tmdb_disabled: 'Metadata z TMDB nejsou nastavena (TMDB_API_KEY)',
-    tmdb_not_found: 'Titul v TMDB nenalezen',
-    tmdb_conflict: 'Tento titul už v knihovně je',
-    tmdb_failed: 'TMDB neodpovídá',
+  },
+  library: {
+    not_found: 'Knihovna nenalezena',
+    conflict: 'Tato složka už knihovnou je',
+    root_unavailable: 'Složka VIDEO_ROOT není dostupná',
   },
   movie: { not_found: 'Film nenalezen' },
   show: { not_found: 'Seriál nenalezen' },

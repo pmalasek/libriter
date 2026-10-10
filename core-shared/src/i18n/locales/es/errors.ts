@@ -21,6 +21,10 @@ export default {
     stream_token_invalid: 'Token de reproducción no válido o caducado',
     mobile_token_refresh: 'Un token móvil no se puede renovar con otro token móvil. Vuelve a iniciar sesión',
   },
+  plugin: {
+    not_found: 'El plugin no está instalado',
+    discover_failed: 'No se pudieron cargar los plugins',
+  },
   user: {
     not_found: 'Usuario no encontrado',
     email_taken: 'Este correo electrónico ya está en uso',

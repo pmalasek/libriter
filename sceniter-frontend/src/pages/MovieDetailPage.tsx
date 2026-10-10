@@ -1,4 +1,4 @@
-import { PencilIcon, PlayIcon, RotateCcwIcon, SparklesIcon, StarIcon } from 'lucide-react'
+import { PencilIcon, PlayIcon, RotateCcwIcon, SparklesIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router'
@@ -14,7 +14,8 @@ import { EditTitleDialog } from '@/components/EditTitleDialog'
 import { FileInfo } from '@/components/FileInfo'
 import { Hero, MetaLine } from '@/components/Hero'
 import { TitleActions } from '@/components/TitleActions'
-import { TmdbMatch } from '@/components/TmdbMatch'
+import { MetadataMatch } from '@/components/MetadataMatch'
+import { ExternalLinks, SourceRating } from '@/components/MetaSource'
 
 export function MovieDetailPage() {
   const { id = '' } = useParams()
@@ -47,11 +48,7 @@ export function MovieDetailPage() {
             m.genres.join(', '),
           ]}
         />
-        {m.tmdb_rating ? (
-          <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground" title={t('video.detail.tmdbRating')}>
-            <StarIcon className="size-4 fill-current text-primary" /> {m.tmdb_rating.toFixed(1)}
-          </p>
-        ) : null}
+        <SourceRating rating={m.rating} provider={m.meta_provider} />
 
         <div className="mt-5 flex flex-wrap gap-2">
           {playable ? (
@@ -75,7 +72,7 @@ export function MovieDetailPage() {
               </Button>
               <Button size="lg" variant="ghost" onClick={() => setMatching(true)}>
                 <SparklesIcon />
-                {t('video.detail.matchTmdb')}
+                {t('video.detail.match')}
               </Button>
             </>
           ) : null}
@@ -87,16 +84,17 @@ export function MovieDetailPage() {
       {m.overview ? <p className="mt-4 max-w-3xl leading-relaxed">{m.overview}</p> : null}
 
       <Credits credits={m.credits} />
+      <ExternalLinks kind="movie" ids={m.external_ids} />
       <FileInfo files={m.files} />
-      <Attribution />
+      <Attribution provider={m.meta_provider ?? null} />
 
       {editing ? <EditTitleDialog kind="movie" title={m} open={editing} onOpenChange={setEditing} /> : null}
       <Dialog open={matching} onOpenChange={setMatching}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t('video.detail.matchTmdb')}</DialogTitle>
+            <DialogTitle>{t('video.detail.match')}</DialogTitle>
           </DialogHeader>
-          <TmdbMatch
+          <MetadataMatch
             kind="movie"
             id={m.id}
             initialQuery={m.original_title || m.title}

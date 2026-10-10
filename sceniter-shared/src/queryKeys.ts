@@ -19,5 +19,10 @@ export const queryKeys = {
   adminStats: ['sceniter', 'admin', 'stats'] as const,
   adminUnmatched: ['sceniter', 'admin', 'unmatched'] as const,
   adminTranscode: ['sceniter', 'admin', 'transcode'] as const,
-  tmdbSearch: (kind: string, q: string, year?: number) => ['sceniter', 'tmdb', kind, q, year ?? null] as const,
+  libraries: ['sceniter', 'libraries'] as const,
+  adminLibraries: ['sceniter', 'admin', 'libraries'] as const,
+  libraryCandidates: ['sceniter', 'admin', 'libraries', 'candidates'] as const,
+  metadataProviders: ['sceniter', 'metadata', 'providers'] as const,
+  metadataSearch: (kind: string, provider: string, q: string, year?: number, title?: string) =>
+    ['sceniter', 'metadata', 'search', kind, provider, q, year ?? null, title ?? null] as const,
 }

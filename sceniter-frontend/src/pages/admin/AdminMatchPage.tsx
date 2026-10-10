@@ -9,7 +9,7 @@ import { ErrorState } from 'core-web/src/components/ErrorState'
 import { Button } from 'core-web/src/components/ui/button'
 import { useAdminUnmatched, useSetMatchState } from '@/api/hooks'
 import { Poster } from '@/components/Poster'
-import { TmdbMatch } from '@/components/TmdbMatch'
+import { MetadataMatch } from '@/components/MetadataMatch'
 
 function UnmatchedRow({ kind, title }: { kind: TitleKind; title: Movie | Show }) {
   const { t } = useTranslation()
@@ -46,7 +46,7 @@ function UnmatchedRow({ kind, title }: { kind: TitleKind; title: Movie | Show })
       </div>
       {open ? (
         <div className="mt-3">
-          <TmdbMatch kind={kind} id={title.id} initialQuery={title.original_title || title.title} initialYear={title.year} onMatched={() => setOpen(false)} />
+          <MetadataMatch kind={kind} id={title.id} initialQuery={title.original_title || title.title} initialYear={title.year} onMatched={() => setOpen(false)} />
         </div>
       ) : null}
     </li>

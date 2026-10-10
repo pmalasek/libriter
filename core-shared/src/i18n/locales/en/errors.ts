@@ -21,6 +21,10 @@ export default {
     stream_token_invalid: 'Invalid or expired playback token',
     mobile_token_refresh: 'A mobile token cannot be refreshed with a mobile token – please sign in again',
   },
+  plugin: {
+    not_found: 'Plugin is not installed',
+    discover_failed: 'Plugins could not be loaded',
+  },
   user: {
     not_found: 'User not found',
     email_taken: 'This email is already in use',

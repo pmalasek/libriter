@@ -12,8 +12,8 @@ import (
 )
 
 const movieCols = `
-	m.id, m.source_key, m.title, m.original_title, m.year, m.overview, m.tagline, m.runtime_min,
-	m.tmdb_id, m.imdb_id, m.poster_path, m.backdrop_path, m.tmdb_rating, m.credits_json,
+	m.id, m.library_id, m.source_key, m.title, m.original_title, m.year, m.overview, m.tagline, m.runtime_min,
+	m.meta_provider, m.meta_id, m.external_ids_json, m.poster_path, m.backdrop_path, m.rating, m.credits_json,
 	m.match_state, m.created_at, m.updated_at`
 
 // mainMovieFile vybere hlavní soubor filmu: největší (nejlepší verzi).
@@ -21,19 +21,20 @@ const mainMovieFile = `(SELECT id FROM sc_media_files WHERE movie_id = m.id ORDE
 
 func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, error) {
 	var (
-		m                                                  model.Movie
-		orig, overview, tagline, imdb, poster, bd, credits sql.NullString
-		year, runtime, tmdb                                sql.NullInt64
-		rating                                             sql.NullFloat64
+		m                                            model.Movie
+		orig, overview, tagline, poster, bd, credits sql.NullString
+		provider, metaID, external                   sql.NullString
+		year, runtime, rating                        sql.NullInt64
 	)
-	dest := []any{&m.ID, &m.SourceKey, &m.Title, &orig, &year, &overview, &tagline, &runtime,
-		&tmdb, &imdb, &poster, &bd, &rating, &credits, &m.MatchState, &m.CreatedAt, &m.UpdatedAt}
+	dest := []any{&m.ID, &m.LibraryID, &m.SourceKey, &m.Title, &orig, &year, &overview, &tagline, &runtime,
+		&provider, &metaID, &external, &poster, &bd, &rating, &credits, &m.MatchState, &m.CreatedAt, &m.UpdatedAt}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return m, err
 	}
 	m.OriginalTitle, m.Year, m.Overview, m.Tagline = ptrString(orig), ptrInt(year), ptrString(overview), ptrString(tagline)
-	m.RuntimeMin, m.TMDBID, m.IMDBID = ptrInt(runtime), ptrInt(tmdb), ptrString(imdb)
-	m.PosterPath, m.BackdropPath, m.TMDBRating = ptrString(poster), ptrString(bd), ptrFloat(rating)
+	m.RuntimeMin, m.MetaProvider, m.MetaID = ptrInt(runtime), ptrString(provider), ptrString(metaID)
+	m.ExternalIDs = model.UnmarshalExternalIDs(ptrString(external))
+	m.PosterPath, m.BackdropPath, m.Rating = ptrString(poster), ptrString(bd), ptrInt(rating)
 	m.Credits = model.UnmarshalCredits(ptrString(credits))
 	m.Genres = []string{}
 	return m, nil
@@ -41,10 +42,12 @@ func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, e
 
 // MovieFilter omezuje výpis filmů.
 type MovieFilter struct {
-	Query string // podřetězec názvu nebo původního názvu
-	Genre string
-	Sort  string // title | year | added | rating
-	Limit int    // 0 = bez omezení
+	// Library omezí výpis na jednu knihovnu (uuid.Nil = všechny zapnuté).
+	Library uuid.UUID
+	Query   string // podřetězec názvu nebo původního názvu
+	Genre   string
+	Sort    string // title | year | added | rating
+	Limit   int    // 0 = bez omezení
 	// WithoutFiles zahrne i filmy bez souborů – pro administraci párování.
 	WithoutFiles bool
 	MatchState   string
@@ -58,8 +61,12 @@ func (s *Store) ListMovies(ctx context.Context, f MovieFilter) ([]model.Movie, e
 	} else {
 		q += `JOIN sc_media_files mf ON mf.id = ` + mainMovieFile
 	}
-	q += ` WHERE 1 = 1`
+	q += ` JOIN sc_libraries l ON l.id = m.library_id WHERE l.enabled = 1`
 	args := []any{}
+	if f.Library != uuid.Nil {
+		args = append(args, f.Library)
+		q += fmt.Sprintf(` AND m.library_id = ?%d`, len(args))
+	}
 	if f.Query != "" {
 		args = append(args, likePattern(f.Query))
 		q += fmt.Sprintf(` AND (m.title LIKE ?%d ESCAPE '\' OR m.original_title LIKE ?%[1]d ESCAPE '\')`, len(args))
@@ -79,7 +86,7 @@ func (s *Store) ListMovies(ctx context.Context, f MovieFilter) ([]model.Movie, e
 	case "added":
 		q += ` ORDER BY m.created_at DESC, m.title`
 	case "rating":
-		q += ` ORDER BY m.tmdb_rating DESC NULLS LAST, m.title`
+		q += ` ORDER BY m.rating DESC NULLS LAST, m.title`
 	default:
 		q += ` ORDER BY m.title`
 	}
@@ -173,8 +180,9 @@ func (s *Store) genresByID(ctx context.Context, kind string) (map[uuid.UUID][]st
 }
 
 const showCols = `
-	s.id, s.source_key, s.title, s.original_title, s.year, s.overview, s.status, s.tmdb_id,
-	s.poster_path, s.backdrop_path, s.tmdb_rating, s.credits_json, s.match_state, s.created_at, s.updated_at`
+	s.id, s.library_id, s.source_key, s.title, s.original_title, s.year, s.overview, s.status,
+	s.meta_provider, s.meta_id, s.external_ids_json,
+	s.poster_path, s.backdrop_path, s.rating, s.credits_json, s.match_state, s.created_at, s.updated_at`
 
 // showCounts spočítá řady a díly, které mají soubor.
 const showCounts = `
@@ -187,17 +195,20 @@ func scanShow(sc interface{ Scan(...any) error }) (model.Show, error) {
 	var (
 		sh                                          model.Show
 		orig, overview, status, poster, bd, credits sql.NullString
-		year, tmdb                                  sql.NullInt64
-		rating                                      sql.NullFloat64
+		provider, metaID, external                  sql.NullString
+		year, rating                                sql.NullInt64
 	)
-	err := sc.Scan(&sh.ID, &sh.SourceKey, &sh.Title, &orig, &year, &overview, &status, &tmdb,
+	err := sc.Scan(&sh.ID, &sh.LibraryID, &sh.SourceKey, &sh.Title, &orig, &year, &overview, &status,
+		&provider, &metaID, &external,
 		&poster, &bd, &rating, &credits, &sh.MatchState, &sh.CreatedAt, &sh.UpdatedAt,
 		&sh.SeasonCount, &sh.EpisodeCount)
 	if err != nil {
 		return sh, err
 	}
 	sh.OriginalTitle, sh.Year, sh.Overview, sh.Status = ptrString(orig), ptrInt(year), ptrString(overview), ptrString(status)
-	sh.TMDBID, sh.PosterPath, sh.BackdropPath, sh.TMDBRating = ptrInt(tmdb), ptrString(poster), ptrString(bd), ptrFloat(rating)
+	sh.MetaProvider, sh.MetaID = ptrString(provider), ptrString(metaID)
+	sh.ExternalIDs = model.UnmarshalExternalIDs(ptrString(external))
+	sh.PosterPath, sh.BackdropPath, sh.Rating = ptrString(poster), ptrString(bd), ptrInt(rating)
 	sh.Credits = model.UnmarshalCredits(ptrString(credits))
 	sh.Genres = []string{}
 	return sh, nil
@@ -205,6 +216,7 @@ func scanShow(sc interface{ Scan(...any) error }) (model.Show, error) {
 
 // ShowFilter omezuje výpis seriálů.
 type ShowFilter struct {
+	Library      uuid.UUID
 	Query        string
 	Genre        string
 	Sort         string // title | year | added | rating
@@ -215,12 +227,17 @@ type ShowFilter struct {
 
 // ListShows vrátí seriály, které mají aspoň jeden díl se souborem.
 func (s *Store) ListShows(ctx context.Context, f ShowFilter) ([]model.Show, error) {
-	q := `SELECT ` + showCols + `, ` + showCounts + ` FROM sc_shows s WHERE 1 = 1`
+	q := `SELECT ` + showCols + `, ` + showCounts + ` FROM sc_shows s
+		JOIN sc_libraries l ON l.id = s.library_id WHERE l.enabled = 1`
+	args := []any{}
+	if f.Library != uuid.Nil {
+		args = append(args, f.Library)
+		q += fmt.Sprintf(` AND s.library_id = ?%d`, len(args))
+	}
 	if !f.WithoutFiles {
 		q += ` AND EXISTS (SELECT 1 FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
 			JOIN sc_media_files mf ON mf.episode_id = e.id WHERE se.show_id = s.id)`
 	}
-	args := []any{}
 	if f.Query != "" {
 		args = append(args, likePattern(f.Query))
 		q += fmt.Sprintf(` AND (s.title LIKE ?%d ESCAPE '\' OR s.original_title LIKE ?%[1]d ESCAPE '\')`, len(args))
@@ -240,7 +257,7 @@ func (s *Store) ListShows(ctx context.Context, f ShowFilter) ([]model.Show, erro
 	case "added":
 		q += ` ORDER BY s.updated_at DESC, s.title`
 	case "rating":
-		q += ` ORDER BY s.tmdb_rating DESC NULLS LAST, s.title`
+		q += ` ORDER BY s.rating DESC NULLS LAST, s.title`
 	default:
 		q += ` ORDER BY s.title`
 	}
@@ -410,10 +427,13 @@ func (s *Store) NextEpisode(ctx context.Context, id uuid.UUID) (*model.Episode, 
 }
 
 // RecentEpisodes vrátí naposledy přidané díly (napříč seriály).
-func (s *Store) RecentEpisodes(ctx context.Context, limit int) ([]model.Episode, error) {
+// library = uuid.Nil znamená všechny zapnuté knihovny.
+func (s *Store) RecentEpisodes(ctx context.Context, library uuid.UUID, limit int) ([]model.Episode, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT `+episodeCols+episodeFrom+`
-		WHERE EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)
-		ORDER BY e.created_at DESC, se.number DESC, e.number DESC LIMIT ?1`, limit)
+		JOIN sc_libraries lib ON lib.id = sh.library_id
+		WHERE lib.enabled = 1 AND (?2 = '`+uuid.Nil.String()+`' OR sh.library_id = ?2)
+		  AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)
+		ORDER BY e.created_at DESC, se.number DESC, e.number DESC LIMIT ?1`, limit, library)
 	if err != nil {
 		return nil, fmt.Errorf("recent episodes: %w", err)
 	}

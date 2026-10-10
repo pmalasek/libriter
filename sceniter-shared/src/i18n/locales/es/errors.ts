@@ -1,11 +1,16 @@
 export default {
   sceniter: {
     disabled: 'La videoteca no está configurada en el servidor',
+    metadata_disabled: 'No hay ninguna fuente de metadatos configurada o instalada',
+    metadata_not_found: 'La fuente no encontró el título',
+    metadata_conflict: 'Este título ya está en la biblioteca',
+    metadata_failed: 'La fuente de metadatos no responde',
     not_found: 'No encontrado',
-    tmdb_disabled: 'Los metadatos de TMDB no están configurados (TMDB_API_KEY)',
-    tmdb_not_found: 'Título no encontrado en TMDB',
-    tmdb_conflict: 'Este título ya está en la biblioteca',
-    tmdb_failed: 'TMDB no responde',
+  },
+  library: {
+    not_found: 'Biblioteca no encontrada',
+    conflict: 'Esta carpeta ya es una biblioteca',
+    root_unavailable: 'La carpeta VIDEO_ROOT no está disponible',
   },
   movie: { not_found: 'Película no encontrada' },
   show: { not_found: 'Serie no encontrada' },

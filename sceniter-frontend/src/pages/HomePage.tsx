@@ -1,10 +1,13 @@
-import { FilmIcon } from 'lucide-react'
+import { FilmIcon, FolderPlusIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { episodeLabel, imageUrl, posterUrl, progressRatio, remainingLabel, type ContinueItem } from 'sceniter-shared'
+import { episodeLabel, imageUrl, posterUrl, progressRatio, remainingLabel, type ContinueItem, type HomeLibrary } from 'sceniter-shared'
+import { useAuth } from 'core-web/src/auth/AuthContext'
+import { isAdmin } from 'core-web/src/auth/permissions'
 import { EmptyState } from 'core-web/src/components/EmptyState'
 import { ErrorState } from 'core-web/src/components/ErrorState'
-import { useHome } from '@/api/hooks'
+import { Button } from 'core-web/src/components/ui/button'
+import { useHome, useLibraries } from '@/api/hooks'
 import { Attribution } from '@/components/Attribution'
 import { Poster } from '@/components/Poster'
 import { PosterCard } from '@/components/PosterCard'
@@ -41,19 +44,62 @@ function ContinueCard({ item }: { item: ContinueItem }) {
   )
 }
 
+/** Nově přidané v jedné knihovně: plakáty filmů, nebo obrázky nových dílů. */
+function LibraryShelf({ row }: { row: HomeLibrary }) {
+  const { t } = useTranslation()
+  const lib = row.library
+  return (
+    <Shelf title={t('video.home.inLibrary', { name: lib.name })} to={`/library/${lib.id}?sort=added`}>
+      {row.movies.map((m) => (
+        <ShelfItem key={m.id}>
+          <PosterCard movie={m} />
+        </ShelfItem>
+      ))}
+      {row.episodes.map((e) => (
+        <ShelfItem key={e.id} wide>
+          <Link to={`/shows/${e.show_id}`} className="group block outline-none">
+            <Poster src={imageUrl(e.still_path)} title={e.show_title ?? ''} aspect="still" className="transition-transform duration-200 group-hover:-translate-y-0.5" />
+            <p className="mt-2 truncate text-sm font-medium">{e.show_title}</p>
+            <p className="truncate text-xs text-muted-foreground">{episodeLabel(e)}</p>
+          </Link>
+        </ShelfItem>
+      ))}
+    </Shelf>
+  )
+}
+
 export function HomePage() {
   const { t } = useTranslation()
+  const { user } = useAuth()
   const home = useHome()
+  const libraries = useLibraries()
 
   if (home.isError) return <ErrorState error={home.error} onRetry={() => void home.refetch()} />
   if (!home.data) return <p className="py-8 text-center text-muted-foreground">{t('common.loading')}</p>
 
-  const { continue: cont, recent_movies, recent_episodes, watchlist } = home.data
-  const empty = recent_movies.length === 0 && recent_episodes.length === 0
+  const { continue: cont, libraries: rows, watchlist } = home.data
+  const noLibraries = libraries.data?.length === 0
+  const empty = !noLibraries && rows.length === 0
 
   return (
     <div>
       <h1 className="font-heading sr-only">{t('video.nav.home')}</h1>
+      {noLibraries ? (
+        <div className="mt-6">
+          <EmptyState
+            icon={FolderPlusIcon}
+            title={t('video.home.noLibrariesTitle')}
+            description={t('video.home.noLibrariesDescription')}
+          />
+          {isAdmin(user) ? (
+            <div className="mt-4 flex justify-center">
+              <Button asChild>
+                <Link to="/admin/libraries">{t('video.home.noLibrariesAction')}</Link>
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
       {empty ? (
         <div className="mt-6">
           <EmptyState icon={FilmIcon} title={t('video.home.emptyTitle')} description={t('video.home.emptyDescription')} />
@@ -70,29 +116,9 @@ export function HomePage() {
         </Shelf>
       ) : null}
 
-      {recent_movies.length > 0 ? (
-        <Shelf title={t('video.home.recentMovies')} to="/movies?sort=added">
-          {recent_movies.map((m) => (
-            <ShelfItem key={m.id}>
-              <PosterCard movie={m} />
-            </ShelfItem>
-          ))}
-        </Shelf>
-      ) : null}
-
-      {recent_episodes.length > 0 ? (
-        <Shelf title={t('video.home.recentEpisodes')} to="/shows?sort=added">
-          {recent_episodes.map((e) => (
-            <ShelfItem key={e.id} wide>
-              <Link to={`/shows/${e.show_id}`} className="group block outline-none">
-                <Poster src={imageUrl(e.still_path)} title={e.show_title ?? ''} aspect="still" className="transition-transform duration-200 group-hover:-translate-y-0.5" />
-                <p className="mt-2 truncate text-sm font-medium">{e.show_title}</p>
-                <p className="truncate text-xs text-muted-foreground">{episodeLabel(e)}</p>
-              </Link>
-            </ShelfItem>
-          ))}
-        </Shelf>
-      ) : null}
+      {rows.map((row) => (
+        <LibraryShelf key={row.library.id} row={row} />
+      ))}
 
       {watchlist.length > 0 ? (
         <Shelf title={t('video.home.watchlist')} to="/watchlist">

@@ -20,6 +20,10 @@ export default {
       metadata_update: 'Sources de métadonnées modifiées',
       registration_update: 'Paramètres d’inscription modifiés',
       library_update: 'Paramètres de la bibliothèque modifiés',
+      plugin_update: 'Modification des réglages d’un plugin',
+    },
+    plugins: {
+      reload: 'Plugins rechargés',
     },
     book: {
       delete: 'Livre supprimé',

@@ -20,6 +20,9 @@ type Config struct {
 	Metadata MetadataConfig
 	Library  LibraryConfig
 
+	// PluginDir je adresář pluginů metadat (mediater-meta-*). Viz pluginDir.
+	PluginDir string
+
 	// DefaultProduct je produkt, jehož webové rozhraní dostanou hosty, které
 	// nepatří žádnému produktu (localhost, IP adresa). Výchozí „libriter“.
 	DefaultProduct string
@@ -181,6 +184,7 @@ func load() *Config {
 		Library: LibraryConfig{
 			DefaultLanguage: strings.ToLower(strings.TrimSpace(envStr("DEFAULT_BOOK_LANGUAGE", "cs"))),
 		},
+		PluginDir:      pluginDir(env),
 		DefaultProduct: strings.ToLower(strings.TrimSpace(envStr("DEFAULT_PRODUCT", "libriter"))),
 		EnvFile:        env.file,
 		env:            env,
@@ -195,6 +199,24 @@ func load() *Config {
 		cfg.Storage.ImportRoot = filepath.Join(filepath.Dir(cfg.Storage.AudioRoot), "import")
 	}
 	return cfg
+}
+
+// DefaultPluginDir je adresář pluginů z balíčku.
+const DefaultPluginDir = "/usr/lib/mediater/plugins"
+
+// pluginDir vybere adresář pluginů: PLUGIN_DIR, jinak plugins/ vedle binárky
+// (bin/mediater + bin/plugins po `just build`), jinak adresář z balíčku.
+func pluginDir(env dotEnv) string {
+	if dir := env.path("PLUGIN_DIR", ""); dir != "" {
+		return dir
+	}
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Join(filepath.Dir(exe), "plugins")
+		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+			return dir
+		}
+	}
+	return DefaultPluginDir
 }
 
 // dotEnv drží výsledek načtení .env: odkud se čerpalo a které klíče z něj přišly.

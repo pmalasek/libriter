@@ -6,4 +6,5 @@
 export const coreQueryKeys = {
   user: (id: string) => ['users', id] as const,
   authConfig: ['auth', 'config'] as const,
+  adminPlugins: ['admin', 'plugins'] as const,
 }

@@ -42,6 +42,7 @@ type Deps struct {
 	Store     *storage.Store
 	Library   *service.Library
 	Matcher   *service.Matcher
+	Libs      *service.Libraries
 	Scanner   *scanner.Scanner // nil, když je Sceniter vypnutý
 	HLS       *stream.Manager
 	Subs      *stream.Subtitles
@@ -98,6 +99,7 @@ func (h *Handler) Routes(r chi.Router) {
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireRole(coremodel.RoleReader))
 					r.Get("/home", h.Home)
+					r.Get("/libraries", h.Libraries)
 					r.Get("/movies", h.Movies)
 					r.Get("/movies/{id}", h.Movie)
 					r.Get("/shows", h.Shows)
@@ -123,6 +125,7 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Use(middleware.RequireRole(coremodel.RoleEditor))
 					r.Patch("/movies/{id}", h.PatchTitle)
 					r.Patch("/shows/{id}", h.PatchTitle)
+					r.Get("/metadata/providers", h.MetadataProviders)
 					r.Get("/metadata/search", h.MetadataSearch)
 					r.Put("/movies/{id}/match", h.Match)
 					r.Put("/shows/{id}/match", h.Match)
@@ -134,6 +137,12 @@ func (h *Handler) Routes(r chi.Router) {
 
 				r.Group(func(r chi.Router) {
 					r.Use(middleware.RequireRole(coremodel.RoleAdmin))
+					r.Get("/admin/libraries", h.AdminLibraries)
+					r.Post("/admin/libraries", h.CreateLibrary)
+					r.Get("/admin/libraries/candidates", h.LibraryCandidates)
+					r.Put("/admin/libraries/order", h.ReorderLibraries)
+					r.Patch("/admin/libraries/{id}", h.UpdateLibrary)
+					r.Delete("/admin/libraries/{id}", h.DeleteLibrary)
 					r.Get("/admin/scanner", h.ScannerStatus)
 					r.Post("/admin/scanner/rescan", h.Rescan)
 					r.Post("/admin/metadata/match-all", h.MatchAll)
@@ -150,10 +159,10 @@ func (h *Handler) Routes(r chi.Router) {
 // GET /sceniter/config
 func (h *Handler) Config(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"enabled":      h.enabled(),
-		"tmdb_enabled": h.Matcher.Enabled(),
-		"transcoding":  h.HLS.Available(),
-		"profiles":     []string{"web", "safari"},
+		"enabled":            h.enabled(),
+		"metadata_providers": h.metadataProviders(),
+		"transcoding":        h.HLS.Available(),
+		"profiles":           []string{"web", "safari"},
 	})
 }
 

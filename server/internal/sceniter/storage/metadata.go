@@ -5,23 +5,19 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 
 	"mediater/internal/sceniter/model"
 )
 
-// Genre je žánr z TMDB.
-type Genre struct {
-	TMDBID int
-	Name   string
-}
-
-// TitleMeta jsou metadata filmu nebo seriálu z TMDB. Obrázky jsou názvy
-// souborů v SCENITER_IMAGE_ROOT (prázdné = beze změny).
+// TitleMeta jsou metadata filmu nebo seriálu ze zdroje (pluginu). Obrázky
+// jsou názvy souborů v SCENITER_IMAGE_ROOT (prázdné = beze změny).
 type TitleMeta struct {
-	TMDBID        int
-	IMDBID        string
+	Provider      string
+	ID            string
+	ExternalIDs   map[string]string
 	Title         string
 	OriginalTitle string
 	Overview      string
@@ -29,16 +25,18 @@ type TitleMeta struct {
 	Status        string
 	Year          int
 	RuntimeMin    int
-	Rating        float64
-	PosterPath    string
-	BackdropPath  string
-	Genres        []Genre
-	Credits       []model.Credit
+	// Rating je hodnocení zdroje v procentech (0 = neznámé).
+	Rating       int
+	PosterPath   string
+	BackdropPath string
+	// Genres jsou názvy žánrů; nil = beze změny.
+	Genres  []string
+	Credits []model.Credit
 }
 
-// ApplyMovieMeta uloží metadata k filmu. Když už jiný film má stejné
-// tmdb_id (druhá verze téhož filmu v jiném souboru), soubory se přesunou
-// k němu a tento záznam zanikne. Vrací ID filmu, který metadata nese.
+// ApplyMovieMeta uloží metadata k filmu. Když už jiný film ve stejné
+// knihovně má stejný titul u stejného zdroje (druhá verze téhož filmu
+// v jiném souboru), soubory se přesunou k němu a tento záznam zanikne. Vrací ID filmu, který metadata nese.
 func (s *Store) ApplyMovieMeta(ctx context.Context, id uuid.UUID, m TitleMeta, state string) (uuid.UUID, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -47,7 +45,10 @@ func (s *Store) ApplyMovieMeta(ctx context.Context, id uuid.UUID, m TitleMeta, s
 	defer tx.Rollback() //nolint:errcheck
 
 	var other uuid.UUID
-	err = tx.QueryRowContext(ctx, `SELECT id FROM sc_movies WHERE tmdb_id = ?1 AND id <> ?2`, m.TMDBID, id).Scan(&other)
+	err = tx.QueryRowContext(ctx, `
+		SELECT o.id FROM sc_movies o JOIN sc_movies cur ON cur.id = ?3
+		WHERE o.meta_provider = ?1 AND o.meta_id = ?2 AND o.id <> cur.id AND o.library_id = cur.library_id`,
+		m.Provider, m.ID, id).Scan(&other)
 	switch {
 	case err == nil:
 		if _, err := tx.ExecContext(ctx, `UPDATE sc_media_files SET movie_id = ?1 WHERE movie_id = ?2`, other, id); err != nil {
@@ -69,15 +70,16 @@ func (s *Store) ApplyMovieMeta(ctx context.Context, id uuid.UUID, m TitleMeta, s
 
 	_, err = tx.ExecContext(ctx, `
 		UPDATE sc_movies SET
-		  tmdb_id = ?2, imdb_id = COALESCE(?3, imdb_id), title = COALESCE(?4, title),
-		  original_title = COALESCE(?5, original_title), overview = COALESCE(?6, overview),
-		  tagline = COALESCE(?7, tagline), year = COALESCE(?8, year), runtime_min = COALESCE(?9, runtime_min),
-		  tmdb_rating = COALESCE(?10, tmdb_rating), poster_path = COALESCE(?11, poster_path),
-		  backdrop_path = COALESCE(?12, backdrop_path), credits_json = COALESCE(?13, credits_json),
-		  match_state = ?14, updated_at = CURRENT_TIMESTAMP
+		  meta_provider = ?2, meta_id = ?3, external_ids_json = COALESCE(?4, external_ids_json),
+		  title = COALESCE(?5, title),
+		  original_title = COALESCE(?6, original_title), overview = COALESCE(?7, overview),
+		  tagline = COALESCE(?8, tagline), year = COALESCE(?9, year), runtime_min = COALESCE(?10, runtime_min),
+		  rating = COALESCE(?11, rating), poster_path = COALESCE(?12, poster_path),
+		  backdrop_path = COALESCE(?13, backdrop_path), credits_json = COALESCE(?14, credits_json),
+		  match_state = ?15, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?1`,
-		id, m.TMDBID, nullStr(m.IMDBID), nullStr(m.Title), nullStr(m.OriginalTitle), nullStr(m.Overview),
-		nullStr(m.Tagline), nullInt(m.Year), nullInt(m.RuntimeMin), nullFloat(m.Rating),
+		id, m.Provider, m.ID, model.MarshalExternalIDs(m.ExternalIDs), nullStr(m.Title), nullStr(m.OriginalTitle),
+		nullStr(m.Overview), nullStr(m.Tagline), nullInt(m.Year), nullInt(m.RuntimeMin), nullInt(m.Rating),
 		nullStr(m.PosterPath), nullStr(m.BackdropPath), model.MarshalCredits(m.Credits), state)
 	if err != nil {
 		return uuid.Nil, fmt.Errorf("apply movie meta: %w", err)
@@ -98,15 +100,16 @@ func (s *Store) ApplyShowMeta(ctx context.Context, id uuid.UUID, m TitleMeta, st
 
 	_, err = tx.ExecContext(ctx, `
 		UPDATE sc_shows SET
-		  tmdb_id = ?2, title = COALESCE(?3, title), original_title = COALESCE(?4, original_title),
-		  overview = COALESCE(?5, overview), status = COALESCE(?6, status), year = COALESCE(?7, year),
-		  tmdb_rating = COALESCE(?8, tmdb_rating), poster_path = COALESCE(?9, poster_path),
-		  backdrop_path = COALESCE(?10, backdrop_path), credits_json = COALESCE(?11, credits_json),
-		  match_state = ?12, updated_at = CURRENT_TIMESTAMP
+		  meta_provider = ?2, meta_id = ?3, external_ids_json = COALESCE(?4, external_ids_json),
+		  title = COALESCE(?5, title), original_title = COALESCE(?6, original_title),
+		  overview = COALESCE(?7, overview), status = COALESCE(?8, status), year = COALESCE(?9, year),
+		  rating = COALESCE(?10, rating), poster_path = COALESCE(?11, poster_path),
+		  backdrop_path = COALESCE(?12, backdrop_path), credits_json = COALESCE(?13, credits_json),
+		  match_state = ?14, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?1`,
-		id, m.TMDBID, nullStr(m.Title), nullStr(m.OriginalTitle), nullStr(m.Overview), nullStr(m.Status),
-		nullInt(m.Year), nullFloat(m.Rating), nullStr(m.PosterPath), nullStr(m.BackdropPath),
-		model.MarshalCredits(m.Credits), state)
+		id, m.Provider, m.ID, model.MarshalExternalIDs(m.ExternalIDs), nullStr(m.Title), nullStr(m.OriginalTitle),
+		nullStr(m.Overview), nullStr(m.Status), nullInt(m.Year), nullInt(m.Rating), nullStr(m.PosterPath),
+		nullStr(m.BackdropPath), model.MarshalCredits(m.Credits), state)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return ErrConflict
@@ -119,7 +122,7 @@ func (s *Store) ApplyShowMeta(ctx context.Context, id uuid.UUID, m TitleMeta, st
 	return tx.Commit()
 }
 
-// EpisodeMeta jsou metadata dílu z TMDB.
+// EpisodeMeta jsou metadata dílu ze zdroje.
 type EpisodeMeta struct {
 	Number     int
 	Title      string
@@ -129,7 +132,7 @@ type EpisodeMeta struct {
 	RuntimeMin int
 }
 
-// SeasonMeta jsou metadata řady z TMDB.
+// SeasonMeta jsou metadata řady ze zdroje.
 type SeasonMeta struct {
 	Number     int
 	Title      string
@@ -175,7 +178,7 @@ func (s *Store) ApplySeasonMeta(ctx context.Context, showID uuid.UUID, m SeasonM
 	return tx.Commit()
 }
 
-func setGenres(ctx context.Context, tx *sql.Tx, kind string, id uuid.UUID, genres []Genre) error {
+func setGenres(ctx context.Context, tx *sql.Tx, kind string, id uuid.UUID, genres []string) error {
 	if genres == nil {
 		return nil
 	}
@@ -187,11 +190,15 @@ func setGenres(ctx context.Context, tx *sql.Tx, kind string, id uuid.UUID, genre
 		return err
 	}
 	for _, g := range genres {
+		g = strings.TrimSpace(g)
+		if g == "" {
+			continue
+		}
 		var gid int64
 		err := tx.QueryRowContext(ctx, `
-			INSERT INTO sc_genres (tmdb_id, name) VALUES (?1, ?2)
-			ON CONFLICT (tmdb_id) DO UPDATE SET name = excluded.name
-			RETURNING id`, g.TMDBID, g.Name).Scan(&gid)
+			INSERT INTO sc_genres (name) VALUES (?1)
+			ON CONFLICT (name) DO UPDATE SET name = name
+			RETURNING id`, g).Scan(&gid)
 		if err != nil {
 			return fmt.Errorf("genre: %w", err)
 		}
@@ -203,7 +210,7 @@ func setGenres(ctx context.Context, tx *sql.Tx, kind string, id uuid.UUID, genre
 }
 
 // SetMatchState změní stav párování. Stav „unmatched“ zároveň zruší vazbu
-// na TMDB (texty a obrázky zůstanou, dokud se titul nespáruje znovu).
+// na zdroj (texty a obrázky zůstanou, dokud se titul nespáruje znovu).
 func (s *Store) SetMatchState(ctx context.Context, kind string, id uuid.UUID, state string) error {
 	table := "sc_movies"
 	if kind == model.KindShow {
@@ -211,7 +218,7 @@ func (s *Store) SetMatchState(ctx context.Context, kind string, id uuid.UUID, st
 	}
 	q := `UPDATE ` + table + ` SET match_state = ?2, updated_at = CURRENT_TIMESTAMP`
 	if state == model.MatchUnmatched {
-		q += `, tmdb_id = NULL`
+		q += `, meta_provider = NULL, meta_id = NULL`
 	}
 	res, err := s.db.ExecContext(ctx, q+` WHERE id = ?1`, id, state)
 	if err != nil {

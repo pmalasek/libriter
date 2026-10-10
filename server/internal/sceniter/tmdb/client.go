@@ -256,7 +256,10 @@ type detailsResponse struct {
 	Genres         []Genre                 `json:"genres"`
 	Credits        credits                 `json:"credits"`
 	CreatedBy      []struct{ Name string } `json:"created_by"`
-	Seasons        []struct {
+	ExternalIDs    struct {
+		IMDBID string `json:"imdb_id"`
+	} `json:"external_ids"`
+	Seasons []struct {
 		SeasonNumber int `json:"season_number"`
 	} `json:"seasons"`
 }
@@ -270,6 +273,9 @@ func (r detailsResponse) normalize() *Details {
 		Year:       yearOf(firstNonEmpty(r.ReleaseDate, r.FirstAirDate)),
 		RuntimeMin: r.Runtime, Rating: r.VoteAverage,
 		PosterPath: r.PosterPath, BackdropPath: r.BackdropPath, Genres: r.Genres,
+	}
+	if d.IMDBID == "" {
+		d.IMDBID = r.ExternalIDs.IMDBID
 	}
 	if d.RuntimeMin == 0 && len(r.EpisodeRunTime) > 0 {
 		d.RuntimeMin = r.EpisodeRunTime[0]
@@ -311,7 +317,7 @@ func (c *Client) TV(ctx context.Context, id int) (*Details, error) {
 
 func (c *Client) details(ctx context.Context, path string) (*Details, error) {
 	var r detailsResponse
-	if err := c.get(ctx, path, url.Values{"language": {c.language}, "append_to_response": {"credits"}}, &r); err != nil {
+	if err := c.get(ctx, path, url.Values{"language": {c.language}, "append_to_response": {"credits,external_ids"}}, &r); err != nil {
 		return nil, err
 	}
 	d := r.normalize()
@@ -363,6 +369,14 @@ const (
 	SizeBackdrop = "w1280"
 	SizeStill    = "w300"
 )
+
+// ImageURL vrátí plnou adresu obrázku (path z TMDB, např. „/abc.jpg“).
+func (c *Client) ImageURL(size, path string) string {
+	if path == "" {
+		return ""
+	}
+	return c.imageURL + "/" + size + path
+}
 
 // Image stáhne obrázek (path z TMDB, např. „/abc.jpg“) v dané velikosti.
 func (c *Client) Image(ctx context.Context, size, path string) ([]byte, string, error) {

@@ -1,4 +1,4 @@
-import { CheckCircle2Icon, CircleIcon, PencilIcon, PlayIcon, SparklesIcon, StarIcon } from 'lucide-react'
+import { CheckCircle2Icon, CircleIcon, PencilIcon, PlayIcon, SparklesIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -26,7 +26,8 @@ import { Hero, MetaLine } from '@/components/Hero'
 import { Poster } from '@/components/Poster'
 import { ProgressBar } from '@/components/ProgressBar'
 import { TitleActions } from '@/components/TitleActions'
-import { TmdbMatch } from '@/components/TmdbMatch'
+import { MetadataMatch } from '@/components/MetadataMatch'
+import { ExternalLinks, SourceRating } from '@/components/MetaSource'
 
 function EpisodeRow({ e }: { e: EpisodeWithProgress }) {
   const { t } = useTranslation()
@@ -97,11 +98,7 @@ export function ShowDetailPage() {
             s.genres.join(', '),
           ]}
         />
-        {s.tmdb_rating ? (
-          <p className="mt-1 flex items-center gap-1 text-sm text-muted-foreground" title={t('video.detail.tmdbRating')}>
-            <StarIcon className="size-4 fill-current text-primary" /> {s.tmdb_rating.toFixed(1)}
-          </p>
-        ) : null}
+        <SourceRating rating={s.rating} provider={s.meta_provider} />
         <div className="mt-5 flex flex-wrap gap-2">
           {up ? (
             <Button size="lg" onClick={() => navigate(`/watch/episode/${up.id}`)}>
@@ -120,7 +117,7 @@ export function ShowDetailPage() {
               </Button>
               <Button size="lg" variant="ghost" onClick={() => setMatching(true)}>
                 <SparklesIcon />
-                {t('video.detail.matchTmdb')}
+                {t('video.detail.match')}
               </Button>
             </>
           ) : null}
@@ -159,15 +156,16 @@ export function ShowDetailPage() {
       ) : null}
 
       <Credits credits={s.credits} />
-      <Attribution />
+      <ExternalLinks kind="show" ids={s.external_ids} />
+      <Attribution provider={s.meta_provider ?? null} />
 
       {editing ? <EditTitleDialog kind="show" title={s} open={editing} onOpenChange={setEditing} /> : null}
       <Dialog open={matching} onOpenChange={setMatching}>
         <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{t('video.detail.matchTmdb')}</DialogTitle>
+            <DialogTitle>{t('video.detail.match')}</DialogTitle>
           </DialogHeader>
-          <TmdbMatch kind="show" id={s.id} initialQuery={s.title} initialYear={s.year} onMatched={() => setMatching(false)} />
+          <MetadataMatch kind="show" id={s.id} initialQuery={s.title} initialYear={s.year} onMatched={() => setMatching(false)} />
         </DialogContent>
       </Dialog>
     </div>

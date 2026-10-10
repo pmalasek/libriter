@@ -20,6 +20,10 @@ export default {
       metadata_update: 'Změna zdrojů metadat',
       registration_update: 'Změna nastavení registrace',
       library_update: 'Změna nastavení knihovny',
+      plugin_update: 'Změna nastavení pluginu',
+    },
+    plugins: {
+      reload: 'Načtení pluginů',
     },
     book: {
       delete: 'Smazání knihy',

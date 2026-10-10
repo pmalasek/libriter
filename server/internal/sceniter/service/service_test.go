@@ -11,17 +11,18 @@ import (
 
 	"mediater/internal/core/config"
 	"mediater/internal/core/db"
+	"mediater/internal/core/plugin"
 	coreservice "mediater/internal/core/service"
 	corestorage "mediater/internal/core/storage"
 	"mediater/internal/sceniter/migrations"
 	"mediater/internal/sceniter/storage"
-	"mediater/internal/sceniter/tmdb"
 )
 
 type env struct {
-	store  *storage.Store
-	lib    *Library
-	userID uuid.UUID
+	store             *storage.Store
+	lib               *Library
+	userID            uuid.UUID
+	movieLib, showLib uuid.UUID
 }
 
 func newEnv(t *testing.T) *env {
@@ -40,13 +41,21 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	store := storage.New(conn)
-	return &env{store: store, lib: NewLibrary(store), userID: u.ID}
+	movies, err := store.CreateLibrary(ctx, storage.LibraryInput{Dir: "Filmy", Name: "Filmy", Kind: "movie", Language: "cs", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shows, err := store.CreateLibrary(ctx, storage.LibraryInput{Dir: "Seriály", Name: "Seriály", Kind: "show", Language: "cs", Enabled: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &env{store: store, lib: NewLibrary(store), userID: u.ID, movieLib: movies.ID, showLib: shows.ID}
 }
 
 func (e *env) movie(t *testing.T, title string) (movieID, mediaID uuid.UUID) {
 	t.Helper()
 	ctx := context.Background()
-	id, err := e.store.EnsureMovie(ctx, storage.MovieKey{SourceKey: "Filmy/" + title, Title: title})
+	id, err := e.store.EnsureMovie(ctx, storage.MovieKey{LibraryID: e.movieLib, SourceKey: "Filmy/" + title, Title: title})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +70,7 @@ func (e *env) movie(t *testing.T, title string) (movieID, mediaID uuid.UUID) {
 func (e *env) episode(t *testing.T, show string, season, number int) uuid.UUID {
 	t.Helper()
 	ctx := context.Background()
-	id, err := e.store.EnsureEpisode(ctx, storage.EpisodeKey{ShowKey: "Seriály/" + show, ShowTitle: show, Season: season, Episode: number})
+	id, err := e.store.EnsureEpisode(ctx, storage.EpisodeKey{LibraryID: e.showLib, ShowKey: "Seriály/" + show, ShowTitle: show, Season: season, Episode: number})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,15 +186,15 @@ func TestContinueAndUpNext(t *testing.T) {
 }
 
 func TestPickResult(t *testing.T) {
-	res := []tmdb.SearchResult{
-		{ID: 1, Title: "Pelíšky", OriginalTitle: "Pelíšky", Year: 1999},
-		{ID: 2, Title: "Pelíšky 2", Year: 2010},
+	res := []plugin.SearchResult{
+		{ID: "1", Title: "Pelíšky", OriginalTitle: "Pelíšky", Year: 1999},
+		{ID: "2", Title: "Pelíšky 2", Year: 2010},
 	}
-	if id, ok := pickResult(res, "Pelisky", "", 1999); !ok || id != 1 {
-		t.Errorf("rok + název bez diakritiky: %d %v", id, ok)
+	if id, ok := pickResult(res, "Pelisky", "", 1999); !ok || id != "1" {
+		t.Errorf("rok + název bez diakritiky: %s %v", id, ok)
 	}
-	if id, ok := pickResult(res, "Pelíšky", "", 2000); !ok || id != 1 {
-		t.Errorf("rok ±1: %d %v", id, ok)
+	if id, ok := pickResult(res, "Pelíšky", "", 2000); !ok || id != "1" {
+		t.Errorf("rok ±1: %s %v", id, ok)
 	}
 	if _, ok := pickResult(res, "Pelíšky", "", 0); ok {
 		t.Error("bez roku a víc výsledků se nesmí párovat automaticky")
@@ -193,7 +202,7 @@ func TestPickResult(t *testing.T) {
 	if _, ok := pickResult(res, "Úplně jiný", "", 1980); ok {
 		t.Error("jiný rok i název")
 	}
-	if id, ok := pickResult(res[:1], "Pelíšky", "", 0); !ok || id != 1 {
+	if id, ok := pickResult(res[:1], "Pelíšky", "", 0); !ok || id != "1" {
 		t.Error("jediný výsledek se shodným názvem")
 	}
 }

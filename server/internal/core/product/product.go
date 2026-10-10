@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"mediater/internal/core/config"
+	"mediater/internal/core/plugin"
 	"mediater/internal/core/service"
 )
 
@@ -26,7 +27,10 @@ type Deps struct {
 	Users        *service.UserService
 	Registration *service.RegistrationService
 	Audit        *service.AuditService
-	StartedAt    time.Time
+	// Plugins spouští zdroje metadat; PluginSettings drží jejich konfiguraci.
+	Plugins        *plugin.Host
+	PluginSettings *plugin.Settings
+	StartedAt      time.Time
 }
 
 // Product je jeden produkt nad společnými účty.

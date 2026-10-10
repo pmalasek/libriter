@@ -20,6 +20,8 @@ const (
 	AuditSettingsMetadata     = "settings.metadata_update"
 	AuditSettingsRegistration = "settings.registration_update"
 	AuditSettingsLibrary      = "settings.library_update"
+	AuditSettingsPlugin       = "settings.plugin_update"
+	AuditPluginsReload        = "plugins.reload"
 	AuditBookDelete           = "book.delete"
 	AuditAuthorDelete         = "author.delete"
 	AuditSeriesDelete         = "series.delete"

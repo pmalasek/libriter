@@ -4,6 +4,10 @@ import {
   queryKeys,
   type EpisodeDetail,
   type Home,
+  type Library,
+  type LibraryRequest,
+  type MetadataProvider,
+  type MetadataSearchResponse,
   type Movie,
   type MovieDetail,
   type Playback,
@@ -15,7 +19,6 @@ import {
   type ShowDetail,
   type TitleKind,
   type TitlePatch,
-  type TmdbResult,
   type TranscodeSession,
   type WatchlistItem,
 } from 'sceniter-shared'
@@ -46,7 +49,17 @@ export function useHome() {
   return useQuery({ queryKey: queryKeys.home, queryFn: () => apiFetch<Home>(`${BASE}/home`) })
 }
 
+/** Zapnuté knihovny v nastaveném pořadí – menu a domovská stránka. */
+export function useLibraries() {
+  return useQuery({
+    queryKey: queryKeys.libraries,
+    queryFn: async () => list(await apiFetch<Library[] | null>(`${BASE}/libraries`)),
+    staleTime: 60_000,
+  })
+}
+
 export interface ListParams extends Record<string, string> {
+  library: string
   q: string
   genre: string
   sort: string
@@ -188,17 +201,30 @@ export function usePatchTitle(kind: TitleKind, id: string) {
   })
 }
 
-// ---- párování s TMDB (editor) ----
+// ---- párování se zdrojem metadat (editor) ----
 
-export function useTmdbSearch(kind: TitleKind, q: string, year?: number) {
+/** Zdroje video metadat (pluginy) pro výběr u knihovny a při párování. */
+export function useMetadataProviders() {
   return useQuery({
-    queryKey: queryKeys.tmdbSearch(kind, q, year),
-    queryFn: async () =>
-      list(
-        await apiFetch<TmdbResult[] | null>(
-          `${BASE}/metadata/search${params({ kind, q, year: year ? String(year) : undefined })}`,
-        ),
-      ),
+    queryKey: queryKeys.metadataProviders,
+    queryFn: async () => list(await apiFetch<MetadataProvider[] | null>(`${BASE}/metadata/providers`)),
+    staleTime: 5 * 60 * 1000,
+  })
+}
+
+/**
+ * Hledání u zdroje. Prázdný provider = výchozí zdroj knihovny titulu
+ * (server ho dohledá podle `title`); odpověď říká, který zdroj hledal.
+ */
+export function useMetadataSearch(kind: TitleKind, provider: string, q: string, year?: number, title?: string) {
+  return useQuery({
+    queryKey: queryKeys.metadataSearch(kind, provider, q, year, title),
+    queryFn: async () => {
+      const r = await apiFetch<MetadataSearchResponse>(
+        `${BASE}/metadata/search${params({ kind, provider, q, year: year ? String(year) : undefined, title })}`,
+      )
+      return { provider: r.provider, results: list(r.results) }
+    },
     enabled: q.trim().length > 1,
     staleTime: 60_000,
     retry: false,
@@ -208,10 +234,10 @@ export function useTmdbSearch(kind: TitleKind, q: string, year?: number) {
 export function useMatchTitle() {
   const invalidate = useInvalidateUserState()
   return useMutation({
-    mutationFn: ({ kind, id, tmdbId }: { kind: TitleKind; id: string; tmdbId: number }) =>
+    mutationFn: ({ kind, id, provider, metaId }: { kind: TitleKind; id: string; provider: string; metaId: string }) =>
       apiFetch<{ id: string }>(`${BASE}/${kind === 'movie' ? 'movies' : 'shows'}/${id}/match`, {
         method: 'PUT',
-        json: { tmdb_id: tmdbId },
+        json: { provider, id: metaId },
       }),
     onSuccess: invalidate,
   })
@@ -262,6 +288,52 @@ export function useAdminAction() {
   return useMutation({
     mutationFn: ({ path, method = 'POST' }: { path: string; method?: 'POST' | 'DELETE' }) =>
       apiFetch<unknown>(`${BASE}${path}`, { method }),
+    onSuccess: invalidate,
+  })
+}
+
+// ---- knihovny (admin) ----
+
+export function useAdminLibraries() {
+  return useQuery({
+    queryKey: queryKeys.adminLibraries,
+    queryFn: async () => list(await apiFetch<Library[] | null>(`${BASE}/admin/libraries`)),
+  })
+}
+
+export function useLibraryCandidates(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.libraryCandidates,
+    queryFn: async () => list((await apiFetch<{ dirs: string[] | null }>(`${BASE}/admin/libraries/candidates`)).dirs),
+    enabled,
+  })
+}
+
+export function useSaveLibrary() {
+  const invalidate = useInvalidateUserState()
+  return useMutation({
+    mutationFn: ({ id, body }: { id?: string; body: LibraryRequest }) =>
+      apiFetch<Library>(id ? `${BASE}/admin/libraries/${id}` : `${BASE}/admin/libraries`, {
+        method: id ? 'PATCH' : 'POST',
+        json: body,
+      }),
+    onSuccess: invalidate,
+  })
+}
+
+export function useDeleteLibrary() {
+  const invalidate = useInvalidateUserState()
+  return useMutation({
+    mutationFn: (id: string) => apiFetch<void>(`${BASE}/admin/libraries/${id}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  })
+}
+
+export function useReorderLibraries() {
+  const invalidate = useInvalidateUserState()
+  return useMutation({
+    mutationFn: (ids: string[]) =>
+      apiFetch<Library[]>(`${BASE}/admin/libraries/order`, { method: 'PUT', json: { ids } }),
     onSuccess: invalidate,
   })
 }

@@ -21,8 +21,8 @@ import (
 	"strings"
 	"time"
 
+	"mediater/internal/core/htmlutil"
 	"mediater/internal/libriter/metadata"
-	"mediater/internal/libriter/metadata/htmlutil"
 
 	"golang.org/x/net/html"
 )
@@ -271,6 +271,11 @@ func parseOriginalEdition(r io.Reader) (title string, year int) {
 		}
 	}
 	return text, year
+}
+
+// FetchByID je FetchBook pro rozhraní metadata.IDProvider.
+func (c *Client) FetchByID(ctx context.Context, bookID int) (*BookMetadata, error) {
+	return c.FetchBook(ctx, bookID)
 }
 
 // FetchByURL stáhne metadata knihy přímo z URL.

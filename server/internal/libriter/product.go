@@ -7,6 +7,7 @@ package libriter
 import (
 	"fmt"
 	"io/fs"
+	"log/slog"
 
 	"github.com/go-chi/chi/v5"
 
@@ -16,12 +17,6 @@ import (
 	"mediater/internal/libriter/handler"
 	"mediater/internal/libriter/importer"
 	"mediater/internal/libriter/metadata"
-	"mediater/internal/libriter/metadata/audible"
-	"mediater/internal/libriter/metadata/cbdb"
-	"mediater/internal/libriter/metadata/databazeknih"
-	"mediater/internal/libriter/metadata/goodreads"
-	"mediater/internal/libriter/metadata/googlebooks"
-	"mediater/internal/libriter/metadata/openlibrary"
 	"mediater/internal/libriter/scanner"
 	"mediater/internal/libriter/service"
 	"mediater/internal/libriter/storage"
@@ -68,14 +63,37 @@ func (p *Product) Init(d product.Deps) error {
 	// stahování fotek autorů si přes ně ověřuje povolené adresy. Registry
 	// drží aktuální řetězec a mění ho, když admin přenastaví zdroje; hodnoty
 	// z .env jsou jen výchozí, uložené nastavení má přednost.
-	registry := metadata.NewRegistry(ProviderFactories())
-	settingsSvc := service.NewSettings(store, cfg.Metadata, cfg.Library, registry.KnownNames())
-
-	profiles, googleKey, err := settingsSvc.Profiles(ctx)
-	if err != nil {
-		return fmt.Errorf("nastavení zdrojů metadat: %w", err)
+	//
+	// Zdroje jsou pluginy (core/plugin); seznam se mění, když admin pluginy
+	// znovu načte.
+	registry := metadata.NewRegistry(metadata.PluginFactories(d.Plugins))
+	settingsSvc := service.NewSettingsFunc(store, cfg.Metadata, cfg.Library, registry.KnownNames)
+	if d.PluginSettings != nil {
+		settingsSvc.WithGoogleKeyStore(d.PluginSettings)
+		if err := settingsSvc.MigrateGoogleKey(ctx); err != nil {
+			return fmt.Errorf("klíč Google Books: %w", err)
+		}
 	}
-	registry.Rebuild(profiles, metadata.ProviderConfig{GoogleBooksAPIKey: googleKey})
+
+	rebuild := func() error {
+		profiles, googleKey, err := settingsSvc.Profiles(ctx)
+		if err != nil {
+			return fmt.Errorf("nastavení zdrojů metadat: %w", err)
+		}
+		registry.Rebuild(profiles, metadata.ProviderConfig{GoogleBooksAPIKey: googleKey})
+		return nil
+	}
+	if err := rebuild(); err != nil {
+		return err
+	}
+	if d.Plugins != nil {
+		d.Plugins.OnChange(func() {
+			registry.SetFactories(metadata.PluginFactories(d.Plugins))
+			if err := rebuild(); err != nil {
+				slog.Warn("zdroje metadat po načtení pluginů", "err", err)
+			}
+		})
+	}
 
 	scn.SetDefaultLanguage(settingsSvc.DefaultLanguage)
 	scn.Start(ctx)
@@ -224,25 +242,4 @@ func (p *Product) RegisterRoutes(r chi.Router) {
 			r.Get("/admin/listening/{id}", adminH.ListeningUser)
 		})
 	})
-}
-
-// ProviderFactories vrací všechny zdroje metadat, které binárka umí. Které
-// z nich se použijí a v jakém pořadí, rozhoduje nastavení (viz
-// service.SettingsService); registry podle něj řetězec sestavuje a mění.
-func ProviderFactories() map[string]metadata.Factory {
-	return map[string]metadata.Factory{
-		"databazeknih": func(metadata.ProviderConfig) metadata.Provider { return databazeknih.NewClient() },
-		"cbdb":         func(metadata.ProviderConfig) metadata.Provider { return cbdb.NewClient() },
-		"openlibrary":  func(metadata.ProviderConfig) metadata.Provider { return openlibrary.NewClient() },
-		"googlebooks": func(cfg metadata.ProviderConfig) metadata.Provider {
-			return googlebooks.NewClient(cfg.GoogleBooksAPIKey)
-		},
-		audible.MarketplaceCOM.Name: func(metadata.ProviderConfig) metadata.Provider {
-			return audible.NewClient(audible.MarketplaceCOM)
-		},
-		audible.MarketplaceDE.Name: func(metadata.ProviderConfig) metadata.Provider {
-			return audible.NewClient(audible.MarketplaceDE)
-		},
-		"goodreads": func(metadata.ProviderConfig) metadata.Provider { return goodreads.NewClient() },
-	}
 }

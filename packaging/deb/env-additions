@@ -8,14 +8,19 @@ DEFAULT_PRODUCT=libriter
 # ---- Sceniter – filmy a seriály (doplněno ve verzi 2.0) ----
 # Prázdné VIDEO_ROOT = Sceniter je vypnutý. Adresář stačí číst; nesmí ležet
 # pod /home (služba má ProtectHome=true).
+# Které podsložky jsou filmy a které seriály, nastavuje admin v administraci
+# Sceniteru (Knihovny).
 VIDEO_ROOT=
-SCENITER_MOVIES_DIRS=Filmy,Movies
-SCENITER_SHOWS_DIRS=Seriály,Serialy,Shows,Series,TV
 SCENITER_IMAGE_ROOT=/var/lib/libriter/sceniter-images
 SCENITER_RESCAN_MINUTES=0
+# Výchozí klíč pluginu TMDB; klíč uložený v administraci (Zdroje metadat) má přednost.
 TMDB_API_KEY=
-TMDB_LANGUAGE=cs-CZ
 TRANSCODE_ROOT=/var/cache/libriter/transcode
 TRANSCODE_MAX_SESSIONS=2
 TRANSCODE_IDLE_SECONDS=60
 TRANSCODE_MAX_HEIGHT=1080
+
+# ---- Pluginy metadat (doplněno ve verzi 2.1) ----
+# Adresář se zdroji metadat (mediater-meta-*). Soubory musí patřit rootovi
+# a nesmí být zapisovatelné pro skupinu ani ostatní.
+PLUGIN_DIR=/usr/lib/mediater/plugins

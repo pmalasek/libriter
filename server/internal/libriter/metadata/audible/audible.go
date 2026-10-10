@@ -18,8 +18,8 @@ import (
 	"strconv"
 	"strings"
 
+	"mediater/internal/core/htmlutil"
 	"mediater/internal/libriter/metadata"
-	"mediater/internal/libriter/metadata/htmlutil"
 	"mediater/internal/libriter/model"
 )
 

@@ -7,7 +7,7 @@ import { Button } from 'core-web/src/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from 'core-web/src/components/ui/sheet'
 import { cn } from 'core-web/src/lib/utils'
 import { ThemeToggle } from 'core-web/src/components/layout/ThemeToggle'
-import { useNavItems } from './navItems'
+import { navLabel, useNavItems } from './navItems'
 
 /** Kolik záložek se vedle sebe vejde na telefon, než je nahradí „Více“. */
 const TABS = 4
@@ -50,18 +50,21 @@ export function TabBar() {
         aria-label={t('layout.nav.bottom')}
         className="glass-strong inset-shadow-glass fixed inset-x-3 bottom-3 z-40 flex h-16 items-stretch gap-0.5 rounded-3xl p-1.5 pb-[max(0.375rem,env(safe-area-inset-bottom))] shadow-glass-lg ring-1 ring-glass-edge md:hidden"
       >
-        {tabs.map(({ to, labelKey, icon: Icon, end }) => (
+        {tabs.map((item) => {
+          const { to, icon: Icon, end } = item
+          return (
           <NavLink key={to} to={to} end={end} className={({ isActive }) => tabClass(isActive)}>
             {({ isActive }) => (
               <>
                 <span className={iconClass(isActive)}>
                   <Icon className="size-5" />
                 </span>
-                <span className="max-w-full truncate">{t(labelKey)}</span>
+                <span className="max-w-full truncate">{navLabel(item, t)}</span>
               </>
             )}
           </NavLink>
-        ))}
+          )
+        })}
 
         <button type="button" onClick={() => setMore(true)} className={tabClass(restActive)}>
           <span className={iconClass(restActive)}>
@@ -81,7 +84,9 @@ export function TabBar() {
           </SheetHeader>
 
           <div className="flex flex-col gap-1">
-            {rest.map(({ to, labelKey, icon: Icon, end }) => (
+            {rest.map((item) => {
+              const { to, icon: Icon, end } = item
+              return (
               <NavLink
                 key={to}
                 to={to}
@@ -95,9 +100,10 @@ export function TabBar() {
                 }
               >
                 <Icon className="size-5 shrink-0" />
-                {t(labelKey)}
+                {navLabel(item, t)}
               </NavLink>
-            ))}
+              )
+            })}
 
             <button
               type="button"

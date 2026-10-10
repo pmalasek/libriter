@@ -7,6 +7,8 @@ export function AdminLayout() {
   const { t } = useTranslation()
   const tabs = [
     { to: '/admin', label: t('video.admin.nav.overview'), end: true },
+    { to: '/admin/libraries', label: t('video.admin.nav.libraries') },
+    { to: '/admin/sources', label: t('video.admin.nav.sources') },
     { to: '/admin/match', label: t('video.admin.nav.match') },
     { to: '/admin/transcode', label: t('video.admin.nav.transcode') },
   ]

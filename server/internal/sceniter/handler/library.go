@@ -9,12 +9,12 @@ import (
 	"github.com/google/uuid"
 
 	"mediater/internal/core/imagestore"
+	"mediater/internal/core/plugin"
 	coreservice "mediater/internal/core/service"
 	"mediater/internal/sceniter/model"
 	"mediater/internal/sceniter/scanner"
 	"mediater/internal/sceniter/service"
 	"mediater/internal/sceniter/storage"
-	"mediater/internal/sceniter/tmdb"
 )
 
 // GET /sceniter/images/{name}
@@ -38,10 +38,28 @@ func (h *Handler) Home(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, home)
 }
 
-// GET /sceniter/movies?q=&genre=&sort=title|year|added|rating
+// libraryQuery přečte ?library=<uuid>; prázdné = všechny knihovny.
+func libraryQuery(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	v := r.URL.Query().Get("library")
+	if v == "" {
+		return uuid.Nil, true
+	}
+	id, err := uuid.Parse(v)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "request.invalid_id", "neplatné ID knihovny")
+		return uuid.Nil, false
+	}
+	return id, true
+}
+
+// GET /sceniter/movies?library=&q=&genre=&sort=title|year|added|rating
 func (h *Handler) Movies(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	movies, err := h.Store.ListMovies(r.Context(), storage.MovieFilter{Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort")})
+	lib, ok := libraryQuery(w, r)
+	if !ok {
+		return
+	}
+	movies, err := h.Store.ListMovies(r.Context(), storage.MovieFilter{Library: lib, Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort")})
 	if writeStoreError(w, err, "movie.not_found") {
 		return
 	}
@@ -61,10 +79,14 @@ func (h *Handler) Movie(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, m)
 }
 
-// GET /sceniter/shows?q=&genre=&sort=
+// GET /sceniter/shows?library=&q=&genre=&sort=
 func (h *Handler) Shows(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	shows, err := h.Store.ListShows(r.Context(), storage.ShowFilter{Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort")})
+	lib, ok := libraryQuery(w, r)
+	if !ok {
+		return
+	}
+	shows, err := h.Store.ListShows(r.Context(), storage.ShowFilter{Library: lib, Query: q.Get("q"), Genre: q.Get("genre"), Sort: q.Get("sort")})
 	if writeStoreError(w, err, "show.not_found") {
 		return
 	}
@@ -328,60 +350,100 @@ func (h *Handler) PatchTitle(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GET /sceniter/metadata/search?kind=movie|show&q=&year=
+// GET /sceniter/metadata/search?kind=movie|show&q=&year=&provider=&language=&title=<id>
+//
+// Zdroj a jazyk, které klient neuvede, se vezmou z knihovny titulu (title);
+// bez titulu je výchozí zdroj první nainstalovaný, který druh umí.
 func (h *Handler) MetadataSearch(w http.ResponseWriter, r *http.Request) {
-	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	query := r.URL.Query()
+	q := strings.TrimSpace(query.Get("q"))
 	if q == "" {
 		writeError(w, http.StatusBadRequest, "validation.invalid", "chybí dotaz")
 		return
+	}
+	kind := query.Get("kind")
+	if kind != model.KindShow {
+		kind = model.KindMovie
 	}
 	year := 0
 	if y := intQuery(r, "year"); y != nil {
 		year = *y
 	}
-	res, err := h.Matcher.Search(r.Context(), r.URL.Query().Get("kind"), q, year)
+	provider, lang := query.Get("provider"), query.Get("language")
+	if t := query.Get("title"); t != "" && (provider == "" || lang == "") {
+		if id, err := uuid.Parse(t); err == nil {
+			if lib, err := h.Matcher.LibraryOf(r.Context(), kind, id); err == nil {
+				if provider == "" && lib.Provider != nil {
+					provider = *lib.Provider
+				}
+				if lang == "" {
+					lang = lib.Language
+				}
+			}
+		}
+	}
+	if provider == "" {
+		for _, p := range h.metadataProviders() {
+			if contains(p.Kinds, kind) {
+				provider = p.Name
+				break
+			}
+		}
+	}
+	res, err := h.Matcher.Search(r.Context(), provider, kind, lang, q, year)
 	if h.writeMetadataError(w, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, res)
+	writeJSON(w, http.StatusOK, map[string]any{"provider": provider, "results": res})
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *Handler) writeMetadataError(w http.ResponseWriter, err error) bool {
 	switch {
 	case err == nil:
 		return false
-	case errors.Is(err, service.ErrMetadataDisabled):
-		writeError(w, http.StatusServiceUnavailable, "sceniter.tmdb_disabled", "metadata z TMDB nejsou nastavena (TMDB_API_KEY)")
-	case errors.Is(err, tmdb.ErrNotFound):
-		writeError(w, http.StatusNotFound, "sceniter.tmdb_not_found", "titul v TMDB nenalezen")
+	case errors.Is(err, service.ErrMetadataDisabled), errors.Is(err, plugin.ErrUnknownPlugin),
+		errors.Is(err, plugin.ErrUnsupported):
+		writeError(w, http.StatusServiceUnavailable, "sceniter.metadata_disabled", "zdroj metadat není nastaven nebo nainstalován")
+	case plugin.IsNotFound(err):
+		writeError(w, http.StatusNotFound, "sceniter.metadata_not_found", "titul u zdroje nenalezen")
 	case errors.Is(err, storage.ErrConflict):
-		writeError(w, http.StatusConflict, "sceniter.tmdb_conflict", err.Error())
+		writeError(w, http.StatusConflict, "sceniter.metadata_conflict", err.Error())
 	default:
-		writeError(w, http.StatusBadGateway, "sceniter.tmdb_failed", "TMDB neodpovídá: "+err.Error())
+		writeError(w, http.StatusBadGateway, "sceniter.metadata_failed", "zdroj metadat neodpovídá: "+err.Error())
 	}
 	return true
 }
 
-// PUT /sceniter/movies/{id}/match, /sceniter/shows/{id}/match  {"tmdb_id": 123}
+// PUT /sceniter/movies/{id}/match, /sceniter/shows/{id}/match  {"provider": "tmdb", "id": "603"}
 func (h *Handler) Match(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUID(w, r, "id")
 	if !ok {
 		return
 	}
 	var req struct {
-		TMDBID int `json:"tmdb_id"`
+		Provider string `json:"provider"`
+		ID       string `json:"id"`
 	}
-	if err := readJSON(r, &req); err != nil || req.TMDBID <= 0 {
-		writeError(w, http.StatusBadRequest, "validation.invalid", "chybí tmdb_id")
+	if err := readJSON(r, &req); err != nil || strings.TrimSpace(req.Provider) == "" || strings.TrimSpace(req.ID) == "" {
+		writeError(w, http.StatusBadRequest, "validation.invalid", "chybí provider nebo id")
 		return
 	}
 	kind := kindFromPath(r)
 	result := id
 	var err error
 	if kind == model.KindShow {
-		err = h.Matcher.MatchShow(r.Context(), id, req.TMDBID, model.MatchManual)
+		err = h.Matcher.MatchShow(r.Context(), id, req.Provider, req.ID, model.MatchManual)
 	} else {
-		result, err = h.Matcher.MatchMovie(r.Context(), id, req.TMDBID, model.MatchManual)
+		result, err = h.Matcher.MatchMovie(r.Context(), id, req.Provider, req.ID, model.MatchManual)
 	}
 	if errors.Is(err, storage.ErrNotFound) {
 		writeError(w, http.StatusNotFound, kind+".not_found", "nenalezeno")
@@ -391,7 +453,7 @@ func (h *Handler) Match(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Audit.Record(r.Context(), userID(r), coreservice.AuditEvent{Action: AuditMatch, TargetType: kind,
-		TargetID: result.String(), Details: map[string]int{"tmdb_id": req.TMDBID}})
+		TargetID: result.String(), Details: map[string]string{"provider": req.Provider, "id": req.ID}})
 	writeJSON(w, http.StatusOK, map[string]string{"id": result.String()})
 }
 
@@ -439,7 +501,7 @@ func (h *Handler) Rescan(w http.ResponseWriter, r *http.Request) {
 // POST /sceniter/admin/metadata/match-all – spustí automatické párování.
 func (h *Handler) MatchAll(w http.ResponseWriter, r *http.Request) {
 	if !h.Matcher.Enabled() {
-		writeError(w, http.StatusServiceUnavailable, "sceniter.tmdb_disabled", "metadata z TMDB nejsou nastavena (TMDB_API_KEY)")
+		writeError(w, http.StatusServiceUnavailable, "sceniter.metadata_disabled", "není nainstalovaný žádný zdroj metadat")
 		return
 	}
 	h.Matcher.Kick()
@@ -469,7 +531,7 @@ func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
 		"library":    st,
 		"scanner":    h.Scanner.Status(),
 		"transcodes": len(h.HLS.List()),
-		"tmdb":       h.Matcher.Enabled(),
+		"metadata":   h.Matcher.Enabled(),
 	})
 }
 

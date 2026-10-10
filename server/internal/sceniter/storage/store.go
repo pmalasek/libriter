@@ -4,6 +4,7 @@ package storage
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 
 	corestorage "mediater/internal/core/storage"
@@ -12,6 +13,8 @@ import (
 var (
 	ErrNotFound = corestorage.ErrNotFound
 	ErrConflict = corestorage.ErrConflict
+	// ErrInvalid znamená neplatný vstup (např. neúplné pořadí knihoven).
+	ErrInvalid = errors.New("invalid input")
 )
 
 // Store sdružuje DB operace videoknihovny.

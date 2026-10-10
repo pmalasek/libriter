@@ -4,7 +4,7 @@ import { ThemeToggle } from 'core-web/src/components/layout/ThemeToggle'
 import { UserMenu } from 'core-web/src/components/layout/UserMenu'
 import { cn } from 'core-web/src/lib/utils'
 import { LogoMark } from './Logo'
-import { useNavItems } from './navItems'
+import { navLabel, useNavItems } from './navItems'
 
 /** Svislý sloupek ikon u levé hrany – stejný jako v Libriteru. */
 export function NavRail() {
@@ -25,13 +25,16 @@ export function NavRail() {
         <LogoMark />
       </Link>
 
-      {items.map(({ to, labelKey, icon: Icon, end }) => (
+      {items.map((item) => {
+        const { to, icon: Icon, end } = item
+        const label = navLabel(item, t)
+        return (
         <NavLink
           key={to}
           to={to}
           end={end}
-          title={t(labelKey)}
-          aria-label={t(labelKey)}
+          title={label}
+          aria-label={label}
           className={({ isActive }) =>
             cn(
               'flex size-11 shrink-0 items-center justify-center rounded-2xl outline-none transition-[background-color,box-shadow,color] duration-200 focus-visible:ring-3 focus-visible:ring-ring/50',
@@ -43,7 +46,8 @@ export function NavRail() {
         >
           <Icon className="size-5" />
         </NavLink>
-      ))}
+        )
+      })}
 
       <div className="hairline-t mt-auto flex flex-col items-center gap-1 pt-3">
         <ThemeToggle />

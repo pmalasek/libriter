@@ -21,6 +21,10 @@ export default {
     stream_token_invalid: 'Ungültiges oder abgelaufenes Wiedergabetoken',
     mobile_token_refresh: 'Ein mobiles Token kann nicht mit einem mobilen Token erneuert werden – bitte melde dich erneut an',
   },
+  plugin: {
+    not_found: 'Plugin ist nicht installiert',
+    discover_failed: 'Plugins konnten nicht geladen werden',
+  },
   user: {
     not_found: 'Benutzer nicht gefunden',
     email_taken: 'Diese E-Mail-Adresse wird bereits verwendet',

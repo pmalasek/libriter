@@ -10,9 +10,10 @@ import (
 
 // Handlers sdružuje handlery jádra pro registraci rout.
 type Handlers struct {
-	Auth  *AuthHandler
-	Users *UserHandler
-	Admin *AdminHandler
+	Auth    *AuthHandler
+	Users   *UserHandler
+	Admin   *AdminHandler
+	Plugins *PluginsHandler
 }
 
 // RegisterRoutes zaregistruje API jádra na router /api/v1: přihlášení,
@@ -52,6 +53,11 @@ func RegisterRoutes(r chi.Router, auth *service.AuthService, h Handlers) {
 			r.Get("/admin/settings/registration", h.Admin.RegistrationSettings)
 			r.Put("/admin/settings/registration", h.Admin.SetRegistrationSettings)
 			r.Get("/admin/audit", h.Admin.Audit)
+
+			// Pluginy metadat – společné všem produktům
+			r.Get("/admin/plugins", h.Plugins.List)
+			r.Post("/admin/plugins/reload", h.Plugins.Reload)
+			r.Put("/admin/plugins/{name}/config", h.Plugins.SetConfig)
 		})
 	})
 }
