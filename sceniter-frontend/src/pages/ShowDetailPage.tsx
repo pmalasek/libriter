@@ -1,4 +1,4 @@
-import { CheckCircle2Icon, CircleIcon, PencilIcon, PlayIcon, SparklesIcon } from 'lucide-react'
+import { CheckCircle2Icon, CircleIcon, FolderPenIcon, PencilIcon, PlayIcon, SparklesIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
@@ -133,6 +133,10 @@ export function ShowDetailPage() {
               <Button size="lg" variant="ghost" onClick={() => setMatching(true)}>
                 <SparklesIcon />
                 {t('video.detail.match')}
+              </Button>
+              <Button size="lg" variant="ghost" onClick={() => navigate(`/shows/${s.id}/files`)}>
+                <FolderPenIcon />
+                {t('video.detail.filesEdit')}
               </Button>
             </>
           ) : null}

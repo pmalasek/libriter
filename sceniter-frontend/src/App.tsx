@@ -16,6 +16,7 @@ const ShowsPage = lazyPage(() => import('@/pages/ListPage'), 'ShowsPage')
 const LibraryPage = lazyPage(() => import('@/pages/ListPage'), 'LibraryPage')
 const MovieDetailPage = lazyPage(() => import('@/pages/MovieDetailPage'), 'MovieDetailPage')
 const ShowDetailPage = lazyPage(() => import('@/pages/ShowDetailPage'), 'ShowDetailPage')
+const ShowFilesPage = lazyPage(() => import('@/pages/ShowFilesPage'), 'ShowFilesPage')
 const WatchPage = lazyPage(() => import('@/pages/WatchPage'), 'WatchPage')
 const WatchlistPage = lazyPage(() => import('@/pages/WatchlistPage'), 'WatchlistPage')
 const SearchPage = lazyPage(() => import('@/pages/SearchPage'), 'SearchPage')
@@ -27,7 +28,7 @@ const AdminOverviewPage = lazyPage(() => import('@/pages/admin/AdminOverviewPage
 const AdminLibrariesPage = lazyPage(() => import('@/pages/admin/AdminLibrariesPage'), 'AdminLibrariesPage')
 const AdminSourcesPage = lazyPage(() => import('@/pages/admin/AdminSourcesPage'), 'AdminSourcesPage')
 const AdminMatchPage = lazyPage(() => import('@/pages/admin/AdminMatchPage'), 'AdminMatchPage')
-const AdminShowIssuesPage = lazyPage(() => import('@/pages/admin/AdminShowIssuesPage'), 'AdminShowIssuesPage')
+const AdminIssuesPage = lazyPage(() => import('@/pages/admin/AdminIssuesPage'), 'AdminIssuesPage')
 const AdminTranscodePage = lazyPage(() => import('@/pages/admin/AdminTranscodePage'), 'AdminTranscodePage')
 
 export function App() {
@@ -52,6 +53,9 @@ export function App() {
             <Route path="movies/:id" element={<MovieDetailPage />} />
             <Route path="shows" element={<ShowsPage />} />
             <Route path="shows/:id" element={<ShowDetailPage />} />
+            <Route element={<RequireRole role="editor" />}>
+              <Route path="shows/:id/files" element={<ShowFilesPage />} />
+            </Route>
             <Route path="library/:id" element={<LibraryPage />} />
             <Route path="people/:id" element={<PersonPage />} />
             <Route path="watchlist" element={<WatchlistPage />} />
@@ -63,7 +67,7 @@ export function App() {
                 <Route path="libraries" element={<AdminLibrariesPage />} />
                 <Route path="sources" element={<AdminSourcesPage />} />
                 <Route path="match" element={<AdminMatchPage />} />
-                <Route path="shows" element={<AdminShowIssuesPage />} />
+                <Route path="issues" element={<AdminIssuesPage />} />
                 <Route path="transcode" element={<AdminTranscodePage />} />
               </Route>
             </Route>

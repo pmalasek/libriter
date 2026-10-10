@@ -10,7 +10,7 @@ export function AdminLayout() {
     { to: '/admin/libraries', label: t('video.admin.nav.libraries') },
     { to: '/admin/sources', label: t('video.admin.nav.sources') },
     { to: '/admin/match', label: t('video.admin.nav.match') },
-    { to: '/admin/shows', label: t('video.admin.nav.showIssues') },
+    { to: '/admin/issues', label: t('video.admin.nav.issues') },
     { to: '/admin/transcode', label: t('video.admin.nav.transcode') },
   ]
   return (

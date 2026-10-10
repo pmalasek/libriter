@@ -15,7 +15,12 @@ export default {
   movie: { not_found: 'Film introuvable' },
   show: { not_found: 'Série introuvable' },
   episode: { not_found: 'Épisode introuvable' },
-  media: { not_found: 'Fichier vidéo introuvable' },
+  media: {
+    not_found: 'Fichier vidéo introuvable',
+    rename_conflict: 'Un fichier portant le nouveau nom existe déjà',
+    primary_file: 'Ce fichier porte le film et ne peut pas être séparé',
+  },
+  renumber: { invalid: 'Renumérotation non valide : fichiers hors du dossier ou numéros d\'épisode en double' },
   subtitle: {
     not_found: 'Sous-titres introuvables',
     unsupported: 'Ces sous-titres ne peuvent pas être convertis',

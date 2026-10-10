@@ -32,6 +32,9 @@ import {
   type TitlePatch,
   type TranscodeSession,
   type WatchlistItem,
+  type MovieIssue,
+  type RenumberPlan,
+  type ShowFolder,
 } from 'sceniter-shared'
 
 const BASE = '/sceniter'
@@ -368,6 +371,47 @@ export function useAdminShowIssues() {
   return useQuery({
     queryKey: queryKeys.adminShowIssues,
     queryFn: async () => list((await apiFetch<{ items: ShowIssue[] | null }>(`${BASE}/admin/library/show-issues`)).items),
+  })
+}
+
+/** Filmy s přisloučeným cizím souborem (kontrola v administraci). */
+export function useAdminMovieIssues() {
+  return useQuery({
+    queryKey: queryKeys.adminMovieIssues,
+    queryFn: async () => list((await apiFetch<{ items: MovieIssue[] | null }>(`${BASE}/admin/library/movie-issues`)).items),
+  })
+}
+
+/** Složky seriálu se soubory dílů (editor číslování). */
+export function useShowFolders(showId: string) {
+  return useQuery({
+    queryKey: queryKeys.showFolders(showId),
+    queryFn: async () => list((await apiFetch<{ items: ShowFolder[] | null }>(`${BASE}/shows/${showId}/folders`)).items),
+    enabled: Boolean(showId),
+  })
+}
+
+/**
+ * Přečísluje soubory jedné složky seriálu: přejmenuje je na disku na
+ * "SxxEyy" a přeřadí k dílům. S dryRun jen vrátí plán přejmenování.
+ */
+export function useRenumber() {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: ({ id, dir, season, dryRun, files }: {
+      id: string
+      dir: string
+      season: number
+      dryRun: boolean
+      files: { media_id: string; episode: number }[]
+    }) =>
+      apiFetch<RenumberPlan>(`${BASE}/shows/${id}/renumber`, {
+        method: 'POST',
+        json: { dir, season, dry_run: dryRun, files },
+      }),
+    onSuccess: (_plan, vars) => {
+      if (!vars.dryRun) invalidate()
+    },
   })
 }
 

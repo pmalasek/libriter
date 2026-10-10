@@ -322,3 +322,75 @@ func TestShowIssues(t *testing.T) {
 		t.Errorf("pořadí = %+v", p)
 	}
 }
+
+func TestMovieIssues(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	file := func(movieID uuid.UUID, path string) {
+		t.Helper()
+		if _, err := e.store.SaveMedia(ctx, storage.SaveMediaInput{FilePath: path, MovieID: &movieID, SizeBytes: 1, ModTime: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Film ve dvou částech: oba soubory vedou na stejný klíč, nehlásí se.
+	pelisky, err := e.store.EnsureMovie(ctx, storage.MovieKey{LibraryID: e.movieLib, SourceKey: "Filmy/pelisky", Title: "Pelíšky"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	file(pelisky, "Filmy/pelisky.cd1.avi")
+	file(pelisky, "Filmy/pelisky.cd2.avi")
+	// Film s přisloučeným cizím souborem.
+	red, _ := e.movie(t, "RED")
+	file(red, "Filmy/Dej si pohov/Dej si pohov.mkv")
+	// Film s jedním souborem.
+	e.movie(t, "Amadeus")
+
+	got, err := e.lib.MovieIssues(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != red || len(got[0].Files) != 2 {
+		t.Fatalf("filmy s nálezy = %+v", got)
+	}
+	for _, f := range got[0].Files {
+		if f.Detachable != (f.FilePath == "Filmy/Dej si pohov/Dej si pohov.mkv") {
+			t.Errorf("soubor %+v", f)
+		}
+	}
+}
+
+func TestShowFolders(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	var showID uuid.UUID
+	file := func(season, number int, name string) {
+		t.Helper()
+		id, err := e.store.EnsureEpisode(ctx, storage.EpisodeKey{LibraryID: e.showLib, ShowKey: "Seriály/Show", ShowTitle: "Show", Season: season, Episode: number})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := e.store.SaveMedia(ctx, storage.SaveMediaInput{FilePath: "Seriály/Show/" + name, EpisodeID: &id, SizeBytes: 1, ModTime: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+		ep, _ := e.store.GetEpisode(ctx, id)
+		showID = ep.ShowID
+	}
+	file(2, 1, "S02/Show S02E01.mkv")
+	file(2, 2, "S02/b.mkv")
+	file(1, 1, "a.mkv")
+	file(1, 2, "c.mkv")
+
+	got, err := e.lib.ShowFolders(ctx, showID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[0].Dir != "Seriály/Show" || got[1].Dir != "Seriály/Show/S02" {
+		t.Fatalf("složky = %+v", got)
+	}
+	if got[0].Season != 1 || got[1].Season != 2 {
+		t.Errorf("řady složek %d, %d", got[0].Season, got[1].Season)
+	}
+	if f := got[1].Files; len(f) != 2 || !f[0].FromName || f[1].FromName || f[1].Name != "b.mkv" || f[1].Episode != 2 {
+		t.Errorf("soubory S02 = %+v", f)
+	}
+}

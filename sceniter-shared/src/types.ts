@@ -351,6 +351,8 @@ export interface ShowIssueItem {
   missing?: number[]
   /** Dotčené soubory (duplicate_files; positional – všechny takové soubory řady). */
   files?: string[]
+  /** Složka dotčených souborů – odkaz na editor číslování. */
+  dir?: string
 }
 
 /** Seriál s nálezy (GET /sceniter/admin/library/show-issues). */
@@ -361,6 +363,63 @@ export interface ShowIssue {
   poster_path?: string
   updated_at: string
   issues: ShowIssueItem[]
+}
+
+/** Soubor filmu s více soubory; detachable = přisloučený podle metadat, lze oddělit. */
+export interface MovieIssueFile {
+  id: string
+  file_path: string
+  detachable: boolean
+}
+
+/** Film s přisloučeným cizím souborem (GET /sceniter/admin/library/movie-issues). */
+export interface MovieIssue {
+  id: string
+  title: string
+  source_key: string
+  poster_path?: string
+  updated_at: string
+  files: MovieIssueFile[]
+}
+
+/** Soubor dílu v editoru číslování složky. */
+export interface ShowFolderFile {
+  id: string
+  file_path: string
+  name: string
+  season: number
+  episode: number
+  /** Číslo dílu nese název souboru; jinak ho určilo pořadí ve složce. */
+  from_name: boolean
+}
+
+/** Složka seriálu se soubory dílů (GET /sceniter/shows/{id}/folders). */
+export interface ShowFolder {
+  dir: string
+  /** Řada podle názvu složky, jinak řada většiny souborů. */
+  season: number
+  files: ShowFolderFile[]
+}
+
+export interface RenumberSubtitle {
+  old_path: string
+  new_path: string
+}
+
+/** Jeden soubor plánu přečíslování; new_path === old_path, když název už číslo nese. */
+export interface RenumberChange {
+  media_id: string
+  old_path: string
+  new_path: string
+  season: number
+  episode: number
+  subtitles: RenumberSubtitle[]
+}
+
+/** Výsledek (nebo náhled) přečíslování složky (POST /sceniter/shows/{id}/renumber). */
+export interface RenumberPlan {
+  season: number
+  files: RenumberChange[]
 }
 
 export interface RefreshStatus {

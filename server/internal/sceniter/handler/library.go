@@ -634,6 +634,79 @@ func (h *Handler) ShowIssues(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+// GET /sceniter/admin/library/movie-issues
+func (h *Handler) MovieIssues(w http.ResponseWriter, r *http.Request) {
+	items, err := h.Library.MovieIssues(r.Context())
+	if writeStoreError(w, err, "sceniter.not_found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// GET /sceniter/shows/{id}/folders – složky seriálu se soubory dílů (editor číslování).
+func (h *Handler) ShowFolders(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	items, err := h.Library.ShowFolders(r.Context(), id)
+	if writeStoreError(w, err, "show.not_found") {
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+// POST /sceniter/shows/{id}/renumber – přečísluje soubory jedné složky
+// seriálu: každý dostane zadaný díl a název souboru "SxxEyy". S dry_run jen
+// vrátí plán přejmenování.
+func (h *Handler) Renumber(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req struct {
+		Dir    string `json:"dir"`
+		Season int    `json:"season"`
+		DryRun bool   `json:"dry_run"`
+		Files  []struct {
+			MediaID uuid.UUID `json:"media_id"`
+			Episode int       `json:"episode"`
+		} `json:"files"`
+	}
+	if err := readJSON(r, &req); err != nil || len(req.Files) == 0 || len(req.Files) > 1000 {
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
+		return
+	}
+	files := make([]scanner.RenumberFile, 0, len(req.Files))
+	for _, f := range req.Files {
+		files = append(files, scanner.RenumberFile{MediaID: f.MediaID, Episode: f.Episode})
+	}
+	var (
+		plan *scanner.RenumberPlan
+		err  error
+	)
+	if req.DryRun {
+		plan, err = h.Scanner.PlanRenumber(r.Context(), id, req.Dir, req.Season, files)
+	} else {
+		plan, err = h.Scanner.Renumber(r.Context(), id, req.Dir, req.Season, files)
+	}
+	switch {
+	case errors.Is(err, scanner.ErrRenameConflict):
+		writeError(w, http.StatusConflict, "media.rename_conflict", err.Error())
+		return
+	case errors.Is(err, scanner.ErrRenumberInvalid):
+		writeError(w, http.StatusBadRequest, "renumber.invalid", err.Error())
+		return
+	case writeStoreError(w, err, "show.not_found"):
+		return
+	}
+	if !req.DryRun {
+		h.Audit.Record(r.Context(), userID(r), coreservice.AuditEvent{Action: AuditRenumber, TargetType: model.KindShow,
+			TargetID: id.String(), Details: map[string]string{"dir": req.Dir, "files": strconv.Itoa(len(plan.Files))}})
+	}
+	writeJSON(w, http.StatusOK, plan)
+}
+
 // GET /sceniter/admin/stats
 func (h *Handler) Stats(w http.ResponseWriter, r *http.Request) {
 	st, err := h.Store.Stats(r.Context())

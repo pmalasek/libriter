@@ -36,6 +36,7 @@ const (
 	AuditUnmatch   = "sceniter.unmatch"
 	AuditEdit      = "sceniter.edit"
 	AuditDetach    = "sceniter.detach_file"
+	AuditRenumber  = "sceniter.renumber"
 	auditTargetLib = "sceniter"
 )
 
@@ -142,6 +143,8 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Put("/movies/{id}/ignore", h.Ignore)
 					r.Put("/shows/{id}/ignore", h.Ignore)
 					r.Post("/media/{id}/detach", h.DetachFile)
+					r.Get("/shows/{id}/folders", h.ShowFolders)
+					r.Post("/shows/{id}/renumber", h.Renumber)
 				})
 
 				r.Group(func(r chi.Router) {
@@ -160,6 +163,7 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Get("/admin/metadata/refresh", h.RefreshStatus)
 					r.Get("/admin/library/unmatched", h.Unmatched)
 					r.Get("/admin/library/show-issues", h.ShowIssues)
+					r.Get("/admin/library/movie-issues", h.MovieIssues)
 					r.Get("/admin/stats", h.Stats)
 					r.Get("/admin/transcode", h.TranscodeSessions)
 					r.Delete("/admin/transcode/{session}", h.StopTranscode)

@@ -15,7 +15,12 @@ export default {
   movie: { not_found: 'Film nicht gefunden' },
   show: { not_found: 'Serie nicht gefunden' },
   episode: { not_found: 'Folge nicht gefunden' },
-  media: { not_found: 'Videodatei nicht gefunden' },
+  media: {
+    not_found: 'Videodatei nicht gefunden',
+    rename_conflict: 'Eine Datei mit dem neuen Namen existiert bereits',
+    primary_file: 'Diese Datei trägt den Film und kann nicht abgetrennt werden',
+  },
+  renumber: { invalid: 'Ungültige Neunummerierung: Dateien außerhalb des Ordners oder doppelte Folgennummern' },
   subtitle: {
     not_found: 'Untertitel nicht gefunden',
     unsupported: 'Diese Untertitel können nicht umgewandelt werden',

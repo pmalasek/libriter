@@ -17,7 +17,12 @@ export default {
   movie: { not_found: 'Movie not found' },
   show: { not_found: 'TV show not found' },
   episode: { not_found: 'Episode not found' },
-  media: { not_found: 'Video file not found' },
+  media: {
+    not_found: 'Video file not found',
+    rename_conflict: 'A file with the new name already exists',
+    primary_file: 'This file holds the movie and cannot be split off',
+  },
+  renumber: { invalid: 'Invalid renumbering: files outside the folder or duplicate episode numbers' },
   subtitle: {
     not_found: 'Subtitles not found',
     unsupported: 'These subtitles cannot be converted',

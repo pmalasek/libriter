@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -417,6 +418,49 @@ func stripShowPrefix(name, show string) string {
 		}
 	}
 	return name[got[len(want)-1][1]:]
+}
+
+// EpisodeFileName vrátí název souboru (bez přípony) nesoucí řadu a díl ve
+// tvaru "S01E03": přísný zápis, který už v názvu je ("S01E05", "1x02",
+// "s6x01", "S0421"), nahradí; jinak ho předřadí ("S01E03 - Colombo 32 -
+// Vražda"). Původní text zůstává, změna je vratná a ParseEpisodeIn z názvu
+// přečte přesně zadanou řadu a díl.
+func EpisodeFileName(stem string, season, episode int) string {
+	tag := fmt.Sprintf("S%02dE%02d", season, episode)
+	for _, re := range []*regexp.Regexp{sxxexxRe, snxnnRe, snnnnRe, nxnnRe} {
+		if m := re.FindStringSubmatchIndex(stem); m != nil {
+			// m[2] je začátek čísla řady; zápis "S"/"s" před ním patří k tagu.
+			start := m[2]
+			if start > 0 && (stem[start-1] == 's' || stem[start-1] == 'S') {
+				start--
+			}
+			return stem[:start] + tag + stem[m[5]:]
+		}
+	}
+	stem = strings.TrimSpace(stem)
+	if stem == "" {
+		return tag
+	}
+	return tag + " - " + stem
+}
+
+// EpisodeFileNameFlat je EpisodeFileName pro díl ležící naplocho v knihovně,
+// kde seriál určuje text před "SxxEyy" (viz episodeKey). Přísný zápis
+// v názvu se jen nahradí (seriál se čte stejně). Jinak se tag vloží za název
+// seriálu, pokud jím název začíná a pokračuje mezerou ("Pan casu 42" → "Pan
+// casu S01E03 42"); v ostatních případech se název seriálu předřadí ("42 -
+// Vražda" → "Pan casu S01E03 - 42 - Vražda").
+func EpisodeFileNameFlat(stem, show string, season, episode int) string {
+	for _, re := range []*regexp.Regexp{sxxexxRe, snxnnRe, snnnnRe, nxnnRe} {
+		if re.MatchString(stem) {
+			return EpisodeFileName(stem, season, episode)
+		}
+	}
+	tag := fmt.Sprintf("S%02dE%02d", season, episode)
+	if rest := stripShowPrefix(stem, show); rest != stem && strings.HasPrefix(rest, " ") {
+		return stem[:len(stem)-len(rest)] + " " + tag + rest
+	}
+	return show + " " + EpisodeFileName(stem, season, episode)
 }
 
 // LooksLikeEpisode řekne, jestli název nese číslo sezóny a dílu (SxxEyy, NxNN).

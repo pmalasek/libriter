@@ -2,11 +2,14 @@ package scanner
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 
 	"mediater/internal/core/config"
 	"mediater/internal/core/db"
@@ -424,5 +427,131 @@ func TestEpisodeKeyAbsoluteNumbering(t *testing.T) {
 	key, ok := episodeKey(lib, filepath.Join(dir, parts[2]), parts, []string{"Seriály"}, "Colombo 33.Smrt", "")
 	if !ok || key.Season != 5 || key.Episode != 2 {
 		t.Errorf("Colombo 33 v S05 = S%dE%d (%v), chci S5E2", key.Season, key.Episode, ok)
+	}
+}
+
+// Přečíslování složky přejmenuje soubory (i titulky) na disku, přeřadí je
+// k dílům a další průchod je nechá být.
+func TestRenumberFolder(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"Serialy/Show/S01/a.mkv", "Serialy/Show/S01/b.mkv", "Serialy/Show/S01/b.cs.srt", "Serialy/Show/S01/c.mkv"} {
+		touch(t, root, f)
+	}
+	store := newTestStore(t)
+	addLibrary(t, store, "Serialy", "show")
+	s := New(root, store)
+	scanOnce(t, s)
+	ctx := context.Background()
+
+	shows, _ := store.ListShows(ctx, storage.ShowFilter{})
+	if len(shows) != 1 || shows[0].EpisodeCount != 3 {
+		t.Fatalf("seriály %+v", shows)
+	}
+	showID := shows[0].ID
+	media := func(p string) *storage.MediaRecord {
+		t.Helper()
+		rec, err := store.MediaByPath(ctx, p)
+		if err != nil {
+			t.Fatalf("%s: %v", p, err)
+		}
+		return rec
+	}
+	a, b, c := media("Serialy/Show/S01/a.mkv"), media("Serialy/Show/S01/b.mkv"), media("Serialy/Show/S01/c.mkv")
+
+	// Soubor mimo složku a duplicitní číslo jsou neplatné zadání.
+	if _, err := s.PlanRenumber(ctx, showID, "Serialy/Show", 1, []RenumberFile{{a.ID, 1}}); !errors.Is(err, ErrRenumberInvalid) {
+		t.Errorf("soubor mimo složku: %v", err)
+	}
+	if _, err := s.PlanRenumber(ctx, showID, "Serialy/Show/S01", 1, []RenumberFile{{a.ID, 1}, {b.ID, 1}}); !errors.Is(err, ErrRenumberInvalid) {
+		t.Errorf("duplicitní díl: %v", err)
+	}
+
+	order := []RenumberFile{{c.ID, 1}, {a.ID, 2}, {b.ID, 3}}
+	plan, err := s.PlanRenumber(ctx, showID, "Serialy/Show/S01", 1, order)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(plan.Files) != 3 || plan.Files[0].NewPath != "Serialy/Show/S01/S01E01 - c.mkv" || len(plan.Files[2].Subtitles) != 1 ||
+		plan.Files[2].Subtitles[0].NewPath != "Serialy/Show/S01/S01E03 - b.cs.srt" {
+		t.Fatalf("plán %+v", plan.Files)
+	}
+	// Náhled nic nezměnil.
+	if _, err := os.Stat(filepath.Join(root, "Serialy/Show/S01/a.mkv")); err != nil {
+		t.Fatal("náhled přejmenoval soubor")
+	}
+
+	// Kolize s existujícím souborem.
+	touch(t, root, "Serialy/Show/S01/S01E02 - a.mkv")
+	if _, err := s.Renumber(ctx, showID, "Serialy/Show/S01", 1, order); !errors.Is(err, ErrRenameConflict) {
+		t.Fatalf("kolize: %v", err)
+	}
+	os.Remove(filepath.Join(root, "Serialy/Show/S01/S01E02 - a.mkv"))
+
+	if _, err := s.Renumber(ctx, showID, "Serialy/Show/S01", 1, order); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"S01E01 - c.mkv", "S01E02 - a.mkv", "S01E03 - b.mkv", "S01E03 - b.cs.srt"} {
+		if _, err := os.Stat(filepath.Join(root, "Serialy/Show/S01", f)); err != nil {
+			t.Errorf("na disku chybí %s", f)
+		}
+	}
+	seasons, _ := store.ListSeasons(ctx, showID)
+	if len(seasons) != 1 || len(seasons[0].Episodes) != 3 {
+		t.Fatalf("řady %+v", seasons)
+	}
+	want := map[int]uuid.UUID{1: c.ID, 2: a.ID, 3: b.ID}
+	for _, e := range seasons[0].Episodes {
+		files, _ := store.ListMedia(ctx, nil, &e.ID)
+		if len(files) != 1 || files[0].ID != want[e.Number] {
+			t.Errorf("díl %d: soubory %+v", e.Number, files)
+		}
+		if e.Number == 3 && len(files[0].Subtitles) != 1 {
+			t.Errorf("díl 3 bez titulků: %+v", files[0])
+		}
+	}
+
+	// Další průchod nic nepřeřadí ani nezaloží znovu.
+	st := scanOnce(t, s)
+	if st.Added != 0 || st.Removed != 0 {
+		t.Errorf("průchod po přečíslování: %+v", st)
+	}
+	if rec := media("Serialy/Show/S01/S01E02 - a.mkv"); rec.ID != a.ID {
+		t.Errorf("soubor a má nové ID")
+	}
+	seasons, _ = store.ListSeasons(ctx, showID)
+	if len(seasons[0].Episodes) != 3 {
+		t.Errorf("po průchodu %d dílů", len(seasons[0].Episodes))
+	}
+}
+
+// Díl ležící naplocho v knihovně dostane do názvu i seriál, aby po
+// přejmenování patřil ke stejnému seriálu.
+func TestRenumberFlatKeepsShow(t *testing.T) {
+	root := t.TempDir()
+	for _, f := range []string{"Serialy/Pan casu S01E42.mkv", "Serialy/Pan casu S01E43.mkv"} {
+		touch(t, root, f)
+	}
+	store := newTestStore(t)
+	addLibrary(t, store, "Serialy", "show")
+	s := New(root, store)
+	scanOnce(t, s)
+	ctx := context.Background()
+	shows, _ := store.ListShows(ctx, storage.ShowFilter{})
+	if len(shows) != 1 {
+		t.Fatalf("seriály %+v", shows)
+	}
+	a, _ := store.MediaByPath(ctx, "Serialy/Pan casu S01E42.mkv")
+	b, _ := store.MediaByPath(ctx, "Serialy/Pan casu S01E43.mkv")
+	plan, err := s.Renumber(ctx, shows[0].ID, "Serialy", 2, []RenumberFile{{b.ID, 1}, {a.ID, 2}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if plan.Files[0].NewPath != "Serialy/Pan casu S02E01.mkv" {
+		t.Errorf("plán %+v", plan.Files)
+	}
+	scanOnce(t, s)
+	shows, _ = store.ListShows(ctx, storage.ShowFilter{})
+	if len(shows) != 1 || shows[0].EpisodeCount != 2 {
+		t.Errorf("po průchodu seriály %+v", shows)
 	}
 }

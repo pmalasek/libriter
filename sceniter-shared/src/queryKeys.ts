@@ -13,6 +13,7 @@ export const queryKeys = {
   show: (id: string) => ['sceniter', 'show', id] as const,
   season: (showId: string, number: number) => ['sceniter', 'show', showId, 'season', number] as const,
   episode: (id: string) => ['sceniter', 'episode', id] as const,
+  showFolders: (showId: string) => ['sceniter', 'show', showId, 'folders'] as const,
   person: (id: string) => ['sceniter', 'person', id] as const,
   similar: (kind: string, id: string) => ['sceniter', 'similar', kind, id] as const,
   genres: ['sceniter', 'genres'] as const,
@@ -24,6 +25,7 @@ export const queryKeys = {
   adminUnmatchedList: (kind: string, attempted: boolean) =>
     ['sceniter', 'admin', 'unmatched', kind, attempted] as const,
   adminShowIssues: ['sceniter', 'admin', 'show-issues'] as const,
+  adminMovieIssues: ['sceniter', 'admin', 'movie-issues'] as const,
   adminTranscode: ['sceniter', 'admin', 'transcode'] as const,
   adminRefresh: ['sceniter', 'admin', 'refresh'] as const,
   adminMatch: ['sceniter', 'admin', 'match'] as const,

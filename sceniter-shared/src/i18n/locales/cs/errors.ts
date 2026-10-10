@@ -15,7 +15,12 @@ export default {
   movie: { not_found: 'Film nenalezen' },
   show: { not_found: 'Seriál nenalezen' },
   episode: { not_found: 'Díl nenalezen' },
-  media: { not_found: 'Soubor s videem nenalezen' },
+  media: {
+    not_found: 'Soubor s videem nenalezen',
+    rename_conflict: 'Soubor s novým názvem už existuje',
+    primary_file: 'Tento soubor drží film, nelze ho oddělit',
+  },
+  renumber: { invalid: 'Neplatné přečíslování: soubory mimo složku nebo duplicitní čísla dílů' },
   subtitle: {
     not_found: 'Titulky nenalezeny',
     unsupported: 'Tyto titulky nejde převést',

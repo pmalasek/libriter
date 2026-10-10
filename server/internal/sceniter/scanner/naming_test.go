@@ -263,3 +263,61 @@ func TestParseProbeTitle(t *testing.T) {
 		t.Errorf("Title = %q", p.Title)
 	}
 }
+
+func TestEpisodeFileName(t *testing.T) {
+	cases := []struct {
+		in      string
+		season  int
+		episode int
+		want    string
+	}{
+		{"Colombo 32 - Vražda", 5, 1, "S05E01 - Colombo 32 - Vražda"},
+		{"02. díl", 1, 3, "S01E03 - 02. díl"},
+		{"trp0324", 3, 7, "S03E07 - trp0324"},
+		{"a", 1, 1, "S01E01 - a"},
+		{"", 1, 1, "S01E01"},
+		// Přísný zápis se nahradí.
+		{"Show S01E05 - Title", 1, 3, "Show S01E03 - Title"},
+		{"Show.s01e05.720p", 2, 10, "Show.S02E10.720p"},
+		{"Show 1x02 Title", 1, 7, "Show S01E07 Title"},
+		{"cali.s6x01", 6, 4, "cali.S06E04"},
+		{"Mentalista S0421", 4, 22, "Mentalista S04E22"},
+	}
+	for _, c := range cases {
+		got := EpisodeFileName(c.in, c.season, c.episode)
+		if got != c.want {
+			t.Errorf("EpisodeFileName(%q, %d, %d) = %q, chci %q", c.in, c.season, c.episode, got, c.want)
+		}
+		ep := ParseEpisodeIn(got, "Show", 9)
+		if !ep.OK || ep.Season != c.season || ep.Episode != c.episode {
+			t.Errorf("ParseEpisodeIn(%q) = %+v, chci S%02dE%02d", got, ep, c.season, c.episode)
+		}
+	}
+}
+
+func TestEpisodeFileNameFlat(t *testing.T) {
+	cases := []struct {
+		in, show string
+		want     string
+	}{
+		{"Pan casu 42", "Pan casu", "Pan casu S01E03 42"},
+		{"Pan-casu-3-cz", "Pan casu", "Pan casu S01E03 - Pan-casu-3-cz"},
+		{"Pan-casu-S02E09-cz", "Pan-casu", "Pan-casu-S01E03-cz"},
+		{"42 - Vražda", "Pan casu", "Pan casu S01E03 - 42 - Vražda"},
+		{"Pan.casu.S02E09.720p", "Pan casu", "Pan.casu.S01E03.720p"},
+		{"Pan casu 1x09", "Pan casu", "Pan casu S01E03"},
+	}
+	for _, c := range cases {
+		got := EpisodeFileNameFlat(c.in, c.show, 1, 3)
+		if got != c.want {
+			t.Errorf("EpisodeFileNameFlat(%q) = %q, chci %q", c.in, got, c.want)
+		}
+		ep := ParseEpisode(got)
+		if !ep.OK || ep.Season != 1 || ep.Episode != 3 {
+			t.Errorf("ParseEpisode(%q) = %+v", got, ep)
+		}
+		if loc := sxxexxRe.FindStringIndex(got); loc == nil || ParseMovie(got[:loc[0]]).Title != c.show {
+			t.Errorf("seriál z %q: %q", got, ParseMovie(got[:loc[0]]).Title)
+		}
+	}
+}
