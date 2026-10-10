@@ -34,7 +34,9 @@ type Library struct {
 	// Language je jazyk metadat (ISO 639-1).
 	Language string `json:"language"`
 	// Provider je jméno pluginu, se kterým se tituly párují automaticky.
-	Provider  *string   `json:"provider,omitempty"`
+	Provider *string `json:"provider,omitempty"`
+	// Icon je název ikony v menu (vybírá se z nabídky webu); nil = podle typu.
+	Icon      *string   `json:"icon,omitempty"`
 	Position  int       `json:"position"`
 	Enabled   bool      `json:"enabled"`
 	CreatedAt time.Time `json:"created_at"`

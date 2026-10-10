@@ -1,5 +1,5 @@
-import { ArrowDownIcon, ArrowUpIcon, FilmIcon, FolderPlusIcon, PencilIcon, Trash2Icon, TriangleAlertIcon, TvIcon } from 'lucide-react'
-import { useState } from 'react'
+import { ArrowDownIcon, ArrowUpIcon, FolderPlusIcon, PencilIcon, Trash2Icon, TriangleAlertIcon } from 'lucide-react'
+import { createElement, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import type { Library, LibraryRequest, MetadataProvider, TitleKind } from 'sceniter-shared'
@@ -23,6 +23,7 @@ import { Input } from 'core-web/src/components/ui/input'
 import { Label } from 'core-web/src/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'core-web/src/components/ui/select'
 import { Switch } from 'core-web/src/components/ui/switch'
+import { cn } from 'core-web/src/lib/utils'
 import {
   useAdminLibraries,
   useDeleteLibrary,
@@ -31,10 +32,46 @@ import {
   useReorderLibraries,
   useSaveLibrary,
 } from '@/api/hooks'
+import { defaultLibraryIcon, LIBRARY_ICONS, libraryIcon } from '@/lib/libraryIcons'
 
 /** Jazyky metadat v nabídce; názvy dodá prohlížeč v jazyce rozhraní. */
 const LANGUAGES = ['cs', 'sk', 'en', 'de', 'fr', 'es', 'it', 'pl', 'hu', 'ru', 'uk', 'ja']
 const NONE = '__none__'
+
+/** Výběr ikony do menu; první volba je výchozí ikona podle typu. */
+function IconPicker({ kind, value, onChange }: { kind: TitleKind; value: string; onChange: (icon: string) => void }) {
+  const { t } = useTranslation()
+  const Default = defaultLibraryIcon(kind)
+  const options: { key: string; label: string; Icon: typeof Default }[] = [
+    { key: '', label: t('video.admin.libraries.iconDefault'), Icon: Default },
+    ...Object.entries(LIBRARY_ICONS).map(([key, Icon]) => ({ key, label: key, Icon })),
+  ]
+  return (
+    <div role="radiogroup" aria-label={t('video.admin.libraries.icon')} className="flex flex-wrap gap-1.5">
+      {options.map(({ key, label, Icon }) => {
+        const active = value === key
+        return (
+          <button
+            key={key || 'default'}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            aria-label={label}
+            title={label}
+            onClick={() => onChange(key)}
+            className={cn(
+              'flex size-9 items-center justify-center rounded-xl outline-none transition-colors focus-visible:ring-3 focus-visible:ring-ring/50',
+              active ? 'bg-primary/12 text-primary ring-1 ring-primary/30' : 'text-muted-foreground hover:bg-foreground/6 hover:text-foreground',
+              key === '' && 'border border-dashed border-glass-edge',
+            )}
+          >
+            <Icon className="size-4.5" />
+          </button>
+        )
+      })}
+    </div>
+  )
+}
 
 function useLanguageName() {
   const { i18n } = useTranslation()
@@ -75,6 +112,7 @@ function LibraryDialog({
   const [kind, setKind] = useState<TitleKind>(library?.kind ?? 'movie')
   const [language, setLanguage] = useState(library?.language ?? 'cs')
   const [provider, setProvider] = useState(library?.provider ?? '')
+  const [icon, setIcon] = useState(library?.icon ?? '')
 
   const options = providersFor(providers.data ?? [], kind, language)
   // Zdroj, který neumí zvolený typ (změna typu u nové knihovny), se zahodí.
@@ -86,6 +124,7 @@ function LibraryDialog({
       name: name.trim() || dir,
       language,
       provider: providerValue === NONE ? '' : providerValue,
+      icon,
     }
     if (!library) Object.assign(body, { dir, kind, enabled: true })
     save.mutate(
@@ -180,6 +219,11 @@ function LibraryDialog({
           </div>
 
           <div className="grid gap-1.5">
+            <Label>{t('video.admin.libraries.icon')}</Label>
+            <IconPicker kind={kind} value={icon} onChange={setIcon} />
+          </div>
+
+          <div className="grid gap-1.5">
             <Label htmlFor="library-provider">{t('video.admin.libraries.provider')}</Label>
             <Select value={providerValue} onValueChange={(v) => setProvider(v === NONE ? '' : v)}>
               <SelectTrigger id="library-provider" className="w-full">
@@ -230,12 +274,11 @@ function LibraryRow({
   const [editing, setEditing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const provider = library.provider ? providers.find((p) => p.name === library.provider) : undefined
-  const Icon = library.kind === 'show' ? TvIcon : FilmIcon
 
   return (
     <li className="glass inset-shadow-glass flex flex-wrap items-center gap-3 rounded-2xl p-3 ring-1 ring-glass-edge">
       <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <Icon className="size-5" />
+        {createElement(libraryIcon(library), { className: 'size-5' })}
       </span>
       <div className="min-w-0 flex-1">
         <p className="flex flex-wrap items-center gap-2 font-medium">

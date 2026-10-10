@@ -154,3 +154,21 @@ func TestIDFromURL(t *testing.T) {
 		}
 	}
 }
+
+// Minisérie vedená na ČSFD jako „TV film“ se u seriálu najde taky – za
+// výsledky ze sekce seriálů.
+func TestParseSearchShowsIncludesTVFilms(t *testing.T) {
+	res := ParseSearch(parse(t, "search-bitva.html"), plugin.KindShow, "https://www.csfd.cz")
+	var found *plugin.SearchResult
+	for i := range res {
+		if res[i].Title == "Bitva o nebe nad Británií" {
+			found = &res[i]
+		}
+	}
+	if found == nil || found.Year != 2005 || !strings.Contains(found.Note, "TV film") {
+		t.Fatalf("TV film mezi výsledky chybí: %+v", res)
+	}
+	if res[0].Title == found.Title {
+		t.Error("seriály mají být před filmy")
+	}
+}

@@ -198,6 +198,8 @@ export default {
       kindShow: 'Series',
       language: 'Idioma de los metadatos',
       provider: 'Fuente de metadatos predeterminada',
+      icon: 'Icono en el menú',
+      iconDefault: 'Según el tipo',
       noProvider: 'Sin emparejamiento automático',
       enabled: 'Activada',
       disabled: 'desactivada',

@@ -12,7 +12,7 @@ import (
 )
 
 const libraryCols = `
-	l.id, l.dir, l.name, l.kind, l.language, l.provider, l.position, l.enabled, l.created_at, l.updated_at,
+	l.id, l.dir, l.name, l.kind, l.language, l.provider, l.icon, l.position, l.enabled, l.created_at, l.updated_at,
 	CASE l.kind
 	  WHEN 'movie' THEN (SELECT count(*) FROM sc_movies m WHERE m.library_id = l.id
 	                       AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.movie_id = m.id))
@@ -23,12 +23,12 @@ const libraryCols = `
 
 func scanLibrary(sc interface{ Scan(...any) error }) (model.Library, error) {
 	var (
-		l        model.Library
-		provider sql.NullString
+		l              model.Library
+		provider, icon sql.NullString
 	)
-	err := sc.Scan(&l.ID, &l.Dir, &l.Name, &l.Kind, &l.Language, &provider, &l.Position, &l.Enabled,
+	err := sc.Scan(&l.ID, &l.Dir, &l.Name, &l.Kind, &l.Language, &provider, &icon, &l.Position, &l.Enabled,
 		&l.CreatedAt, &l.UpdatedAt, &l.ItemCount)
-	l.Provider = ptrString(provider)
+	l.Provider, l.Icon = ptrString(provider), ptrString(icon)
 	return l, err
 }
 
@@ -74,6 +74,7 @@ type LibraryInput struct {
 	Kind     string
 	Language string
 	Provider string
+	Icon     string
 	Enabled  bool
 }
 
@@ -81,9 +82,9 @@ type LibraryInput struct {
 func (s *Store) CreateLibrary(ctx context.Context, in LibraryInput) (*model.Library, error) {
 	id := uuid.New()
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO sc_libraries (id, dir, name, kind, language, provider, enabled, position)
-		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, (SELECT COALESCE(max(position), -1) + 1 FROM sc_libraries))`,
-		id, in.Dir, in.Name, in.Kind, in.Language, nullStr(in.Provider), in.Enabled)
+		INSERT INTO sc_libraries (id, dir, name, kind, language, provider, icon, enabled, position)
+		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, (SELECT COALESCE(max(position), -1) + 1 FROM sc_libraries))`,
+		id, in.Dir, in.Name, in.Kind, in.Language, nullStr(in.Provider), nullStr(in.Icon), in.Enabled)
 	if err != nil {
 		if isUniqueViolation(err) {
 			return nil, ErrConflict
@@ -93,13 +94,13 @@ func (s *Store) CreateLibrary(ctx context.Context, in LibraryInput) (*model.Libr
 	return s.GetLibrary(ctx, id)
 }
 
-// UpdateLibrary uloží název, jazyk, zdroj a zapnutí. Složku ani typ změnit
+// UpdateLibrary uloží název, jazyk, zdroj, ikonu a zapnutí. Složku ani typ změnit
 // nejde – obsah by neodpovídal tomu, co už je naskenované.
 func (s *Store) UpdateLibrary(ctx context.Context, id uuid.UUID, in LibraryInput) (*model.Library, error) {
 	res, err := s.db.ExecContext(ctx, `
-		UPDATE sc_libraries SET name = ?2, language = ?3, provider = ?4, enabled = ?5,
+		UPDATE sc_libraries SET name = ?2, language = ?3, provider = ?4, enabled = ?5, icon = ?6,
 		  updated_at = CURRENT_TIMESTAMP
-		WHERE id = ?1`, id, in.Name, in.Language, nullStr(in.Provider), in.Enabled)
+		WHERE id = ?1`, id, in.Name, in.Language, nullStr(in.Provider), in.Enabled, nullStr(in.Icon))
 	if err != nil {
 		return nil, fmt.Errorf("update library: %w", err)
 	}

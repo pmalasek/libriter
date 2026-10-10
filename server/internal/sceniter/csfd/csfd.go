@@ -138,12 +138,28 @@ func (c *Client) Search(ctx context.Context, kind, query string) ([]plugin.Searc
 	return ParseSearch(doc, kind, c.baseURL), nil
 }
 
-// ParseSearch vytáhne výsledky hledání pro daný druh.
+// ParseSearch vytáhne výsledky hledání pro daný druh. U seriálu se za
+// výsledky ze sekce seriálů přidají i ty ze sekce filmů: ČSFD vede některé
+// minisérie jako „TV film“ (s délkou 4×47 min), seriálem pak nejsou.
 func ParseSearch(doc *html.Node, kind, base string) []plugin.SearchResult {
-	section := "films"
+	out := parseSearchSection(doc, "films", base)
 	if kind == plugin.KindShow {
-		section = "series"
+		seen := map[string]bool{}
+		series := parseSearchSection(doc, "series", base)
+		for _, r := range series {
+			seen[r.ID] = true
+		}
+		for _, r := range out {
+			if !seen[r.ID] {
+				series = append(series, r)
+			}
+		}
+		out = series
 	}
+	return out
+}
+
+func parseSearchSection(doc *html.Node, section, base string) []plugin.SearchResult {
 	box := htmlutil.Find(doc, func(n *html.Node) bool {
 		return n.Data == "section" && htmlutil.Attr(n, "data-search-results") == section
 	})

@@ -14,6 +14,8 @@ export interface Library {
   language: string
   /** Výchozí zdroj metadat (jméno pluginu). */
   provider?: string
+  /** Ikona v menu (název z nabídky webu); chybí = podle typu. */
+  icon?: string
   position: number
   enabled: boolean
   created_at: string
@@ -30,6 +32,8 @@ export interface LibraryRequest {
   language?: string
   /** '' = bez automatického párování. */
   provider?: string
+  /** '' = výchozí ikona podle typu. */
+  icon?: string
   enabled?: boolean
 }
 

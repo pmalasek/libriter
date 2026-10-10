@@ -231,8 +231,19 @@ func pickResult(res []plugin.SearchResult, title, original string, year int) (st
 		}
 		return "", false
 	}
-	if len(res) == 1 && sameName(res[0]) {
-		return res[0].ID, res[0].ID != ""
+	// Bez roku: jediný výsledek se shodným názvem. Ostatní výsledky hledání
+	// (jiné tituly se stejným slovem) shodu nezpochybňují.
+	var only *plugin.SearchResult
+	for i := range res {
+		if sameName(res[i]) {
+			if only != nil {
+				return "", false // dva stejně pojmenované tituly – rozhodne člověk
+			}
+			only = &res[i]
+		}
+	}
+	if only != nil {
+		return only.ID, only.ID != ""
 	}
 	return "", false
 }

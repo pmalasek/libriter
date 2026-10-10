@@ -198,6 +198,8 @@ export default {
       kindShow: 'TV shows',
       language: 'Metadata language',
       provider: 'Default metadata source',
+      icon: 'Menu icon',
+      iconDefault: 'By type',
       noProvider: 'No automatic matching',
       enabled: 'Enabled',
       disabled: 'disabled',

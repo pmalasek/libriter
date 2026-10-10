@@ -55,6 +55,7 @@ Knihovna je podsložka přímo pod `VIDEO_ROOT`. Nastavuje ji admin v
 | Složka | Podsložka `VIDEO_ROOT`; nabízejí se jen ty, které knihovnou ještě nejsou. |
 | Typ | Filmy, nebo seriály – určuje, jak scanner soubory zařadí. Po založení ho nejde změnit. |
 | Zobrazovaný název | Položka v menu a nadpis řádku na domovské stránce. |
+| Ikona | Ikona v menu z nabídky; bez volby podle typu (filmový pás / televize). |
 | Jazyk metadat | Jazyk, ve kterém zdroj vrací názvy a popisy (ISO 639-1). |
 | Výchozí zdroj metadat | Plugin, se kterým se tituly párují automaticky; bez zdroje se nepárují. |
 | Zapnutá | Vypnutá knihovna se neprochází ani nezobrazuje, data zůstávají. |

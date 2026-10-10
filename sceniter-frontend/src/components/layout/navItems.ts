@@ -1,8 +1,9 @@
-import { BookmarkIcon, FilmIcon, HomeIcon, SearchIcon, SettingsIcon, TvIcon, type LucideIcon } from 'lucide-react'
+import { BookmarkIcon, HomeIcon, SearchIcon, SettingsIcon, type LucideIcon } from 'lucide-react'
 import type { ParseKeys } from 'i18next'
 import { useAuth } from 'core-web/src/auth/AuthContext'
 import { isAdmin } from 'core-web/src/auth/permissions'
 import { useLibraries } from '@/api/hooks'
+import { libraryIcon } from '@/lib/libraryIcons'
 
 export interface NavItem {
   to: string
@@ -35,7 +36,7 @@ export function useNavItems(): NavItem[] {
   const libs: NavItem[] = (libraries.data ?? []).map((lib, i) => ({
     to: `/library/${lib.id}`,
     label: lib.name,
-    icon: lib.kind === 'show' ? TvIcon : FilmIcon,
+    icon: libraryIcon(lib),
     primary: i < PRIMARY_LIBRARIES,
   }))
   return [HOME, ...libs, ...TAIL, ...(isAdmin(user) ? [ADMIN] : [])]

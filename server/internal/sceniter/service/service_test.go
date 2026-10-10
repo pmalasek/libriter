@@ -196,8 +196,12 @@ func TestPickResult(t *testing.T) {
 	if id, ok := pickResult(res, "Pelíšky", "", 2000); !ok || id != "1" {
 		t.Errorf("rok ±1: %s %v", id, ok)
 	}
-	if _, ok := pickResult(res, "Pelíšky", "", 0); ok {
-		t.Error("bez roku a víc výsledků se nesmí párovat automaticky")
+	if id, ok := pickResult(res, "Pelíšky", "", 0); !ok || id != "1" {
+		t.Errorf("bez roku: jediný výsledek se shodným názvem: %s %v", id, ok)
+	}
+	twins := append(res, plugin.SearchResult{ID: "3", Title: "Pelíšky", Year: 2021})
+	if _, ok := pickResult(twins, "Pelíšky", "", 0); ok {
+		t.Error("bez roku a dva stejně pojmenované tituly se nesmí párovat automaticky")
 	}
 	if _, ok := pickResult(res, "Úplně jiný", "", 1980); ok {
 		t.Error("jiný rok i název")

@@ -204,6 +204,8 @@ export default {
       kindShow: 'Seriály',
       language: 'Jazyk metadat',
       provider: 'Výchozí zdroj metadat',
+      icon: 'Ikona v menu',
+      iconDefault: 'Podle typu',
       noProvider: 'Bez automatického párování',
       enabled: 'Zapnutá',
       disabled: 'vypnutá',

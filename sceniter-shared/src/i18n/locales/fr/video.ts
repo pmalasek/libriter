@@ -198,6 +198,8 @@ export default {
       kindShow: 'Séries',
       language: 'Langue des métadonnées',
       provider: 'Source de métadonnées par défaut',
+      icon: 'Icône du menu',
+      iconDefault: 'Selon le type',
       noProvider: 'Pas d’association automatique',
       enabled: 'Activée',
       disabled: 'désactivée',

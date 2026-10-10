@@ -21,7 +21,11 @@ import (
 // ErrConflict znamená, že složka už knihovnou je.
 var ErrConflict = errors.New("složka už je knihovnou")
 
-var languageRe = regexp.MustCompile(`^[a-z]{2,3}$`)
+var (
+	languageRe = regexp.MustCompile(`^[a-z]{2,3}$`)
+	// Název ikony z nabídky webu; server ho jen ukládá.
+	iconRe = regexp.MustCompile(`^[a-z0-9-]{1,40}$`)
+)
 
 // Libraries spravuje knihovny – podsložky VIDEO_ROOT s typem obsahu, jazykem
 // a zdrojem metadat. Nastavení je globální a mění ho jen admin.
@@ -78,7 +82,9 @@ type LibraryRequest struct {
 	Kind     string  `json:"kind"`
 	Language string  `json:"language"`
 	Provider *string `json:"provider"`
-	Enabled  *bool   `json:"enabled"`
+	// Icon: nil = beze změny, "" = výchozí podle typu.
+	Icon    *string `json:"icon"`
+	Enabled *bool   `json:"enabled"`
 }
 
 func (l *Libraries) validate(kind string, in *LibraryRequest, out *storage.LibraryInput) error {
@@ -110,6 +116,12 @@ func (l *Libraries) validate(kind string, in *LibraryRequest, out *storage.Libra
 		if !p.Manifest.Supports(kind) {
 			return fmt.Errorf("%w: zdroj %q neumí %s", ErrInvalid, out.Provider, kindLabel(kind))
 		}
+	}
+	if in.Icon != nil {
+		out.Icon = strings.TrimSpace(*in.Icon)
+	}
+	if out.Icon != "" && !iconRe.MatchString(out.Icon) {
+		return fmt.Errorf("%w: neplatná ikona %q", ErrInvalid, out.Icon)
 	}
 	if in.Enabled != nil {
 		out.Enabled = *in.Enabled
@@ -160,6 +172,9 @@ func (l *Libraries) Update(ctx context.Context, id uuid.UUID, in LibraryRequest)
 	out := storage.LibraryInput{Dir: cur.Dir, Name: cur.Name, Language: cur.Language, Enabled: cur.Enabled}
 	if cur.Provider != nil {
 		out.Provider = *cur.Provider
+	}
+	if cur.Icon != nil {
+		out.Icon = *cur.Icon
 	}
 	if in.Name == "" {
 		in.Name = cur.Name
