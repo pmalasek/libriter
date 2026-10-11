@@ -97,6 +97,7 @@ func (h *Handler) Routes(r chi.Router) {
 			r.Get("/media/{id}/stream", h.Stream)
 			r.Head("/media/{id}/stream", h.Stream)
 			r.Get("/media/{id}/hls/master.m3u8", h.Master)
+			r.Post("/media/{id}/hls/keepalive", h.HLSKeepAlive)
 			r.Get("/media/{id}/subtitles/{key}", h.Subtitle)
 			r.Get("/hls/{session}/{file}", h.HLSFile)
 			r.Delete("/hls/{session}", h.HLSStop)

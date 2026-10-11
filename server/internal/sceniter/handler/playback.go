@@ -252,6 +252,26 @@ func (h *Handler) hlsError(w http.ResponseWriter, err error) {
 	}
 }
 
+// POST /sceniter/media/{id}/hls/keepalive?t= – přehrávač je pořád otevřený,
+// převody souboru se nemají ukončit pro nečinnost. Adresuje se souborem, ne
+// session: nativní HLS v Safari ID session nezná. 404 znamená, že převod už
+// neexistuje a přehrávač ho musí založit znovu.
+func (h *Handler) HLSKeepAlive(w http.ResponseWriter, r *http.Request) {
+	user, ok := h.streamUser(w, r)
+	if !ok {
+		return
+	}
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	if h.HLS.KeepAlive(user, id) == 0 {
+		writeError(w, http.StatusNotFound, "transcode.gone", "převod skončil, spusťte přehrávání znovu")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // DELETE /sceniter/hls/{session}?t= (i POST …/stop) – přehrávač odchází.
 func (h *Handler) HLSStop(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.streamUser(w, r)

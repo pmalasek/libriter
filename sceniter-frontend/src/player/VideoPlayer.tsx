@@ -22,6 +22,11 @@ const SAVE_INTERVAL_MS = 10_000
 const MAX_TIME_GAP = 3
 /** Odpočet před automatickým spuštěním dalšího dílu. */
 const NEXT_COUNTDOWN = 10
+/**
+ * Jak často přehrávač serveru hlásí, že převod pořád potřebuje. Musí být
+ * kratší než TRANSCODE_IDLE_SECONDS (výchozí 60 s, minimum 10 s).
+ */
+const KEEPALIVE_MS = 20_000
 /** Pořadí režimů: když přehrání selže, zkusí se dražší. */
 const ESCALATION: PlaybackMode[] = ['direct', 'remux', 'transcode']
 
@@ -125,6 +130,14 @@ export function VideoPlayer({
 
   // ---- napojení zdroje (přímo / nativní HLS / hls.js) ----
 
+  // Převod na serveru zmizel (úklid, restart serveru): nový token a nový
+  // převod, pokračuje se od aktuální pozice.
+  const refetchPlayback = playback.refetch
+  const restart = useCallback(() => {
+    seekTo.current = videoRef.current?.currentTime || seekTo.current
+    void refetchPlayback()
+  }, [refetchPlayback])
+
   const escalate = useCallback(
     (from: PlaybackMode) => {
       const i = ESCALATION.indexOf(from === 'transcode_audio' ? 'remux' : from)
@@ -163,6 +176,23 @@ export function VideoPlayer({
     video.addEventListener('loadedmetadata', onMeta, { once: true })
     video.addEventListener('error', onError)
 
+    // S plným bufferem nebo v pauze přehrávač segmenty nežádá a server by
+    // převod po době nečinnosti smazal – proto pravidelný keepalive.
+    let keepalive: number | undefined
+    if (pb.hls) {
+      const u = new URL(pb.url, window.location.origin)
+      const keepUrl = `${u.pathname.replace(/master\.m3u8$/, 'keepalive')}?t=${encodeURIComponent(u.searchParams.get('t') ?? '')}`
+      keepalive = window.setInterval(() => {
+        void fetch(keepUrl, { method: 'POST' })
+          .then((res) => {
+            if (res.status === 404 && !cancelled) restart()
+          })
+          .catch(() => {
+            // Výpadek sítě – zkusí se při dalším tiku.
+          })
+      }, KEEPALIVE_MS)
+    }
+
     if (pb.hls && !(profile === 'safari' && hasNativeHls(video))) {
       void import('hls.js').then(({ default: Hls }) => {
         if (cancelled) return
@@ -173,6 +203,7 @@ export function VideoPlayer({
         const h = new Hls({ maxBufferLength: 30, backBufferLength: 90, manifestLoadingMaxRetry: 2 })
         hls = h
         let mediaRecovered = false
+        let restarted = false
         h.on(Hls.Events.MANIFEST_PARSED, () => {
           stopUrl = h.levels[0]?.uri?.replace(/\/index\.m3u8\?/, '/stop?')
         })
@@ -192,6 +223,11 @@ export function VideoPlayer({
             escalate(pb.mode)
             return
           }
+          if (status === 404 && !restarted) {
+            restarted = true
+            restart()
+            return
+          }
           setFailure(t('video.player.failed'))
         })
         h.loadSource(pb.url)
@@ -203,6 +239,7 @@ export function VideoPlayer({
 
     return () => {
       cancelled = true
+      window.clearInterval(keepalive)
       video.removeEventListener('loadedmetadata', onMeta)
       video.removeEventListener('error', onError)
       hls?.destroy()
@@ -213,7 +250,7 @@ export function VideoPlayer({
     }
     // Objekt rozhodnutí se mění jen s novým zdrojem (jiná stopa, režim nebo
     // nový token po „Zkusit znovu“) – pak se video napojí znovu.
-  }, [pb, profile, escalate, t])
+  }, [pb, profile, escalate, restart, t])
 
   // ---- titulky ----
 

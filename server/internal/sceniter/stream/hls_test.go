@@ -92,3 +92,30 @@ func TestManagerReapsIdle(t *testing.T) {
 		t.Fatal("adresář převodu zůstal")
 	}
 }
+
+// Přehrávač s plným bufferem (nebo v pauze) segmenty nežádá; keepalive musí
+// převod udržet, jinak ho úklid smaže a přehrávání se po pár minutách zastaví.
+func TestManagerKeepAlive(t *testing.T) {
+	src := testVideo(t)
+	m := NewManager(t.TempDir(), 1, time.Minute)
+	user, media := uuid.New(), uuid.New()
+	s, err := m.Open(Options{UserID: user, MediaID: media, Path: src, Mode: ModeRemux})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Stop(s.ID)
+
+	s.mu.Lock()
+	s.lastAccess = time.Now().Add(-2 * time.Minute)
+	s.mu.Unlock()
+	if n := m.KeepAlive(uuid.New(), media); n != 0 {
+		t.Fatalf("cizí uživatel obnovil %d převodů", n)
+	}
+	if n := m.KeepAlive(user, media); n != 1 {
+		t.Fatalf("KeepAlive = %d, chci 1", n)
+	}
+	m.reap()
+	if _, err := m.Lookup(s.ID, user); err != nil {
+		t.Fatalf("převod po keepalive zmizel: %v", err)
+	}
+}

@@ -211,6 +211,23 @@ func (m *Manager) Lookup(id string, userID uuid.UUID) (*Session, error) {
 	return s, nil
 }
 
+// KeepAlive obnoví nečinnost všech převodů uživatele pro daný soubor a vrátí,
+// kolik jich bylo. Přehrávač ho volá pravidelně: s plným bufferem (hls.js
+// si u nízkého bitrate natáhne i 10 minut dopředu) nebo při pauze nežádá
+// segmenty déle, než je doba nečinnosti, a převod by se mu pod rukama smazal.
+func (m *Manager) KeepAlive(userID, mediaID uuid.UUID) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for _, s := range m.sessions {
+		if s.UserID == userID && s.MediaID == mediaID {
+			s.touch()
+			n++
+		}
+	}
+	return n
+}
+
 // Stop ukončí session (přehrávač odešel, nebo admin).
 func (m *Manager) Stop(id string) bool {
 	m.mu.Lock()
