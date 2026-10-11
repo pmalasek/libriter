@@ -366,16 +366,23 @@ mobile-ios-release method destination: mobile-deps
 # React Native v jednom stromu by se pobily). Sdílené balíčky bere Metro
 # přímo ze zdrojů (viz sceniter-tv/metro.config.js).
 
-# Závislosti TV aplikace (vlastní lockfile v sceniter-tv/)
+# Závislosti TV aplikace (vlastní lockfile v sceniter-tv/). Pod rootem
+# (sudo) by node_modules, android/ i Gradle cache patřily rootovi.
 [working-directory('sceniter-tv')]
 [private]
 tv-deps:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "$(id -u)" = 0 ]; then
+        echo "TV aplikaci sestavuj jako běžný uživatel, ne přes sudo." >&2
+        exit 1
+    fi
     npm ci
 
-# Metro bundler TV aplikace (dev build, ne Expo Go)
+# Metro bundler TV aplikace (pro už nainstalovaný debug build)
 [working-directory('sceniter-tv')]
 tv-start: tv-deps
-    EXPO_TV=1 npx expo start --dev-client
+    EXPO_TV=1 npx expo start
 
 # Na připojené Android TV / Google TV (adb connect <ip>) nebo v emulátoru Android TV
 [working-directory('sceniter-tv')]
@@ -416,7 +423,8 @@ tv-android-release task artifact out: tv-deps
         echo "⚠ Release klíč nenastavený (just mobile-keystore) – podepisuji debug klíčem, do Google Play to neprojde." >&2
     fi
     EXPO_TV=1 npx expo prebuild --platform android
-    (cd android && ./gradlew {{task}})
+    # Televize a TV boxy jsou ARM; x86 je jen pro emulátor a build zdvojnásobí.
+    (cd android && ./gradlew {{task}} -PreactNativeArchitectures=armeabi-v7a,arm64-v8a)
     mkdir -p dist
     cp "android/app/build/outputs/{{artifact}}" "dist/{{out}}"
     echo "→ {{tv_dir}}/dist/{{out}}"
