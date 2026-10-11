@@ -51,6 +51,7 @@ function playEpisode(show: ShowDetail, e: EpisodeWithProgress, fromStart = false
     title: show.title,
     subtitle: episodeShort(e),
     start: !fromStart && canResume(e.progress) ? e.progress.position_sec : 0,
+    fromStart,
   })
 }
 

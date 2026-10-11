@@ -83,6 +83,9 @@ export function VideoPlayer({
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const seekTo = useRef<number | undefined>(startAt)
+  // Dokud se poprvé nerozehrálo, neukládat – převzatá pozice s čerstvým
+  // časem by přepsala novější, zapsanou mezitím z jiného zařízení.
+  const started = useRef(false)
   const meter = useRef(new WatchMeter())
   const lastSave = useRef(0)
   // Aktuální rozhodnutí pro obsluhy událostí (ukládání pozice, eskalace).
@@ -98,6 +101,7 @@ export function VideoPlayer({
       const video = videoRef.current
       const current = pbRef.current
       if (!video || !current || !Number.isFinite(video.currentTime)) return Promise.resolve()
+      if (!started.current && !opts.completed) return Promise.resolve()
       const secs = meter.current.take()
       lastSave.current = Date.now()
       const duration = current.duration_sec || (Number.isFinite(video.duration) ? video.duration : undefined)
@@ -113,7 +117,6 @@ export function VideoPlayer({
           watched_seconds: secs,
           completed: opts.completed,
           device_id: deviceId(),
-          recorded_at: new Date().toISOString(),
         },
         opts.keepalive,
       ).catch(() => {
@@ -179,6 +182,7 @@ export function VideoPlayer({
       const at = seekTo.current
       if (!shouldSeekTo(at, pb.duration_sec)) {
         seekTo.current = undefined
+        started.current = true
         play()
         return
       }
@@ -194,6 +198,7 @@ export function VideoPlayer({
         }
         video.currentTime = at
         seekTo.current = undefined
+        started.current = true
         setResuming(false)
         play()
       }

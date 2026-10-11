@@ -6,8 +6,13 @@ export interface PlayParams {
   episodeId?: string
   title: string
   subtitle?: string
-  /** Pozice v sekundách, od které pokračovat; 0 = od začátku. */
+  /** Pozice v sekundách z dat obrazovky, od které pokračovat; 0 = bez uložené pozice. */
   start?: number
+  /**
+   * Výslovně od začátku. Jinak si přehrávač před startem ověří pozici na
+   * serveru – data obrazovky můžou být stará (díl rozkoukaný na jiné TV).
+   */
+  fromStart?: boolean
 }
 
 export const openMovie = (id: string) => router.push({ pathname: '/movie/[id]', params: { id } } as never)
@@ -43,6 +48,7 @@ export function play(p: PlayParams) {
   if (p.episodeId) params.episodeId = p.episodeId
   if (p.subtitle) params.subtitle = p.subtitle
   if (p.start) params.start = String(Math.floor(p.start))
+  if (!p.fromStart) params.resume = '1'
   router.push({ pathname: '/player', params } as never)
 }
 

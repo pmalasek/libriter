@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -244,14 +245,18 @@ func (h *Handler) ListProgress(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, list)
 }
 
-// PUT /sceniter/progress – pozice z přehrávače. 409 progress.stale znamená,
-// že jiné zařízení zapsalo novější pozici; klient ji má převzít.
+// PUT /sceniter/progress – pozice z přehrávače, který je právě online.
+// O pořadí rozhoduje čas serveru: hodiny zařízení (TV, prohlížeč) můžou jít
+// špatně a novější pozice z jiného zařízení by pak prohrála. recorded_at
+// z těla se proto ignoruje; časy z klienta má jen offline dávka (/progress/sync).
+// 409 progress.stale tu tak nastane jen výjimečně (souběh se starší dávkou).
 func (h *Handler) SaveProgress(w http.ResponseWriter, r *http.Request) {
 	var req service.ProgressRequest
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
+	req.RecordedAt = nil
 	err := h.Library.SaveProgress(r.Context(), userID(r), req)
 	switch {
 	case errors.Is(err, storage.ErrStale):
@@ -266,14 +271,23 @@ func (h *Handler) SaveProgress(w http.ResponseWriter, r *http.Request) {
 
 // POST /sceniter/progress/sync – dávka pozic z offline zařízení (budoucí TV
 // klienti). Každá událost má event_id; opakovaná dávka se nezapočte dvakrát.
+//
+// Časy událostí jsou z hodin zařízení. sent_at (hodiny zařízení při odeslání)
+// dovolí změřit, o kolik se liší od serveru, a časy přepočítat na serverové.
+// Bez sent_at platí časy tak, jak jsou (s oříznutím budoucnosti v service).
 func (h *Handler) SyncProgress(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		DeviceID string                    `json:"device_id"`
+		SentAt   *time.Time                `json:"sent_at"`
 		Events   []service.ProgressRequest `json:"events"`
 	}
 	if err := readJSON(r, &req); err != nil || len(req.Events) > 500 {
 		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku (max. 500 událostí)")
 		return
+	}
+	var skew time.Duration
+	if req.SentAt != nil {
+		skew = time.Since(*req.SentAt)
 	}
 	type result struct {
 		EventID *uuid.UUID `json:"event_id"`
@@ -284,6 +298,10 @@ func (h *Handler) SyncProgress(w http.ResponseWriter, r *http.Request) {
 	for _, ev := range req.Events {
 		if ev.DeviceID == "" {
 			ev.DeviceID = req.DeviceID
+		}
+		if ev.RecordedAt != nil && skew != 0 {
+			at := ev.RecordedAt.Add(skew)
+			ev.RecordedAt = &at
 		}
 		res := result{EventID: ev.EventID, Status: "applied"}
 		if ev.EventID == nil {

@@ -3,10 +3,11 @@ import { ActivityIndicator, AppState, BackHandler, Platform, StyleSheet, View, u
 import { router, useLocalSearchParams, useNavigation } from 'expo-router'
 import { useEventListener } from 'expo'
 import { VideoView, useVideoPlayer } from 'expo-video'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ArrowLeftIcon, RotateCcwIcon } from 'lucide-react-native'
 import {
+  canResume,
   escalateMode,
   languageCode,
   saveProgress,
@@ -17,7 +18,7 @@ import {
   type Playback,
   type PlaybackMode,
 } from 'sceniter-shared'
-import { useEpisode, usePrefetchEpisode, usePrefetchPlayback } from '@/api/queries'
+import { episodeQuery, movieQuery, useEpisode, usePrefetchEpisode, usePrefetchPlayback } from '@/api/queries'
 import { Button } from '@/components/Button'
 import { T } from '@/components/T'
 import { goToShowEpisode } from '@/lib/nav'
@@ -52,6 +53,27 @@ function defaultSubtitle(pb: Playback, uiLang: string, mode: 'off' | 'language')
   return forced?.key ?? ''
 }
 
+/** Jak dlouho nejvýš čekat na pozici ze serveru, než se pustí ta z obrazovky. */
+const RESUME_CHECK_MS = 3000
+
+/**
+ * Pozice, od které pokračovat, přímo ze serveru – data obrazovky, ze které se
+ * přišlo, můžou být stará (díl mezitím rozkoukaný na jiné TV, domovská
+ * obrazovka z disku, aplikace dlouho na pozadí). 0 = od začátku,
+ * null = nezjištěno (platí pozice z obrazovky).
+ */
+function checkResume(qc: QueryClient, ids: { movieId?: string; episodeId?: string }): Promise<number | null> {
+  const request = ids.episodeId
+    ? qc.fetchQuery({ ...episodeQuery(ids.episodeId), staleTime: 0 }).then((d) => d.progress)
+    : ids.movieId
+      ? qc.fetchQuery({ ...movieQuery(ids.movieId), staleTime: 0 }).then((d) => d.user.progress)
+      : undefined
+  if (!request) return Promise.resolve(null)
+  const fresh = request.then((p) => (canResume(p) ? p.position_sec : 0)).catch(() => null)
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), RESUME_CHECK_MS))
+  return Promise.race([fresh, timeout])
+}
+
 export default function PlayerScreen() {
   const params = useLocalSearchParams<{
     mediaId: string
@@ -60,6 +82,7 @@ export default function PlayerScreen() {
     title: string
     subtitle?: string
     start?: string
+    resume?: string
   }>()
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
@@ -113,6 +136,13 @@ export default function PlayerScreen() {
   })
 
   const seekTo = useRef<number | undefined>(Number(params.start) > 0 ? Number(params.start) : undefined)
+  // Ověření pozice na serveru běží souběžně s otevřením proudu; spotřebuje se
+  // při prvním úspěšném otevření (undefined = ještě nespuštěno).
+  const resumeCheck = useRef<Promise<number | null> | null | undefined>(undefined)
+  if (resumeCheck.current === undefined) resumeCheck.current = params.resume ? checkResume(qc, current) : null
+  // Dokud se poprvé nerozehrálo, neukládat: pozice by byla ta převzatá
+  // (třeba stará z jiné TV) s čerstvým časem a přepsala by novější na serveru.
+  const started = useRef(false)
   const pendingSeek = useRef<number | undefined>(undefined)
   const [phase, setPhase] = useState<Phase>('loading')
   const phaseRef = useRef(phase)
@@ -136,7 +166,7 @@ export default function PlayerScreen() {
   const save = useCallback(
     (completed?: boolean) => {
       const current = pbRef.current
-      if (!current) return Promise.resolve()
+      if (!current || (!started.current && !completed)) return Promise.resolve()
       lastSave.current = Date.now()
       const { movieId, episodeId, mediaId } = ids.current
       return saveProgress({
@@ -149,7 +179,6 @@ export default function PlayerScreen() {
         watched_seconds: meter.current.take(),
         completed,
         device_id: device.current,
-        recorded_at: new Date().toISOString(),
       }).catch(() => {
         // Uloží se při dalším pokusu; přehrávání kvůli tomu nepřerušujeme.
       })
@@ -209,6 +238,13 @@ export default function PlayerScreen() {
         else escalate()
         return
       }
+      const check = resumeCheck.current
+      if (check) {
+        const fresh = await check
+        if (cancelled) return
+        resumeCheck.current = null
+        if (fresh !== null) seekTo.current = fresh > 0 ? fresh : undefined
+      }
       const at = seekTo.current
       const resume = shouldSeekTo(at, pb.duration_sec)
       if (resume) {
@@ -236,6 +272,7 @@ export default function PlayerScreen() {
         pendingSeek.current = undefined
       }
       seekTo.current = undefined
+      started.current = true
       setPhase('playing')
     } else if (status === 'error') {
       escalate()
@@ -322,6 +359,8 @@ export default function PlayerScreen() {
     setCountdown(null)
     setEnded(false)
     seekTo.current = undefined
+    started.current = false
+    resumeCheck.current = checkResume(qc, { episodeId: next.id })
     pendingSeek.current = undefined
     timeRef.current = 0
     durationRef.current = 0
@@ -346,7 +385,7 @@ export default function PlayerScreen() {
     // Nové ID → nový dotaz na rozhodnutí → efekt výš zavře session dohraného
     // dílu a otevře další.
     setCurrent({ mediaId: next.media_id, episodeId: next.id, movieId: undefined, subtitle: episodeShort(next) })
-  }, [player, save])
+  }, [player, qc, save])
 
   useEffect(() => {
     if (countdown === null) return

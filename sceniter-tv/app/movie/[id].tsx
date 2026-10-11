@@ -41,7 +41,8 @@ export default function MovieScreen() {
   const progress = m?.user.progress
   const resume = canResume(progress)
   const cast = m ? [...creditsWithRole(m.credits, 'director'), ...creditsWithRole(m.credits, 'cast')].slice(0, 20) : []
-  const start = (at: number) => m?.media_id && play({ mediaId: m.media_id, movieId: m.id, title: m.title, start: at })
+  const start = (at: number, fromStart = false) =>
+    m?.media_id && play({ mediaId: m.media_id, movieId: m.id, title: m.title, start: at, fromStart })
   const warm = () => prefetchPlayback(m?.media_id)
 
   return (
@@ -64,7 +65,7 @@ export default function MovieScreen() {
               onFocus={warm}
               onPress={() => start(resume ? progress.position_sec : 0)}
             />
-            {resume ? <Button icon={RotateCcwIcon} label={t('video.detail.restart')} onFocus={warm} onPress={() => start(0)} /> : null}
+            {resume ? <Button icon={RotateCcwIcon} label={t('video.detail.restart')} onFocus={warm} onPress={() => start(0, true)} /> : null}
           </>
         ) : (
           <Button label={t('video.detail.noFile')} disabled hasTVPreferredFocus />

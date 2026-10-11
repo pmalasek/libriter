@@ -1,9 +1,9 @@
 import { useEffect } from 'react'
-import { BackHandler, Platform, TVEventControl } from 'react-native'
+import { AppState, BackHandler, Platform, TVEventControl } from 'react-native'
 import { Stack, router, usePathname } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, focusManager } from '@tanstack/react-query'
 import { I18nextProvider } from 'react-i18next'
 import { useFonts } from 'expo-font'
 import { BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold } from '@expo-google-fonts/bricolage-grotesque'
@@ -24,9 +24,15 @@ const queryClient = new QueryClient({
       staleTime: 30_000,
       gcTime: 10 * 60_000,
       retry: 1,
-      refetchOnWindowFocus: false,
     },
   },
+})
+
+// Návrat aplikace do popředí = „focus okna“: zastaralé dotazy se obnoví, ať
+// Domů a detail ukážou pozici rozkoukanou mezitím na jiném zařízení.
+focusManager.setEventListener((setFocused) => {
+  const sub = AppState.addEventListener('change', (state) => setFocused(state === 'active'))
+  return () => sub.remove()
 })
 
 /**

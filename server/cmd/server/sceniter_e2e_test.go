@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // sceniterEnv je router se Sceniterem nad dočasnou videoknihovnou.
@@ -274,11 +276,31 @@ func TestSceniterEndToEnd(t *testing.T) {
 	}, nil); code != http.StatusNoContent {
 		t.Fatalf("progress: %d", code)
 	}
+	// Online zápis řadí čas serveru: razítko z hodin zařízení (tady o hodinu
+	// pozadu) novější pozici neshodí.
 	old := time.Now().Add(-time.Hour)
 	if code := e.json("PUT", "/api/v1/sceniter/progress", map[string]any{
-		"movie_id": movieID, "position_sec": 1, "recorded_at": old,
-	}, nil); code != http.StatusConflict {
-		t.Fatalf("starší pozice: %d, chci 409", code)
+		"movie_id": movieID, "position_sec": 7, "recorded_at": old,
+	}, nil); code != http.StatusNoContent {
+		t.Fatalf("pozice se zpožděnými hodinami: %d, chci 204", code)
+	}
+	// Offline dávka: hodiny zařízení jdou o 10 min napřed (sent_at to prozradí),
+	// událost vznikla „před 5 min“ podle nich, tedy před 15 min podle serveru –
+	// je starší než právě uložená pozice.
+	ahead := time.Now().Add(10 * time.Minute)
+	var sync struct {
+		Results []struct {
+			Status string `json:"status"`
+		} `json:"results"`
+	}
+	if code := e.json("POST", "/api/v1/sceniter/progress/sync", map[string]any{
+		"device_id": "tv-offline", "sent_at": ahead,
+		"events": []map[string]any{{
+			"event_id": uuid.NewString(), "movie_id": movieID, "position_sec": 1,
+			"recorded_at": ahead.Add(-5 * time.Minute),
+		}},
+	}, &sync); code != http.StatusOK || len(sync.Results) != 1 || sync.Results[0].Status != "stale" {
+		t.Fatalf("offline dávka s předběhlými hodinami: %d %+v, chci stale", code, sync)
 	}
 	var home struct {
 		Continue []struct {

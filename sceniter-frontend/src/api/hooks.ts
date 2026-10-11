@@ -101,11 +101,13 @@ export function useMovies(p: ListParams): PagedList<MovieSummary> {
   })
 }
 
-export function useMovie(id: string) {
+/** `fresh`: při připojení vždy načíst znovu (pozice pro přehrávač nesmí být z cache). */
+export function useMovie(id: string, opts: { fresh?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.movie(id),
     queryFn: ({ signal }) => getMovie(id, { signal }),
     enabled: Boolean(id),
+    refetchOnMount: opts.fresh ? 'always' : true,
   })
 }
 
@@ -134,11 +136,12 @@ export function useSeason(showId: string, number: number | undefined) {
   })
 }
 
-export function useEpisode(id: string | undefined) {
+export function useEpisode(id: string | undefined, opts: { fresh?: boolean } = {}) {
   return useQuery({
     queryKey: queryKeys.episode(id ?? ''),
     queryFn: ({ signal }) => getEpisode(id!, { signal }),
     enabled: Boolean(id),
+    refetchOnMount: opts.fresh ? 'always' : true,
   })
 }
 

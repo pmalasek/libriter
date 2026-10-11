@@ -47,8 +47,10 @@ export function useLibraries() {
   })
 }
 
+export const movieQuery = (id: string) => ({ queryKey: queryKeys.movie(id), queryFn: ({ signal }: { signal: AbortSignal }) => getMovie(id, { signal }) })
+
 export function useMovie(id: string) {
-  return useQuery({ queryKey: queryKeys.movie(id), queryFn: ({ signal }) => getMovie(id, { signal }), enabled: !!id })
+  return useQuery({ ...movieQuery(id), enabled: !!id })
 }
 
 export function useShow(id: string) {
@@ -65,7 +67,7 @@ export function useSeason(showId: string, number: number | undefined) {
   })
 }
 
-const episodeQuery = (id: string) => ({ queryKey: queryKeys.episode(id), queryFn: ({ signal }: { signal: AbortSignal }) => getEpisode(id, { signal }) })
+export const episodeQuery = (id: string) => ({ queryKey: queryKeys.episode(id), queryFn: ({ signal }: { signal: AbortSignal }) => getEpisode(id, { signal }) })
 
 export function useEpisode(id: string | undefined) {
   return useQuery({ ...episodeQuery(id ?? ''), enabled: !!id })
