@@ -30,7 +30,17 @@ const KEEPALIVE_MS = 20_000
 /** Pořadí režimů: když přehrání selže, zkusí se dražší. */
 const ESCALATION: PlaybackMode[] = ['direct', 'remux', 'transcode']
 
+/** Kolik sekund za místem pokračování musí být hotovo, než se na něj skočí. */
+const RESUME_AHEAD = 6
+
 type HlsInstance = import('hls.js').default
+
+/** Konec části videa, na kterou jde skočit (u rostoucího playlistu roste). */
+function seekableEnd(video: HTMLVideoElement): number {
+  const r = video.seekable
+  if (r.length > 0) return r.end(r.length - 1)
+  return Number.isFinite(video.duration) ? video.duration : 0
+}
 
 export interface NextUp {
   label: string
@@ -64,7 +74,9 @@ export function VideoPlayer({
   const [mode, setMode] = useState<PlaybackMode | undefined>()
   const [subtitleKey, setSubtitleKey] = useState('')
   const [failure, setFailure] = useState<string | null>(null)
-  const [waiting, setWaiting] = useState(true)
+  // Čeká se, až bude místo, odkud se pokračuje, k dispozici (rostoucí
+  // playlist přebalení). Nativní ovládání v tu chvíli točítko neukazuje.
+  const [resuming, setResuming] = useState(false)
   const [chrome, setChrome] = useState(true)
   const [countdown, setCountdown] = useState<number | null>(null)
 
@@ -86,20 +98,22 @@ export function VideoPlayer({
   // ---- ukládání pozice ----
 
   const save = useCallback(
-    (opts: { keepalive?: boolean; completed?: boolean } = {}) => {
+    (opts: { keepalive?: boolean; completed?: boolean } = {}): Promise<void> => {
       const video = videoRef.current
       const current = pbRef.current
-      if (!video || !current || !Number.isFinite(video.currentTime)) return
+      if (!video || !current || !Number.isFinite(video.currentTime)) return Promise.resolve()
       const secs = Math.floor(watched.current)
       watched.current -= secs
       lastSave.current = Date.now()
       const duration = current.duration_sec || (Number.isFinite(video.duration) ? video.duration : undefined)
-      void saveProgress(
+      return saveProgress(
         {
           movie_id: movieId,
           episode_id: episodeId,
           media_id: mediaId,
-          position_sec: Math.max(0, video.currentTime),
+          // Dokud se na uloženou pozici neskočilo, video stojí na začátku –
+          // uložila by se nula místo místa, kde divák skončil.
+          position_sec: Math.max(0, seekTo.current ?? video.currentTime),
           duration_sec: duration,
           watched_seconds: secs,
           completed: opts.completed,
@@ -116,15 +130,15 @@ export function VideoPlayer({
 
   useEffect(() => {
     const onHide = () => {
-      if (document.visibilityState === 'hidden') save({ keepalive: true })
+      if (document.visibilityState === 'hidden') void save({ keepalive: true })
     }
     document.addEventListener('visibilitychange', onHide)
     window.addEventListener('pagehide', onHide)
     return () => {
       document.removeEventListener('visibilitychange', onHide)
       window.removeEventListener('pagehide', onHide)
-      save({ keepalive: true })
-      void qc.invalidateQueries({ queryKey: ['sceniter'] })
+      // Až po uložení, jinak by detail mohl načíst ještě starou pozici.
+      void save({ keepalive: true }).finally(() => qc.invalidateQueries({ queryKey: ['sceniter'] }))
     }
   }, [qc, save])
 
@@ -158,16 +172,38 @@ export function VideoPlayer({
     let hls: HlsInstance | undefined
     let cancelled = false
     let stopUrl: string | undefined
+    let resumeTimer: number | undefined
     setFailure(null)
-    setWaiting(true)
+    setResuming(false)
 
-    const onMeta = () => {
-      const at = seekTo.current
-      if (at && at > 0 && at < (pb.duration_sec ?? Infinity) - 5) video.currentTime = at
-      seekTo.current = undefined
+    const play = () => {
       void video.play().catch(() => {
         // Automatické přehrání může prohlížeč zakázat – uživatel klikne sám.
       })
+    }
+    const onMeta = () => {
+      const at = seekTo.current
+      if (!at || at <= 0 || at >= (pb.duration_sec ?? Infinity) - 5) {
+        seekTo.current = undefined
+        play()
+        return
+      }
+      // Přebalení a převod zvuku servírují playlist, který teprve roste:
+      // skok za jeho konec by prohlížeč usekl na konec už hotové části.
+      // Počká se proto, až převod k místu dojede (kopírování je rychlé).
+      const seekWhenReady = () => {
+        if (cancelled) return
+        if (seekableEnd(video) < at + RESUME_AHEAD) {
+          setResuming(true)
+          resumeTimer = window.setTimeout(seekWhenReady, 500)
+          return
+        }
+        video.currentTime = at
+        seekTo.current = undefined
+        setResuming(false)
+        play()
+      }
+      seekWhenReady()
     }
     const onError = () => {
       if (cancelled || hls) return
@@ -200,7 +236,9 @@ export function VideoPlayer({
           video.src = pb.url
           return
         }
-        const h = new Hls({ maxBufferLength: 30, backBufferLength: 90, manifestLoadingMaxRetry: 2 })
+        // Rostoucí playlist (EVENT bez ENDLIST) bere hls.js jako živé vysílání
+        // a začal by u jeho konce – startPosition 0 ho drží na začátku.
+        const h = new Hls({ maxBufferLength: 30, backBufferLength: 90, manifestLoadingMaxRetry: 2, startPosition: 0 })
         hls = h
         let mediaRecovered = false
         let restarted = false
@@ -240,6 +278,7 @@ export function VideoPlayer({
     return () => {
       cancelled = true
       window.clearInterval(keepalive)
+      window.clearTimeout(resumeTimer)
       video.removeEventListener('loadedmetadata', onMeta)
       video.removeEventListener('error', onError)
       hls?.destroy()
@@ -294,7 +333,7 @@ export function VideoPlayer({
       if (delta > 0 && delta < MAX_TIME_GAP) watched.current += delta
     }
     lastTime.current = now
-    if (Date.now() - lastSave.current > SAVE_INTERVAL_MS) save()
+    if (Date.now() - lastSave.current > SAVE_INTERVAL_MS) void save()
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
@@ -349,14 +388,11 @@ export function VideoPlayer({
           lastTime.current = null
         }}
         onPause={() => {
-          save()
+          void save()
           setChrome(true)
         }}
-        onPlaying={() => setWaiting(false)}
-        onWaiting={() => setWaiting(true)}
-        onCanPlay={() => setWaiting(false)}
         onEnded={() => {
-          save({ completed: true })
+          void save({ completed: true })
           if (next) setCountdown(NEXT_COUNTDOWN)
         }}
       >
@@ -460,10 +496,12 @@ export function VideoPlayer({
         </div>
       </div>
 
-      {waiting && !error ? (
+      {/* Při načítání videa ukazuje točítko nativní ovládání; vlastní jen
+          dokud video nemá zdroj nebo se čeká na místo pokračování. */}
+      {(!pb || resuming) && !error ? (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3">
           <LoaderIcon className="size-10 animate-spin opacity-80" />
-          {!pb ? <p className="text-sm text-white/70">{t('video.player.loading')}</p> : null}
+          <p className="text-sm text-white/70">{t(resuming ? 'video.player.resuming' : 'video.player.loading')}</p>
         </div>
       ) : null}
 

@@ -123,6 +123,7 @@ export default {
   player: {
     back: 'Zpět',
     loading: 'Připravuji video…',
+    resuming: 'Přesouvám se na místo, kde jste skončili…',
     failed: 'Video se nepodařilo přehrát.',
     retry: 'Zkusit znovu',
     audio: 'Zvuková stopa',

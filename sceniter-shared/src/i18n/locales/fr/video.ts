@@ -115,6 +115,7 @@ export default {
   player: {
     back: 'Retour',
     loading: 'Préparation de la vidéo…',
+    resuming: 'Retour à l’endroit où vous vous étiez arrêté…',
     failed: 'La vidéo n’a pas pu être lue.',
     retry: 'Réessayer',
     audio: 'Piste audio',

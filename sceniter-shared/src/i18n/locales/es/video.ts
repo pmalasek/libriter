@@ -115,6 +115,7 @@ export default {
   player: {
     back: 'Atrás',
     loading: 'Preparando el vídeo…',
+    resuming: 'Volviendo a donde lo dejaste…',
     failed: 'No se pudo reproducir el vídeo.',
     retry: 'Reintentar',
     audio: 'Pista de audio',

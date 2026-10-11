@@ -115,6 +115,7 @@ export default {
   player: {
     back: 'Zurück',
     loading: 'Video wird vorbereitet…',
+    resuming: 'Springe zur gespeicherten Position…',
     failed: 'Das Video konnte nicht abgespielt werden.',
     retry: 'Erneut versuchen',
     audio: 'Tonspur',

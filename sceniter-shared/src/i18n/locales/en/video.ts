@@ -115,6 +115,7 @@ export default {
   player: {
     back: 'Back',
     loading: 'Preparing video…',
+    resuming: 'Jumping to where you left off…',
     failed: 'The video could not be played.',
     retry: 'Try again',
     audio: 'Audio track',
