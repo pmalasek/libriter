@@ -10,6 +10,7 @@ import { BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold } from '@exp
 import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold } from '@expo-google-fonts/geist'
 import { i18n } from 'sceniter-shared'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
+import { handleSectionBack } from '@/lib/nav'
 import { PrefsProvider } from '@/lib/prefs'
 import { Loading } from '@/components/States'
 import { PairScreen } from '@/screens/PairScreen'
@@ -30,8 +31,9 @@ const queryClient = new QueryClient({
 
 /**
  * Zpět (Menu na Siri Remote, Back na Android TV): o krok zpět v zásobníku,
- * z jiné sekce na Domů, z Domů pryč z aplikace. Na tvOS musí Menu na domovské
- * obrazovce patřit systému (požadavek App Store) – tam se klávesa uvolní.
+ * v sekci nejdřív do bočního menu, z menu na Domů, z Domů pryč z aplikace.
+ * Na tvOS musí Menu na domovské obrazovce patřit systému (požadavek App
+ * Store) – tam se klávesa uvolní.
  */
 function useBackBehaviour(ready: boolean) {
   const pathname = usePathname()
@@ -48,6 +50,7 @@ function useBackBehaviour(ready: boolean) {
         router.back()
         return true
       }
+      if (handleSectionBack()) return true
       if (!atRoot) {
         router.replace('/')
         return true

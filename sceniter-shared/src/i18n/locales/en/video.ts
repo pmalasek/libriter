@@ -390,7 +390,15 @@ export default {
     },
     loadFailed: 'Could not load. Check the connection to the server.',
     retry: 'Try again',
-    allTitles: 'All',
+    libraryMissing: 'This library no longer exists.',
+    sort: {
+      title: 'Sort',
+      button: 'Sort: {{value}}',
+      added: 'Recently added',
+      name: 'By title',
+      year: 'By year',
+      rating: 'By rating',
+    },
     player: {
       tracks: 'Audio and subtitles',
       seekHint: 'Hold to skip faster',

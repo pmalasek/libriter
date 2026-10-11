@@ -391,7 +391,15 @@ export default {
     },
     loadFailed: 'No se ha podido cargar. Comprueba la conexión con el servidor.',
     retry: 'Reintentar',
-    allTitles: 'Todo',
+    libraryMissing: 'Esta biblioteca ya no existe.',
+    sort: {
+      title: 'Orden',
+      button: 'Orden: {{value}}',
+      added: 'Añadidos recientemente',
+      name: 'Por título',
+      year: 'Por año',
+      rating: 'Por valoración',
+    },
     player: {
       tracks: 'Audio y subtítulos',
       seekHint: 'Mantén pulsado para avanzar más rápido',

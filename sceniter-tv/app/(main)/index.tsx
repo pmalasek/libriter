@@ -11,7 +11,7 @@ import {
   type Movie,
   type WatchlistItem,
 } from 'sceniter-shared'
-import { usePrefetchTitle, useHome } from '@/api/queries'
+import { useDebouncedPrefetch, useHome } from '@/api/queries'
 import { Backdrop } from '@/components/Backdrop'
 import { PosterCard, WideCard } from '@/components/Cards'
 import { Hero } from '@/components/Hero'
@@ -62,9 +62,8 @@ function HeroArea({ store }: { store: ReturnType<typeof createFocusStore<HeroInf
 export default function HomeScreen() {
   const { t } = useTranslation()
   const home = useHome()
-  const prefetch = usePrefetchTitle()
+  const prefetch = useDebouncedPrefetch()
   const store = useRef(createFocusStore<HeroInfo>()).current
-  const prefetchTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   // Výchozí fokus jen do prvního zaměření – obnova dat ze serveru (po datech
   // z cache) jinak vrátí fokus na první kartu uprostřed listování.
   const focusedOnce = useRef(false)
@@ -72,8 +71,7 @@ export default function HomeScreen() {
   const focus = (info: HeroInfo | undefined, prefetchTitle?: [kind: 'movie' | 'show', id: string]) => {
     focusedOnce.current = true
     if (info) store.set(info)
-    clearTimeout(prefetchTimer.current)
-    if (prefetchTitle) prefetchTimer.current = setTimeout(() => prefetch(...prefetchTitle), 400)
+    if (prefetchTitle) prefetch(...prefetchTitle)
   }
 
   const data = home.data

@@ -404,7 +404,15 @@ export default {
     },
     loadFailed: 'Nepodařilo se načíst. Zkontrolujte připojení k serveru.',
     retry: 'Zkusit znovu',
-    allTitles: 'Vše',
+    libraryMissing: 'Knihovna už neexistuje.',
+    sort: {
+      title: 'Řazení',
+      button: 'Řazení: {{value}}',
+      added: 'Nedávno přidané',
+      name: 'Podle názvu',
+      year: 'Podle roku',
+      rating: 'Podle hodnocení',
+    },
     player: {
       tracks: 'Zvuk a titulky',
       seekHint: 'Podržením se přetáčí rychleji',

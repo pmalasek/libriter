@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { FlatList, StyleSheet, TVFocusGuideView, View } from 'react-native'
+import { useEffect, useRef, useState } from 'react'
+import { ActivityIndicator, FlatList, StyleSheet, TVFocusGuideView, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { PlayIcon } from 'lucide-react-native'
@@ -17,7 +17,7 @@ import {
   type Show,
   type ShowDetail,
 } from 'sceniter-shared'
-import { useSeason, useShow, useSimilar } from '@/api/queries'
+import { usePrefetchPlayback, useSeason, useShow, useSimilar } from '@/api/queries'
 import { Button } from '@/components/Button'
 import { PersonCard, PosterCard, WideCard } from '@/components/Cards'
 import { DetailLayout } from '@/components/DetailLayout'
@@ -25,8 +25,9 @@ import { Row } from '@/components/Row'
 import { ErrorView, Loading } from '@/components/States'
 import { T } from '@/components/T'
 import { openPerson, openShow, play } from '@/lib/nav'
+import { useCachedTitle } from '@/lib/summaryCache'
 import { backdropImage, episodeShort, metaLine, posterImage, wideImage } from '@/lib/titles'
-import { card, px, safe } from '@/theme'
+import { card, colors, px, safe } from '@/theme'
 
 function seasonName(s: SeasonInfo): string {
   return s.title || (s.number === 0 ? tr('video.detail.specials') : tr('video.detail.season', { number: s.number }))
@@ -48,8 +49,19 @@ export default function ShowScreen() {
   const { t } = useTranslation()
   const show = useShow(id)
   const similar = useSimilar('show', id)
+  const cached = useCachedTitle('show', id)
+  const prefetchPlayback = usePrefetchPlayback()
   const s = show.data
   const [season, setSeason] = useState<number | undefined>()
+  // Přejetí fokusem přes řady přepne až po chvíli klidu – jinak by každá
+  // řada, přes kterou fokus jen projel, spustila načtení a překreslení.
+  const seasonTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(seasonTimer.current), [])
+  const pickSeason = (n: number, now = false) => {
+    clearTimeout(seasonTimer.current)
+    if (now) setSeason(n)
+    else seasonTimer.current = setTimeout(() => setSeason(n), 250)
+  }
 
   // Výchozí řada: ta, ve které je další díl, jinak první běžná (ne speciály).
   useEffect(() => {
@@ -59,7 +71,19 @@ export default function ShowScreen() {
 
   const episodes = useSeason(id, season)
 
-  if (!s) return show.isError ? <ErrorView onRetry={() => void show.refetch()} /> : <Loading />
+  if (!s) {
+    if (show.isError || !cached) return show.isError ? <ErrorView onRetry={() => void show.refetch()} /> : <Loading />
+    // Než dojde detail: pozadí a název ze seznamu, ze kterého se přišlo.
+    return (
+      <DetailLayout
+        backdrop={backdropImage(cached)}
+        title={cached.title}
+        meta={metaLine({ year: cached.year, rating: cached.rating })}
+        overview={cached.overview}
+        actions={<ActivityIndicator size="large" color={colors.textDim} />}
+      />
+    )
+  }
 
   const next = s.up_next
   const resumeNext = next && canResume(next.progress)
@@ -78,6 +102,7 @@ export default function ShowScreen() {
             primary
             hasTVPreferredFocus
             icon={PlayIcon}
+            onFocus={() => prefetchPlayback(next.media_id)}
             label={
               resumeNext
                 ? `${t('video.home.continue')} · ${episodeCode(next.season, next.number)}`
@@ -100,18 +125,18 @@ export default function ShowScreen() {
               <Button
                 label={seasonName(item)}
                 selected={item.number === season}
-                onFocus={() => setSeason(item.number)}
-                onPress={() => setSeason(item.number)}
+                onFocus={() => pickSeason(item.number)}
+                onPress={() => pickSeason(item.number, true)}
               />
             )}
           />
         </TVFocusGuideView>
       ) : null}
 
-      <View style={{ minHeight: card.wideH + px(160) }}>
+      <View style={{ minHeight: card.wideH + px(160), opacity: episodes.isPlaceholderData ? 0.6 : 1 }}>
         {episodes.data ? (
           <Row<EpisodeWithProgress>
-            key={season}
+            key={episodes.data.number}
             items={episodes.data.episodes}
             itemWidth={card.wideW}
             keyOf={(e) => e.id}
@@ -125,6 +150,7 @@ export default function ShowScreen() {
                   image={wideImage(e.still_path, e.created_at) ?? wideImage(s.backdrop_path, s.updated_at)}
                   progress={e.progress?.completed ? 0 : progressRatio(e.progress, e.duration_sec)}
                   hasTVPreferredFocus={!next?.media_id && i === Math.max(0, upNextIndex)}
+                  onFocus={() => prefetchPlayback(e.media_id)}
                   onPress={() => playEpisode(s, e)}
                 />
                 {e.overview ? (

@@ -1,30 +1,43 @@
+import { useEffect, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Slot, router, usePathname } from 'expo-router'
-import { NAV_COLLAPSED, SideNav, type Section } from '@/components/SideNav'
+import { NAV_COLLAPSED, SideNav, type SideNavHandle } from '@/components/SideNav'
+import { setSectionBack } from '@/lib/nav'
+import { pathOf, sectionOf } from '@/lib/navItems'
 import { colors } from '@/theme'
 
-const PATHS: Record<Section, string> = {
-  home: '/',
-  movies: '/movies',
-  shows: '/shows',
-  search: '/search',
-  settings: '/settings',
-}
-
-function sectionOf(pathname: string): Section {
-  const hit = (Object.entries(PATHS) as [Section, string][]).find(([, p]) => p !== '/' && pathname.startsWith(p))
-  return hit?.[0] ?? 'home'
-}
-
-/** Hlavní sekce s bočním menu; detaily a přehrávač jsou nad nimi bez menu. */
+/**
+ * Hlavní sekce s bočním menu; detaily a přehrávač jsou nad nimi bez menu.
+ *
+ * Zpět v sekci nejdřív zaměří menu na aktuální položce (do jiné knihovny
+ * je to pak pár stisků). Zpět z menu nechá root layout přejít na Domů,
+ * Zpět na Domů aplikaci opustí.
+ */
 export default function MainLayout() {
   const current = sectionOf(usePathname())
+  const nav = useRef<SideNavHandle>(null)
+  const menuFocused = useRef(false)
+
+  useEffect(() => {
+    setSectionBack(() => {
+      if (current === 'home' || menuFocused.current) return false
+      nav.current?.focus()
+      return true
+    })
+    return () => setSectionBack(null)
+  }, [current])
+
   return (
     <View style={styles.root}>
       <View style={[styles.content, { marginLeft: current === 'home' ? 0 : NAV_COLLAPSED }]}>
         <Slot />
       </View>
-      <SideNav current={current} onSelect={(s) => s !== current && router.replace(PATHS[s] as never)} />
+      <SideNav
+        ref={nav}
+        current={current}
+        onSelect={(k) => k !== current && router.replace(pathOf(k) as never)}
+        onFocusChange={(inside) => (menuFocused.current = inside)}
+      />
     </View>
   )
 }

@@ -1,5 +1,5 @@
-import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useCallback } from 'react'
+import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useCallback, useEffect, useRef } from 'react'
 import {
   getEpisode,
   getHome,
@@ -12,10 +12,12 @@ import {
   getTitlePage,
   queryKeys,
   search,
+  type Library,
   type MovieSummary,
   type ShowSummary,
   type TitleKind,
 } from 'sceniter-shared'
+import { playbackQueryOptions } from '@/player/playbackQuery'
 import { readHomeCache, writeHomeCache } from './homeCache'
 
 // Hooky TV klienta nad sdílenými voláními API (sceniter-shared/api.ts).
@@ -36,7 +38,13 @@ export function useHome() {
 }
 
 export function useLibraries() {
-  return useQuery({ queryKey: queryKeys.libraries, queryFn: ({ signal }) => getLibraries({ signal }), staleTime: 5 * 60_000 })
+  return useQuery<Library[]>({
+    queryKey: queryKeys.libraries,
+    queryFn: ({ signal }) => getLibraries({ signal }),
+    staleTime: 5 * 60_000,
+    // Menu má knihovny hned po startu z uložené domovské obrazovky.
+    placeholderData: () => readHomeCache()?.libraries.map((l) => l.library),
+  })
 }
 
 export function useMovie(id: string) {
@@ -52,15 +60,15 @@ export function useSeason(showId: string, number: number | undefined) {
     queryKey: queryKeys.season(showId, number ?? -1),
     queryFn: ({ signal }) => getSeason(showId, number!, { signal }),
     enabled: !!showId && number !== undefined,
+    // Při přepnutí řady zůstanou vidět díly předchozí, dokud nedojdou nové.
+    placeholderData: keepPreviousData,
   })
 }
 
+const episodeQuery = (id: string) => ({ queryKey: queryKeys.episode(id), queryFn: ({ signal }: { signal: AbortSignal }) => getEpisode(id, { signal }) })
+
 export function useEpisode(id: string | undefined) {
-  return useQuery({
-    queryKey: queryKeys.episode(id ?? ''),
-    queryFn: ({ signal }) => getEpisode(id!, { signal }),
-    enabled: !!id,
-  })
+  return useQuery({ ...episodeQuery(id ?? ''), enabled: !!id })
 }
 
 export function usePerson(id: string) {
@@ -98,6 +106,10 @@ export function useTitles<K extends TitleKind>(kind: K, filter: { library?: stri
       const loaded = pages.reduce((n, p) => n + p.items.length, 0)
       return loaded < last.total ? loaded : undefined
     },
+    // Změna řazení nechá mřížku na místě, dokud nedojde nová stránka;
+    // návrat do knihovny do minuty se vykreslí rovnou z cache.
+    placeholderData: keepPreviousData,
+    staleTime: 60_000,
   })
 }
 
@@ -111,4 +123,46 @@ export function usePrefetchTitle() {
     },
     [qc],
   )
+}
+
+/**
+ * Přednačtení detailu až po chvíli na kartě – rychlé listování ovladačem
+ * tak nespouští dotaz za každou kartou, přes kterou fokus jen přejel.
+ */
+export function useDebouncedPrefetch(ms = 400) {
+  const prefetch = usePrefetchTitle()
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  return useCallback(
+    (kind: TitleKind, id: string) => {
+      clearTimeout(timer.current)
+      timer.current = setTimeout(() => prefetch(kind, id), ms)
+    },
+    [ms, prefetch],
+  )
+}
+
+/**
+ * Přednačtení rozhodnutí o přehrávání (fokus na Přehrát nebo na díl) – start
+ * videa pak nečeká na server. Krátké zpoždění: přejetí přes řadu dílů nic nespustí.
+ */
+export function usePrefetchPlayback(ms = 300) {
+  const qc = useQueryClient()
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(timer.current), [])
+  return useCallback(
+    (mediaId: string | undefined) => {
+      clearTimeout(timer.current)
+      if (!mediaId) return
+      // Starší než 30 s se raději zeptá znovu (mezitím mohl začít převod jinde).
+      timer.current = setTimeout(() => void qc.prefetchQuery({ ...playbackQueryOptions(mediaId), staleTime: 30_000 }), ms)
+    },
+    [ms, qc],
+  )
+}
+
+/** Přednačtení dílu (při odpočtu do dalšího dílu). */
+export function usePrefetchEpisode() {
+  const qc = useQueryClient()
+  return useCallback((id: string) => void qc.prefetchQuery(episodeQuery(id)), [qc])
 }

@@ -250,6 +250,12 @@ a `package-lock.json`; `sceniter-shared` a `core-shared` bere Metro přímo ze
 zdrojů. Recepty: `just tv-start`, `tv-android`, `tv-ios`, `tv-apk`, `tv-aab`,
 `tv-testflight`.
 
+**Ovládání.** Boční menu má Hledat, Domů, každou knihovnu zvlášť (název
+a ikona z administrace, pořadí jako na webu) a Nastavení. Výpis knihovny má
+jediné tlačítko řazení; volba se pamatuje v televizi pro každou knihovnu.
+Zpět v sekci zaměří menu, z menu vede na Domů, z Domů ven z aplikace. Po
+dohrání dílu běží odpočet a další díl se přepne v tomtéž přehrávači.
+
 **Párování.** Televize se nepřihlašuje heslem. Po zadání adresy serveru ukáže
 kód a QR; uživatel ho na telefonu nebo počítači potvrdí na stránce `/link`
 (web Sceniteru i Libriteru) a televize dostane token se scope `tv` (platí jako
@@ -312,5 +318,4 @@ Pořadí kroků při prvním nasazení verze 2.0:
 - Přihlášení je na každé doméně zvlášť (vlastní úložiště prohlížeče), účet je
   ale stejný.
 - Uživatele a role spravuje administrace Libriteru.
-- TV aplikace (Apple TV, Google TV) zatím nejsou; API, profily přehrávání,
-  token v adrese a synchronizace pozic s `recorded_at` jsou na ně připravené.
+- TV aplikace (Apple TV, Google TV) jsou v `sceniter-tv/` (viz výše).

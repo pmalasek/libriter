@@ -390,7 +390,15 @@ export default {
     },
     loadFailed: 'Laden fehlgeschlagen. Prüfe die Verbindung zum Server.',
     retry: 'Erneut versuchen',
-    allTitles: 'Alle',
+    libraryMissing: 'Diese Bibliothek existiert nicht mehr.',
+    sort: {
+      title: 'Sortierung',
+      button: 'Sortierung: {{value}}',
+      added: 'Zuletzt hinzugefügt',
+      name: 'Nach Titel',
+      year: 'Nach Jahr',
+      rating: 'Nach Bewertung',
+    },
     player: {
       tracks: 'Audio und Untertitel',
       seekHint: 'Gedrückt halten, um schneller zu spulen',

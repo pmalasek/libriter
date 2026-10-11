@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, AppState, BackHandler, Platform, StyleSheet, View, useTVEventHandler, type HWEvent } from 'react-native'
+import { ActivityIndicator, AppState, BackHandler, StyleSheet, View, useTVEventHandler, type HWEvent } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEventListener } from 'expo'
 import { VideoView, useVideoPlayer } from 'expo-video'
@@ -8,7 +8,6 @@ import { useTranslation } from 'react-i18next'
 import { ArrowLeftIcon, RotateCcwIcon } from 'lucide-react-native'
 import {
   escalateMode,
-  getPlayback,
   languageCode,
   saveProgress,
   shouldSeekTo,
@@ -18,18 +17,18 @@ import {
   type Playback,
   type PlaybackMode,
 } from 'sceniter-shared'
-import { useEpisode } from '@/api/queries'
+import { useEpisode, usePrefetchEpisode, usePrefetchPlayback } from '@/api/queries'
 import { Button } from '@/components/Button'
 import { T } from '@/components/T'
 import { usePrefs } from '@/lib/prefs'
 import { deviceId } from '@/lib/storage'
 import { episodeShort } from '@/lib/titles'
 import { Chrome, NextUp, TracksPanel } from '@/player/Overlay'
+import { playbackQueryOptions } from '@/player/playbackQuery'
 import { StreamSession, TranscodeBusyError } from '@/player/session'
 import { SubtitleOverlay, useCues } from '@/player/Subtitles'
 import { colors, px } from '@/theme'
 
-const PROFILE = Platform.OS === 'ios' ? 'tvos' : 'androidtv'
 /** Ovládání zmizí po chvíli bez stisku, pokud video hraje. */
 const CHROME_MS = 4000
 /** Přetáčení šipkami se potvrdí samo po chvíli bez dalšího stisku. */
@@ -57,25 +56,36 @@ export default function PlayerScreen() {
     subtitle?: string
     start?: string
   }>()
-  const { mediaId, movieId, episodeId } = params
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const { prefs } = usePrefs()
+
+  // Co se právě přehrává. Další díl se přepne tady, bez navigace – nová
+  // obrazovka přehrávače by při odchodu staré přišla o své rozhodnutí
+  // o přehrávání a převod na serveru by se zastavil.
+  const [current, setCurrent] = useState(() => ({
+    mediaId: params.mediaId,
+    movieId: params.movieId,
+    episodeId: params.episodeId,
+    subtitle: params.subtitle,
+  }))
+  const ids = useRef(current)
+  ids.current = current
+  const { mediaId, episodeId } = current
+
   const episode = useEpisode(episodeId)
   const nextEpisode = episode.data?.next ?? undefined
+  const nextRef = useRef(nextEpisode)
+  nextRef.current = nextEpisode
+  const prefetchEpisode = usePrefetchEpisode()
+  const prefetchPlayback = usePrefetchPlayback(0)
 
   // ---- rozhodnutí o přehrávání ----
 
   const [audio, setAudio] = useState<number | undefined>()
   const [mode, setMode] = useState<PlaybackMode | undefined>()
   const [attempt, setAttempt] = useState(0)
-  const playback = useQuery({
-    queryKey: ['sceniter', 'playback', mediaId, PROFILE, audio ?? null, mode ?? null, attempt],
-    queryFn: () => getPlayback(mediaId, { profile: PROFILE, audio, mode }),
-    staleTime: Infinity,
-    gcTime: 0,
-    retry: false,
-  })
+  const playback = useQuery(playbackQueryOptions(mediaId, { audio, mode, attempt }))
   const pb = playback.data
   const pbRef = useRef(pb)
   pbRef.current = pb
@@ -88,6 +98,8 @@ export default function PlayerScreen() {
   const seekTo = useRef<number | undefined>(Number(params.start) > 0 ? Number(params.start) : undefined)
   const pendingSeek = useRef<number | undefined>(undefined)
   const [phase, setPhase] = useState<Phase>('loading')
+  const phaseRef = useRef(phase)
+  phaseRef.current = phase
   const [failure, setFailure] = useState<string | null>(null)
 
   // Poslední známá poloha – ukládání při odchodu už na uvolněný přehrávač sahat nesmí.
@@ -109,6 +121,7 @@ export default function PlayerScreen() {
       const current = pbRef.current
       if (!current) return Promise.resolve()
       lastSave.current = Date.now()
+      const { movieId, episodeId, mediaId } = ids.current
       return saveProgress({
         movie_id: movieId,
         episode_id: episodeId,
@@ -124,7 +137,7 @@ export default function PlayerScreen() {
         // Uloží se při dalším pokusu; přehrávání kvůli tomu nepřerušujeme.
       })
     },
-    [episodeId, mediaId, movieId],
+    [],
   )
 
   useEffect(() => {
@@ -137,7 +150,12 @@ export default function PlayerScreen() {
     return () => {
       sub.remove()
       // Až po uložení, ať detail a domovská obrazovka ukážou novou pozici.
-      void save().finally(() => qc.invalidateQueries({ queryKey: ['sceniter'] }))
+      // Jen dotazy s průběhem – výpisy a rozhodnutí o přehrávání zůstanou.
+      void save().finally(() =>
+        qc.invalidateQueries({
+          predicate: (q) => q.queryKey[0] === 'sceniter' && ['home', 'movie', 'show', 'episode'].includes(String(q.queryKey[1])),
+        }),
+      )
     }
   }, [player, qc, save])
 
@@ -184,6 +202,7 @@ export default function PlayerScreen() {
       }
       if (cancelled) return
       pendingSeek.current = resume ? at : undefined
+      endedRef.current = false
       player.replace({ uri: session.url, contentType: pb.hls ? 'hls' : 'progressive' })
       player.play()
     })()
@@ -212,6 +231,9 @@ export default function PlayerScreen() {
   const [duration, setDuration] = useState(0)
   const [paused, setPaused] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
+  const [ended, setEnded] = useState(false)
+  // Android hlásí konec opakovaně (při každé změně stavu po dohrání).
+  const endedRef = useRef(false)
 
   useEventListener(player, 'timeUpdate', ({ currentTime }) => {
     timeRef.current = currentTime
@@ -235,24 +257,51 @@ export default function PlayerScreen() {
   })
 
   useEventListener(player, 'playToEnd', () => {
+    if (endedRef.current || phaseRef.current !== 'playing') return
+    endedRef.current = true
     void save(true)
-    if (nextEpisode?.media_id) setCountdown(NEXT_COUNTDOWN)
-    else router.back()
+    setEnded(true)
   })
 
+  // Co po dohrání: odpočet k dalšímu dílu, jinak zpět. Dokud se detail dílu
+  // načítá, nerozhoduje se – jinak by se odešlo, i když další díl existuje.
+  const episodeSettled = !episodeId || episode.isSuccess || episode.isError
+  useEffect(() => {
+    if (!ended || countdown !== null) return
+    if (nextEpisode?.media_id) {
+      setCountdown(NEXT_COUNTDOWN)
+      prefetchEpisode(nextEpisode.id)
+      prefetchPlayback(nextEpisode.media_id)
+    } else if (episodeSettled) router.back()
+  }, [countdown, ended, episodeSettled, nextEpisode, prefetchEpisode, prefetchPlayback])
+
   const playNext = useCallback(() => {
-    if (!nextEpisode?.media_id) return
+    const next = nextRef.current
+    if (!next?.media_id) return
     setCountdown(null)
-    router.replace({
-      pathname: '/player',
-      params: {
-        mediaId: nextEpisode.media_id,
-        episodeId: nextEpisode.id,
-        title: params.title,
-        subtitle: episodeShort(nextEpisode),
-      },
-    } as never)
-  }, [nextEpisode, params.title])
+    setEnded(false)
+    seekTo.current = undefined
+    pendingSeek.current = undefined
+    timeRef.current = 0
+    durationRef.current = 0
+    lastSave.current = 0
+    meter.current.reset()
+    setTime(0)
+    setDuration(0)
+    setPaused(false)
+    setFailure(null)
+    setPhase('loading')
+    setScrubTo(undefined)
+    setPanel(false)
+    setChrome(true)
+    setSubtitleKey(null)
+    setAudio(undefined)
+    setMode(undefined)
+    setAttempt(0)
+    // Nové ID → nový dotaz na rozhodnutí → efekt výš zavře session dohraného
+    // dílu a otevře další.
+    setCurrent({ mediaId: next.media_id, episodeId: next.id, movieId: undefined, subtitle: episodeShort(next) })
+  }, [])
 
   useEffect(() => {
     if (countdown === null) return
@@ -388,7 +437,7 @@ export default function PlayerScreen() {
       <SubtitleOverlay cues={cues} time={time} size={prefs.subtitleSize} raised={showChrome || panel} />
 
       {showChrome ? (
-        <Chrome title={params.title} subtitle={params.subtitle} time={time} duration={duration || pb?.duration_sec || 0} scrubTo={scrubTo} paused={paused} />
+        <Chrome title={params.title} subtitle={current.subtitle} time={time} duration={duration || pb?.duration_sec || 0} scrubTo={scrubTo} paused={paused} />
       ) : null}
 
       {panel && pb ? (

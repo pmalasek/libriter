@@ -391,7 +391,15 @@ export default {
     },
     loadFailed: 'Chargement impossible. Vérifiez la connexion au serveur.',
     retry: 'Réessayer',
-    allTitles: 'Tout',
+    libraryMissing: 'Cette bibliothèque n’existe plus.',
+    sort: {
+      title: 'Tri',
+      button: 'Tri : {{value}}',
+      added: 'Ajouts récents',
+      name: 'Par titre',
+      year: 'Par année',
+      rating: 'Par note',
+    },
     player: {
       tracks: 'Audio et sous-titres',
       seekHint: 'Maintenez pour avancer plus vite',
