@@ -33,6 +33,8 @@ import { colors, px } from '@/theme'
 const CHROME_MS = 4000
 /** Na tlačítkách lišty (čtení popisků, volba) zůstává lišta déle. */
 const CHROME_BUTTONS_MS = 8000
+/** Jak často se při držené šipce přetáčí o další krok. */
+const HOLD_REPEAT_MS = 250
 /** Přetáčení šipkami se potvrdí samo po chvíli bez dalšího stisku. */
 const SCRUB_COMMIT_MS = 900
 
@@ -257,12 +259,22 @@ export default function PlayerScreen() {
     if (Date.now() - lastSave.current > SAVE_INTERVAL_MS) void save()
   })
 
+  // Po skoku přehrávač chvíli bufferuje a hlásí „nehraje“ – to není pauza
+  // (ikona by blikala play/pause). Pauza je jen „nehraje a nenačítá“.
+  const pauseCheck = useRef<ReturnType<typeof setTimeout>>(undefined)
+  useEffect(() => () => clearTimeout(pauseCheck.current), [])
   useEventListener(player, 'playingChange', ({ isPlaying }) => {
-    setPaused(!isPlaying)
-    if (!isPlaying) {
+    clearTimeout(pauseCheck.current)
+    if (isPlaying) {
+      setPaused(false)
+      return
+    }
+    pauseCheck.current = setTimeout(() => {
+      if (player.playing || player.status === 'loading') return
+      setPaused(true)
       void save()
       poke()
-    }
+    }, 250)
   })
 
   useEventListener(player, 'playToEnd', () => {
@@ -437,8 +449,18 @@ export default function PlayerScreen() {
     return dir * (r.count >= 8 ? 60 : r.count >= 4 ? 30 : 10)
   }
 
+  // Opakované přetáčení při držené šipce (do puštění klávesy).
+  const hold = useRef<ReturnType<typeof setInterval>>(undefined)
+  const stopHold = () => {
+    clearInterval(hold.current)
+    hold.current = undefined
+  }
+  useEffect(() => () => clearInterval(hold.current), [])
+
   const handler = useRef<(e: HWEvent) => void>(() => undefined)
   handler.current = (e: HWEvent) => {
+    // Jakákoli jiná klávesa (nebo puštění) držení ukončí.
+    if (hold.current && !e.eventType.startsWith('long')) stopHold()
     const type = e.eventType
     // react-native-tvos na Androidu posílá jen uvolnění klávesy (1); při
     // držení opakovaně long* se stiskem (0). Stisk běžné klávesy se ignoruje,
@@ -480,9 +502,21 @@ export default function PlayerScreen() {
       case 'right':
         return scrubBy(step(type === 'right' ? 1 : -1))
       case 'longLeft':
-      case 'longRight':
-        // Držení: opakované skoky se zrychlením (10 → 30 → 60 s).
-        return scrubBy(step(type === 'longRight' ? 1 : -1))
+      case 'longRight': {
+        // Držení: Android pošle long* jen při začátku (0) a puštění (1),
+        // opakování si přehrávač dělá sám – skoky se zrychlením 10 → 30 → 60 s.
+        stopHold()
+        if (e.eventKeyAction === 1) return
+        const dir = type === 'longRight' ? 1 : -1
+        scrubBy(step(dir))
+        const started = Date.now()
+        hold.current = setInterval(() => {
+          // Pojistka: kdyby se puštění klávesy ztratilo, nepřetáčet donekonečna.
+          if (Date.now() - started > 30_000) return stopHold()
+          scrubBy(step(dir))
+        }, HOLD_REPEAT_MS)
+        return
+      }
       case 'select':
         // Skrytá lišta: první OK ji jen ukáže.
         return chromeVisibleRef.current ? togglePlay() : poke()
