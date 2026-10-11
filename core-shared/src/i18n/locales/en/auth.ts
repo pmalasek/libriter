@@ -35,4 +35,17 @@ export default {
     haveAccount: 'Already have an account?',
     loginLink: 'Sign in',
   },
+  link: {
+    title: 'Connect a TV',
+    description: 'Enter the code shown on your TV screen.',
+    code: 'Code from the TV',
+    check: 'Continue',
+    confirm: 'Sign in {{name}} to the account {{user}}?',
+    unnamed: 'TV',
+    approve: 'Allow',
+    approving: 'Allowing…',
+    cancel: 'Cancel',
+    done: 'Done! Your TV will sign in within a few seconds.',
+    again: 'Connect another device',
+  },
 }

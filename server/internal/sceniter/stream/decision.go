@@ -29,8 +29,7 @@ type Profile struct {
 	MaxHeight int
 }
 
-// Profiles jsou známé profily klientů. Budoucí TV klienti přidají vlastní
-// (tvos, androidtv) a zbytek logiky zůstane stejný.
+// Profiles jsou známé profily klientů: prohlížeče a televizní aplikace.
 var Profiles = map[string]Profile{
 	// Chrome, Firefox, Edge: <video> s MSE (hls.js). MKV ani AC3 neumí spolehlivě.
 	"web": {
@@ -45,6 +44,23 @@ var Profiles = map[string]Profile{
 		Containers: []string{"mp4"},
 		Video:      []string{"h264", "hevc"},
 		Audio:      []string{"aac", "mp3", "ac3", "eac3", "flac", "alac"},
+	},
+	// Apple TV (AVPlayer): jako Safari – MP4/MOV a HLS, HEVC, Dolby zvuk.
+	// MKV jde přes remux, obraz se nepřevádí.
+	"tvos": {
+		Name:       "tvos",
+		Containers: []string{"mp4"},
+		Video:      []string{"h264", "hevc"},
+		Audio:      []string{"aac", "mp3", "ac3", "eac3", "flac", "alac"},
+	},
+	// Google TV / Android TV (ExoPlayer): MKV přehraje přímo. AC3/E-AC3 umí
+	// jen některé přístroje (passthrough do TV či receiveru) a AV1 jen novější
+	// hardware, proto chybí – převod samotného zvuku je levný.
+	"androidtv": {
+		Name:       "androidtv",
+		Containers: []string{"mp4", "matroska", "webm"},
+		Video:      []string{"h264", "hevc", "vp9"},
+		Audio:      []string{"aac", "mp3", "opus", "vorbis", "flac"},
 	},
 }
 

@@ -170,8 +170,9 @@ plugin TMDB nainstalovaný.
 
 ## Přehrávání
 
-Prohlížeč pošle svůj profil (`web` pro Chrome, Firefox a Edge, `safari` pro
-Safari) a server zvolí nejlevnější režim:
+Klient pošle svůj profil (`web` pro Chrome, Firefox a Edge, `safari` pro
+Safari, `tvos` pro Apple TV, `androidtv` pro Google TV) a server zvolí
+nejlevnější režim:
 
 | Režim | Kdy | Zátěž serveru |
 |---|---|---|
@@ -238,6 +239,36 @@ Vše pod `/api/v1/sceniter`. Přehrávací cesty nesou streamovací token v adre
 | `GET /admin/transcode`, `DELETE /admin/transcode/{session}` | admin | Běžící převody |
 
 Chyby mají stejný tvar jako v Libriteru: `{"error": "…", "code": "sceniter.disabled"}`.
+
+## TV aplikace (Apple TV, Google TV)
+
+Jen přehrávač – prohlížení knihoven, detail, hledání a přehrávání, žádné úpravy.
+Zdroj je v `sceniter-tv/` (Expo + react-native-tvos + expo-video, jedna
+codebase pro obě platformy). Nejde o npm workspace: fork React Native by se
+v jednom stromu pobil s mobilem Libriteru, proto má vlastní `node_modules`
+a `package-lock.json`; `sceniter-shared` a `core-shared` bere Metro přímo ze
+zdrojů. Recepty: `just tv-start`, `tv-android`, `tv-ios`, `tv-apk`, `tv-aab`,
+`tv-testflight`.
+
+**Párování.** Televize se nepřihlašuje heslem. Po zadání adresy serveru ukáže
+kód a QR; uživatel ho na telefonu nebo počítači potvrdí na stránce `/link`
+(web Sceniteru i Libriteru) a televize dostane token se scope `tv` (platí jako
+mobilní token, 365 dní). Kód platí 10 minut a leží v databázi (tabulka
+`device_codes`, jen hash `device_code`), takže párování přežije restart
+serveru; prošlý kód televize sama nahradí novým.
+
+| Metoda a cesta | Role | Popis |
+|---|---|---|
+| `POST /api/v1/auth/device/start` `{"device_name"}` | veřejné | `device_code`, `user_code` (ABCD-EFGH), `verification_path`, `interval` |
+| `POST /api/v1/auth/device/token` `{"device_code"}` | veřejné | 428 `auth.device_pending`, 429 `auth.device_slow_down`, 410 `auth.device_expired`, jinak `{token, user}` |
+| `GET /api/v1/auth/device/{user_code}` | přihlášený | Které zařízení se páruje |
+| `POST /api/v1/auth/device/approve` `{"user_code"}` | přihlášený | Schválí párování |
+
+**Přehrávání** sdílí pravidla s webem (`sceniter-shared/src/playback.ts`):
+eskalace režimu při chybě, keepalive převodu, ukládání pozice. U přebalení
+čeká televize s pokračováním, až playlist k místu dojede. Titulky vykresluje
+aplikace sama z WebVTT (AVPlayer externí titulky k přímo přehrávanému souboru
+neumí), takže vypadají na obou platformách stejně.
 
 ## Nasazení na helpdesk24.works
 

@@ -41,7 +41,7 @@ type subtitleTrack struct {
 	URL string `json:"url"`
 }
 
-// GET /sceniter/media/{id}/playback?profile=web|safari&audio=<index>&mode=<vynutit režim>
+// GET /sceniter/media/{id}/playback?profile=web|safari|tvos|androidtv&audio=<index>&mode=<vynutit režim>
 func (h *Handler) Playback(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUID(w, r, "id")
 	if !ok {

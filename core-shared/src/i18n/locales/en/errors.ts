@@ -20,6 +20,11 @@ export default {
     token_failed: 'Could not issue an access token',
     stream_token_invalid: 'Invalid or expired playback token',
     mobile_token_refresh: 'A mobile token cannot be refreshed with a mobile token – please sign in again',
+    device_busy: 'Too many pairings in progress, try again in a moment',
+    device_pending: 'Waiting for approval',
+    device_slow_down: 'Pairing is being checked too often',
+    device_expired: 'The pairing code has expired',
+    device_code_invalid: 'The code does not exist or has expired',
   },
   plugin: {
     not_found: 'Plugin is not installed',

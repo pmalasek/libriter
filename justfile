@@ -9,6 +9,7 @@ frontend_dir := "libriter-frontend"
 sceniter_dir := "sceniter-frontend"
 backend_dir  := "server"
 mobile_dir   := "libriter-mobile"
+tv_dir       := "sceniter-tv"
 dist         := backend_dir / "internal/libriter/web/dist"
 sceniter_dist := backend_dir / "internal/sceniter/web/dist"
 
@@ -81,9 +82,10 @@ i18n-check:
 vet:
     go vet ./...
 
-# tsc ve všech npm workspaces (sdílené balíčky, weby, mobil)
+# tsc ve všech npm workspaces (sdílené balíčky, weby, mobil) a v TV aplikaci
 typecheck:
     npm run typecheck
+    cd {{tv_dir}} && npx tsc --noEmit
 
 # Závislosti mobilní aplikace. Instalují se v kořeni: mobil, web
 # i libriter-shared jsou npm workspaces s jedním package-lock.json, takže
@@ -356,6 +358,103 @@ mobile-ios-release method destination: mobile-deps
     else
         echo "→ {{mobile_dir}}/dist/Libriter.ipa"
     fi
+
+# ---- Sceniter TV (Apple TV + Google TV) ----
+#
+# TV aplikace běží na forku react-native-tvos, proto není npm workspace:
+# má vlastní node_modules a package-lock.json v sceniter-tv/ (dvě verze
+# React Native v jednom stromu by se pobily). Sdílené balíčky bere Metro
+# přímo ze zdrojů (viz sceniter-tv/metro.config.js).
+
+# Závislosti TV aplikace (vlastní lockfile v sceniter-tv/)
+[working-directory('sceniter-tv')]
+[private]
+tv-deps:
+    npm ci
+
+# Metro bundler TV aplikace (dev build, ne Expo Go)
+[working-directory('sceniter-tv')]
+tv-start: tv-deps
+    EXPO_TV=1 npx expo start --dev-client
+
+# Na připojené Android TV / Google TV (adb connect <ip>) nebo v emulátoru Android TV
+[working-directory('sceniter-tv')]
+tv-android: tv-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -r "$HOME/.config/libriter/android-env.sh" ]; then
+        . "$HOME/.config/libriter/android-env.sh"
+    fi
+    EXPO_TV=1 npx expo run:android --device
+
+# V simulátoru Apple TV (jen macOS + Xcode s tvOS SDK)
+[working-directory('sceniter-tv')]
+tv-ios: tv-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    EXPO_TV=1 npx expo prebuild --platform ios
+    echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
+    (cd ios && pod install)
+    EXPO_TV=1 npx expo run:ios
+
+# Release APK k ruční instalaci (sideload na Google TV) → sceniter-tv/dist/sceniter-tv.apk
+tv-apk: (tv-android-release "assembleRelease" "apk/release/app-release.apk" "sceniter-tv.apk")
+
+# Release AAB pro Google Play (Android TV) → sceniter-tv/dist/sceniter-tv.aab
+tv-aab: (tv-android-release "bundleRelease" "bundle/release/app-release.aab" "sceniter-tv.aab")
+
+# Podepisuje stejným upload klíčem jako mobil (just mobile-keystore).
+[working-directory('sceniter-tv')]
+[private]
+tv-android-release task artifact out: tv-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ -r "$HOME/.config/libriter/android-env.sh" ]; then
+        . "$HOME/.config/libriter/android-env.sh"
+    fi
+    if ! grep -qs '^LIBRITER_UPLOAD_STORE_FILE=' "$HOME/.gradle/gradle.properties"; then
+        echo "⚠ Release klíč nenastavený (just mobile-keystore) – podepisuji debug klíčem, do Google Play to neprojde." >&2
+    fi
+    EXPO_TV=1 npx expo prebuild --platform android
+    (cd android && ./gradlew {{task}})
+    mkdir -p dist
+    cp "android/app/build/outputs/{{artifact}}" "dist/{{out}}"
+    echo "→ {{tv_dir}}/dist/{{out}}"
+
+# Sestaví release pro Apple TV a nahraje ho do App Store Connect (TestFlight)
+[working-directory('sceniter-tv')]
+tv-testflight: tv-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    team="${LIBRITER_APPLE_TEAM:-$(node -p "require('./app.json').expo.ios.appleTeamId ?? ''")}"
+    EXPO_TV=1 npx expo prebuild --platform ios
+    echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
+    (cd ios && pod install)
+    archive="$PWD/ios/build/Sceniter.xcarchive"
+    xcodebuild -workspace ios/Sceniter.xcworkspace -scheme Sceniter \
+        -configuration Release -destination 'generic/platform=tvOS' \
+        -archivePath "$archive" -allowProvisioningUpdates \
+        DEVELOPMENT_TEAM="$team" CODE_SIGN_STYLE=Automatic archive
+    tmp="$(mktemp -d)"
+    cat > "$tmp/ExportOptions.plist" <<EOF
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0"><dict>
+      <key>method</key><string>app-store-connect</string>
+      <key>teamID</key><string>$team</string>
+      <key>signingStyle</key><string>automatic</string>
+      <key>destination</key><string>upload</string>
+    </dict></plist>
+    EOF
+    xcodebuild -exportArchive -archivePath "$archive" -exportPath "$tmp" \
+        -exportOptionsPlist "$tmp/ExportOptions.plist" -allowProvisioningUpdates
+    rm -rf "$tmp"
+    echo "✓ Nahráno do App Store Connect."
+
+# Ikony, bannery a Top Shelf z sceniter-tv/assets/brand/ (po změně loga)
+[working-directory('sceniter-tv')]
+tv-brand-assets:
+    sh brand-assets.sh
 
 # Nový release: zvýší verzi (patch/minor/major), sestaví .deb a vystaví ho na GitHubu
 deploy:

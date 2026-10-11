@@ -35,4 +35,17 @@ export default {
     haveAccount: 'Bereits ein Konto?',
     loginLink: 'Anmelden',
   },
+  link: {
+    title: 'Fernseher verbinden',
+    description: 'Gib den Code ein, der auf deinem Fernseher angezeigt wird.',
+    code: 'Code vom Fernseher',
+    check: 'Weiter',
+    confirm: '{{name}} mit dem Konto {{user}} anmelden?',
+    unnamed: 'Fernseher',
+    approve: 'Erlauben',
+    approving: 'Wird erlaubt…',
+    cancel: 'Abbrechen',
+    done: 'Fertig! Dein Fernseher meldet sich in wenigen Sekunden an.',
+    again: 'Weiteres Gerät verbinden',
+  },
 }

@@ -5,6 +5,7 @@ import {
   type AuthConfig,
   type AuthResponse,
   type ChangePasswordRequest,
+  type DeviceInfo,
   type LoginRequest,
   type PluginInfo,
   type PluginsResponse,
@@ -100,5 +101,22 @@ export function useSetPluginConfig(name: string) {
         prev ? { ...prev, plugins: prev.plugins.map((p) => (p.name === info.name ? info : p)) } : prev,
       )
     },
+  })
+}
+
+/** Čekající párování televize podle kódu z obrazovky (stránka /link). */
+export function useDeviceInfo(code: string) {
+  return useQuery({
+    queryKey: ['device', code],
+    queryFn: ({ signal }) => apiFetch<DeviceInfo>(`/auth/device/${encodeURIComponent(code)}`, { signal }),
+    enabled: code.length > 0,
+    retry: false,
+  })
+}
+
+export function useApproveDevice() {
+  return useMutation({
+    mutationFn: (userCode: string) =>
+      apiFetch<DeviceInfo>('/auth/device/approve', { method: 'POST', json: { user_code: userCode } }),
   })
 }

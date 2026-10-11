@@ -20,6 +20,11 @@ export default {
     token_failed: 'Impossible de créer un jeton d’accès',
     stream_token_invalid: 'Jeton de lecture invalide ou expiré',
     mobile_token_refresh: 'Un jeton mobile ne peut pas être renouvelé avec un jeton mobile. Veuillez vous reconnecter',
+    device_busy: 'Trop d’appairages en cours, réessayez dans un instant',
+    device_pending: 'En attente de validation',
+    device_slow_down: 'L’appairage est vérifié trop souvent',
+    device_expired: 'Le code d’appairage a expiré',
+    device_code_invalid: 'Le code n’existe pas ou a expiré',
   },
   plugin: {
     not_found: 'Le plugin n’est pas installé',

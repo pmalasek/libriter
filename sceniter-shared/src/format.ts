@@ -54,6 +54,35 @@ export function resolutionLabel(width?: number, height?: number): string {
 
 const languageNames = new Map<string, Intl.DisplayNames | null>()
 
+/** Trojpísmenné kódy (ISO 639-2, jak je píše ffprobe) → dvoupísmenné. */
+const ISO3: Record<string, string> = {
+  cze: 'cs', ces: 'cs', slo: 'sk', slk: 'sk', eng: 'en', ger: 'de', deu: 'de', fre: 'fr', fra: 'fr',
+  spa: 'es', ita: 'it', pol: 'pl', rus: 'ru', ukr: 'uk', hun: 'hu', por: 'pt', dut: 'nl', nld: 'nl',
+  swe: 'sv', nor: 'no', nob: 'no', dan: 'da', fin: 'fi', tur: 'tr', gre: 'el', ell: 'el', heb: 'he',
+  ara: 'ar', hin: 'hi', jpn: 'ja', kor: 'ko', chi: 'zh', zho: 'zh', tha: 'th', vie: 'vi', rum: 'ro',
+  ron: 'ro', bul: 'bg', hrv: 'hr', srp: 'sr', slv: 'sl', est: 'et', lav: 'lv', lit: 'lt', cat: 'ca',
+}
+
+/**
+ * Jazyky v jejich vlastním jazyce – záloha pro prostředí bez
+ * Intl.DisplayNames (Hermes v TV aplikaci).
+ */
+const ENDONYMS: Record<string, string> = {
+  cs: 'Čeština', sk: 'Slovenčina', en: 'English', de: 'Deutsch', fr: 'Français', es: 'Español',
+  it: 'Italiano', pl: 'Polski', ru: 'Русский', uk: 'Українська', hu: 'Magyar', pt: 'Português',
+  nl: 'Nederlands', sv: 'Svenska', no: 'Norsk', da: 'Dansk', fi: 'Suomi', tr: 'Türkçe', el: 'Ελληνικά',
+  he: 'עברית', ar: 'العربية', hi: 'हिन्दी', ja: '日本語', ko: '한국어', zh: '中文', th: 'ไทย',
+  vi: 'Tiếng Việt', ro: 'Română', bg: 'Български', hr: 'Hrvatski', sr: 'Srpski', sl: 'Slovenščina',
+  et: 'Eesti', lv: 'Latviešu', lt: 'Lietuvių', ca: 'Català',
+}
+
+/** Kód jazyka stopy v dvoupísmenném tvaru („cze“ → „cs“, „en-US“ → „en“). */
+export function languageCode(code: string | undefined): string | undefined {
+  const c = code?.trim().toLowerCase().split(/[-_]/)[0]
+  if (!c || c === 'und') return undefined
+  return ISO3[c] ?? c
+}
+
 /** Název jazyka stopy v jazyce rozhraní („čeština“ / „Czech“). */
 export function languageName(code: string | undefined): string | undefined {
   if (!code) return undefined
@@ -69,9 +98,10 @@ export function languageName(code: string | undefined): string | undefined {
     const name = languageNames.get(locale)?.of(code)
     if (name) return name.charAt(0).toLocaleUpperCase(locale) + name.slice(1)
   } catch {
-    // neplatný kód jazyka – vrátí se, jak je
+    // neplatný kód jazyka – zkusí se tabulka
   }
-  return code.toUpperCase()
+  const short = languageCode(code)
+  return (short && ENDONYMS[short]) ?? code.toUpperCase()
 }
 
 /** Popisek zvukové nebo titulkové stopy: jazyk, název, kodek, kanály. */

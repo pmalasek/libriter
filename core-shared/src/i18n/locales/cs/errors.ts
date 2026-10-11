@@ -20,6 +20,11 @@ export default {
     token_failed: 'Přístupový token se nepodařilo vydat',
     stream_token_invalid: 'Neplatný nebo vypršelý token pro přehrávání',
     mobile_token_refresh: 'Mobilní token nelze obnovit mobilním tokenem – přihlaste se znovu',
+    device_busy: 'Příliš mnoho rozpracovaných párování, zkuste to za chvíli',
+    device_pending: 'Čeká se na schválení',
+    device_slow_down: 'Párování se zkouší příliš často',
+    device_expired: 'Párovací kód vypršel',
+    device_code_invalid: 'Kód neexistuje nebo už vypršel',
   },
   plugin: {
     not_found: 'Plugin není nainstalovaný',

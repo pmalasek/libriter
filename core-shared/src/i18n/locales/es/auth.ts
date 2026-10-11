@@ -35,4 +35,17 @@ export default {
     haveAccount: '¿Ya tienes cuenta?',
     loginLink: 'Iniciar sesión',
   },
+  link: {
+    title: 'Conectar un televisor',
+    description: 'Introduce el código que aparece en la pantalla del televisor.',
+    code: 'Código del televisor',
+    check: 'Continuar',
+    confirm: '¿Iniciar sesión en {{name}} con la cuenta {{user}}?',
+    unnamed: 'Televisor',
+    approve: 'Permitir',
+    approving: 'Permitiendo…',
+    cancel: 'Cancelar',
+    done: '¡Listo! El televisor iniciará sesión en unos segundos.',
+    again: 'Conectar otro dispositivo',
+  },
 }

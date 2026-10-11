@@ -60,6 +60,30 @@ export interface MobileTokenRequest {
 
 export type MobileToken = StreamToken
 
+/** Zahájené párování televize (device flow). */
+export interface DeviceStart {
+  /** Tajný kód zařízení; zůstává v televizi. */
+  device_code: string
+  /** Kód pro uživatele ve tvaru ABCD-EFGH. */
+  user_code: string
+  /** Cesta stránky schválení na webu (/link). */
+  verification_path: string
+  expires_in: number
+  /** Minimální rozestup dotazů na token v sekundách. */
+  interval: number
+}
+
+/** Čekající párování, jak ho vidí stránka schválení. */
+export interface DeviceInfo {
+  user_code: string
+  device_name: string
+  expires_at: string
+}
+
+export interface DeviceTokenResponse extends AuthResponse {
+  expires_at: string
+}
+
 export interface AuthResponse {
   user: User
   token: string

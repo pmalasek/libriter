@@ -13,6 +13,7 @@ const BookDetailPage = lazy(() => import('@/pages/BookDetailPage').then((module)
 const BooksPage = lazy(() => import('@/pages/BooksPage').then((module) => ({ default: module.BooksPage })))
 const HomePage = lazy(() => import('@/pages/HomePage').then((module) => ({ default: module.HomePage })))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then((module) => ({ default: module.NotFoundPage })))
+const LinkDevicePage = lazy(() => import('core-web/src/pages/LinkDevicePage').then((module) => ({ default: module.LinkDevicePage })))
 const ProfilePage = lazy(() => import('@/pages/ProfilePage').then((module) => ({ default: module.ProfilePage })))
 const SeriesDetailPage = lazy(() => import('@/pages/SeriesDetailPage').then((module) => ({ default: module.SeriesDetailPage })))
 const SeriesPage = lazy(() => import('@/pages/SeriesPage').then((module) => ({ default: module.SeriesPage })))
@@ -38,6 +39,8 @@ export function App() {
       </Route>
 
       <Route element={<RequireAuth />}>
+        {/* Schválení párování televize (Sceniter TV) – účet je společný */}
+        <Route path="link" element={<LinkDevicePage />} />
         <Route element={<AppLayout />}>
           {/* Domovská stránka: čím se dá pokračovat a co je v knihovně nového. */}
           <Route index element={<HomePage />} />

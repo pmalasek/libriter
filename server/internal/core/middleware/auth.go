@@ -99,7 +99,8 @@ func RoleFromCtx(ctx context.Context) string {
 }
 
 // ScopeFromCtx vrátí scope tokenu, kterým se volající prokázal. Prázdný
-// řetězec je běžné přihlášení, service.ScopeMobile mobilní aplikace.
+// řetězec je běžné přihlášení, service.ScopeMobile mobilní aplikace,
+// service.ScopeTV televize.
 func ScopeFromCtx(ctx context.Context) string {
 	scope, _ := ctx.Value(ctxKeyScope).(string)
 	return scope

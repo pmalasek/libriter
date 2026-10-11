@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
+
 	"mediater/internal/core/middleware"
 	"mediater/internal/core/service"
 )
@@ -127,15 +129,15 @@ func (h *AuthHandler) StreamToken(w http.ResponseWriter, r *http.Request) {
 // přihlašuje jednou a pak jede i offline – s 72hodinovým přihlašovacím
 // tokenem by po víkendu bez signálu žádala heslo u stažené knihy.
 //
-// Mobilní token další mobilní token nevyrazí: uniklý token by se sám
-// prodlužoval donekonečna a odhlášení by ho nikdy nedohnalo.
+// Mobilní (ani televizní) token další mobilní token nevyrazí: uniklý token by
+// se sám prodlužoval donekonečna a odhlášení by ho nikdy nedohnalo.
 func (h *AuthHandler) MobileToken(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromCtx(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "auth.missing_token", "chybí autorizační token")
 		return
 	}
-	if middleware.ScopeFromCtx(r.Context()) == service.ScopeMobile {
+	if middleware.ScopeFromCtx(r.Context()) != "" {
 		writeError(w, http.StatusForbidden, "auth.mobile_token_refresh", "mobilní token nelze obnovit mobilním tokenem – přihlaste se znovu")
 		return
 	}
@@ -195,4 +197,124 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		"user":  user,
 		"token": token,
 	})
+}
+
+// POST /api/v1/auth/device/start  (veřejné)
+//
+// Televize zahájí párování: dostane device_code (nechá si ho) a user_code,
+// který ukáže na obrazovce. Uživatel ho pak schválí na webu na stránce /link.
+func (h *AuthHandler) DeviceStart(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		DeviceName string `json:"device_name"`
+	}
+	if r.ContentLength > 0 {
+		if err := readJSON(r, &req); err != nil {
+			writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
+			return
+		}
+	}
+
+	start, err := h.svc.StartDeviceAuth(r.Context(), req.DeviceName)
+	if errors.Is(err, service.ErrDeviceBusy) {
+		writeError(w, http.StatusServiceUnavailable, "auth.device_busy", "příliš mnoho rozpracovaných párování, zkuste to za chvíli")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "auth.token_failed", "párování se nepodařilo zahájit")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"device_code":       start.DeviceCode,
+		"user_code":         start.UserCode,
+		"verification_path": "/link",
+		"expires_in":        start.ExpiresIn,
+		"interval":          start.Interval,
+	})
+}
+
+// POST /api/v1/auth/device/token  (veřejné)
+//
+// Televize se opakovaně ptá, jestli už uživatel kód schválil. Po schválení
+// dostane dlouhodobý token se scope „tv“ a profil uživatele – stejný tvar
+// jako odpověď na přihlášení.
+func (h *AuthHandler) DeviceToken(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		DeviceCode string `json:"device_code"`
+	}
+	if err := readJSON(r, &req); err != nil || req.DeviceCode == "" {
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
+		return
+	}
+
+	user, token, expiresAt, err := h.svc.PollDeviceToken(r.Context(), req.DeviceCode)
+	switch {
+	case errors.Is(err, service.ErrDevicePending):
+		writeError(w, http.StatusPreconditionRequired, "auth.device_pending", "čeká se na schválení")
+		return
+	case errors.Is(err, service.ErrDeviceSlowDown):
+		writeError(w, http.StatusTooManyRequests, "auth.device_slow_down", "zkoušejte to méně často")
+		return
+	case errors.Is(err, service.ErrDeviceExpired):
+		writeError(w, http.StatusGone, "auth.device_expired", "párovací kód vypršel")
+		return
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "auth.token_failed", "token pro televizi se nepodařilo vydat")
+		return
+	}
+
+	slog.Info("vydán televizní token", "user_id", user.ID, "expires_at", expiresAt)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user":       user,
+		"token":      token,
+		"expires_at": expiresAt,
+	})
+}
+
+// GET /api/v1/auth/device/{code}  (přihlášený uživatel)
+//
+// Stránka schválení podle toho ukáže, které zařízení se přihlašuje.
+func (h *AuthHandler) DeviceInfo(w http.ResponseWriter, r *http.Request) {
+	info, err := h.svc.DeviceByUserCode(r.Context(), chi.URLParam(r, "code"))
+	if errors.Is(err, service.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "auth.device_code_invalid", "kód neexistuje nebo vypršel")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání")
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
+}
+
+// POST /api/v1/auth/device/approve  (přihlášený uživatel)
+//
+// Schválí párování: televize se přihlásí účtem toho, kdo kód potvrdil.
+func (h *AuthHandler) DeviceApprove(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromCtx(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "auth.missing_token", "chybí autorizační token")
+		return
+	}
+	var req struct {
+		UserCode string `json:"user_code"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
+		return
+	}
+
+	info, err := h.svc.ApproveDevice(r.Context(), userID, req.UserCode)
+	if errors.Is(err, service.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "auth.device_code_invalid", "kód neexistuje nebo vypršel")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.internal", "párování se nepodařilo schválit")
+		return
+	}
+
+	slog.Info("schváleno párování televize", "user_id", userID, "device", info.DeviceName)
+	writeJSON(w, http.StatusOK, info)
 }

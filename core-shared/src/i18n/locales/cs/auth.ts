@@ -35,4 +35,17 @@ export default {
     haveAccount: 'Už máte účet?',
     loginLink: 'Přihlaste se',
   },
+  link: {
+    title: 'Připojit televizi',
+    description: 'Zadejte kód, který vidíte na obrazovce televize.',
+    code: 'Kód z televize',
+    check: 'Pokračovat',
+    confirm: 'Přihlásit zařízení {{name}} k účtu {{user}}?',
+    unnamed: 'Televize',
+    approve: 'Povolit',
+    approving: 'Povoluji…',
+    cancel: 'Zrušit',
+    done: 'Hotovo! Televize se za pár vteřin přihlásí.',
+    again: 'Připojit další zařízení',
+  },
 }

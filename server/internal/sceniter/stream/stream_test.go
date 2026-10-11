@@ -22,6 +22,7 @@ func media(container, video string, audio ...string) model.MediaFile {
 
 func TestDecide(t *testing.T) {
 	web, safari := ProfileFor("web"), ProfileFor("safari")
+	tvos, androidtv := ProfileFor("tvos"), ProfileFor("androidtv")
 	one := 2
 	cases := []struct {
 		name string
@@ -37,6 +38,11 @@ func TestDecide(t *testing.T) {
 		{"avi mpeg4 mp3", media("avi", "mpeg4", "mp3"), web, nil, ModeTranscode},
 		{"mp4 hevc web", media("mp4", "hevc", "aac"), web, nil, ModeTranscode},
 		{"mp4 hevc safari", media("mp4", "hevc", "aac"), safari, nil, ModeDirect},
+		{"mkv h264 ac3 tvos", media("matroska", "h264", "ac3"), tvos, nil, ModeRemux},
+		{"mp4 hevc eac3 tvos", media("mp4", "hevc", "eac3"), tvos, nil, ModeDirect},
+		{"mkv hevc aac androidtv", media("matroska", "hevc", "aac"), androidtv, nil, ModeDirect},
+		{"mkv h264 ac3 androidtv", media("matroska", "h264", "ac3"), androidtv, nil, ModeTranscodeAudio},
+		{"mkv av1 androidtv", media("matroska", "av1", "opus"), androidtv, nil, ModeTranscode},
 		{"mp4, druhá stopa", media("mp4", "h264", "aac", "aac"), web, &one, ModeRemux},
 		{"neprozkoumané mp4", model.MediaFile{FilePath: "a.mp4"}, web, nil, ModeDirect},
 		{"neprozkoumané avi", model.MediaFile{FilePath: "a.avi"}, web, nil, ModeTranscode},

@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "Sceniter",
+    "slug": "sceniter-tv",
+    "version": "0.1.0",
+    "scheme": "sceniter",
+    "orientation": "landscape",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B0B0F",
+    "primaryColor": "#0B7A7A",
+    "ios": {
+      "bundleIdentifier": "cz.sceniter.tv",
+      "appleTeamId": "QL5UHGHK98",
+      "buildNumber": "1",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
+    },
+    "android": {
+      "package": "cz.sceniter.tv",
+      "versionCode": 1,
+      "usesCleartextTraffic": true,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.VIBRATE"
+      ]
+    },
+    "plugins": [
+      [
+        "@react-native-tvos/config-tv",
+        {
+          "androidTVBanner": "./assets/tv-banner.png",
+          "androidTVIcon": "./assets/icon.png",
+          "appleTVImages": {
+            "icon": "./assets/tvos-icon.png",
+            "iconSmall": "./assets/tvos-icon-small.png",
+            "iconSmall2x": "./assets/tvos-icon-small-2x.png",
+            "topShelf": "./assets/tvos-topshelf.png",
+            "topShelf2x": "./assets/tvos-topshelf-2x.png",
+            "topShelfWide": "./assets/tvos-topshelf-wide.png",
+            "topShelfWide2x": "./assets/tvos-topshelf-wide-2x.png"
+          }
+        }
+      ],
+      "expo-router",
+      "expo-secure-store",
+      "expo-image",
+      "expo-localization",
+      [
+        "expo-video",
+        {
+          "supportsPictureInPicture": false,
+          "supportsBackgroundPlayback": false
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash.png",
+          "imageWidth": 220,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0B0F"
+        }
+      ],
+      "../libriter-mobile/plugins/withAndroidReleaseSigning"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}

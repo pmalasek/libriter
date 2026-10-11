@@ -20,6 +20,11 @@ export default {
     token_failed: 'No se ha podido emitir un token de acceso',
     stream_token_invalid: 'Token de reproducción no válido o caducado',
     mobile_token_refresh: 'Un token móvil no se puede renovar con otro token móvil. Vuelve a iniciar sesión',
+    device_busy: 'Demasiadas vinculaciones en curso, inténtalo de nuevo en un momento',
+    device_pending: 'Esperando la aprobación',
+    device_slow_down: 'La vinculación se consulta con demasiada frecuencia',
+    device_expired: 'El código de vinculación ha caducado',
+    device_code_invalid: 'El código no existe o ha caducado',
   },
   plugin: {
     not_found: 'El plugin no está instalado',

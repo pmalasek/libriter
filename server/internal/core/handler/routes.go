@@ -26,6 +26,9 @@ func RegisterRoutes(r chi.Router, auth *service.AuthService, h Handlers) {
 	r.Get("/auth/config", h.Auth.Config) // je registrace zapnutá?
 	r.Post("/auth/register", h.Auth.Register)
 	r.Post("/auth/login", h.Auth.Login)
+	// Párování televize (device flow): TV ukáže kód, uživatel ho schválí na webu
+	r.Post("/auth/device/start", h.Auth.DeviceStart)
+	r.Post("/auth/device/token", h.Auth.DeviceToken)
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(auth))
@@ -34,6 +37,9 @@ func RegisterRoutes(r chi.Router, auth *service.AuthService, h Handlers) {
 		r.Get("/auth/stream-token", h.Auth.StreamToken)
 		// Dlouhodobý token pro mobilní aplikaci (offline přehrávač)
 		r.Post("/auth/mobile-token", h.Auth.MobileToken)
+		// Schválení párování televize ze stránky /link
+		r.Get("/auth/device/{code}", h.Auth.DeviceInfo)
+		r.Post("/auth/device/approve", h.Auth.DeviceApprove)
 
 		// Uživatelé - vlastní profil
 		r.Get("/users/{id}", h.Users.Get)

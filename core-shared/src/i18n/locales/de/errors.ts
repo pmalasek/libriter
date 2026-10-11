@@ -20,6 +20,11 @@ export default {
     token_failed: 'Zugriffstoken konnte nicht erstellt werden',
     stream_token_invalid: 'Ungültiges oder abgelaufenes Wiedergabetoken',
     mobile_token_refresh: 'Ein mobiles Token kann nicht mit einem mobilen Token erneuert werden – bitte melde dich erneut an',
+    device_busy: 'Zu viele laufende Kopplungen, versuche es gleich noch einmal',
+    device_pending: 'Warte auf Bestätigung',
+    device_slow_down: 'Die Kopplung wird zu oft abgefragt',
+    device_expired: 'Der Kopplungscode ist abgelaufen',
+    device_code_invalid: 'Der Code existiert nicht oder ist abgelaufen',
   },
   plugin: {
     not_found: 'Plugin ist nicht installiert',

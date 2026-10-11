@@ -23,6 +23,7 @@ const SearchPage = lazyPage(() => import('@/pages/SearchPage'), 'SearchPage')
 const PersonPage = lazyPage(() => import('@/pages/PersonPage'), 'PersonPage')
 const NotFoundPage = lazyPage(() => import('@/pages/NotFoundPage'), 'NotFoundPage')
 const ProfilePage = lazyPage(() => import('core-web/src/pages/ProfilePage'), 'ProfilePage')
+const LinkDevicePage = lazyPage(() => import('core-web/src/pages/LinkDevicePage'), 'LinkDevicePage')
 const AdminLayout = lazyPage(() => import('@/pages/admin/AdminLayout'), 'AdminLayout')
 const AdminOverviewPage = lazyPage(() => import('@/pages/admin/AdminOverviewPage'), 'AdminOverviewPage')
 const AdminLibrariesPage = lazyPage(() => import('@/pages/admin/AdminLibrariesPage'), 'AdminLibrariesPage')
@@ -41,6 +42,8 @@ export function App() {
       </Route>
 
       <Route element={<RequireAuth />}>
+        {/* Schválení párování televize – mimo layout, chodí se sem i z telefonu přes QR */}
+        <Route path="link" element={<LinkDevicePage />} />
         {/* Přehrávač je přes celou obrazovku, bez navigace. */}
         <Route element={<DisabledGate />}>
           <Route path="watch/:kind/:id" element={<WatchPage />} />

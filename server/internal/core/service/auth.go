@@ -59,6 +59,9 @@ type AuthService struct {
 	cacheTTL time.Duration
 	cacheMu  sync.Mutex
 	cache    map[uuid.UUID]cachedUser
+
+	// now je hodiny párování televizí (device.go); testy je posouvají.
+	now func() time.Time
 }
 
 // cachedUser je krátkodobě zapamatovaný výsledek ověření uživatele z tokenu.
@@ -73,6 +76,7 @@ func NewAuth(store *storage.Store, cfg config.JWTConfig) *AuthService {
 		cfg:      cfg,
 		cacheTTL: authCacheTTL,
 		cache:    make(map[uuid.UUID]cachedUser),
+		now:      time.Now,
 	}
 }
 
@@ -204,14 +208,14 @@ func (a *AuthService) Login(ctx context.Context, login, password string) (*model
 }
 
 // ParseToken ověří a dekóduje token, kterým se chodí do API: přihlašovací
-// (prázdný scope) nebo mobilní. Token na streamování odmítne – jinak by
+// (prázdný scope), mobilní nebo televizní. Token na streamování odmítne – jinak by
 // adresa audia posloužila jako přihlášení do celého API.
 func (a *AuthService) ParseToken(tokenStr string) (*Claims, error) {
 	claims, err := a.parseClaims(tokenStr)
 	if err != nil {
 		return nil, err
 	}
-	if claims.Scope != "" && claims.Scope != ScopeMobile {
+	if claims.Scope != "" && claims.Scope != ScopeMobile && claims.Scope != ScopeTV {
 		return nil, ErrInvalidToken
 	}
 	return claims, nil

@@ -3,35 +3,38 @@ import { useEffect, useRef } from 'react'
 import { usePagedList, type PagedList } from 'core-web/src/lib/paged'
 import {
   apiFetch,
+  getEpisode,
+  getGenres,
+  getHome,
+  getLibraries,
+  getMovie,
+  getPerson,
+  getPlayback,
+  getSeason,
+  getShow,
+  getSimilar,
+  getTitlePage,
+  getWatchlist,
+  list,
   listQuery,
   queryKeys,
+  search,
   type Page,
-  type EpisodeDetail,
-  type Home,
   type Library,
   type LibraryRequest,
   type MatchStatus,
   type MetadataProvider,
   type MetadataSearchResponse,
-  type Movie,
-  type MovieDetail,
   type MovieSummary,
-  type PersonDetail,
-  type Playback,
-  type ProgressRequest,
+  type PlaybackMode,
   type RefreshStatus,
   type SceniterConfig,
   type SceniterStats,
-  type SearchResults,
-  type Season,
-  type Show,
-  type ShowDetail,
   type ShowIssue,
   type ShowSummary,
   type TitleKind,
   type TitlePatch,
   type TranscodeSession,
-  type WatchlistItem,
   type MovieIssue,
   type RenumberPlan,
   type ShowFolder,
@@ -40,10 +43,9 @@ import {
 
 const BASE = '/sceniter'
 
-/** Seznam z API; null (prázdný Go slice) se převede na []. */
-function list<T>(value: T[] | null | undefined): T[] {
-  return value ?? []
-}
+// Prohlížení a přehrávání volá funkce ze sceniter-shared (sdílí je TV klient);
+// tady jsou nad nimi jen hooky.
+export { saveProgress } from 'sceniter-shared'
 
 function params(p: Record<string, string | undefined>): string {
   const q = new URLSearchParams()
@@ -61,14 +63,14 @@ export function useSceniterConfig() {
 }
 
 export function useHome() {
-  return useQuery({ queryKey: queryKeys.home, queryFn: () => apiFetch<Home>(`${BASE}/home`) })
+  return useQuery({ queryKey: queryKeys.home, queryFn: ({ signal }) => getHome({ signal }) })
 }
 
 /** Zapnuté knihovny v nastaveném pořadí – menu a domovská stránka. */
 export function useLibraries() {
   return useQuery({
     queryKey: queryKeys.libraries,
-    queryFn: async () => list(await apiFetch<Library[] | null>(`${BASE}/libraries`)),
+    queryFn: ({ signal }) => getLibraries({ signal }),
     staleTime: 60_000,
   })
 }
@@ -91,26 +93,32 @@ function pageFetcher<T>(path: string, p: Record<string, string | boolean | undef
  * v paměti se drží jen stránky kolem viditelné části mřížky.
  */
 export function useMovies(p: ListParams): PagedList<MovieSummary> {
-  return usePagedList({ queryKey: queryKeys.movies(p), fetchPage: pageFetcher<MovieSummary>('/movies', p) })
+  return usePagedList({
+    queryKey: queryKeys.movies(p),
+    fetchPage: (offset, limit, signal) => getTitlePage<MovieSummary>('movie', p, offset, limit, { signal }),
+  })
 }
 
 export function useMovie(id: string) {
   return useQuery({
     queryKey: queryKeys.movie(id),
-    queryFn: () => apiFetch<MovieDetail>(`${BASE}/movies/${id}`),
+    queryFn: ({ signal }) => getMovie(id, { signal }),
     enabled: Boolean(id),
   })
 }
 
 /** Seriály podle filtru – stránkovaně. */
 export function useShows(p: ListParams): PagedList<ShowSummary> {
-  return usePagedList({ queryKey: queryKeys.shows(p), fetchPage: pageFetcher<ShowSummary>('/shows', p) })
+  return usePagedList({
+    queryKey: queryKeys.shows(p),
+    fetchPage: (offset, limit, signal) => getTitlePage<ShowSummary>('show', p, offset, limit, { signal }),
+  })
 }
 
 export function useShow(id: string) {
   return useQuery({
     queryKey: queryKeys.show(id),
-    queryFn: () => apiFetch<ShowDetail>(`${BASE}/shows/${id}`),
+    queryFn: ({ signal }) => getShow(id, { signal }),
     enabled: Boolean(id),
   })
 }
@@ -119,10 +127,7 @@ export function useShow(id: string) {
 export function useSeason(showId: string, number: number | undefined) {
   return useQuery({
     queryKey: queryKeys.season(showId, number ?? -1),
-    queryFn: async () => {
-      const s = await apiFetch<Season>(`${BASE}/shows/${showId}/seasons/${number}`)
-      return { ...s, episodes: list(s.episodes) }
-    },
+    queryFn: ({ signal }) => getSeason(showId, number!, { signal }),
     enabled: Boolean(showId) && number !== undefined,
   })
 }
@@ -130,7 +135,7 @@ export function useSeason(showId: string, number: number | undefined) {
 export function useEpisode(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.episode(id ?? ''),
-    queryFn: () => apiFetch<EpisodeDetail>(`${BASE}/episodes/${id}`),
+    queryFn: ({ signal }) => getEpisode(id!, { signal }),
     enabled: Boolean(id),
   })
 }
@@ -139,10 +144,7 @@ export function useEpisode(id: string | undefined) {
 export function usePerson(id: string) {
   return useQuery({
     queryKey: queryKeys.person(id),
-    queryFn: async () => {
-      const p = await apiFetch<PersonDetail>(`${BASE}/people/${id}`)
-      return { ...p, credits: list(p.credits) }
-    },
+    queryFn: ({ signal }) => getPerson(id, { signal }),
     enabled: Boolean(id),
   })
 }
@@ -151,10 +153,7 @@ export function usePerson(id: string) {
 export function useSimilar(kind: TitleKind, id: string) {
   return useQuery({
     queryKey: queryKeys.similar(kind, id),
-    queryFn: async () =>
-      kind === 'movie'
-        ? { movies: list(await apiFetch<Movie[] | null>(`${BASE}/movies/${id}/similar`)), shows: [] as Show[] }
-        : { movies: [] as Movie[], shows: list(await apiFetch<Show[] | null>(`${BASE}/shows/${id}/similar`)) },
+    queryFn: ({ signal }) => getSimilar(kind, id, { signal }),
     enabled: Boolean(id),
     staleTime: 5 * 60 * 1000,
   })
@@ -163,7 +162,7 @@ export function useSimilar(kind: TitleKind, id: string) {
 export function useGenres() {
   return useQuery({
     queryKey: queryKeys.genres,
-    queryFn: async () => list(await apiFetch<string[] | null>(`${BASE}/genres`)),
+    queryFn: ({ signal }) => getGenres({ signal }),
     staleTime: 5 * 60 * 1000,
   })
 }
@@ -171,10 +170,7 @@ export function useGenres() {
 export function useSearch(q: string) {
   return useQuery({
     queryKey: queryKeys.search(q),
-    queryFn: async () => {
-      const r = await apiFetch<SearchResults>(`${BASE}/search${params({ q })}`)
-      return { movies: list(r.movies), shows: list(r.shows), people: list(r.people) }
-    },
+    queryFn: ({ signal }) => search(q, { signal }),
     enabled: q.trim().length > 0,
     placeholderData: (prev) => prev,
   })
@@ -183,7 +179,7 @@ export function useSearch(q: string) {
 export function useWatchlist() {
   return useQuery({
     queryKey: queryKeys.watchlist,
-    queryFn: async () => list(await apiFetch<WatchlistItem[] | null>(`${BASE}/watchlist`)),
+    queryFn: ({ signal }) => getWatchlist({ signal }),
   })
 }
 
@@ -194,10 +190,7 @@ export function useWatchlist() {
 export function usePlayback(mediaId: string | undefined, profile: string, audio?: number, mode?: string) {
   return useQuery({
     queryKey: [...queryKeys.playback(mediaId ?? '', audio), profile, mode ?? null],
-    queryFn: () =>
-      apiFetch<Playback>(
-        `${BASE}/media/${mediaId}/playback${params({ profile, audio: audio?.toString(), mode })}`,
-      ),
+    queryFn: () => getPlayback(mediaId!, { profile, audio, mode: mode as PlaybackMode | undefined }),
     enabled: Boolean(mediaId),
     staleTime: Infinity,
     gcTime: 0,
@@ -259,14 +252,6 @@ export function useSetWatched() {
         method: watched ? 'PUT' : 'DELETE',
       }),
     onSuccess: invalidate,
-  })
-}
-
-/** Zápis pozice z přehrávače; 409 (novější pozice jinde) není chyba. */
-export function saveProgress(body: ProgressRequest, keepalive = false): Promise<void> {
-  return apiFetch<void>(`${BASE}/progress`, { method: 'PUT', json: body, keepalive }).catch((err: unknown) => {
-    if (err && typeof err === 'object' && 'status' in err && err.status === 409) return
-    throw err
   })
 }
 

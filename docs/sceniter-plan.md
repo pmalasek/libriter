@@ -22,8 +22,8 @@
 
 Uživatel chce druhou aplikaci **Sceniter** pro správu a přehrávání videí (filmy, seriály)
 se **společnou databází uživatelů** s Libriterem, ale se samostatným webovým frontendem.
-TV aplikace (Apple TV, Google TV) jsou **odložené na později**; architektura je má
-umožnit bez přestavby.
+TV aplikace (Apple TV, Google TV) byly nejdřív odložené; od 2026-10-11 vznikají
+v `sceniter-tv/` (viz níže a docs/sceniter.md).
 
 Dnešní stav:
 - Go backend `libriter-backend/` (chi, SQLite přes modernc, jedna binárka s `go:embed` webu).
@@ -300,15 +300,19 @@ DRY_RUN=1 bash _scripts/release.sh && dpkg -c dist/mediater_*.deb
 sudo nginx -t && curl -sI https://video.helpdesk24.works/health
 ```
 
-## Připraveno pro budoucí TV klienty (teď se nedělá)
+## TV klienti (2026-10-11)
 
-- Sceniter API má vlastní prefix a nezávisí na hostname, TV ho použije stejně jako web.
-- Profil přehrávání je parametr (`?profile=`); doplní se `tvos` a `androidtv`.
+- Sceniter API má vlastní prefix a nezávisí na hostname, TV ho používá stejně jako web.
+- Profily přehrávání `tvos` a `androidtv` (`stream/decision.go`).
 - Video jde přes stejný streamovací token `?t=` jako audio.
-- Pro přihlášení se přidá device-code flow (kód na TV, schválení na webu `/link`) a scope `tv`
-  podle vzoru `mobile`; volitelně `aud` claim a `users.tokens_revoked_before`.
-- Klient vznikne jako workspace `sceniter-tv` (Expo + react-native-tvos + expo-video) a použije
-  `sceniter-shared`. Pozor na dvě verze React Native v jednom monorepu (metro `nodeModulesPaths`).
+- Přihlášení device-code flow (kód na TV, schválení na webu `/link`) a scope `tv` podle vzoru
+  `mobile`. Kódy v tabulce `device_codes` (migrace jádra 018, `core/service/device.go`). `aud` claim a
+  `users.tokens_revoked_before` zatím ne.
+- Klient `sceniter-tv` (Expo + react-native-tvos + expo-video) **není npm workspace**: peer
+  závislosti RN knihoven neberou prerelease verzi `0.86.3-0` a dvě RN v jednom stromu by se
+  pobily. Má vlastní lockfile (`.npmrc legacy-peer-deps`) a sdílené balíčky řeší Metro.
+- Volání API a pravidla přehrávání jsou ve `sceniter-shared` (`api.ts`, `playback.ts`, `vtt.ts`)
+  a používá je i web.
 
 ## Rizika
 

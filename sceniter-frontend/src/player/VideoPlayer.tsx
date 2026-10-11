@@ -2,7 +2,21 @@ import { useQueryClient } from '@tanstack/react-query'
 import { ArrowLeftIcon, AudioLinesIcon, CaptionsIcon, InfoIcon, LoaderIcon, SkipForwardIcon } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { languageName, trackLabel, type Playback, type PlaybackMode } from 'sceniter-shared'
+import {
+  escalateMode,
+  keepaliveUrl,
+  languageName,
+  shouldSeekTo,
+  stopUrlFromVariant,
+  trackLabel,
+  WatchMeter,
+  KEEPALIVE_MS,
+  NEXT_COUNTDOWN,
+  RESUME_AHEAD,
+  SAVE_INTERVAL_MS,
+  type Playback,
+  type PlaybackMode,
+} from 'sceniter-shared'
 import { Button } from 'core-web/src/components/ui/button'
 import {
   DropdownMenu,
@@ -15,23 +29,6 @@ import {
 import { cn } from 'core-web/src/lib/utils'
 import { saveProgress, usePlayback } from '@/api/hooks'
 import { detectProfile, deviceId, hasNativeHls } from './profile'
-
-/** Jak často se během přehrávání ukládá pozice. */
-const SAVE_INTERVAL_MS = 10_000
-/** Větší skok v čase mezi dvěma timeupdate je přetočení, ne sledování. */
-const MAX_TIME_GAP = 3
-/** Odpočet před automatickým spuštěním dalšího dílu. */
-const NEXT_COUNTDOWN = 10
-/**
- * Jak často přehrávač serveru hlásí, že převod pořád potřebuje. Musí být
- * kratší než TRANSCODE_IDLE_SECONDS (výchozí 60 s, minimum 10 s).
- */
-const KEEPALIVE_MS = 20_000
-/** Pořadí režimů: když přehrání selže, zkusí se dražší. */
-const ESCALATION: PlaybackMode[] = ['direct', 'remux', 'transcode']
-
-/** Kolik sekund za místem pokračování musí být hotovo, než se na něj skočí. */
-const RESUME_AHEAD = 6
 
 type HlsInstance = import('hls.js').default
 
@@ -86,8 +83,7 @@ export function VideoPlayer({
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const seekTo = useRef<number | undefined>(startAt)
-  const lastTime = useRef<number | null>(null)
-  const watched = useRef(0)
+  const meter = useRef(new WatchMeter())
   const lastSave = useRef(0)
   // Aktuální rozhodnutí pro obsluhy událostí (ukládání pozice, eskalace).
   const pbRef = useRef<Playback | undefined>(pb)
@@ -102,8 +98,7 @@ export function VideoPlayer({
       const video = videoRef.current
       const current = pbRef.current
       if (!video || !current || !Number.isFinite(video.currentTime)) return Promise.resolve()
-      const secs = Math.floor(watched.current)
-      watched.current -= secs
+      const secs = meter.current.take()
       lastSave.current = Date.now()
       const duration = current.duration_sec || (Number.isFinite(video.duration) ? video.duration : undefined)
       return saveProgress(
@@ -154,9 +149,8 @@ export function VideoPlayer({
 
   const escalate = useCallback(
     (from: PlaybackMode) => {
-      const i = ESCALATION.indexOf(from === 'transcode_audio' ? 'remux' : from)
-      const nextMode = ESCALATION[i + 1]
-      if (!nextMode || !pbRef.current?.transcoding_available) {
+      const nextMode = escalateMode(from, pbRef.current?.transcoding_available ?? false)
+      if (!nextMode) {
         setFailure(t('video.player.failed'))
         return
       }
@@ -183,7 +177,7 @@ export function VideoPlayer({
     }
     const onMeta = () => {
       const at = seekTo.current
-      if (!at || at <= 0 || at >= (pb.duration_sec ?? Infinity) - 5) {
+      if (!shouldSeekTo(at, pb.duration_sec)) {
         seekTo.current = undefined
         play()
         return
@@ -216,8 +210,7 @@ export function VideoPlayer({
     // převod po době nečinnosti smazal – proto pravidelný keepalive.
     let keepalive: number | undefined
     if (pb.hls) {
-      const u = new URL(pb.url, window.location.origin)
-      const keepUrl = `${u.pathname.replace(/master\.m3u8$/, 'keepalive')}?t=${encodeURIComponent(u.searchParams.get('t') ?? '')}`
+      const keepUrl = keepaliveUrl(pb.url)
       keepalive = window.setInterval(() => {
         void fetch(keepUrl, { method: 'POST' })
           .then((res) => {
@@ -243,7 +236,7 @@ export function VideoPlayer({
         let mediaRecovered = false
         let restarted = false
         h.on(Hls.Events.MANIFEST_PARSED, () => {
-          stopUrl = h.levels[0]?.uri?.replace(/\/index\.m3u8\?/, '/stop?')
+          stopUrl = stopUrlFromVariant(h.levels[0]?.uri)
         })
         h.on(Hls.Events.ERROR, (_e, data) => {
           if (!data.fatal) return
@@ -327,12 +320,7 @@ export function VideoPlayer({
   function onTimeUpdate() {
     const video = videoRef.current
     if (!video) return
-    const now = video.currentTime
-    if (lastTime.current !== null && !video.paused) {
-      const delta = now - lastTime.current
-      if (delta > 0 && delta < MAX_TIME_GAP) watched.current += delta
-    }
-    lastTime.current = now
+    meter.current.tick(video.currentTime, !video.paused)
     if (Date.now() - lastSave.current > SAVE_INTERVAL_MS) void save()
   }
 
@@ -384,9 +372,7 @@ export function VideoPlayer({
         playsInline
         crossOrigin="anonymous"
         onTimeUpdate={onTimeUpdate}
-        onSeeking={() => {
-          lastTime.current = null
-        }}
+        onSeeking={() => meter.current.reset()}
         onPause={() => {
           void save()
           setChrome(true)
