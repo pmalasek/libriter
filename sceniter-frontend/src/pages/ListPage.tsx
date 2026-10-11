@@ -18,14 +18,20 @@ import { SORT_DEFAULT_DIR, SORTS, type Sort } from '@/lib/sort'
 
 /**
  * Stav filtrů v adrese (?q=&genre=&sort=&dir=) – přežije reload i zpět.
- * Výchozí hodnoty (název, přirozený směr klíče) se do adresy nepíšou.
+ * Řazení se navíc ukládá (per knihovna, resp. všechny filmy/seriály), aby se
+ * výpis příště otevřel stejně: adresa > uložené > výchozí (název, přirozený
+ * směr klíče). Odkaz s ?sort= (třeba z Domů) uložené nepřepíše.
  */
-function useListParams() {
+function useListParams(scope: string) {
   const [params, setParams] = useSearchParams()
+  const [savedSort, saveSort] = usePersistedChoice<Sort>(`sceniter.sort.${scope}`, 'title', SORTS)
+  const [savedDir, saveDir] = usePersistedChoice<SortDir>(`sceniter.sortDir.${scope}`, SORT_DEFAULT_DIR[savedSort], SORT_DIRS)
   const sortParam = params.get('sort') as Sort | null
-  const sort: Sort = sortParam && (SORTS as readonly string[]).includes(sortParam) ? sortParam : 'title'
+  const sortFromUrl = sortParam && (SORTS as readonly string[]).includes(sortParam) ? sortParam : null
+  const sort: Sort = sortFromUrl ?? savedSort
   const dirParam = params.get('dir') as SortDir | null
-  const dir: SortDir = dirParam && (SORT_DIRS as readonly string[]).includes(dirParam) ? dirParam : SORT_DEFAULT_DIR[sort]
+  const dir: SortDir =
+    dirParam && (SORT_DIRS as readonly string[]).includes(dirParam) ? dirParam : sortFromUrl ? SORT_DEFAULT_DIR[sort] : savedDir
   const update = (values: Record<string, string>) =>
     setParams(
       (p) => {
@@ -45,8 +51,15 @@ function useListParams() {
     setQuery: (q: string) => update({ q }),
     setGenre: (genre: string) => update({ genre }),
     // Změna klíče vrátí jeho přirozený směr (nejnovější první u data přidání).
-    setSort: (key: Sort) => update({ sort: key === 'title' ? '' : key, dir: '' }),
-    setDir: (d: SortDir) => update({ dir: d === SORT_DEFAULT_DIR[sort] ? '' : d }),
+    setSort: (key: Sort) => {
+      saveSort(key)
+      saveDir(SORT_DEFAULT_DIR[key])
+      update({ sort: key === 'title' ? '' : key, dir: '' })
+    },
+    setDir: (d: SortDir) => {
+      saveDir(d)
+      update({ dir: d === SORT_DEFAULT_DIR[sort] ? '' : d })
+    },
   }
 }
 
@@ -70,7 +83,7 @@ function Toolbar({ list, view, onView }: { list: ReturnType<typeof useListParams
 
 function MovieList({ title, library = '' }: { title: string; library?: string }) {
   const { t } = useTranslation()
-  const list = useListParams()
+  const list = useListParams(library || 'movies')
   const [view, setView] = usePersistedChoice<ViewMode>('movies.view', 'tiles', VIEW_MODES)
   // Hledání se pošle až po chvíli klidu, ne po každé klávese.
   const query = useDebouncedValue(list.q.trim())
@@ -102,7 +115,7 @@ function MovieList({ title, library = '' }: { title: string; library?: string })
 
 function ShowList({ title, library = '' }: { title: string; library?: string }) {
   const { t } = useTranslation()
-  const list = useListParams()
+  const list = useListParams(library || 'shows')
   const [view, setView] = usePersistedChoice<ViewMode>('shows.view', 'tiles', VIEW_MODES)
   const query = useDebouncedValue(list.q.trim())
   const shows = useShows({ library, q: query, genre: list.genre, sort: list.sort, dir: list.dir })

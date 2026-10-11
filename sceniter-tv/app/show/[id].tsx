@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, FlatList, StyleSheet, TVFocusGuideView, View } from 'react-native'
+import { ActivityIndicator, Dimensions, FlatList, StyleSheet, TVFocusGuideView, View } from 'react-native'
 import { useLocalSearchParams } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { PlayIcon } from 'lucide-react-native'
@@ -29,6 +29,16 @@ import { useCachedTitle } from '@/lib/summaryCache'
 import { backdropImage, episodeShort, metaLine, posterImage, wideImage } from '@/lib/titles'
 import { card, colors, px, safe } from '@/theme'
 
+/** Mřížka dílů: čtyři sloupce širokých karet přes celou šířku mezi bezpečnými okraji. */
+const EP_COLUMNS = 4
+const EP_W = Math.floor((Dimensions.get('window').width - safe.x * 2 - card.gap * (EP_COLUMNS - 1)) / EP_COLUMNS)
+
+function chunk<T>(xs: T[], n: number): T[][] {
+  const rows: T[][] = []
+  for (let i = 0; i < xs.length; i += n) rows.push(xs.slice(i, i + n))
+  return rows
+}
+
 function seasonName(s: SeasonInfo): string {
   return s.title || (s.number === 0 ? tr('video.detail.specials') : tr('video.detail.season', { number: s.number }))
 }
@@ -45,14 +55,22 @@ function playEpisode(show: ShowDetail, e: EpisodeWithProgress, fromStart = false
 }
 
 export default function ShowScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>()
+  // episode/season: z přehrávače – otevřít řadu a zaměřit hraný díl.
+  const { id, episode: episodeParam, season: seasonParam } = useLocalSearchParams<{ id: string; episode?: string; season?: string }>()
   const { t } = useTranslation()
   const show = useShow(id)
   const similar = useSimilar('show', id)
   const cached = useCachedTitle('show', id)
   const prefetchPlayback = usePrefetchPlayback()
   const s = show.data
-  const [season, setSeason] = useState<number | undefined>()
+  const [season, setSeason] = useState<number | undefined>(() => (seasonParam ? Number(seasonParam) : undefined))
+  // Díl, který má dostat fokus (jen jednou – po zaměření se zapomene).
+  const [focusEpisode, setFocusEpisode] = useState(episodeParam)
+  useEffect(() => {
+    if (!episodeParam) return
+    setFocusEpisode(episodeParam)
+    if (seasonParam) setSeason(Number(seasonParam))
+  }, [episodeParam, seasonParam])
   // Přejetí fokusem přes řady přepne až po chvíli klidu – jinak by každá
   // řada, přes kterou fokus jen projel, spustila načtení a překreslení.
   const seasonTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
@@ -89,6 +107,7 @@ export default function ShowScreen() {
   const resumeNext = next && canResume(next.progress)
   const cast = [...creditsWithRole(s.credits, 'creator'), ...creditsWithRole(s.credits, 'cast')].slice(0, 20)
   const upNextIndex = episodes.data?.episodes.findIndex((e) => e.id === next?.id) ?? -1
+  const currentSeason = s.seasons.find((x) => x.number === season)
 
   return (
     <DetailLayout
@@ -133,36 +152,53 @@ export default function ShowScreen() {
         </TVFocusGuideView>
       ) : null}
 
-      <View style={{ minHeight: card.wideH + px(160), opacity: episodes.isPlaceholderData ? 0.6 : 1 }}>
+      <View style={[styles.episodes, { opacity: episodes.isPlaceholderData ? 0.6 : 1 }]}>
+        {currentSeason ? (
+          <T variant="section" style={styles.episodesTitle}>
+            {`${seasonName(currentSeason)}  ·  ${t('video.shows.episodes', { count: currentSeason.episode_count })}`}
+          </T>
+        ) : null}
         {episodes.data ? (
-          <Row<EpisodeWithProgress>
-            key={episodes.data.number}
-            items={episodes.data.episodes}
-            itemWidth={card.wideW}
-            keyOf={(e) => e.id}
-            render={(e, i) => (
-              <View>
-                <WideCard
-                  title={e.title || t('video.detail.episode', { number: e.number })}
-                  subtitle={[episodeCode(e.season, e.number), e.duration_sec ? formatDuration(e.duration_sec) : null, e.progress?.completed ? t('video.detail.watched') : null]
-                    .filter(Boolean)
-                    .join(' · ')}
-                  image={wideImage(e.still_path, e.created_at) ?? wideImage(s.backdrop_path, s.updated_at)}
-                  progress={e.progress?.completed ? 0 : progressRatio(e.progress, e.duration_sec)}
-                  hasTVPreferredFocus={!next?.media_id && i === Math.max(0, upNextIndex)}
-                  onFocus={() => prefetchPlayback(e.media_id)}
-                  onPress={() => playEpisode(s, e)}
-                />
-                {e.overview ? (
-                  <T variant="small" faint numberOfLines={3} style={styles.epOverview}>
-                    {e.overview}
-                  </T>
-                ) : null}
+          // Obyčejné řádky ve ScrollView detailu – seriál o stovce dílů se
+          // posouvá svisle a šipky nahoru/dolů jdou po řádcích.
+          <TVFocusGuideView autoFocus key={episodes.data.number}>
+            {chunk(episodes.data.episodes, EP_COLUMNS).map((row, r) => (
+              <View key={r} style={styles.epRow}>
+                {row.map((e, c) => {
+                  const i = r * EP_COLUMNS + c
+                  const preferred = focusEpisode ? e.id === focusEpisode : !next?.media_id && i === Math.max(0, upNextIndex)
+                  return (
+                    <View key={e.id} style={{ width: EP_W }}>
+                      <WideCard
+                        width={EP_W}
+                        title={e.title || t('video.detail.episode', { number: e.number })}
+                        subtitle={[episodeCode(e.season, e.number), e.duration_sec ? formatDuration(e.duration_sec) : null, e.progress?.completed ? t('video.detail.watched') : null]
+                          .filter(Boolean)
+                          .join(' · ')}
+                        image={wideImage(e.still_path, e.created_at) ?? wideImage(s.backdrop_path, s.updated_at)}
+                        progress={e.progress?.completed ? 0 : progressRatio(e.progress, e.duration_sec)}
+                        hasTVPreferredFocus={preferred}
+                        onFocus={() => {
+                          if (focusEpisode && e.id === focusEpisode) setFocusEpisode(undefined)
+                          prefetchPlayback(e.media_id)
+                        }}
+                        onPress={() => playEpisode(s, e)}
+                      />
+                      {e.overview ? (
+                        <T variant="small" faint numberOfLines={2} style={styles.epOverview}>
+                          {e.overview}
+                        </T>
+                      ) : null}
+                    </View>
+                  )
+                })}
               </View>
-            )}
-          />
+            ))}
+          </TVFocusGuideView>
         ) : (
-          <Loading />
+          <View style={{ minHeight: px(400) }}>
+            <Loading />
+          </View>
         )}
       </View>
 
@@ -196,5 +232,9 @@ export default function ShowScreen() {
 const styles = StyleSheet.create({
   seasons: { marginBottom: px(8) },
   seasonsContent: { paddingHorizontal: safe.x, gap: px(16), paddingVertical: px(12) },
-  epOverview: { width: card.wideW, marginTop: px(14) },
+  episodes: { paddingHorizontal: safe.x, marginBottom: px(44) },
+  episodesTitle: { marginBottom: px(18) },
+  // Svislá mezera i na zvětšenou zaměřenou kartu.
+  epRow: { flexDirection: 'row', gap: card.gap, paddingVertical: px(16) },
+  epOverview: { marginTop: px(14) },
 })

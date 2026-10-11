@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, AppState, BackHandler, Platform, StyleSheet, View, useTVEventHandler, type HWEvent } from 'react-native'
-import { router, useLocalSearchParams } from 'expo-router'
+import { router, useLocalSearchParams, useNavigation } from 'expo-router'
 import { useEventListener } from 'expo'
 import { VideoView, useVideoPlayer } from 'expo-video'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -20,6 +20,7 @@ import {
 import { useEpisode, usePrefetchEpisode, usePrefetchPlayback } from '@/api/queries'
 import { Button } from '@/components/Button'
 import { T } from '@/components/T'
+import { goToShowEpisode } from '@/lib/nav'
 import { usePrefs } from '@/lib/prefs'
 import { deviceId } from '@/lib/storage'
 import { episodeShort } from '@/lib/titles'
@@ -79,6 +80,18 @@ export default function PlayerScreen() {
 
   const episode = useEpisode(episodeId)
   const nextEpisode = episode.data?.next ?? undefined
+  // Detail tohoto seriálu je přímo pod přehrávačem (přišlo se z něj) –
+  // tlačítko Seriál se na něj vrátí místo otevírání nového. Stav zásobníku
+  // (kořenový Stack) se čte až při stisku; useRootNavigationState vrací
+  // obal nad navigátorem, ne jeho cesty.
+  const navigation = useNavigation()
+  const openShow = () => {
+    const e = episode.data?.episode
+    if (!e) return
+    const routes = navigation.getState()?.routes ?? []
+    const below = routes.length >= 2 ? routes[routes.length - 2] : undefined
+    goToShowEpisode(e, below?.name === 'show/[id]' && (below.params as { id?: string } | undefined)?.id === e.show_id)
+  }
   const nextRef = useRef(nextEpisode)
   nextRef.current = nextEpisode
   const prefetchEpisode = usePrefetchEpisode()
@@ -617,6 +630,7 @@ export default function PlayerScreen() {
           onTracks={() => setPanel(true)}
           onRestart={restartEpisode}
           onNext={playNext}
+          onShow={episode.data ? openShow : undefined}
         />
       ) : null}
 

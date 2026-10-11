@@ -399,6 +399,8 @@ export default {
       name: 'By title',
       year: 'By year',
       rating: 'By rating',
+      asc: 'Ascending',
+      desc: 'Descending',
     },
     player: {
       tracks: 'Audio and subtitles',
@@ -406,6 +408,7 @@ export default {
       nextEpisode: 'Next episode · {{episode}}',
       seekHint: 'Hold to skip faster',
       endsAt: 'Ends at {{time}}',
+      showDetail: 'Show',
     },
   },
 }

@@ -22,7 +22,7 @@ export function Loading() {
   return (
     <View style={styles.center}>
       <Animated.View style={{ opacity: pulse }}>
-        <ActivityIndicator size="large" color={colors.textDim} />
+        <ActivityIndicator size="large" color={colors.accent} />
       </Animated.View>
     </View>
   )

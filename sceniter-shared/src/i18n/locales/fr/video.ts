@@ -400,6 +400,8 @@ export default {
       name: 'Par titre',
       year: 'Par année',
       rating: 'Par note',
+      asc: 'Croissant',
+      desc: 'Décroissant',
     },
     player: {
       tracks: 'Audio et sous-titres',
@@ -407,6 +409,7 @@ export default {
       nextEpisode: 'Épisode suivant · {{episode}}',
       seekHint: 'Maintenez pour avancer plus vite',
       endsAt: 'Se termine à {{time}}',
+      showDetail: 'Série',
     },
   },
 }

@@ -1,7 +1,7 @@
 import * as Crypto from 'expo-crypto'
 import * as SecureStore from 'expo-secure-store'
 import { parseSession, serializeSession, type Session } from 'sceniter-shared'
-import { isSort, type Sort } from './sort'
+import { isSort, isSortDir, type Sort, type SortDir } from './sort'
 
 // Token je klíč k celé knihovně, proto SecureStore (Keychain / Keystore).
 // Ostatní jsou drobná nastavení – SecureStore stačí i na ně a TV aplikace
@@ -82,16 +82,20 @@ export interface Prefs {
   subtitleSize: SubtitleSize
   /** Zvolené řazení podle ID knihovny. */
   librarySort: Record<string, Sort>
+  /** Směr řazení podle ID knihovny; chybí = přirozený směr klíče (SORT_DIR). */
+  librarySortDir: Record<string, SortDir>
 }
 
-export const defaultPrefs: Prefs = { subtitles: 'off', subtitleSize: 'medium', librarySort: {} }
+export const defaultPrefs: Prefs = { subtitles: 'off', subtitleSize: 'medium', librarySort: {}, librarySortDir: {} }
 
 export async function loadPrefs(): Promise<Prefs> {
   try {
     const stored = JSON.parse((await get(KEYS.prefs)) ?? '{}') as Partial<Prefs>
     const librarySort: Record<string, Sort> = {}
     for (const [id, sort] of Object.entries(stored.librarySort ?? {})) if (isSort(sort)) librarySort[id] = sort
-    return { ...defaultPrefs, ...stored, librarySort }
+    const librarySortDir: Record<string, SortDir> = {}
+    for (const [id, dir] of Object.entries(stored.librarySortDir ?? {})) if (isSortDir(dir)) librarySortDir[id] = dir
+    return { ...defaultPrefs, ...stored, librarySort, librarySortDir }
   } catch {
     return defaultPrefs
   }

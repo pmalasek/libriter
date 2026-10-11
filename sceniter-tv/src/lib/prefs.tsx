@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { DEFAULT_SORT, type Sort } from './sort'
+import { DEFAULT_SORT, SORT_DIR, type Sort, type SortDir } from './sort'
 import { defaultPrefs, loadPrefs, savePrefs, type Prefs } from './storage'
 
 interface PrefsValue {
@@ -16,15 +16,32 @@ export function usePrefs(): PrefsValue {
   return ctx
 }
 
-/** Řazení knihovny zapamatované v televizi (každá knihovna zvlášť). */
-export function useLibrarySort(libraryId: string): [Sort, (s: Sort) => void] {
+export interface LibrarySort {
+  sort: Sort
+  dir: SortDir
+  /** Změna klíče vrátí jeho přirozený směr (nejnovější první u data přidání). */
+  setSort: (s: Sort) => void
+  setDir: (d: SortDir) => void
+}
+
+/** Řazení knihovny (klíč i směr) zapamatované v televizi – každá knihovna zvlášť. */
+export function useLibrarySort(libraryId: string): LibrarySort {
   const { prefs, update } = usePrefs()
   const sort = prefs.librarySort[libraryId] ?? DEFAULT_SORT
-  const set = useCallback(
-    (s: Sort) => update((p) => ({ librarySort: { ...p.librarySort, [libraryId]: s } })),
+  const dir = prefs.librarySortDir[libraryId] ?? SORT_DIR[sort]
+  const setSort = useCallback(
+    (s: Sort) =>
+      update((p) => {
+        const { [libraryId]: _, ...librarySortDir } = p.librarySortDir
+        return { librarySort: { ...p.librarySort, [libraryId]: s }, librarySortDir }
+      }),
     [libraryId, update],
   )
-  return [sort, set]
+  const setDir = useCallback(
+    (d: SortDir) => update((p) => ({ librarySortDir: { ...p.librarySortDir, [libraryId]: d } })),
+    [libraryId, update],
+  )
+  return useMemo(() => ({ sort, dir, setSort, setDir }), [sort, dir, setSort, setDir])
 }
 
 /** Nastavení uložená v televizi (titulky, řazení knihoven). */

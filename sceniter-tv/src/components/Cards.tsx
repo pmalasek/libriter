@@ -3,6 +3,9 @@ import { StyleSheet, View } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { card, colors, px, radius } from '@/theme'
+
+/** Přesah měděného hala kolem zaměřené karty. */
+const HALO = px(10)
 import { Focusable } from './Focusable'
 import { ProgressBar } from './ProgressBar'
 import { T } from './T'
@@ -34,13 +37,16 @@ export const PosterCard = memo(function PosterCard({ title, subtitle, image, pro
     <Focusable onPress={onPress} onFocus={onFocus} hasTVPreferredFocus={hasTVPreferredFocus} style={{ width: card.posterW }}>
       {(focused) => (
         <>
-          <View style={[styles.poster, focused && styles.focused]}>
-            {image ? (
-              <Image source={image} style={StyleSheet.absoluteFill} contentFit="cover" transition={180} cachePolicy="memory-disk" recyclingKey={image} />
-            ) : (
-              <Placeholder title={title} />
-            )}
-            {progress ? <ProgressBar ratio={progress} style={styles.cardProgress} light /> : null}
+          <View>
+            {focused ? <View style={[styles.halo, { borderRadius: radius.card + HALO }]} /> : null}
+            <View style={[styles.poster, focused && styles.focused]}>
+              {image ? (
+                <Image source={image} style={StyleSheet.absoluteFill} contentFit="cover" transition={180} cachePolicy="memory-disk" recyclingKey={image} />
+              ) : (
+                <Placeholder title={title} />
+              )}
+              {progress ? <ProgressBar ratio={progress} style={styles.cardProgress} light /> : null}
+            </View>
           </View>
           <View style={styles.caption}>
             <T variant="caption" numberOfLines={1} dim={!focused}>
@@ -58,28 +64,32 @@ export const PosterCard = memo(function PosterCard({ title, subtitle, image, pro
   )
 })
 
-/** Široká karta 16:9 – pokračovat ve sledování, díly seriálu. */
-export const WideCard = memo(function WideCard({ title, subtitle, image, progress, onPress, onFocus, hasTVPreferredFocus }: CardProps) {
+/** Široká karta 16:9 – pokračovat ve sledování, díly seriálu. `width` jen pro mřížku dílů. */
+export const WideCard = memo(function WideCard({ title, subtitle, image, progress, onPress, onFocus, hasTVPreferredFocus, width = card.wideW }: CardProps & { width?: number }) {
+  const size = width === card.wideW ? undefined : { width, height: Math.round((width * 9) / 16) }
   return (
-    <Focusable onPress={onPress} onFocus={onFocus} hasTVPreferredFocus={hasTVPreferredFocus} style={{ width: card.wideW }}>
+    <Focusable onPress={onPress} onFocus={onFocus} hasTVPreferredFocus={hasTVPreferredFocus} style={{ width }}>
       {(focused) => (
-        <View style={[styles.wide, focused && styles.focused]}>
-          {image ? (
-            <Image source={image} style={StyleSheet.absoluteFill} contentFit="cover" transition={180} cachePolicy="memory-disk" recyclingKey={image} />
-          ) : (
-            <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceHi }]} />
-          )}
-          <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={styles.wideShade} />
-          <View style={styles.wideText}>
-            <T variant="bodyMedium" numberOfLines={1}>
-              {title}
-            </T>
-            {subtitle ? (
-              <T variant="small" dim numberOfLines={1}>
-                {subtitle}
+        <View>
+          {focused ? <View style={[styles.halo, { borderRadius: radius.card + HALO }]} /> : null}
+          <View style={[styles.wide, size, focused && styles.focused]}>
+            {image ? (
+              <Image source={image} style={StyleSheet.absoluteFill} contentFit="cover" transition={180} cachePolicy="memory-disk" recyclingKey={image} />
+            ) : (
+              <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceHi }]} />
+            )}
+            <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={styles.wideShade} />
+            <View style={styles.wideText}>
+              <T variant="bodyMedium" numberOfLines={1}>
+                {title}
               </T>
-            ) : null}
-            {progress ? <ProgressBar ratio={progress} style={{ marginTop: px(10) }} light /> : null}
+              {subtitle ? (
+                <T variant="small" dim numberOfLines={1}>
+                  {subtitle}
+                </T>
+              ) : null}
+              {progress ? <ProgressBar ratio={progress} style={{ marginTop: px(10) }} light /> : null}
+            </View>
           </View>
         </View>
       )}
@@ -94,7 +104,9 @@ export const PersonCard = memo(function PersonCard({ title, subtitle, image, onP
     <Focusable onPress={onPress} style={{ width: px(200), alignItems: 'center' }}>
       {(focused) => (
         <>
-          <View style={[{ width: size, height: size, borderRadius: size / 2 }, styles.person, focused && styles.focused]}>
+          <View>
+            {focused ? <View style={[styles.halo, { borderRadius: size / 2 + HALO }]} /> : null}
+            <View style={[{ width: size, height: size, borderRadius: size / 2 }, styles.person, focused && styles.focused]}>
             {image ? (
               <Image source={image} style={StyleSheet.absoluteFill} contentFit="cover" transition={180} cachePolicy="memory-disk" />
             ) : (
@@ -102,6 +114,7 @@ export const PersonCard = memo(function PersonCard({ title, subtitle, image, onP
                 {title.slice(0, 1)}
               </T>
             )}
+            </View>
           </View>
           <T variant="caption" numberOfLines={1} dim={!focused} style={{ marginTop: px(14), textAlign: 'center' }}>
             {title}
@@ -125,7 +138,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surface,
     borderWidth: px(4),
-    borderColor: 'transparent',
+    borderColor: colors.edge,
   },
   wide: {
     width: card.wideW,
@@ -134,7 +147,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: colors.surface,
     borderWidth: px(4),
-    borderColor: 'transparent',
+    borderColor: colors.edge,
   },
   person: {
     overflow: 'hidden',
@@ -142,8 +155,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: px(4),
-    borderColor: 'transparent',
+    borderColor: colors.edge,
   },
+  // Měkké halo v akcentu pod bílým rámečkem – Android stínům barvu nedá.
+  halo: { position: 'absolute', top: -HALO, left: -HALO, right: -HALO, bottom: -HALO, backgroundColor: colors.accentSoft },
   focused: {
     borderColor: colors.focus,
     shadowColor: '#000',

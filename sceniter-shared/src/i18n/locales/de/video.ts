@@ -399,6 +399,8 @@ export default {
       name: 'Nach Titel',
       year: 'Nach Jahr',
       rating: 'Nach Bewertung',
+      asc: 'Aufsteigend',
+      desc: 'Absteigend',
     },
     player: {
       tracks: 'Audio und Untertitel',
@@ -406,6 +408,7 @@ export default {
       nextEpisode: 'Nächste Folge · {{episode}}',
       seekHint: 'Gedrückt halten, um schneller zu spulen',
       endsAt: 'Endet um {{time}}',
+      showDetail: 'Serie',
     },
   },
 }

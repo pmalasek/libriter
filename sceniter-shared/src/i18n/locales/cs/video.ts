@@ -413,6 +413,8 @@ export default {
       name: 'Podle názvu',
       year: 'Podle roku',
       rating: 'Podle hodnocení',
+      asc: 'Vzestupně',
+      desc: 'Sestupně',
     },
     player: {
       tracks: 'Zvuk a titulky',
@@ -420,6 +422,7 @@ export default {
       nextEpisode: 'Další díl · {{episode}}',
       seekHint: 'Podržením se přetáčí rychleji',
       endsAt: 'Skončí v {{time}}',
+      showDetail: 'Seriál',
     },
   },
 }

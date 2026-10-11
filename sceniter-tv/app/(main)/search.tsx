@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ComponentRef } from 'react'
 import { ScrollView, StyleSheet, TextInput, TVFocusGuideView, View } from 'react-native'
+import { useLocalSearchParams } from 'expo-router'
 import { useTranslation } from 'react-i18next'
 import { SearchIcon } from 'lucide-react-native'
 import { profileUrl, type Movie, type Person, type Show } from 'sceniter-shared'
@@ -14,6 +15,16 @@ import { card, colors, fonts, px, radius, safe } from '@/theme'
 
 export default function SearchScreen() {
   const { t } = useTranslation()
+  // Otevřeno tlačítkem Hledat v knihovně: fokus rovnou do pole (otevře klávesnici).
+  const { focus } = useLocalSearchParams<{ focus?: string }>()
+  const inputRef = useRef<TextInput>(null)
+  const focusConsumed = useRef(false)
+  useEffect(() => {
+    if (focus !== '1' || focusConsumed.current) return
+    focusConsumed.current = true
+    const timer = setTimeout(() => inputRef.current?.focus(), 50)
+    return () => clearTimeout(timer)
+  }, [focus])
   const [text, setText] = useState('')
   const [query, setQuery] = useState('')
   const [inputFocused, setInputFocused] = useState(false)
@@ -35,6 +46,7 @@ export default function SearchScreen() {
       <View style={[styles.inputRow, inputFocused && styles.inputRowFocused]}>
         <SearchIcon size={px(40)} color={inputFocused ? colors.accent : colors.textDim} />
         <TextInput
+          ref={inputRef}
           value={text}
           onChangeText={setText}
           placeholder={t('video.search.placeholder')}

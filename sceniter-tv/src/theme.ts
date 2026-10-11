@@ -12,20 +12,35 @@ export function px(n: number): number {
   return Math.round(n * scale)
 }
 
+/**
+ * Paleta „měď na petroleji“: tmavý podklad s petrolejovým nádechem, teplý
+ * měděný akcent, bílý fokus. Teplý akcent na chladném podkladu drží kontrast
+ * i s pestrými plakáty a ladí s webem (teal + oranžová).
+ */
 export const colors = {
-  bg: '#0B0B0F',
-  surface: '#16171D',
-  surfaceHi: '#20222A',
-  text: '#F4F7F7',
-  textDim: 'rgba(244,247,247,0.66)',
-  textFaint: 'rgba(244,247,247,0.42)',
-  accent: '#14A3A0',
-  accentDeep: '#0B7A7A',
+  bg: '#0D1216',
+  surface: '#171E23',
+  surfaceHi: '#212A31',
+  text: '#F7F3EC',
+  textDim: 'rgba(247,243,236,0.68)',
+  textFaint: 'rgba(247,243,236,0.44)',
+  accent: '#E59A4A',
+  accentDeep: '#B5702A',
+  /** Halo kolem zaměřené karty, vybrané pozadí. */
+  accentSoft: 'rgba(229,154,74,0.2)',
   focus: '#FFFFFF',
-  onFocus: '#0B0B0F',
+  onFocus: '#0D1216',
   danger: '#FF6B6B',
-  scrim: 'rgba(11,11,15,0.92)',
+  scrim: 'rgba(13,18,22,0.92)',
+  /** Jemná světlá hrana karet a panelů, ať se neslévají s pozadím. */
+  edge: 'rgba(255,255,255,0.08)',
+  /** Skvrny záře v pozadí (Glow): petrolejová a měděná – krytí určuje Glow. */
+  glowCool: '#26707A',
+  glowWarm: '#E59A4A',
 }
+
+/** Barva pozadí s průhledností – přechody nad obrázky a menu. */
+export const bgAlpha = (a: number) => `rgba(13,18,22,${a})`
 
 export const fonts = {
   heading: 'BricolageGrotesque_700Bold',

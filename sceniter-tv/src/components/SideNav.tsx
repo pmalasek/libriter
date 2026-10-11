@@ -3,7 +3,7 @@ import { Animated, ScrollView, StyleSheet, TVFocusGuideView, View } from 'react-
 import { LinearGradient } from 'expo-linear-gradient'
 import { ClapperboardIcon } from 'lucide-react-native'
 import { useNavItems, type NavKey } from '@/lib/navItems'
-import { colors, fonts, px, radius } from '@/theme'
+import { bgAlpha, colors, fonts, px, radius } from '@/theme'
 import { Focusable } from './Focusable'
 
 export const NAV_COLLAPSED = px(176)
@@ -94,7 +94,7 @@ export const SideNav = forwardRef<SideNavHandle, SideNavProps>(
     return (
       <Animated.View style={[styles.nav, { width }]}>
         <LinearGradient
-          colors={open ? ['rgba(11,11,15,0.98)', 'rgba(11,11,15,0.92)'] : ['rgba(11,11,15,0.85)', 'rgba(11,11,15,0.35)']}
+          colors={open ? [bgAlpha(0.98), bgAlpha(0.92)] : [bgAlpha(0.85), bgAlpha(0.35)]}
           start={{ x: 0, y: 0.5 }}
           end={{ x: 1, y: 0.5 }}
           style={StyleSheet.absoluteFill}

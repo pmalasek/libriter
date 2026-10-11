@@ -46,7 +46,7 @@ export function SortPicker({ value, onSelect, onClose }: { value: Sort; onSelect
 
 const styles = StyleSheet.create({
   scrim: { ...StyleSheet.absoluteFill, zIndex: 20, backgroundColor: colors.scrim, alignItems: 'center', justifyContent: 'center' },
-  panel: { width: px(620), padding: px(44), borderRadius: radius.card, backgroundColor: colors.surface },
+  panel: { width: px(620), padding: px(44), borderRadius: radius.card, backgroundColor: colors.surface, borderWidth: px(2), borderColor: colors.edge },
   title: { marginBottom: px(28) },
   options: { gap: px(14) },
 })

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { StyleSheet, View, useTVEventHandler } from 'react-native'
 import { Slot, router, usePathname } from 'expo-router'
+import { Glow } from '@/components/Glow'
 import { NAV_COLLAPSED, SideNav, type SideNavHandle } from '@/components/SideNav'
 import { setSectionBack } from '@/lib/nav'
 import { pathOf, sectionOf, type NavKey } from '@/lib/navItems'
@@ -74,6 +75,8 @@ export default function MainLayout() {
 
   return (
     <View style={styles.root}>
+      {/* Domů má backdrop přes celou plochu; knihovna si záři kreslí sama nad svým backdropem. */}
+      {current !== 'home' && !current.startsWith('lib:') ? <Glow /> : null}
       {/* Obyčejný View, ne TVFocusGuideView: guide se Androidu hlásí jako jeden
           prvek přes celou plochu, a na Domů (obsah i pod menu) by šipka vpravo
           z menu nenašla cíl. requestTVFocus na View zaměří první prvek uvnitř;

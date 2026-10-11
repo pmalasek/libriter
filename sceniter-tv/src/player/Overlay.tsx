@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useRef, useState } from 'react'
 import { Animated, Pressable, ScrollView, StyleSheet, TVFocusGuideView, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useTranslation } from 'react-i18next'
-import { PauseIcon, PlayIcon, RotateCcwIcon, SkipForwardIcon, SubtitlesIcon } from 'lucide-react-native'
+import { PauseIcon, PlayIcon, RotateCcwIcon, SkipForwardIcon, SubtitlesIcon, TvIcon } from 'lucide-react-native'
 import { formatClock, languageName, trackLabel, type Playback } from 'sceniter-shared'
 import { Button } from '@/components/Button'
 import { T } from '@/components/T'
@@ -38,8 +38,10 @@ export const Chrome = forwardRef<View, {
   onTracks: () => void
   onRestart: () => void
   onNext: () => void
+  /** Hraje díl seriálu: skok na detail seriálu se zaměřeným dílem. */
+  onShow?: () => void
 }>(function Chrome(
-  { title, subtitle, time, duration, available, scrubTo, paused, visible, nextLabel, focusButtons, onSeekFocus, onButtonFocus, onTracks, onRestart, onNext },
+  { title, subtitle, time, duration, available, scrubTo, paused, visible, nextLabel, focusButtons, onSeekFocus, onButtonFocus, onTracks, onRestart, onNext, onShow },
   seekRef,
 ) {
   const { t, i18n } = useTranslation()
@@ -119,6 +121,7 @@ export const Chrome = forwardRef<View, {
               onPress={onTracks}
             />
             <Button icon={RotateCcwIcon} label={t('video.tv.player.restart')} scale={false} onFocus={onButtonFocus} onPress={onRestart} />
+            {onShow ? <Button icon={TvIcon} label={t('video.tv.player.showDetail')} scale={false} onFocus={onButtonFocus} onPress={onShow} /> : null}
             {nextLabel ? (
               <Button
                 icon={SkipForwardIcon}
@@ -258,7 +261,9 @@ const styles = StyleSheet.create({
     bottom: px(200),
     padding: px(36),
     borderRadius: radius.card,
-    backgroundColor: 'rgba(22,23,29,0.94)',
+    backgroundColor: 'rgba(23,30,35,0.94)',
+    borderWidth: px(2),
+    borderColor: colors.edge,
     maxWidth: px(900),
   },
 })
