@@ -61,9 +61,10 @@ func (p *Product) Init(d product.Deps) error {
 
 	deps := handler.Deps{
 		Store: store, Library: service.NewLibrary(store), Matcher: matcher, HLS: hls,
-		Libs: service.NewLibraries(store, cfg.VideoRoot, d.Plugins, nil),
-		Subs: stream.NewSubtitles(filepath.Join(cfg.TranscodeRoot, "subs")),
-		Auth: d.Auth, Audit: d.Audit,
+		Images: service.NewTitleImages(store, cfg.ImageRoot),
+		Libs:   service.NewLibraries(store, cfg.VideoRoot, d.Plugins, nil),
+		Subs:   stream.NewSubtitles(filepath.Join(cfg.TranscodeRoot, "subs")),
+		Auth:   d.Auth, Audit: d.Audit,
 		VideoRoot: cfg.VideoRoot, ImageRoot: cfg.ImageRoot, MaxHeight: cfg.TranscodeMaxHeight,
 		Thumbs: d.Thumbs,
 	}

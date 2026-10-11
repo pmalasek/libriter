@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { usePagedList, type PagedList } from 'core-web/src/lib/paged'
 import {
   apiFetch,
+  apiUpload,
   getEpisode,
   getGenres,
   getHome,
@@ -32,6 +33,7 @@ import {
   type SceniterStats,
   type ShowIssue,
   type ShowSummary,
+  type TitleImageKind,
   type TitleKind,
   type TitlePatch,
   type TranscodeSession,
@@ -260,6 +262,26 @@ export function usePatchTitle(kind: TitleKind, id: string) {
   return useMutation({
     mutationFn: (patch: TitlePatch) =>
       apiFetch<void>(`${BASE}/${kind === 'movie' ? 'movies' : 'shows'}/${id}`, { method: 'PATCH', json: patch }),
+    onSuccess: invalidate,
+  })
+}
+
+/** Nahrání vlastního plakátu nebo pozadí (tělo = soubor); obnova metadat ho nepřepíše. */
+export function useUploadTitleImage(kind: TitleKind, id: string) {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: ({ image, file }: { image: TitleImageKind; file: File }) =>
+      apiUpload<void>(`${BASE}/${kind === 'movie' ? 'movies' : 'shows'}/${id}/images/${image}`, file, { method: 'PUT' }),
+    onSuccess: invalidate,
+  })
+}
+
+/** Odebrání vlastního obrázku – vrátí se obrázek ze zdroje metadat, pokud zůstal na disku. */
+export function useRemoveTitleImage(kind: TitleKind, id: string) {
+  const invalidate = useInvalidateAll()
+  return useMutation({
+    mutationFn: (image: TitleImageKind) =>
+      apiFetch<void>(`${BASE}/${kind === 'movie' ? 'movies' : 'shows'}/${id}/images/${image}`, { method: 'DELETE' }),
     onSuccess: invalidate,
   })
 }

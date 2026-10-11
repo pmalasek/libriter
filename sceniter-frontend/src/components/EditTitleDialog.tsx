@@ -1,7 +1,10 @@
+import { Undo2Icon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
-import type { Movie, Show, TitleKind } from 'sceniter-shared'
+import { backdropUrl, posterUrl, type Movie, type Show, type TitleImageKind, type TitleKind } from 'sceniter-shared'
+import { ImageUploadButton } from 'core-web/src/components/ImageUploadButton'
+import { Badge } from 'core-web/src/components/ui/badge'
 import { Button } from 'core-web/src/components/ui/button'
 import {
   Dialog,
@@ -13,9 +16,72 @@ import {
 import { Input } from 'core-web/src/components/ui/input'
 import { Label } from 'core-web/src/components/ui/label'
 import { Textarea } from 'core-web/src/components/ui/textarea'
-import { usePatchTitle } from '@/api/hooks'
+import { usePatchTitle, useRemoveTitleImage, useUploadTitleImage } from '@/api/hooks'
+import { Poster } from './Poster'
 
-/** Ruční úprava názvu, roku a popisu (editor). */
+/** Největší šířka náhledu v dialogu (CSS px) – stáhne se zmenšenina. */
+const PREVIEW_WIDTH = 192
+
+/**
+ * Jeden obrázek titulu (plakát nebo pozadí): náhled, nahrání vlastního
+ * souboru a návrat k obrázku ze zdroje. Ukládá se hned, nezávisle na Uložit.
+ */
+function ImageField({ kind, title, image }: { kind: TitleKind; title: Movie | Show; image: TitleImageKind }) {
+  const { t } = useTranslation()
+  const upload = useUploadTitleImage(kind, title.id)
+  const remove = useRemoveTitleImage(kind, title.id)
+  const busy = upload.isPending || remove.isPending
+  const manual = (image === 'poster' ? title.poster_source : title.backdrop_source) === 'manual'
+  const src = image === 'poster' ? posterUrl(title, PREVIEW_WIDTH) : backdropUrl(title)
+
+  return (
+    <div className="grid gap-2" aria-busy={busy}>
+      <div className="flex items-center gap-2">
+        <span className="text-sm font-medium">{t(image === 'poster' ? 'video.detail.poster' : 'video.detail.backdrop')}</span>
+        {manual ? <Badge variant="secondary">{t('video.detail.customImage')}</Badge> : null}
+      </div>
+      <Poster
+        src={src}
+        title={title.title}
+        kind={kind}
+        year={title.year}
+        aspect={image === 'poster' ? 'poster' : 'still'}
+        className={image === 'poster' ? 'w-28' : 'w-48'}
+      />
+      <div className="flex flex-wrap items-center gap-1">
+        <ImageUploadButton
+          label={t('video.detail.uploadImage')}
+          disabled={busy}
+          onFile={(file) =>
+            upload.mutate(
+              { image, file },
+              { onSuccess: () => toast.success(t('video.detail.imageUploaded')), onError: (err) => toast.error(err.message) },
+            )
+          }
+        />
+        {manual ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            disabled={busy}
+            onClick={() =>
+              remove.mutate(image, {
+                onSuccess: () => toast.success(t('video.detail.imageRestored')),
+                onError: (err) => toast.error(err.message),
+              })
+            }
+          >
+            <Undo2Icon />
+            {t('video.detail.restoreImage')}
+          </Button>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/** Ruční úprava názvu, roku, popisu a obrázků (editor). */
 export function EditTitleDialog({
   kind,
   title,
@@ -50,7 +116,7 @@ export function EditTitleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-xl">
         <form onSubmit={submit} className="grid gap-4">
           <DialogHeader>
             <DialogTitle>{t('video.detail.editTitle')}</DialogTitle>
@@ -71,6 +137,14 @@ export function EditTitleDialog({
             <Label htmlFor="overview">{t('video.detail.overviewLabel')}</Label>
             <Textarea id="overview" rows={5} value={overview} onChange={(e) => setOverview(e.target.value)} />
           </div>
+          <fieldset className="grid gap-3">
+            <legend className="text-sm font-medium">{t('video.detail.images')}</legend>
+            <div className="flex flex-wrap gap-6">
+              <ImageField kind={kind} title={title} image="poster" />
+              <ImageField kind={kind} title={title} image="backdrop" />
+            </div>
+            <p className="text-xs text-muted-foreground">{t('video.detail.imageHint')}</p>
+          </fieldset>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               {t('common.cancel')}

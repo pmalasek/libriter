@@ -1,8 +1,9 @@
 import { memo } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
-import { card, colors, px, radius } from '@/theme'
+import { placeholderGradient, placeholderInitial } from 'sceniter-shared'
+import { card, colors, fonts, px, radius } from '@/theme'
 
 /** Přesah měděného hala kolem zaměřené karty. */
 const HALO = px(10)
@@ -20,13 +21,31 @@ interface CardProps {
   hasTVPreferredFocus?: boolean
 }
 
-/** Náhradní plocha, když titul nemá obrázek – název přímo na kartě. */
-function Placeholder({ title }: { title: string }) {
+/**
+ * Náhradní plocha, když titul nemá obrázek: odstín z názvu (stejný jako na
+ * webu), velké počáteční písmeno jako vodoznak a název uprostřed.
+ */
+function Placeholder({ title, wide }: { title: string; wide?: boolean }) {
+  const initial = placeholderInitial(title)
   return (
     <View style={[StyleSheet.absoluteFill, styles.placeholder]}>
-      <T variant="section" numberOfLines={4} style={{ textAlign: 'center' }}>
-        {title}
-      </T>
+      <LinearGradient
+        colors={placeholderGradient(title)}
+        locations={[0, 0.55, 1]}
+        start={{ x: 0.1, y: 0 }}
+        end={{ x: 0.9, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      {initial ? (
+        <Text style={[styles.placeholderInitial, wide && styles.placeholderInitialWide]} allowFontScaling={false}>
+          {initial}
+        </Text>
+      ) : null}
+      {wide ? null : (
+        <T variant="section" numberOfLines={4} style={styles.placeholderTitle}>
+          {title}
+        </T>
+      )}
     </View>
   )
 }
@@ -76,7 +95,7 @@ export const WideCard = memo(function WideCard({ title, subtitle, image, progres
             {image ? (
               <Image source={image} style={StyleSheet.absoluteFill} contentFit="cover" transition={180} cachePolicy="memory-disk" recyclingKey={image} />
             ) : (
-              <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.surfaceHi }]} />
+              <Placeholder title={title} wide />
             )}
             <LinearGradient colors={['transparent', 'rgba(0,0,0,0.85)']} style={styles.wideShade} />
             <View style={styles.wideText}>
@@ -167,12 +186,20 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: px(12) },
     elevation: 12,
   },
-  placeholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: px(20),
-    backgroundColor: colors.surfaceHi,
+  placeholder: { alignItems: 'center', justifyContent: 'center', padding: px(24), overflow: 'hidden' },
+  // Vodoznak: Text bez lineHeight a s includeFontPadding=false – Android
+  // jinak glyf ořízne podle řádku a z písmene zbudou kusy.
+  placeholderInitial: {
+    position: 'absolute',
+    right: -px(10),
+    bottom: -px(24),
+    fontFamily: fonts.heading,
+    fontSize: px(240),
+    includeFontPadding: false,
+    color: 'rgba(255,255,255,0.1)',
   },
+  placeholderInitialWide: { right: px(16), bottom: -px(44), fontSize: px(210) },
+  placeholderTitle: { textAlign: 'center', color: '#FFFFFF' },
   caption: { marginTop: px(14), gap: px(2) },
   cardProgress: { position: 'absolute', left: px(14), right: px(14), bottom: px(14) },
   wideShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: '65%' },

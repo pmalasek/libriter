@@ -16,7 +16,7 @@ import (
 const movieCols = `
 	m.id, m.library_id, m.source_key, m.title, m.original_title, m.year, m.overview, m.tagline, m.runtime_min,
 	m.meta_provider, m.meta_id, m.external_ids_json, m.poster_path, m.backdrop_path, m.rating,
-	m.match_state, m.match_attempted_at, m.created_at, m.updated_at`
+	m.match_state, m.match_attempted_at, m.created_at, m.updated_at, m.poster_source, m.backdrop_source`
 
 // mainMovieFile vybere hlavní soubor filmu: největší (nejlepší verzi).
 const mainMovieFile = `(SELECT id FROM sc_media_files WHERE movie_id = m.id ORDER BY size_bytes DESC, file_path LIMIT 1)`
@@ -30,7 +30,8 @@ func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, e
 		attempted                           sql.NullTime
 	)
 	dest := []any{&m.ID, &m.LibraryID, &m.SourceKey, &m.Title, &orig, &year, &overview, &tagline, &runtime,
-		&provider, &metaID, &external, &poster, &bd, &rating, &m.MatchState, &attempted, &m.CreatedAt, &m.UpdatedAt}
+		&provider, &metaID, &external, &poster, &bd, &rating, &m.MatchState, &attempted, &m.CreatedAt, &m.UpdatedAt,
+		&m.PosterSource, &m.BackdropSource}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return m, err
 	}
@@ -282,7 +283,8 @@ func (s *Store) genresByID(ctx context.Context, kind string, ids []uuid.UUID) (m
 const showCols = `
 	s.id, s.library_id, s.source_key, s.title, s.original_title, s.year, s.overview, s.status,
 	s.meta_provider, s.meta_id, s.external_ids_json,
-	s.poster_path, s.backdrop_path, s.rating, s.match_state, s.match_attempted_at, s.created_at, s.updated_at`
+	s.poster_path, s.backdrop_path, s.rating, s.match_state, s.match_attempted_at, s.created_at, s.updated_at,
+	s.poster_source, s.backdrop_source`
 
 // showCounts spočítá řady a díly, které mají soubor.
 const showCounts = `
@@ -302,6 +304,7 @@ func scanShow(sc interface{ Scan(...any) error }, extra ...any) (model.Show, err
 	dest := []any{&sh.ID, &sh.LibraryID, &sh.SourceKey, &sh.Title, &orig, &year, &overview, &status,
 		&provider, &metaID, &external,
 		&poster, &bd, &rating, &sh.MatchState, &attempted, &sh.CreatedAt, &sh.UpdatedAt,
+		&sh.PosterSource, &sh.BackdropSource,
 		&sh.SeasonCount, &sh.EpisodeCount}
 	err := sc.Scan(append(dest, extra...)...)
 	if err != nil {

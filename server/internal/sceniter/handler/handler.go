@@ -49,6 +49,7 @@ type Deps struct {
 	Store     *storage.Store
 	Library   *service.Library
 	Matcher   *service.Matcher
+	Images    *service.TitleImages
 	Libs      *service.Libraries
 	Scanner   *scanner.Scanner // nil, když je Sceniter vypnutý
 	HLS       *stream.Manager
@@ -139,6 +140,10 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Use(middleware.RequireRole(coremodel.RoleEditor))
 					r.Patch("/movies/{id}", h.PatchTitle)
 					r.Patch("/shows/{id}", h.PatchTitle)
+					r.Put("/movies/{id}/images/{image}", h.UploadTitleImage)
+					r.Put("/shows/{id}/images/{image}", h.UploadTitleImage)
+					r.Delete("/movies/{id}/images/{image}", h.RemoveTitleImage)
+					r.Delete("/shows/{id}/images/{image}", h.RemoveTitleImage)
 					r.Get("/metadata/providers", h.MetadataProviders)
 					r.Get("/metadata/search", h.MetadataSearch)
 					r.Put("/movies/{id}/match", h.Match)

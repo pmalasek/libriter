@@ -101,7 +101,7 @@ export function ShowDetailPage() {
 
   return (
     <div>
-      <Hero backdrop={backdropUrl(s)} poster={posterUrl(s)} title={s.title}>
+      <Hero backdrop={backdropUrl(s)} poster={posterUrl(s)} title={s.title} kind="show" year={s.year}>
         <h1 className="font-heading text-3xl font-bold tracking-tight text-balance sm:text-4xl">{s.title}</h1>
         {s.original_title && s.original_title !== s.title ? <p className="mt-1 text-lg text-muted-foreground">{s.original_title}</p> : null}
         <MetaLine

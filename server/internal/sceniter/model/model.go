@@ -19,8 +19,10 @@ const (
 
 // Druhy titulů v API (watchlist, hodnocení, rozkoukanost).
 const (
-	KindMovie   = "movie"
-	KindShow    = "show"
+	KindMovie = "movie"
+	KindShow  = "show"
+	// ImageManual je hodnota PosterSource/BackdropSource u obrázku nahraného editorem.
+	ImageManual = "manual"
 	KindEpisode = "episode"
 )
 
@@ -111,7 +113,10 @@ type Movie struct {
 	ExternalIDs   map[string]string `json:"external_ids"`
 	PosterPath    *string           `json:"poster_path,omitempty"`
 	BackdropPath  *string           `json:"backdrop_path,omitempty"`
-	Rating        *int              `json:"rating,omitempty"`
+	// PosterSource/BackdropSource: "" = ze zdroje metadat, ImageManual = nahrál editor.
+	PosterSource   string `json:"poster_source,omitempty"`
+	BackdropSource string `json:"backdrop_source,omitempty"`
+	Rating         *int   `json:"rating,omitempty"`
 	// Credits jsou obsazení a štáb – vyplněné jen v detailu, ve výpisech prázdné.
 	Credits    []Credit `json:"credits"`
 	Genres     []string `json:"genres"`
@@ -141,7 +146,10 @@ type Show struct {
 	ExternalIDs   map[string]string `json:"external_ids"`
 	PosterPath    *string           `json:"poster_path,omitempty"`
 	BackdropPath  *string           `json:"backdrop_path,omitempty"`
-	Rating        *int              `json:"rating,omitempty"`
+	// PosterSource/BackdropSource: "" = ze zdroje metadat, ImageManual = nahrál editor.
+	PosterSource   string `json:"poster_source,omitempty"`
+	BackdropSource string `json:"backdrop_source,omitempty"`
+	Rating         *int   `json:"rating,omitempty"`
 	// Credits jsou obsazení a štáb – vyplněné jen v detailu, ve výpisech prázdné.
 	Credits    []Credit `json:"credits"`
 	Genres     []string `json:"genres"`

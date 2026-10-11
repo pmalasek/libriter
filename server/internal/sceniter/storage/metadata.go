@@ -74,8 +74,9 @@ func (s *Store) ApplyMovieMeta(ctx context.Context, id uuid.UUID, m TitleMeta, s
 		  title = COALESCE(?5, title),
 		  original_title = COALESCE(?6, original_title), overview = COALESCE(?7, overview),
 		  tagline = COALESCE(?8, tagline), year = COALESCE(?9, year), runtime_min = COALESCE(?10, runtime_min),
-		  rating = COALESCE(?11, rating), poster_path = COALESCE(?12, poster_path),
-		  backdrop_path = COALESCE(?13, backdrop_path),
+		  rating = COALESCE(?11, rating),
+		  poster_path = CASE WHEN poster_source = 'manual' THEN poster_path ELSE COALESCE(?12, poster_path) END,
+		  backdrop_path = CASE WHEN backdrop_source = 'manual' THEN backdrop_path ELSE COALESCE(?13, backdrop_path) END,
 		  match_state = ?14, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?1`,
 		id, m.Provider, m.ID, model.MarshalExternalIDs(m.ExternalIDs), nullStr(m.Title), nullStr(m.OriginalTitle),
@@ -106,8 +107,9 @@ func (s *Store) ApplyShowMeta(ctx context.Context, id uuid.UUID, m TitleMeta, st
 		  meta_provider = ?2, meta_id = ?3, external_ids_json = COALESCE(?4, external_ids_json),
 		  title = COALESCE(?5, title), original_title = COALESCE(?6, original_title),
 		  overview = COALESCE(?7, overview), status = COALESCE(?8, status), year = COALESCE(?9, year),
-		  rating = COALESCE(?10, rating), poster_path = COALESCE(?11, poster_path),
-		  backdrop_path = COALESCE(?12, backdrop_path),
+		  rating = COALESCE(?10, rating),
+		  poster_path = CASE WHEN poster_source = 'manual' THEN poster_path ELSE COALESCE(?11, poster_path) END,
+		  backdrop_path = CASE WHEN backdrop_source = 'manual' THEN backdrop_path ELSE COALESCE(?12, backdrop_path) END,
 		  match_state = ?13, updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?1`,
 		id, m.Provider, m.ID, model.MarshalExternalIDs(m.ExternalIDs), nullStr(m.Title), nullStr(m.OriginalTitle),
@@ -254,6 +256,72 @@ type TitlePatch struct {
 	OriginalTitle *string `json:"original_title"`
 	Year          *int    `json:"year"`
 	Overview      *string `json:"overview"`
+}
+
+// ImageKind je druh obrázku titulu – sloupec se skládá jen z těchto hodnot.
+type ImageKind string
+
+const (
+	ImagePoster   ImageKind = "poster"
+	ImageBackdrop ImageKind = "backdrop"
+)
+
+// ParseImageKind rozpozná druh obrázku z cesty požadavku.
+func ParseImageKind(s string) (ImageKind, bool) {
+	switch ImageKind(s) {
+	case ImagePoster, ImageBackdrop:
+		return ImageKind(s), true
+	}
+	return "", false
+}
+
+// TitleImage je cesta a původ jednoho obrázku titulu.
+type TitleImage struct {
+	Path   *string
+	Source string
+}
+
+// GetTitleImages vrátí plakát a pozadí titulu.
+func (s *Store) GetTitleImages(ctx context.Context, kind string, id uuid.UUID) (poster, backdrop TitleImage, err error) {
+	table := "sc_movies"
+	if kind == model.KindShow {
+		table = "sc_shows"
+	}
+	var p, b sql.NullString
+	err = s.db.QueryRowContext(ctx, `SELECT poster_path, poster_source, backdrop_path, backdrop_source FROM `+table+` WHERE id = ?1`, id).
+		Scan(&p, &poster.Source, &b, &backdrop.Source)
+	if errors.Is(err, sql.ErrNoRows) {
+		return poster, backdrop, ErrNotFound
+	}
+	if err != nil {
+		return poster, backdrop, fmt.Errorf("title images: %w", err)
+	}
+	poster.Path, backdrop.Path = ptrString(p), ptrString(b)
+	return poster, backdrop, nil
+}
+
+// SetTitleImage nastaví cestu a původ obrázku; updated_at se změní, aby
+// klienti obešli cache (?v=updated_at). fileName nil = bez obrázku.
+func (s *Store) SetTitleImage(ctx context.Context, kind string, id uuid.UUID, image ImageKind, fileName *string, manual bool) error {
+	table := "sc_movies"
+	if kind == model.KindShow {
+		table = "sc_shows"
+	}
+	source := ""
+	if manual {
+		source = model.ImageManual
+	}
+	col := string(image) // jen ImagePoster | ImageBackdrop (viz ParseImageKind)
+	res, err := s.db.ExecContext(ctx, `
+		UPDATE `+table+` SET `+col+`_path = ?2, `+col+`_source = ?3, updated_at = CURRENT_TIMESTAMP
+		WHERE id = ?1`, id, fileName, source)
+	if err != nil {
+		return fmt.Errorf("set title image: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // PatchTitle uloží ruční úpravu.

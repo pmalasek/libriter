@@ -50,7 +50,7 @@ export function MovieDetailPage() {
 
   return (
     <div>
-      <Hero backdrop={backdropUrl(m)} poster={posterUrl(m)} title={m.title}>
+      <Hero backdrop={backdropUrl(m)} poster={posterUrl(m)} title={m.title} kind="movie" year={m.year}>
         <h1 className="font-heading text-3xl font-bold tracking-tight text-balance sm:text-4xl">{m.title}</h1>
         {m.original_title && m.original_title !== m.title ? (
           <p className="mt-1 text-lg text-muted-foreground">{m.original_title}</p>

@@ -22,7 +22,7 @@ function UnmatchedRow({ kind, title }: { kind: TitleKind; title: MovieSummary | 
     <div className="glass inset-shadow-glass rounded-2xl p-3 ring-1 ring-glass-edge">
       <div className="flex items-center gap-3">
         <div className="w-12 shrink-0">
-          <Poster src={posterUrl(title, 48)} title={title.title} className="rounded-lg" />
+          <Poster src={posterUrl(title, 48)} title={title.title} kind={kind} year={title.year} className="rounded-lg" />
         </div>
         <div className="min-w-0 flex-1">
           <Link to={`/${kind === 'movie' ? 'movies' : 'shows'}/${title.id}`} className="font-medium hover:underline">

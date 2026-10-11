@@ -1,6 +1,6 @@
 import { ImageUpIcon } from 'lucide-react'
 import { useRef } from 'react'
-import { Button } from '@/components/ui/button'
+import { Button } from './ui/button'
 
 // Formáty, které backend přijme (typ si ověří podle obsahu).
 const ACCEPT = 'image/jpeg,image/png,image/webp,image/gif,image/bmp'

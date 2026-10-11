@@ -3,6 +3,9 @@
 
 export type MatchState = 'unmatched' | 'auto' | 'manual' | 'ignored'
 export type TitleKind = 'movie' | 'show'
+export type ImageSource = '' | 'manual'
+/** Druh obrázku titulu, který jde nahrát (PUT …/images/{image}). */
+export type TitleImageKind = 'poster' | 'backdrop'
 
 /** Knihovna – podsložka VIDEO_ROOT s typem obsahu a zdrojem metadat. */
 export interface Library {
@@ -94,6 +97,9 @@ export interface Movie {
   external_ids: Record<string, string>
   poster_path?: string
   backdrop_path?: string
+  /** '' = obrázek ze zdroje metadat, 'manual' = nahrál editor (obnova metadat ho nepřepíše). */
+  poster_source?: ImageSource
+  backdrop_source?: ImageSource
   /** Hodnocení zdroje v procentech (0–100). */
   rating?: number
   /** Obsazení a štáb – jen v detailu, ve výpisech prázdné. */
@@ -147,6 +153,9 @@ export interface Show {
   external_ids: Record<string, string>
   poster_path?: string
   backdrop_path?: string
+  /** '' = obrázek ze zdroje metadat, 'manual' = nahrál editor (obnova metadat ho nepřepíše). */
+  poster_source?: ImageSource
+  backdrop_source?: ImageSource
   rating?: number
   /** Obsazení a štáb – jen v detailu, ve výpisech prázdné. */
   credits: Credit[]

@@ -4,6 +4,10 @@ export default {
     progress: 'Pokračujte, kde jste skončili, na libovolném zařízení',
     subtitles: 'Dabing a titulky ve vašem jazyce',
   },
+  kind: {
+    movie: 'Film',
+    show: 'Seriál',
+  },
   nav: {
     home: 'Domů',
     movies: 'Filmy',
@@ -63,6 +67,15 @@ export default {
     episodes_other: '{{count}} dílů',
   },
   detail: {
+    images: 'Obrázky',
+    poster: 'Plakát',
+    backdrop: 'Pozadí',
+    uploadImage: 'Nahrát',
+    restoreImage: 'Vrátit obrázek ze zdroje',
+    customImage: 'Vlastní',
+    imageUploaded: 'Obrázek nahrán.',
+    imageRestored: 'Obrázek ze zdroje obnoven.',
+    imageHint: 'JPEG, PNG, WebP, GIF nebo BMP, nejvýš 20 MB. Vlastní obrázek obnova metadat nepřepíše.',
     match: 'Spárovat se zdrojem metadat',
     rating: 'Hodnocení ({{source}})',
     links: 'Odkazy',

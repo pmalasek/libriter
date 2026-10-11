@@ -1,3 +1,4 @@
+import type { TitleKind } from 'sceniter-shared'
 import { cn } from 'core-web/src/lib/utils'
 import { Poster } from './Poster'
 
@@ -8,12 +9,17 @@ export function Hero({
   backdrop,
   poster,
   title,
+  kind,
+  year,
   cover,
   children,
 }: {
   backdrop?: string
   poster?: string
   title: string
+  /** Pro náhradní plakát bez obrázku. */
+  kind?: TitleKind
+  year?: number
   /** Vlastní obrázek místo plakátu (fotka osoby). */
   cover?: React.ReactNode
   children: React.ReactNode
@@ -28,7 +34,7 @@ export function Hero({
       ) : null}
       <div className={cn('flex flex-col gap-6 sm:flex-row sm:items-end', backdrop && 'pt-24 sm:pt-40')}>
         <div className="w-40 shrink-0 sm:w-52">
-          {cover ?? <Poster src={poster} title={title} className="shadow-glass-lg" />}
+          {cover ?? <Poster src={poster} title={title} kind={kind} year={year} className="shadow-glass-lg" />}
         </div>
         <div className="min-w-0 flex-1">{children}</div>
       </div>

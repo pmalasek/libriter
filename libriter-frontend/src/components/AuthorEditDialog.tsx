@@ -12,7 +12,7 @@ import {
 import type { Author } from '@/api/types'
 import { AuthorImage } from '@/components/AuthorImage'
 import { AuthorMetadataImport } from '@/components/AuthorMetadataImport'
-import { ImageUploadButton } from '@/components/ImageUploadButton'
+import { ImageUploadButton } from 'core-web/src/components/ImageUploadButton'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,

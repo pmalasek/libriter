@@ -4,6 +4,10 @@ export default {
     progress: 'Reprenez là où vous vous êtes arrêté, sur n’importe quel appareil',
     subtitles: 'Doublage et sous-titres dans votre langue',
   },
+  kind: {
+    movie: 'Film',
+    show: 'Série',
+  },
   nav: {
     home: 'Accueil',
     movies: 'Films',
@@ -57,6 +61,15 @@ export default {
     episodes_other: '{{count}} épisodes',
   },
   detail: {
+    images: 'Images',
+    poster: 'Affiche',
+    backdrop: 'Arrière-plan',
+    uploadImage: 'Téléverser',
+    restoreImage: 'Rétablir l’image de la source',
+    customImage: 'Personnalisée',
+    imageUploaded: 'Image téléversée.',
+    imageRestored: 'Image de la source rétablie.',
+    imageHint: 'JPEG, PNG, WebP, GIF ou BMP, 20 Mo au plus. Les images personnalisées survivent à l’actualisation des métadonnées.',
     match: 'Associer à une source de métadonnées',
     rating: 'Note ({{source}})',
     links: 'Liens',

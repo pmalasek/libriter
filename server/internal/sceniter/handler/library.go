@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -410,6 +411,69 @@ func (h *Handler) PatchTitle(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.Audit.Record(r.Context(), userID(r), coreservice.AuditEvent{Action: AuditEdit, TargetType: kind, TargetID: id.String(), Details: p})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// PUT /sceniter/{movies|shows}/{id}/images/{poster|backdrop}  (editor+)
+//
+// Tělo je samotný obrázek (JPEG, PNG, WebP, GIF, BMP); typ se pozná podle
+// obsahu. Ruční obrázek obnova metadat nepřepíše.
+func (h *Handler) UploadTitleImage(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	image, ok := storage.ParseImageKind(chi.URLParam(r, "image"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "image.not_found", "neznámý druh obrázku")
+		return
+	}
+	data, ok := httpx.ReadImageBody(w, r)
+	if !ok {
+		return
+	}
+	kind := kindFromPath(r)
+	err := h.Images.Upload(r.Context(), kind, id, image, data)
+	switch {
+	case errors.Is(err, service.ErrNotImage):
+		writeError(w, http.StatusBadRequest, "image.unsupported", "soubor není podporovaný obrázek")
+		return
+	case errors.Is(err, storage.ErrNotFound):
+		writeError(w, http.StatusNotFound, kind+".not_found", "nenalezeno")
+		return
+	case err != nil:
+		slog.Error("sceniter: uložení obrázku", "err", err)
+		writeError(w, http.StatusInternalServerError, "image.save_failed", "obrázek se nepodařilo uložit")
+		return
+	}
+	h.Audit.Record(r.Context(), userID(r), coreservice.AuditEvent{
+		Action: AuditEdit, TargetType: kind, TargetID: id.String(),
+		Details: map[string]string{"image": string(image), "action": "upload"},
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// DELETE /sceniter/{movies|shows}/{id}/images/{poster|backdrop}  (editor+)
+//
+// Odebere ruční obrázek; obrázek ze zdroje metadat se vrátí, pokud zůstal na disku.
+func (h *Handler) RemoveTitleImage(w http.ResponseWriter, r *http.Request) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return
+	}
+	image, ok := storage.ParseImageKind(chi.URLParam(r, "image"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "image.not_found", "neznámý druh obrázku")
+		return
+	}
+	kind := kindFromPath(r)
+	if writeStoreError(w, h.Images.Remove(r.Context(), kind, id, image), kind+".not_found") {
+		return
+	}
+	h.Audit.Record(r.Context(), userID(r), coreservice.AuditEvent{
+		Action: AuditEdit, TargetType: kind, TargetID: id.String(),
+		Details: map[string]string{"image": string(image), "action": "remove"},
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -4,6 +4,10 @@ export default {
     progress: 'Continue where you left off, on any device',
     subtitles: 'Dubbing and subtitles in your language',
   },
+  kind: {
+    movie: 'Movie',
+    show: 'Show',
+  },
   nav: {
     home: 'Home',
     movies: 'Movies',
@@ -57,6 +61,15 @@ export default {
     episodes_other: '{{count}} episodes',
   },
   detail: {
+    images: 'Images',
+    poster: 'Poster',
+    backdrop: 'Backdrop',
+    uploadImage: 'Upload',
+    restoreImage: 'Restore image from source',
+    customImage: 'Custom',
+    imageUploaded: 'Image uploaded.',
+    imageRestored: 'Source image restored.',
+    imageHint: 'JPEG, PNG, WebP, GIF or BMP, up to 20 MB. A metadata refresh keeps custom images.',
     match: 'Match with a metadata source',
     rating: 'Rating ({{source}})',
     links: 'Links',

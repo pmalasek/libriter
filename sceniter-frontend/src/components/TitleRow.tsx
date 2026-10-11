@@ -36,7 +36,7 @@ export function TitleRow({ movie, show }: { movie?: MovieSummary; show?: ShowSum
       to={to}
       className="flex items-center gap-3 px-3 py-2 outline-none transition-colors hover:bg-primary/5 focus-visible:bg-primary/10"
     >
-      <Poster src={posterUrl(title, THUMB_WIDTH)} title={title.title} compact className="w-8 shrink-0 rounded-md shadow-none" />
+      <Poster src={posterUrl(title, THUMB_WIDTH)} title={title.title} kind={movie ? 'movie' : 'show'} compact className="w-8 shrink-0 rounded-md shadow-none" />
       <div className="min-w-0 flex-1">
         <p className="font-heading truncate text-sm font-semibold tracking-tight">{title.title}</p>
         {original ? <p className="truncate text-xs text-muted-foreground">{original}</p> : null}

@@ -40,7 +40,7 @@ export function PosterCard({
   return (
     <Link to={to} className="group block outline-none">
       <div className="relative transition-transform duration-200 group-hover:-translate-y-0.5 group-focus-visible:ring-3 group-focus-visible:ring-ring/50 rounded-2xl">
-        <Poster src={posterUrl(title, POSTER_WIDTH)} title={title.title} />
+        <Poster src={posterUrl(title, POSTER_WIDTH)} title={title.title} kind={movie ? 'movie' : 'show'} year={title.year} />
         {progress?.completed ? (
           <span
             role="img"

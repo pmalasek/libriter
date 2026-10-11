@@ -4,6 +4,10 @@ export default {
     progress: 'Weiterschauen, wo Sie aufgehört haben – auf jedem Gerät',
     subtitles: 'Synchronfassung und Untertitel in Ihrer Sprache',
   },
+  kind: {
+    movie: 'Film',
+    show: 'Serie',
+  },
   nav: {
     home: 'Start',
     movies: 'Filme',
@@ -57,6 +61,15 @@ export default {
     episodes_other: '{{count}} Folgen',
   },
   detail: {
+    images: 'Bilder',
+    poster: 'Poster',
+    backdrop: 'Hintergrund',
+    uploadImage: 'Hochladen',
+    restoreImage: 'Bild aus der Quelle wiederherstellen',
+    customImage: 'Eigenes',
+    imageUploaded: 'Bild hochgeladen.',
+    imageRestored: 'Bild aus der Quelle wiederhergestellt.',
+    imageHint: 'JPEG, PNG, WebP, GIF oder BMP, höchstens 20 MB. Eigene Bilder bleiben beim Aktualisieren der Metadaten erhalten.',
     match: 'Mit Metadatenquelle verknüpfen',
     rating: 'Bewertung ({{source}})',
     links: 'Links',

@@ -22,7 +22,7 @@ import {
 } from '@/api/types'
 import { BookAuthorsField } from '@/components/BookAuthorsField'
 import { BookCover } from '@/components/BookCover'
-import { ImageUploadButton } from '@/components/ImageUploadButton'
+import { ImageUploadButton } from 'core-web/src/components/ImageUploadButton'
 import { LanguageSelect } from '@/components/LanguageSelect'
 import { MetadataImport } from '@/components/MetadataImport'
 import { SeriesPicker } from '@/components/SeriesPicker'
