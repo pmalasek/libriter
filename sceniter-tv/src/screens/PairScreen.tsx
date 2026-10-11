@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type ElementRef } from 'react'
 import { StyleSheet, TextInput, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
 import * as Device from 'expo-device'
@@ -9,7 +9,9 @@ import { apiFetch, ApiError, type DeviceStart, type DeviceTokenResponse } from '
 import { useAuth } from '@/auth/AuthProvider'
 import { Button } from '@/components/Button'
 import { T } from '@/components/T'
-import { normalizeServerUrl } from '@/lib/serverUrl'
+import { useDownFromInput } from '@/lib/inputEscape'
+import { displayServer, serverCandidates } from '@/lib/serverUrl'
+import { loadRecentServers } from '@/lib/storage'
 import { colors, fonts, px, radius, safe } from '@/theme'
 
 /** Pozadí přihlašovacích obrazovek – tmavé s tyrkysovou září značky. */
@@ -25,26 +27,55 @@ function Glow() {
   )
 }
 
-/** Krok 1: adresa serveru. Ověří se dotazem na /auth/config. */
+/** Odpovídá na adrese server Libriter/Sceniter? (veřejné nastavení přihlášení) */
+async function isServer(url: string): Promise<boolean> {
+  const abort = new AbortController()
+  const timer = setTimeout(() => abort.abort(), 6000)
+  try {
+    const res = await fetch(`${url}/api/v1/auth/config`, { signal: abort.signal })
+    const body: unknown = await res.json()
+    return res.ok && !!body && typeof body === 'object' && 'registration_enabled' in body
+  } catch {
+    return false
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+/**
+ * Krok 1: adresa serveru. Naposledy použité servery jsou nahoře jako
+ * tlačítka (stačí OK); novou adresu stačí zadat bez https://.
+ */
 function ServerStep() {
   const { t } = useTranslation()
   const { server, setServer } = useAuth()
-  const [value, setValue] = useState(server ?? '')
+  const [recent, setRecent] = useState<string[]>([])
+  const [value, setValue] = useState(server ? displayServer(server) : '')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Šipka dolů z pole na Připojit (EditText ji sám nepustí).
+  const connectRef = useRef<ElementRef<typeof View>>(null)
+  const escape = useDownFromInput(() => connectRef.current)
 
-  async function connect() {
-    const url = normalizeServerUrl(value)
-    if (!url) return
+  useEffect(() => {
+    void loadRecentServers().then((list) => {
+      // Server z dřívější verze aplikace (před seznamem) taky nabídnout.
+      setRecent(server && !list.includes(server) ? [server, ...list] : list)
+    })
+  }, [server])
+
+  async function connect(input: string) {
+    const candidates = serverCandidates(input)
+    if (candidates.length === 0 || busy) return
     setBusy(true)
     setError(null)
     try {
-      // Veřejné nastavení přihlášení má každý server Libriter/Sceniter.
-      const res = await fetch(`${url}/api/v1/auth/config`)
-      const body: unknown = await res.json()
-      if (!res.ok || !body || typeof body !== 'object' || !('registration_enabled' in body)) throw new Error(String(res.status))
-      await setServer(url)
-    } catch {
+      for (const url of candidates) {
+        if (await isServer(url)) {
+          await setServer(url)
+          return
+        }
+      }
       setError(t('video.tv.pair.serverError'))
     } finally {
       setBusy(false)
@@ -57,6 +88,24 @@ function ServerStep() {
       <T variant="title" style={styles.heading}>
         {t('video.tv.pair.serverTitle')}
       </T>
+      {recent.length > 0 ? (
+        <View style={styles.recent}>
+          <T dim style={styles.recentLabel}>
+            {t('video.tv.pair.recentServers')}
+          </T>
+          {recent.map((url, i) => (
+            <Button
+              key={url}
+              icon={ServerIcon}
+              label={displayServer(url)}
+              primary={i === 0}
+              hasTVPreferredFocus={i === 0}
+              disabled={busy}
+              onPress={() => void connect(url)}
+            />
+          ))}
+        </View>
+      ) : null}
       <T dim style={styles.hint}>
         {t('video.tv.pair.serverHint')}
       </T>
@@ -69,17 +118,20 @@ function ServerStep() {
         autoCorrect={false}
         keyboardType="url"
         returnKeyType="go"
-        onSubmitEditing={() => void connect()}
-        hasTVPreferredFocus
+        onSubmitEditing={() => void connect(value)}
+        onFocus={escape.onFocus}
+        onBlur={escape.onBlur}
+        hasTVPreferredFocus={recent.length === 0}
         style={styles.input}
       />
       {error ? <T style={styles.error}>{error}</T> : null}
       <Button
-        primary
+        ref={connectRef}
+        primary={recent.length === 0}
         icon={ArrowRightIcon}
         label={busy ? t('video.tv.pair.connecting') : t('video.tv.pair.connect')}
         disabled={busy}
-        onPress={() => void connect()}
+        onPress={() => void connect(value)}
         style={{ marginTop: px(40) }}
       />
     </View>
@@ -181,7 +233,7 @@ function CodeStep() {
     }
   }, [expired, signIn, start])
 
-  const host = (server ?? '').replace(/^https?:\/\//, '')
+  const host = displayServer(server ?? '')
   const link = start ? `${server}${start.verification_path}?code=${encodeURIComponent(start.user_code)}` : ''
 
   return (
@@ -241,6 +293,8 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: safe.x },
   heading: { marginTop: px(32), textAlign: 'center' },
   hint: { marginTop: px(16), textAlign: 'center', maxWidth: px(1000) },
+  recent: { marginTop: px(40), alignItems: 'center', gap: px(14) },
+  recentLabel: { marginBottom: px(4) },
   input: {
     marginTop: px(56),
     width: px(1000),

@@ -24,8 +24,17 @@ export interface SideNavHandle {
  * vidět, kde uživatel je. Při zaměření se rozbalí s celými názvy přes obsah.
  * Fokus do něj vstupuje vždy na aktuální sekci.
  */
-export const SideNav = forwardRef<SideNavHandle, { current: NavKey; onSelect: (k: NavKey) => void; onFocusChange?: (inside: boolean) => void }>(
-  function SideNav({ current, onSelect, onFocusChange }, ref) {
+interface SideNavProps {
+  current: NavKey
+  onSelect: (k: NavKey) => void
+  /** Fokus vstoupil do menu (true) nebo z něj odešel (false). */
+  onFocusChange?: (inside: boolean) => void
+  /** Zaměřená položka menu. */
+  onItemFocus?: (k: NavKey) => void
+}
+
+export const SideNav = forwardRef<SideNavHandle, SideNavProps>(
+  function SideNav({ current, onSelect, onFocusChange, onItemFocus }, ref) {
     const items = useNavItems()
     const [open, setOpen] = useState(false)
     const width = useRef(new Animated.Value(NAV_COLLAPSED)).current
@@ -59,6 +68,7 @@ export const SideNav = forwardRef<SideNavHandle, { current: NavKey; onSelect: (k
             else refs.current.delete(key)
           }}
           scale={false}
+          onFocus={() => onItemFocus?.(key)}
           onPress={() => onSelect(key)}
         >
           {(focused) => {

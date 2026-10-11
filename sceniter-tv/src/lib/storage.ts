@@ -11,6 +11,7 @@ const KEYS = {
   server: 'sceniter.server',
   device: 'sceniter.device',
   prefs: 'sceniter.prefs',
+  servers: 'sceniter.servers',
 }
 
 async function get(key: string): Promise<string | null> {
@@ -37,7 +38,27 @@ export async function loadSession(): Promise<Session | null> {
 export const saveSession = (s: Session | null) => set(KEYS.session, s ? serializeSession(s) : null)
 
 export const loadServer = () => get(KEYS.server)
-export const saveServer = (url: string) => set(KEYS.server, url)
+export const saveServer = async (url: string) => {
+  await set(KEYS.server, url)
+  await rememberServer(url)
+}
+
+const RECENT_SERVERS = 5
+
+/** Naposledy použité servery (nejnovější první) – nabízí je zadání adresy. */
+export async function loadRecentServers(): Promise<string[]> {
+  try {
+    const list: unknown = JSON.parse((await get(KEYS.servers)) ?? '[]')
+    return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+async function rememberServer(url: string): Promise<void> {
+  const list = [url, ...(await loadRecentServers()).filter((x) => x !== url)].slice(0, RECENT_SERVERS)
+  await set(KEYS.servers, JSON.stringify(list))
+}
 
 let deviceIdCache: string | null = null
 

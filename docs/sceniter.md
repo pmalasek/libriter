@@ -253,8 +253,18 @@ zdrojů. Recepty: `just tv-start`, `tv-android`, `tv-ios`, `tv-apk`, `tv-aab`,
 **Ovládání.** Boční menu má Hledat, Domů, každou knihovnu zvlášť (název
 a ikona z administrace, pořadí jako na webu) a Nastavení. Výpis knihovny má
 jediné tlačítko řazení; volba se pamatuje v televizi pro každou knihovnu.
-Zpět v sekci zaměří menu, z menu vede na Domů, z Domů ven z aplikace. Po
-dohrání dílu běží odpočet a další díl se přepne v tomtéž přehrávači.
+OK v menu otevře sekci a předá fokus do ní. Zpět v sekci zaměří menu, z menu
+vede na Domů, z Domů ven z aplikace.
+
+**Přehrávač.** Fokus drží posuvník: šipky vlevo/vpravo přetáčí (opakování
+a držení zrychluje), OK pozastaví. Dolů vede na tlačítka Zvuk a titulky, Od
+začátku a Další díl. Zpět nejdřív skryje lištu, pak přehrávač zavře. V poslední
+minutě dílu se nabídne další díl, po dohrání běží odpočet. React Native tvOS
+posílá na Androidu do JS jen uvolnění klávesy, Přehrát/Pauzu obslouží media
+session přehrávače.
+
+**Adresa serveru** stačí bez schématu: zkusí se https://, pak http://. Posledních
+pět serverů se pamatuje a nabízí jako tlačítka.
 
 **Párování.** Televize se nepřihlašuje heslem. Po zadání adresy serveru ukáže
 kód a QR; uživatel ho na telefonu nebo počítači potvrdí na stránce `/link`

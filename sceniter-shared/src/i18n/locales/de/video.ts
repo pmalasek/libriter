@@ -353,8 +353,9 @@ export default {
   tv: {
     pair: {
       serverTitle: 'Mit dem Server verbinden',
-      serverHint: 'Gib die Adresse deines Sceniter-Servers ein, so wie du sie im Browser öffnest.',
-      serverPlaceholder: 'https://video.example.de',
+      serverHint: 'Der Servername genügt, z. B. video.example.de – https:// wird ergänzt.',
+      serverPlaceholder: 'video.example.de',
+      recentServers: 'Zuletzt verwendet',
       connect: 'Verbinden',
       connecting: 'Verbinde…',
       serverError: 'Unter dieser Adresse antwortet kein Sceniter-Server.',
@@ -401,6 +402,8 @@ export default {
     },
     player: {
       tracks: 'Audio und Untertitel',
+      restart: 'Von vorne',
+      nextEpisode: 'Nächste Folge · {{episode}}',
       seekHint: 'Gedrückt halten, um schneller zu spulen',
       endsAt: 'Endet um {{time}}',
     },

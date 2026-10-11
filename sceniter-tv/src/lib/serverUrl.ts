@@ -1,10 +1,16 @@
 /**
- * Normalizuje adresu serveru zadanou ovladačem: doplní https://, odstraní
- * koncová lomítka i omylem vloženou cestu k API.
+ * Adresy, na kterých zkusit server zadaný ovladačem. Bez schématu se zkouší
+ * nejdřív https://, pak http:// (server v domácí síti bez certifikátu).
+ * Koncová lomítka i omylem vložená cesta k API se odstraní.
  */
-export function normalizeServerUrl(input: string): string {
-  let url = input.trim()
-  if (!url) return ''
-  if (!/^https?:\/\//i.test(url)) url = `https://${url}`
-  return url.replace(/\/+$/, '').replace(/\/api\/v1$/, '')
+export function serverCandidates(input: string): string[] {
+  const raw = input.trim().replace(/\/+$/, '').replace(/\/api\/v1$/, '')
+  if (!raw) return []
+  if (/^https?:\/\//i.test(raw)) return [raw]
+  return [`https://${raw}`, `http://${raw}`]
+}
+
+/** Adresa pro zobrazení – bez https:// (http:// zůstává, ať je vidět). */
+export function displayServer(url: string): string {
+  return url.replace(/^https:\/\//i, '')
 }

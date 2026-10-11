@@ -367,8 +367,9 @@ export default {
   tv: {
     pair: {
       serverTitle: 'Připojení k serveru',
-      serverHint: 'Zadejte adresu svého serveru Sceniter, tak jak ji otevíráte v prohlížeči.',
-      serverPlaceholder: 'https://video.example.cz',
+      serverHint: 'Stačí název serveru, třeba video.example.cz – https:// se doplní samo.',
+      serverPlaceholder: 'video.example.cz',
+      recentServers: 'Naposledy použité',
       connect: 'Připojit',
       connecting: 'Připojuji…',
       serverError: 'Na této adrese neodpovídá žádný server Sceniter.',
@@ -415,6 +416,8 @@ export default {
     },
     player: {
       tracks: 'Zvuk a titulky',
+      restart: 'Od začátku',
+      nextEpisode: 'Další díl · {{episode}}',
       seekHint: 'Podržením se přetáčí rychleji',
       endsAt: 'Skončí v {{time}}',
     },

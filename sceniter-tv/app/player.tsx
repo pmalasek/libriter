@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, AppState, BackHandler, StyleSheet, View, useTVEventHandler, type HWEvent } from 'react-native'
+import { ActivityIndicator, AppState, BackHandler, Platform, StyleSheet, View, useTVEventHandler, type HWEvent } from 'react-native'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useEventListener } from 'expo'
 import { VideoView, useVideoPlayer } from 'expo-video'
@@ -23,7 +23,7 @@ import { T } from '@/components/T'
 import { usePrefs } from '@/lib/prefs'
 import { deviceId } from '@/lib/storage'
 import { episodeShort } from '@/lib/titles'
-import { Chrome, NextUp, TracksPanel } from '@/player/Overlay'
+import { Chrome, NextUp, TracksPanel, UpNextPill } from '@/player/Overlay'
 import { playbackQueryOptions } from '@/player/playbackQuery'
 import { StreamSession, TranscodeBusyError } from '@/player/session'
 import { SubtitleOverlay, useCues } from '@/player/Subtitles'
@@ -31,6 +31,8 @@ import { colors, px } from '@/theme'
 
 /** Ovládání zmizí po chvíli bez stisku, pokud video hraje. */
 const CHROME_MS = 4000
+/** Na tlačítkách lišty (čtení popisků, volba) zůstává lišta déle. */
+const CHROME_BUTTONS_MS = 8000
 /** Přetáčení šipkami se potvrdí samo po chvíli bez dalšího stisku. */
 const SCRUB_COMMIT_MS = 900
 
@@ -229,6 +231,9 @@ export default function PlayerScreen() {
 
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(0)
+  // Hotová část rostoucího playlistu (přebalení) – dál přehrávač skočit neumí.
+  const [available, setAvailable] = useState<number | undefined>()
+  const availableRef = useRef<number | undefined>(undefined)
   const [paused, setPaused] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
   const [ended, setEnded] = useState(false)
@@ -244,6 +249,10 @@ export default function PlayerScreen() {
       durationRef.current = total
       setDuration(total)
     }
+    const growing = pbRef.current?.hls && pbRef.current.mode !== 'transcode'
+    const ready = growing && Number.isFinite(player.duration) && player.duration > 0 ? player.duration : undefined
+    availableRef.current = ready
+    setAvailable(ready)
     meter.current.tick(currentTime, player.playing)
     if (Date.now() - lastSave.current > SAVE_INTERVAL_MS) void save()
   })
@@ -252,7 +261,7 @@ export default function PlayerScreen() {
     setPaused(!isPlaying)
     if (!isPlaying) {
       void save()
-      setChrome(true)
+      poke()
     }
   })
 
@@ -278,6 +287,13 @@ export default function PlayerScreen() {
   const playNext = useCallback(() => {
     const next = nextRef.current
     if (!next?.media_id) return
+    // Rozkoukaný díl uložit (v poslední minutě jako dokoukaný) a zastavit,
+    // ať nehraje, než se načte další.
+    if (!endedRef.current) {
+      const left = durationRef.current - timeRef.current
+      void save(durationRef.current > 0 && left <= 60 ? true : undefined)
+      player.pause()
+    }
     setCountdown(null)
     setEnded(false)
     seekTo.current = undefined
@@ -293,7 +309,11 @@ export default function PlayerScreen() {
     setPhase('loading')
     setScrubTo(undefined)
     setPanel(false)
-    setChrome(true)
+    setChromeAt(Date.now())
+    setUpNextDismissed(false)
+    upNextWarmed.current = false
+    availableRef.current = undefined
+    setAvailable(undefined)
     setSubtitleKey(null)
     setAudio(undefined)
     setMode(undefined)
@@ -301,7 +321,7 @@ export default function PlayerScreen() {
     // Nové ID → nový dotaz na rozhodnutí → efekt výš zavře session dohraného
     // dílu a otevře další.
     setCurrent({ mediaId: next.media_id, episodeId: next.id, movieId: undefined, subtitle: episodeShort(next) })
-  }, [])
+  }, [player, save])
 
   useEffect(() => {
     if (countdown === null) return
@@ -322,16 +342,49 @@ export default function PlayerScreen() {
 
   // ---- ovládání ovladačem ----
 
-  const [chrome, setChrome] = useState(true)
+  // Lišta je vidět od posledního stisku (0 = skrytá); po CHROME_MS zmizí.
+  const [chromeAt, setChromeAt] = useState(() => Date.now())
+  const poke = useCallback(() => setChromeAt(Date.now()), [])
   const [panel, setPanel] = useState(false)
   const [scrubTo, setScrubTo] = useState<number | undefined>()
   const scrubTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const [upNextDismissed, setUpNextDismissed] = useState(false)
+  // Šipka dolů při skryté liště: ukázat ji a rovnou zaměřit tlačítka.
+  const [focusButtons, setFocusButtons] = useState(false)
+  const upNextWarmed = useRef(false)
+
+  // Kde je fokus: posuvník, tlačítka lišty, nebo nabídka dalšího dílu.
+  // Bez zaměřeného prvku by Android šipky do aplikace vůbec nedoručil.
+  const zone = useRef<'seek' | 'buttons' | 'upnext' | null>(null)
+  const seekRef = useRef<View>(null)
+  const focusSeek = useCallback(() => seekRef.current?.requestTVFocus(), [])
+
+  const chromeVisible = (chromeAt > 0 || paused || scrubTo !== undefined) && phase === 'playing' && !panel && countdown === null
+  const chromeVisibleRef = useRef(chromeVisible)
+  chromeVisibleRef.current = chromeVisible
+
+  const hideChrome = useCallback(() => {
+    // Tlačítka se se skrytou lištou odmontují – fokus musí zpět na posuvník.
+    if (zone.current === 'buttons') focusSeek()
+    setFocusButtons(false)
+    setChromeAt(0)
+  }, [focusSeek])
 
   useEffect(() => {
-    if (!chrome || paused || panel || scrubTo !== undefined) return
-    const timer = setTimeout(() => setChrome(false), CHROME_MS)
+    if (!chromeAt || paused || panel || scrubTo !== undefined) return
+    const keep = zone.current === 'buttons' ? CHROME_BUTTONS_MS : CHROME_MS
+    const timer = setTimeout(hideChrome, Math.max(0, chromeAt + keep - Date.now()))
     return () => clearTimeout(timer)
-  }, [chrome, paused, panel, scrubTo, time])
+  }, [chromeAt, hideChrome, paused, panel, scrubTo])
+
+  // Po načtení, zavření panelu a zrušení odpočtu patří fokus posuvníku.
+  useEffect(() => {
+    if (phase === 'playing' && !panel && countdown === null) focusSeek()
+  }, [countdown, focusSeek, panel, phase])
+  // Na začátku přehrávání ukázat na chvíli lištu (název, délka).
+  useEffect(() => {
+    if (phase === 'playing') poke()
+  }, [phase, poke])
 
   const commitScrub = useCallback(
     (target: number | undefined) => {
@@ -346,17 +399,32 @@ export default function PlayerScreen() {
 
   const scrubBy = useCallback(
     (delta: number) => {
-      setChrome(true)
+      poke()
       setScrubTo((prev) => {
-        const max = durationRef.current > 0 ? durationRef.current - 1 : Infinity
+        const end = durationRef.current > 0 ? durationRef.current - 1 : Infinity
+        const ready = availableRef.current !== undefined ? availableRef.current - 2 : Infinity
+        const max = Math.max(0, Math.min(end, ready))
         const next = Math.max(0, Math.min(max, (prev ?? timeRef.current) + delta))
         clearTimeout(scrubTimer.current)
         scrubTimer.current = setTimeout(() => commitScrub(next), SCRUB_COMMIT_MS)
         return next
       })
     },
-    [commitScrub],
+    [commitScrub, poke],
   )
+
+  const togglePlay = () => {
+    poke()
+    if (scrubTo !== undefined) commitScrub(scrubTo)
+    else if (player.playing) player.pause()
+    else player.play()
+  }
+
+  const restartEpisode = () => {
+    poke()
+    commitScrub(0)
+    player.play()
+  }
 
   // Opakované stisky stejným směrem zrychlují (10 s → 30 s → 60 s).
   const repeat = useRef({ dir: 0, count: 0, at: 0 })
@@ -371,38 +439,86 @@ export default function PlayerScreen() {
 
   const handler = useRef<(e: HWEvent) => void>(() => undefined)
   handler.current = (e: HWEvent) => {
-    // Android posílá stisk i uvolnění klávesy; reaguje se na stisk.
-    if (e.eventKeyAction === 1) return
+    const type = e.eventType
+    // react-native-tvos na Androidu posílá jen uvolnění klávesy (1); při
+    // držení opakovaně long* se stiskem (0). Stisk běžné klávesy se ignoruje,
+    // jinak by se na tvOS (posílá obojí) reagovalo dvakrát.
+    if (e.eventKeyAction === 0 && !type.startsWith('long')) return
     if (countdown !== null || panel || failure || phase !== 'playing') return
-    switch (e.eventType) {
-      case 'select':
+
+    // Mediální klávesy fungují vždy. Přehrát/Pauzu na Androidu vyřídí media
+    // session přehrávače sama – tady by se přepnulo podruhé.
+    switch (type) {
       case 'playPause':
-        setChrome(true)
-        if (scrubTo !== undefined) commitScrub(scrubTo)
-        else if (player.playing) player.pause()
-        else player.play()
-        break
-      case 'left':
-      case 'right':
-        scrubBy(step(e.eventType === 'right' ? 1 : -1))
-        break
-      case 'longLeft':
-      case 'longRight':
-        scrubBy(e.eventType === 'longRight' ? 60 : -60)
-        break
+        return Platform.OS === 'android' ? poke() : togglePlay()
+      case 'play':
+        poke()
+        return Platform.OS === 'android' ? undefined : player.play()
+      case 'pause':
+        poke()
+        return Platform.OS === 'android' ? undefined : player.pause()
       case 'fastForward':
       case 'rewind':
-        scrubBy(e.eventType === 'fastForward' ? 30 : -30)
-        break
+        return scrubBy(type === 'fastForward' ? 30 : -30)
+      case 'next':
+        return playNext()
+      case 'previous':
+        return restartEpisode()
+    }
+
+    // Tlačítka lišty ovládá nativní fokus; stisk jen prodlouží lištu.
+    if (zone.current === 'buttons' && chromeVisibleRef.current) return poke()
+
+    // Z nabídky dalšího dílu šipky vrací na posuvník (OK ji spustí samo).
+    if (zone.current === 'upnext') {
+      if (!['left', 'right', 'up', 'longLeft', 'longRight'].includes(type)) return
+      focusSeek()
+    }
+
+    switch (type) {
+      case 'left':
+      case 'right':
+        return scrubBy(step(type === 'right' ? 1 : -1))
+      case 'longLeft':
+      case 'longRight':
+        // Držení: opakované skoky se zrychlením (10 → 30 → 60 s).
+        return scrubBy(step(type === 'longRight' ? 1 : -1))
+      case 'select':
+        // Skrytá lišta: první OK ji jen ukáže.
+        return chromeVisibleRef.current ? togglePlay() : poke()
       case 'down':
-        if (pb) setPanel(true)
-        break
+        if (!chromeVisibleRef.current) setFocusButtons(true)
+        return poke()
       case 'up':
-        setChrome(true)
-        break
+        return poke()
     }
   }
   useTVEventHandler((e) => handler.current(e))
+
+  // Nabídka dalšího dílu v poslední minutě (když lišta nepřekáží).
+  const showUpNext =
+    !!nextEpisode?.media_id &&
+    phase === 'playing' &&
+    duration > 0 &&
+    duration - time <= 60 &&
+    !chromeVisible &&
+    !upNextDismissed &&
+    !ended &&
+    !panel &&
+    countdown === null &&
+    scrubTo === undefined
+  useEffect(() => {
+    if (showUpNext) {
+      if (!upNextWarmed.current && nextEpisode?.media_id) {
+        upNextWarmed.current = true
+        prefetchEpisode(nextEpisode.id)
+        prefetchPlayback(nextEpisode.media_id)
+      }
+    } else if (zone.current === 'upnext') {
+      // Nabídka zmizela i s fokusem – vrátit ho, jinak by ovladač „oněměl“.
+      focusSeek()
+    }
+  }, [focusSeek, nextEpisode, prefetchEpisode, prefetchPlayback, showUpNext])
 
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -414,10 +530,20 @@ export default function PlayerScreen() {
         commitScrub(undefined)
         return true
       }
+      if (zone.current === 'upnext') {
+        setUpNextDismissed(true)
+        focusSeek()
+        return true
+      }
+      // Viditelná lišta se nejdřív skryje; při pauze je vidět pořád, tam Zpět odchází.
+      if (chromeAt > 0 && !paused) {
+        hideChrome()
+        return true
+      }
       return false
     })
     return () => sub.remove()
-  }, [commitScrub, panel, scrubTo])
+  }, [chromeAt, commitScrub, focusSeek, hideChrome, panel, paused, scrubTo])
 
   const changeAudio = (index: number) => {
     setPanel(false)
@@ -428,16 +554,40 @@ export default function PlayerScreen() {
   // ---- vykreslení ----
 
   const error = failure ?? (playback.isError ? playback.error.message : null)
-  const showChrome = (chrome || paused || scrubTo !== undefined) && phase === 'playing' && !panel && countdown === null
 
   return (
     <View style={styles.root}>
       <VideoView player={player} style={StyleSheet.absoluteFill} nativeControls={false} contentFit="contain" />
 
-      <SubtitleOverlay cues={cues} time={time} size={prefs.subtitleSize} raised={showChrome || panel} />
+      <SubtitleOverlay cues={cues} time={time} size={prefs.subtitleSize} raised={chromeVisible || panel} />
 
-      {showChrome ? (
-        <Chrome title={params.title} subtitle={current.subtitle} time={time} duration={duration || pb?.duration_sec || 0} scrubTo={scrubTo} paused={paused} />
+      {phase === 'playing' && !error ? (
+        <Chrome
+          ref={seekRef}
+          title={params.title}
+          subtitle={current.subtitle}
+          time={time}
+          duration={duration || pb?.duration_sec || 0}
+          available={available}
+          scrubTo={scrubTo}
+          paused={paused}
+          visible={chromeVisible}
+          nextLabel={nextEpisode?.media_id ? episodeShort(nextEpisode) : undefined}
+          focusButtons={focusButtons}
+          onSeekFocus={() => (zone.current = 'seek')}
+          onButtonFocus={() => {
+            zone.current = 'buttons'
+            setFocusButtons(false)
+            poke()
+          }}
+          onTracks={() => setPanel(true)}
+          onRestart={restartEpisode}
+          onNext={playNext}
+        />
+      ) : null}
+
+      {showUpNext && nextEpisode ? (
+        <UpNextPill label={episodeShort(nextEpisode)} onPlay={playNext} onFocus={() => (zone.current = 'upnext')} />
       ) : null}
 
       {panel && pb ? (
