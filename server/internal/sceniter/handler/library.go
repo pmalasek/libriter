@@ -407,6 +407,27 @@ func (h *Handler) SetRating(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// PUT /sceniter/aspect/{kind}/{id}  {"aspect_ratio": "4:3" | "16:9" | null}
+// – ruční poměr stran titulu pro přehrávač (soubor bývá chybně označený).
+// Platí pro všechny uživatele; nastavit ho může kdokoli přihlášený.
+func (h *Handler) SetAspectRatio(w http.ResponseWriter, r *http.Request) {
+	movieID, showID, ok := titleRef(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		AspectRatio *string `json:"aspect_ratio"`
+	}
+	if err := readJSON(r, &req); err != nil || (req.AspectRatio != nil && !model.ValidAspectRatio(*req.AspectRatio)) {
+		writeError(w, http.StatusBadRequest, "validation.invalid", "poměr stran musí být 4:3, 16:9 nebo null")
+		return
+	}
+	if writeStoreError(w, h.Store.SetAspectRatio(r.Context(), movieID, showID, req.AspectRatio), "sceniter.not_found") {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // ---- úpravy a párování (editor) ----
 
 // PATCH /sceniter/movies/{id}, /sceniter/shows/{id}

@@ -184,11 +184,17 @@ nejlevnější režim:
 Převody běží jako HLS (fMP4 segmenty po 6 s) v `TRANSCODE_ROOT`. Plný převod má
 playlist s celou délkou filmu: přehrávač zná délku a skok dopředu restartuje
 převod od zvoleného místa. U přebalení a převodu zvuku playlist během převodu
-roste: přetáčet jde do už převedené části, která přibývá rychlostí čtení disku
-(celý film obvykle za desítky sekund). Když přímé přehrání v
+roste a přibývá rychlostí čtení disku (celý film obvykle za desítky sekund).
+Skok mimo už převedenou část (i pokračování v rozkoukaném) spustí převod znovu
+od klíčového snímku před cílem: TV klient pošle `start=` v adrese master
+playlistu a čas skutečného začátku si přečte z `#EXT-X-SESSION-DATA`
+`cz.sceniter.start` (nula časové osy nového playlistu). Když přímé přehrání v
 prohlížeči selže, přehrávač sám zkusí přebalení a pak plný převod.
 
 Zvukové stopy se přepínají v přehrávači (nový převod od stejného místa).
+Poměr stran jde v přehrávači přepnout ručně (Automaticky / 4:3 / 16:9) pro
+soubory, které ho mají zapsaný špatně (např. 4:3 obraz uložený jako 768×432
+se čtvercovými pixely). Volba se uloží k filmu či seriálu a platí pro všechny.
 Titulky: textové vložené stopy i soubory vedle videa se převádějí do WebVTT;
 obrázkové (PGS, VobSub) zobrazit nejdou.
 
@@ -226,6 +232,7 @@ Vše pod `/api/v1/sceniter`. Přehrávací cesty nesou streamovací token v adre
 | `PUT /progress/{movie\|episode}/{id}/watched`, `DELETE /progress/…` | reader | Zhlédnuto / nezhlédnuto |
 | `GET /watchlist`, `PUT\|DELETE /watchlist/{movie\|show}/{id}` | reader | Seznam „chci vidět“ |
 | `PUT /ratings/{movie\|show}/{id}` | reader | Hodnocení 1–10 nebo `null` |
+| `PUT /aspect/{movie\|show}/{id}` | reader | Ruční poměr stran pro přehrávač `4:3` / `16:9` nebo `null` (podle souboru); platí pro všechny |
 | `PATCH /movies/{id}`, `/shows/{id}` | editor | Ruční úprava názvu, roku, popisu |
 | `GET /metadata/providers` | editor | Zdroje video metadat (pluginy) |
 | `GET /metadata/search?kind=&q=&year=&provider=&language=&title=` | editor | Hledání u zdroje; bez `provider` zdroj knihovny titulu |
@@ -256,8 +263,11 @@ jediné tlačítko řazení; volba se pamatuje v televizi pro každou knihovnu.
 OK v menu otevře sekci a předá fokus do ní. Zpět v sekci zaměří menu, z menu
 vede na Domů, z Domů ven z aplikace.
 
-**Přehrávač.** Fokus drží posuvník: šipky vlevo/vpravo přetáčí (opakování
-a držení zrychluje), OK pozastaví. Dolů vede na tlačítka Zvuk a titulky, Od
+**Přehrávač.** Fokus drží posuvník: každý stisk šipky vlevo/vpravo přetočí
+o 10 s (video skočí po chvíli bez stisku), držení posouvá posuvník plynule
+a zrychluje s délkou držení (10 → 30 → 60 s za 0,2 s), video skočí hned po
+puštění. Přetáčet jde po celé délce, i do části, kterou server ještě
+nepřevedl. OK pozastaví. Dolů vede na tlačítka Zvuk a titulky, Od
 začátku a Další díl. Zpět nejdřív skryje lištu, pak přehrávač zavře. V poslední
 minutě dílu se nabídne další díl, po dohrání běží odpočet. React Native tvOS
 posílá na Androidu do JS jen uvolnění klávesy, Přehrát/Pauzu obslouží media

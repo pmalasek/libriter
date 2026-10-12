@@ -3,7 +3,7 @@ import { Animated, Pressable, ScrollView, StyleSheet, TVFocusGuideView, View } f
 import { LinearGradient } from 'expo-linear-gradient'
 import { useTranslation } from 'react-i18next'
 import { PauseIcon, PlayIcon, RotateCcwIcon, SkipForwardIcon, SubtitlesIcon, TvIcon } from 'lucide-react-native'
-import { formatClock, languageName, trackLabel, type Playback } from 'sceniter-shared'
+import { formatClock, languageName, trackLabel, type AspectRatio, type Playback } from 'sceniter-shared'
 import { Button } from '@/components/Button'
 import { T } from '@/components/T'
 import { colors, px, radius, safe } from '@/theme'
@@ -25,6 +25,8 @@ export const Chrome = forwardRef<View, {
   duration: number
   /** Kam už je rostoucí playlist hotový (přebalení); undefined = celé. */
   available?: number
+  /** Odkud je hotový – přebalení spuštěné od místa skoku nezačíná na nule. */
+  readyFrom?: number
   /** Cíl přetáčení, dokud se nepotvrdí; undefined = nepřetáčí se. */
   scrubTo?: number
   paused: boolean
@@ -41,7 +43,7 @@ export const Chrome = forwardRef<View, {
   /** Hraje díl seriálu: skok na detail seriálu se zaměřeným dílem. */
   onShow?: () => void
 }>(function Chrome(
-  { title, subtitle, time, duration, available, scrubTo, paused, visible, nextLabel, focusButtons, onSeekFocus, onButtonFocus, onTracks, onRestart, onNext, onShow },
+  { title, subtitle, time, duration, available, readyFrom = 0, scrubTo, paused, visible, nextLabel, focusButtons, onSeekFocus, onButtonFocus, onTracks, onRestart, onNext, onShow },
   seekRef,
 ) {
   const { t, i18n } = useTranslation()
@@ -55,6 +57,7 @@ export const Chrome = forwardRef<View, {
   const ratio = duration > 0 ? Math.min(1, shown / duration) : 0
   const played = duration > 0 ? Math.min(1, time / duration) : 0
   const ready = duration > 0 && available !== undefined ? Math.min(1, available / duration) : 1
+  const readyStart = duration > 0 ? Math.min(ready, readyFrom / duration) : 0
   const active = seekFocused && visible
 
   return (
@@ -92,7 +95,9 @@ export const Chrome = forwardRef<View, {
           style={styles.seek}
         >
           <View style={[styles.bar, active && styles.barActive]}>
-            {ready < 1 ? <View style={[styles.ready, { width: `${ready * 100}%` }]} /> : null}
+            {ready < 1 || readyStart > 0 ? (
+              <View style={[styles.ready, { left: `${readyStart * 100}%`, width: `${(ready - readyStart) * 100}%` }]} />
+            ) : null}
             <View style={[styles.played, { width: `${played * 100}%` }]} />
             {scrubTo !== undefined ? <View style={[styles.scrubFill, { width: `${ratio * 100}%` }]} /> : null}
             <View style={[styles.knob, active && styles.knobActive, { left: `${ratio * 100}%` }]} />
@@ -152,14 +157,20 @@ export function UpNextPill({ label, onPlay, onFocus }: { label: string; onPlay: 
 }
 
 /** Panel zvukových stop a titulků (šipka dolů). */
+const ASPECTS: AspectRatio[] = ['4:3', '16:9']
+
 export function TracksPanel({
   pb,
   subtitleKey,
+  aspect,
+  onAspect,
   onAudio,
   onSubtitle,
 }: {
   pb: Playback
   subtitleKey: string
+  aspect: AspectRatio | null
+  onAspect: (ratio: AspectRatio | null) => void
   onAudio: (index: number) => void
   onSubtitle: (key: string) => void
 }) {
@@ -206,8 +217,19 @@ export function TracksPanel({
             </T>
           ) : null}
         </View>
+        <View style={styles.column}>
+          <T variant="section" style={styles.columnTitle}>
+            {t('video.player.aspect')}
+          </T>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.options}>
+            <Button label={t('video.player.aspectAuto')} selected={aspect === null} onPress={() => onAspect(null)} />
+            {ASPECTS.map((r) => (
+              <Button key={r} label={r} selected={aspect === r} onPress={() => onAspect(r)} />
+            ))}
+          </ScrollView>
+        </View>
         <T variant="small" faint>
-          {t(`video.player.mode.${pb.mode}`)}
+          {t(`video.player.mode.${pb.mode}`)} · {t('video.player.aspectHint')}
         </T>
       </TVFocusGuideView>
     </View>

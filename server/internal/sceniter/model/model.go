@@ -26,6 +26,15 @@ const (
 	KindEpisode = "episode"
 )
 
+// Ruční poměr stran titulu (Movie.AspectRatio, Show.AspectRatio).
+const (
+	AspectRatio43  = "4:3"
+	AspectRatio169 = "16:9"
+)
+
+// ValidAspectRatio řekne, jestli jde o podporovaný ruční poměr stran.
+func ValidAspectRatio(s string) bool { return s == AspectRatio43 || s == AspectRatio169 }
+
 // Library je knihovna: podsložka VIDEO_ROOT s typem obsahu a zdrojem metadat.
 type Library struct {
 	ID   uuid.UUID `json:"id"`
@@ -117,6 +126,8 @@ type Movie struct {
 	PosterSource   string `json:"poster_source,omitempty"`
 	BackdropSource string `json:"backdrop_source,omitempty"`
 	Rating         *int   `json:"rating,omitempty"`
+	// AspectRatio je ruční poměr stran pro přehrávač; nil = podle souboru.
+	AspectRatio *string `json:"aspect_ratio,omitempty"`
 	// Credits jsou obsazení a štáb – vyplněné jen v detailu, ve výpisech prázdné.
 	Credits    []Credit `json:"credits"`
 	Genres     []string `json:"genres"`
@@ -150,6 +161,8 @@ type Show struct {
 	PosterSource   string `json:"poster_source,omitempty"`
 	BackdropSource string `json:"backdrop_source,omitempty"`
 	Rating         *int   `json:"rating,omitempty"`
+	// AspectRatio je ruční poměr stran pro přehrávač; nil = podle souboru.
+	AspectRatio *string `json:"aspect_ratio,omitempty"`
 	// Credits jsou obsazení a štáb – vyplněné jen v detailu, ve výpisech prázdné.
 	Credits    []Credit `json:"credits"`
 	Genres     []string `json:"genres"`

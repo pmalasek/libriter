@@ -147,6 +147,9 @@ export default {
     },
     info: 'Detalles de reproducción',
     fullscreen: 'Pantalla completa',
+    aspect: 'Relación de aspecto',
+    aspectAuto: 'Automática',
+    aspectHint: 'Se aplica a todo el título en todos los dispositivos.',
   },
   watchlist: {
     title: 'Para ver',
@@ -417,10 +420,11 @@ export default {
       desc: 'Descendente',
     },
     player: {
-      tracks: 'Audio y subtítulos',
+      tracks: 'Audio, subtítulos e imagen',
       restart: 'Desde el principio',
       nextEpisode: 'Siguiente episodio · {{episode}}',
       seekHint: 'Mantén pulsado para avanzar más rápido',
+      seeking: 'Buscando la posición…',
       endsAt: 'Termina a las {{time}}',
       showDetail: 'Serie',
     },

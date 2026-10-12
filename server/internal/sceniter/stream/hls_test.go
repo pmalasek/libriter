@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -118,4 +119,89 @@ func TestManagerKeepAlive(t *testing.T) {
 	if _, err := m.Lookup(s.ID, user); err != nil {
 		t.Fatalf("převod po keepalive zmizel: %v", err)
 	}
+}
+
+func TestKeyframeBefore(t *testing.T) {
+	src := testVideo(t)
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("ffprobe není k dispozici")
+	}
+	// Testovací video má klíčový snímek každou sekundu (-g 25 při 25 fps).
+	for at, want := range map[float64]float64{0: 0, 0.5: 0, 4.5: 4, 5: 5, 7.9: 7} {
+		got, err := keyframeBefore(context.Background(), ffprobe, src, at)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("keyframeBefore(%v) = %v, chci %v", at, got, want)
+		}
+	}
+}
+
+func TestManagerStart(t *testing.T) {
+	src := testVideo(t)
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		t.Skip("ffprobe není k dispozici")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m := NewManager(t.TempDir(), 2, time.Minute)
+	m.Start(ctx)
+	user, media := uuid.New(), uuid.New()
+
+	first, err := m.Open(Options{UserID: user, MediaID: media, Path: src, Mode: ModeRemux, Duration: 8})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := m.Open(Options{UserID: user, MediaID: media, Path: src, Mode: ModeRemux, Duration: 8, Start: 4.5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.ID == first.ID || s.Start != 4 {
+		t.Fatalf("skok: session %s (start %v), původní %s", s.ID, s.Start, first.ID)
+	}
+	if _, err := m.Lookup(first.ID, user); err != ErrSessionGone {
+		t.Fatal("převod od začátku po skoku pořád běží")
+	}
+	// Opakované načtení masteru se stejným místem použije běžící převod.
+	if again, _ := m.Open(Options{UserID: user, MediaID: media, Path: src, Mode: ModeRemux, Duration: 8, Start: 4.5}); again != s {
+		t.Fatal("stejný skok založil nový převod")
+	}
+
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		data, _ := os.ReadFile(filepath.Join(s.Dir(), "index.m3u8"))
+		if strings.Contains(string(data), "#EXT-X-ENDLIST") {
+			// Playlist pokrývá jen zbytek od klíčového snímku (8 − 4 s).
+			if got := playlistSeconds(string(data)); got < 3.9 || got > 4.1 {
+				t.Fatalf("délka playlistu %v s:\n%s", got, data)
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("playlist nedoběhl:\n%s", data)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+
+	// Plný převod skáče po segmentech sám – start se u něj nepoužije.
+	tr, err := m.Open(Options{UserID: user, MediaID: media, Path: src, Mode: ModeTranscode, Duration: 8, Start: 4.5})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tr.Start != 0 {
+		t.Fatalf("plný převod se startem %v", tr.Start)
+	}
+}
+
+func playlistSeconds(text string) float64 {
+	total := 0.0
+	for _, line := range strings.Split(text, "\n") {
+		if v, ok := strings.CutPrefix(line, "#EXTINF:"); ok {
+			f, _ := strconv.ParseFloat(strings.TrimSuffix(v, ","), 64)
+			total += f
+		}
+	}
+	return total
 }

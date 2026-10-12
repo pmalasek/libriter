@@ -1,11 +1,12 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowLeftIcon, AudioLinesIcon, CaptionsIcon, InfoIcon, LoaderIcon, SkipForwardIcon } from 'lucide-react'
+import { ArrowLeftIcon, AudioLinesIcon, CaptionsIcon, InfoIcon, LoaderIcon, RatioIcon, SkipForwardIcon } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   escalateMode,
   keepaliveUrl,
   languageName,
+  setAspectRatio,
   shouldSeekTo,
   stopUrlFromVariant,
   trackLabel,
@@ -14,6 +15,7 @@ import {
   NEXT_COUNTDOWN,
   RESUME_AHEAD,
   SAVE_INTERVAL_MS,
+  type AspectRatio,
   type Playback,
   type PlaybackMode,
 } from 'sceniter-shared'
@@ -32,6 +34,17 @@ import { detectProfile, deviceId, hasNativeHls } from './profile'
 
 type HlsInstance = import('hls.js').default
 
+const ASPECTS: AspectRatio[] = ['4:3', '16:9']
+
+/**
+ * Video s vynuceným poměrem stran: největší obdélník daného poměru uprostřed
+ * plochy, obraz roztažený do něj (soubor má poměr zapsaný špatně).
+ */
+function aspectStyle(ratio: AspectRatio): React.CSSProperties {
+  const [w, h] = ratio.split(':')
+  return { aspectRatio: `${w} / ${h}`, width: `min(100vw, calc(100vh * ${w} / ${h}))`, objectFit: 'fill' }
+}
+
 /** Konec části videa, na kterou jde skočit (u rostoucího playlistu roste). */
 function seekableEnd(video: HTMLVideoElement): number {
   const r = video.seekable
@@ -47,6 +60,7 @@ export interface NextUp {
 export function VideoPlayer({
   mediaId,
   movieId,
+  showId,
   episodeId,
   title,
   subtitle,
@@ -56,6 +70,8 @@ export function VideoPlayer({
 }: {
   mediaId: string
   movieId?: string
+  /** Seriál dílu – ruční poměr stran se ukládá k němu. */
+  showId?: string
   episodeId?: string
   title: string
   subtitle?: string
@@ -79,6 +95,17 @@ export function VideoPlayer({
 
   const playback = usePlayback(mediaId, profile, audio, mode)
   const pb = playback.data
+
+  // Ruční poměr stran platí hned; undefined = podle rozhodnutí ze serveru.
+  const [aspectChoice, setAspectChoice] = useState<AspectRatio | null | undefined>()
+  const aspect = aspectChoice !== undefined ? aspectChoice : (pb?.aspect_ratio ?? null)
+  const changeAspect = (ratio: AspectRatio | null) => {
+    setAspectChoice(ratio)
+    // Patří celému titulu: filmu, nebo seriálu (i jeho dalším dílům).
+    const target = movieId ? (['movie', movieId] as const) : showId ? (['show', showId] as const) : undefined
+    // Když se neuloží, pro toto přehrání volba platí dál.
+    if (target) void setAspectRatio(target[0], target[1], ratio).catch(() => undefined)
+  }
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
@@ -366,13 +393,14 @@ export function VideoPlayer({
       onKeyDown={onKeyDown}
       onMouseMove={() => setChrome(true)}
       onTouchStart={() => setChrome(true)}
-      className="fixed inset-0 z-50 bg-black text-white outline-none"
+      className={cn('fixed inset-0 z-50 bg-black text-white outline-none', aspect && 'flex items-center justify-center')}
       // Fokus hned po otevření, ať fungují klávesové zkratky.
       autoFocus
     >
       <video
         ref={videoRef}
-        className="sceniter-video size-full"
+        className={cn('sceniter-video', !aspect && 'size-full')}
+        style={aspect ? aspectStyle(aspect) : undefined}
         controls
         playsInline
         crossOrigin="anonymous"
@@ -463,6 +491,28 @@ export function VideoPlayer({
                 {pb!.unsupported_subtitles.length > 0 ? (
                   <p className="max-w-56 px-2 py-1.5 text-xs text-muted-foreground">{t('video.player.unsupportedSubtitles')}</p>
                 ) : null}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : null}
+
+          {pb ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-lg" className={cn('text-white hover:bg-white/15 hover:text-white', aspect && 'bg-white/15')} aria-label={t('video.player.aspect')} title={t('video.player.aspect')}>
+                  <RatioIcon className="size-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuLabel>{t('video.player.aspect')}</DropdownMenuLabel>
+                <DropdownMenuRadioGroup value={aspect ?? 'auto'} onValueChange={(v) => changeAspect(v === 'auto' ? null : (v as AspectRatio))}>
+                  <DropdownMenuRadioItem value="auto">{t('video.player.aspectAuto')}</DropdownMenuRadioItem>
+                  {ASPECTS.map((r) => (
+                    <DropdownMenuRadioItem key={r} value={r}>
+                      {r}
+                    </DropdownMenuRadioItem>
+                  ))}
+                </DropdownMenuRadioGroup>
+                <p className="max-w-56 px-2 py-1.5 text-xs text-muted-foreground">{t('video.player.aspectHint')}</p>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null}

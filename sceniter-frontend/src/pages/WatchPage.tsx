@@ -72,6 +72,7 @@ function WatchEpisode({ id, fromStart, onBack }: { id: string; fromStart: boolea
     <VideoPlayer
       mediaId={file.id}
       episodeId={d.episode.id}
+      showId={d.show.id}
       title={d.show.title}
       subtitle={episodeLabel(d.episode)}
       startAt={!fromStart && canResume(p) ? p.position_sec : undefined}

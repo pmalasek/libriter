@@ -52,6 +52,25 @@ export function keepaliveUrl(masterUrl: string): string {
 }
 
 /**
+ * Adresa master playlistu, který spustí přebalení (převod zvuku) od místa
+ * `start` (s) – skok mimo už hotovou část rostoucího playlistu.
+ */
+export function withStart(masterUrl: string, start: number): string {
+  if (!(start > 0)) return masterUrl
+  return `${masterUrl}${masterUrl.includes('?') ? '&' : '?'}start=${start.toFixed(3)}`
+}
+
+/**
+ * Čas (s), od kterého převod běží – nula časové osy playlistu (klíčový
+ * snímek před požadovaným startem). 0, když ho server neposlal.
+ */
+export function masterStart(masterText: string): number {
+  const m = /#EXT-X-SESSION-DATA:.*DATA-ID="cz\.sceniter\.start".*VALUE="([\d.]+)"/.exec(masterText)
+  const v = m ? Number(m[1]) : 0
+  return Number.isFinite(v) && v > 0 ? v : 0
+}
+
+/**
  * Adresa pro ukončení převodu odvozená z adresy playlistu varianty
  * (…/hls/{session}/index.m3u8?t=…). Undefined, když tvar nesedí.
  */

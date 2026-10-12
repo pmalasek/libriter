@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"os"
@@ -34,6 +35,8 @@ type PlaybackResponse struct {
 	// TranscodingAvailable je false, když server nemá ffmpeg – pak jde jen
 	// přímé přehrávání a soubor nemusí v prohlížeči hrát.
 	TranscodingAvailable bool `json:"transcoding_available"`
+	// AspectRatio je ruční poměr stran titulu (4:3 | 16:9); chybí = podle souboru.
+	AspectRatio *string `json:"aspect_ratio,omitempty"`
 }
 
 type subtitleTrack struct {
@@ -73,6 +76,12 @@ func (h *Handler) Playback(w http.ResponseWriter, r *http.Request) {
 
 	resp := PlaybackResponse{MediaID: mf.ID, DurationSec: mf.DurationSec, TokenExpiry: expires, Decision: d,
 		TranscodingAvailable: h.HLS.Available(), Subtitles: []subtitleTrack{}}
+	// Poměr stran je jen kosmetika – jeho chyba přehrávání neshodí.
+	if ratio, err := h.Store.MediaAspectRatio(r.Context(), mf.ID); err != nil {
+		slog.Warn("poměr stran titulu", "media", mf.ID, "err", err)
+	} else {
+		resp.AspectRatio = ratio
+	}
 	if d.Mode == stream.ModeDirect {
 		resp.URL = fmt.Sprintf("%s/media/%s/stream?t=%s", apiBase, mf.ID, t)
 	} else {
@@ -140,8 +149,10 @@ func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// GET /sceniter/media/{id}/hls/master.m3u8?t=&mode=&audio= – založí (nebo
-// znovu použije) převod a vrátí master playlist.
+// GET /sceniter/media/{id}/hls/master.m3u8?t=&mode=&audio=&start= – založí
+// (nebo znovu použije) převod a vrátí master playlist. start (s) spustí
+// přebalení či převod zvuku od klíčového snímku před tímto místem; jeho čas
+// nese #EXT-X-SESSION-DATA "cz.sceniter.start" (nula časové osy playlistu).
 func (h *Handler) Master(w http.ResponseWriter, r *http.Request) {
 	user, ok := h.streamUser(w, r)
 	if !ok {
@@ -171,6 +182,10 @@ func (h *Handler) Master(w http.ResponseWriter, r *http.Request) {
 	if mf.Width != nil && mf.Height != nil {
 		opts.Width, opts.Height = *mf.Width, *mf.Height
 	}
+	if v, err := strconv.ParseFloat(r.URL.Query().Get("start"), 64); err == nil && v > 0 && !math.IsInf(v, 0) &&
+		(opts.Duration <= 0 || v < opts.Duration) {
+		opts.Start = v
+	}
 	s, err := h.HLS.Open(opts)
 	switch {
 	case errors.Is(err, stream.ErrBusy):
@@ -191,6 +206,7 @@ func (h *Handler) Master(w http.ResponseWriter, r *http.Request) {
 	}
 	var b strings.Builder
 	b.WriteString("#EXTM3U\n#EXT-X-VERSION:7\n#EXT-X-INDEPENDENT-SEGMENTS\n")
+	fmt.Fprintf(&b, "#EXT-X-SESSION-DATA:DATA-ID=\"cz.sceniter.start\",VALUE=\"%.3f\"\n", s.Start)
 	fmt.Fprintf(&b, "#EXT-X-STREAM-INF:BANDWIDTH=%d", bandwidth)
 	if opts.Width > 0 && opts.Height > 0 && mode != stream.ModeTranscode {
 		fmt.Fprintf(&b, ",RESOLUTION=%dx%d", opts.Width, opts.Height)
@@ -200,6 +216,7 @@ func (h *Handler) Master(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/vnd.apple.mpegurl")
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Sceniter-Session", s.ID)
+	w.Header().Set("X-Sceniter-Start", strconv.FormatFloat(s.Start, 'f', 3, 64))
 	_, _ = w.Write([]byte(b.String()))
 }
 

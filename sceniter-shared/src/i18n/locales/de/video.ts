@@ -147,6 +147,9 @@ export default {
     },
     info: 'Wiedergabedetails',
     fullscreen: 'Vollbild',
+    aspect: 'Seitenverhältnis',
+    aspectAuto: 'Automatisch',
+    aspectHint: 'Gilt für den ganzen Titel auf allen Geräten.',
   },
   watchlist: {
     title: 'Merkliste',
@@ -416,10 +419,11 @@ export default {
       desc: 'Absteigend',
     },
     player: {
-      tracks: 'Audio und Untertitel',
+      tracks: 'Audio, Untertitel und Bild',
       restart: 'Von vorne',
       nextEpisode: 'Nächste Folge · {{episode}}',
       seekHint: 'Gedrückt halten, um schneller zu spulen',
+      seeking: 'Springe zur Stelle…',
       endsAt: 'Endet um {{time}}',
       showDetail: 'Serie',
     },

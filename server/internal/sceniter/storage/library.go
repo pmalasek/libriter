@@ -16,7 +16,8 @@ import (
 const movieCols = `
 	m.id, m.library_id, m.source_key, m.title, m.original_title, m.year, m.overview, m.tagline, m.runtime_min,
 	m.meta_provider, m.meta_id, m.external_ids_json, m.poster_path, m.backdrop_path, m.rating,
-	m.match_state, m.match_attempted_at, m.created_at, m.updated_at, m.poster_source, m.backdrop_source`
+	m.match_state, m.match_attempted_at, m.created_at, m.updated_at, m.poster_source, m.backdrop_source,
+	m.aspect_ratio`
 
 // mainMovieFile vybere hlavní soubor filmu: největší (nejlepší verzi).
 const mainMovieFile = `(SELECT id FROM sc_media_files WHERE movie_id = m.id ORDER BY size_bytes DESC, file_path LIMIT 1)`
@@ -25,13 +26,13 @@ func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, e
 	var (
 		m                                   model.Movie
 		orig, overview, tagline, poster, bd sql.NullString
-		provider, metaID, external          sql.NullString
+		provider, metaID, external, aspect  sql.NullString
 		year, runtime, rating               sql.NullInt64
 		attempted                           sql.NullTime
 	)
 	dest := []any{&m.ID, &m.LibraryID, &m.SourceKey, &m.Title, &orig, &year, &overview, &tagline, &runtime,
 		&provider, &metaID, &external, &poster, &bd, &rating, &m.MatchState, &attempted, &m.CreatedAt, &m.UpdatedAt,
-		&m.PosterSource, &m.BackdropSource}
+		&m.PosterSource, &m.BackdropSource, &aspect}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return m, err
 	}
@@ -39,6 +40,7 @@ func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, e
 	m.RuntimeMin, m.MetaProvider, m.MetaID = ptrInt(runtime), ptrString(provider), ptrString(metaID)
 	m.ExternalIDs = model.UnmarshalExternalIDs(ptrString(external))
 	m.PosterPath, m.BackdropPath, m.Rating = ptrString(poster), ptrString(bd), ptrInt(rating)
+	m.AspectRatio = ptrString(aspect)
 	if attempted.Valid {
 		m.MatchAttemptedAt = &attempted.Time
 	}
@@ -284,7 +286,7 @@ const showCols = `
 	s.id, s.library_id, s.source_key, s.title, s.original_title, s.year, s.overview, s.status,
 	s.meta_provider, s.meta_id, s.external_ids_json,
 	s.poster_path, s.backdrop_path, s.rating, s.match_state, s.match_attempted_at, s.created_at, s.updated_at,
-	s.poster_source, s.backdrop_source`
+	s.poster_source, s.backdrop_source, s.aspect_ratio`
 
 // showCounts spočítá řady a díly, které mají soubor.
 const showCounts = `
@@ -297,14 +299,14 @@ func scanShow(sc interface{ Scan(...any) error }, extra ...any) (model.Show, err
 	var (
 		sh                                 model.Show
 		orig, overview, status, poster, bd sql.NullString
-		provider, metaID, external         sql.NullString
+		provider, metaID, external, aspect sql.NullString
 		year, rating                       sql.NullInt64
 		attempted                          sql.NullTime
 	)
 	dest := []any{&sh.ID, &sh.LibraryID, &sh.SourceKey, &sh.Title, &orig, &year, &overview, &status,
 		&provider, &metaID, &external,
 		&poster, &bd, &rating, &sh.MatchState, &attempted, &sh.CreatedAt, &sh.UpdatedAt,
-		&sh.PosterSource, &sh.BackdropSource,
+		&sh.PosterSource, &sh.BackdropSource, &aspect,
 		&sh.SeasonCount, &sh.EpisodeCount}
 	err := sc.Scan(append(dest, extra...)...)
 	if err != nil {
@@ -314,6 +316,7 @@ func scanShow(sc interface{ Scan(...any) error }, extra ...any) (model.Show, err
 	sh.MetaProvider, sh.MetaID = ptrString(provider), ptrString(metaID)
 	sh.ExternalIDs = model.UnmarshalExternalIDs(ptrString(external))
 	sh.PosterPath, sh.BackdropPath, sh.Rating = ptrString(poster), ptrString(bd), ptrInt(rating)
+	sh.AspectRatio = ptrString(aspect)
 	if attempted.Valid {
 		sh.MatchAttemptedAt = &attempted.Time
 	}

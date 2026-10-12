@@ -4,6 +4,7 @@
 
 import { apiFetch, listQuery, type Page } from 'core-shared'
 import type {
+  AspectRatio,
   EpisodeDetail,
   Home,
   Library,
@@ -112,6 +113,11 @@ export function getPlayback(
     `${BASE}/media/${mediaId}/playback${params({ profile: p.profile, audio: p.audio?.toString(), mode: p.mode })}`,
     o,
   )
+}
+
+/** Ruční poměr stran titulu (null = podle souboru); platí pro všechny uživatele. */
+export function setAspectRatio(kind: TitleKind, id: string, ratio: AspectRatio | null): Promise<void> {
+  return apiFetch<void>(`${BASE}/aspect/${kind}/${id}`, { method: 'PUT', json: { aspect_ratio: ratio } })
 }
 
 /** Zápis pozice z přehrávače; 409 (novější pozice jinde) není chyba. */

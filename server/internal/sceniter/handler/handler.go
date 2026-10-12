@@ -134,6 +134,7 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Put("/watchlist/{kind}/{id}", h.SetWatchlist)
 					r.Delete("/watchlist/{kind}/{id}", h.SetWatchlist)
 					r.Put("/ratings/{kind}/{id}", h.SetRating)
+					r.Put("/aspect/{kind}/{id}", h.SetAspectRatio)
 				})
 
 				r.Group(func(r chi.Router) {

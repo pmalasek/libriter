@@ -3,9 +3,11 @@ import {
   getBaseUrl,
   hlsPlaylistInfo,
   keepaliveUrl,
+  masterStart,
   RESUME_AHEAD,
   stopUrlFromVariant,
   variantUrlFromMaster,
+  withStart,
   KEEPALIVE_MS,
   type Playback,
 } from 'sceniter-shared'
@@ -19,6 +21,11 @@ export class TranscodeBusyError extends Error {}
  */
 export class StreamSession {
   readonly url: string
+  /**
+   * Čas (s), od kterého převod běží: pozice 0 přehrávače odpovídá tomuto
+   * místu ve videu. Nenulový jen u přebalení spuštěného od místa skoku.
+   */
+  start = 0
   private variant?: string
   private stopUrl?: string
   private keepalive?: ReturnType<typeof setInterval>
@@ -28,8 +35,11 @@ export class StreamSession {
     private readonly pb: Playback,
     /** Převod zmizel (úklid serveru, restart) – je potřeba nové rozhodnutí. */
     private readonly onGone: () => void,
+    /** Místo (s), od kterého má přebalení začít; plný převod skáče sám. */
+    from?: number,
   ) {
-    this.url = absoluteUrl(getBaseUrl(), pb.url)
+    const growing = pb.hls && pb.mode !== 'transcode'
+    this.url = absoluteUrl(getBaseUrl(), growing && from ? withStart(pb.url, from) : pb.url)
   }
 
   /**
@@ -41,7 +51,9 @@ export class StreamSession {
     const res = await fetch(this.url)
     if (res.status === 503) throw new TranscodeBusyError()
     if (!res.ok) throw new Error(`master ${res.status}`)
-    this.variant = variantUrlFromMaster(await res.text(), this.url)
+    const master = await res.text()
+    this.start = masterStart(master)
+    this.variant = variantUrlFromMaster(master, this.url)
     this.stopUrl = stopUrlFromVariant(this.variant)
 
     const keep = absoluteUrl(getBaseUrl(), keepaliveUrl(this.pb.url))
@@ -58,7 +70,7 @@ export class StreamSession {
 
   /**
    * Počká, až rostoucí playlist (přebalení, převod zvuku) pokryje místo
-   * `at` s rezervou. Plný převod má playlist v celé délce hned.
+   * `at` (čas ve videu) s rezervou. Plný převod má playlist v celé délce hned.
    */
   async waitForPosition(at: number, isCancelled: () => boolean): Promise<void> {
     if (!this.pb.hls || !this.variant || this.pb.mode === 'transcode') return
@@ -67,7 +79,7 @@ export class StreamSession {
         const res = await fetch(this.variant)
         if (res.ok) {
           const info = hlsPlaylistInfo(await res.text())
-          if (info.ended || info.seconds >= at + RESUME_AHEAD) return
+          if (info.ended || this.start + info.seconds >= at + RESUME_AHEAD) return
         }
       } catch {
         // zkusit znovu

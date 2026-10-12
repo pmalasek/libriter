@@ -147,6 +147,9 @@ export default {
     },
     info: 'Détails de lecture',
     fullscreen: 'Plein écran',
+    aspect: "Format d'image",
+    aspectAuto: 'Automatique',
+    aspectHint: "S'applique à tout le titre sur tous les appareils.",
   },
   watchlist: {
     title: 'À voir',
@@ -417,10 +420,11 @@ export default {
       desc: 'Décroissant',
     },
     player: {
-      tracks: 'Audio et sous-titres',
+      tracks: 'Audio, sous-titres et image',
       restart: 'Depuis le début',
       nextEpisode: 'Épisode suivant · {{episode}}',
       seekHint: 'Maintenez pour avancer plus vite',
+      seeking: 'Recherche de la position…',
       endsAt: 'Se termine à {{time}}',
       showDetail: 'Série',
     },

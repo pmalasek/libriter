@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ActivityIndicator, AppState, BackHandler, Platform, StyleSheet, View, useTVEventHandler, type HWEvent } from 'react-native'
+import { ActivityIndicator, AppState, BackHandler, Platform, StyleSheet, View, useTVEventHandler, useWindowDimensions, type HWEvent, type ViewStyle } from 'react-native'
 import { router, useLocalSearchParams, useNavigation } from 'expo-router'
 import { useEventListener } from 'expo'
 import { VideoView, useVideoPlayer } from 'expo-video'
@@ -11,10 +11,12 @@ import {
   escalateMode,
   languageCode,
   saveProgress,
+  setAspectRatio,
   shouldSeekTo,
   NEXT_COUNTDOWN,
   SAVE_INTERVAL_MS,
   WatchMeter,
+  type AspectRatio,
   type Playback,
   type PlaybackMode,
 } from 'sceniter-shared'
@@ -35,12 +37,21 @@ import { colors, px } from '@/theme'
 const CHROME_MS = 4000
 /** Na tlačítkách lišty (čtení popisků, volba) zůstává lišta déle. */
 const CHROME_BUTTONS_MS = 8000
-/** Jak často se při držené šipce přetáčí o další krok. */
-const HOLD_REPEAT_MS = 250
+/** Jeden stisk šipky přetočí vždy o stejný kus (s). */
+const SEEK_STEP = 10
+/** Jak často se při držené šipce posune posuvník. */
+const HOLD_TICK_MS = 200
 /** Přetáčení šipkami se potvrdí samo po chvíli bez dalšího stisku. */
-const SCRUB_COMMIT_MS = 900
+const SCRUB_COMMIT_MS = 600
+/** Jak dlouho po skoku nevěřit hlášené poloze, dokud se přehrávač nesrovná. */
+const SETTLE_MS = 4000
 
-type Phase = 'loading' | 'resuming' | 'playing'
+/** Krok při držení (s za tik): zrychluje jen s délkou držení, ne se stisky. */
+function holdStep(heldMs: number): number {
+  return heldMs < 2000 ? 10 : heldMs < 4000 ? 30 : 60
+}
+
+type Phase = 'loading' | 'resuming' | 'seeking' | 'playing'
 
 /**
  * Výchozí titulky: vynucené v jazyce rozhraní vždy (překlad cizojazyčných
@@ -55,6 +66,19 @@ function defaultSubtitle(pb: Playback, uiLang: string, mode: 'off' | 'language')
 
 /** Jak dlouho nejvýš čekat na pozici ze serveru, než se pustí ta z obrazovky. */
 const RESUME_CHECK_MS = 3000
+
+/**
+ * Plocha videa s vynuceným poměrem stran: co největší obdélník daného poměru
+ * uprostřed obrazovky. Obraz se do ní roztáhne (contentFit="fill") – tak se
+ * opraví soubor, který má poměr stran zapsaný špatně.
+ */
+function aspectBox(win: { width: number; height: number }, ratio: AspectRatio): ViewStyle {
+  const [w, h] = ratio.split(':').map(Number)
+  const r = w / h
+  const width = win.width / win.height > r ? win.height * r : win.width
+  const height = width / r
+  return { position: 'absolute', width, height, left: (win.width - width) / 2, top: (win.height - height) / 2 }
+}
 
 /**
  * Pozice, od které pokračovat, přímo ze serveru – data obrazovky, ze které se
@@ -151,6 +175,18 @@ export default function PlayerScreen() {
 
   // Poslední známá poloha – ukládání při odchodu už na uvolněný přehrávač sahat nesmí.
   const timeRef = useRef(0)
+  // Přebalení spuštěné od místa skoku začíná v čase `offset` videa: poloha
+  // přehrávače 0 = offset. Čas v aplikaci (lišta, titulky, ukládání) je vždy
+  // čas videa, s přehrávačem se mluví v jeho čase.
+  const offset = useRef(0)
+  // Skok mimo hotovou část přebalení: nový převod na serveru od cíle.
+  const [seekGen, setSeekGen] = useState(0)
+  const seeking = useRef(false)
+  // Než se přehrávači předá nový zdroj, hlásí ještě ten starý (i chybu,
+  // když se jeho převod na serveru zastaví) – jeho události se ignorují.
+  const switching = useRef(false)
+  // Po skoku přehrávač chvíli hlásí ještě starou polohu.
+  const settle = useRef<{ target: number; until: number } | undefined>(undefined)
   const position = useCallback(() => (timeRef.current > 0 ? timeRef.current : seekTo.current ?? 0), [])
 
   // ---- ukládání pozice ----
@@ -226,18 +262,13 @@ export default function PlayerScreen() {
   useEffect(() => {
     if (!pb) return
     let cancelled = false
-    const session = new StreamSession(pb, restart)
+    let session: StreamSession | undefined
+    switching.current = true
     setFailure(null)
-    setPhase('loading')
+    setPhase(seeking.current ? 'seeking' : 'loading')
     void (async () => {
-      try {
-        await session.open()
-      } catch (e) {
-        if (cancelled) return
-        if (e instanceof TranscodeBusyError) setFailure(t('video.player.busy'))
-        else escalate()
-        return
-      }
+      // Místo pokračování se zjistí před otevřením proudu: přebalení se na
+      // serveru spustí rovnou od něj.
       const check = resumeCheck.current
       if (check) {
         const fresh = await check
@@ -247,31 +278,45 @@ export default function PlayerScreen() {
       }
       const at = seekTo.current
       const resume = shouldSeekTo(at, pb.duration_sec)
-      if (resume) {
-        setPhase('resuming')
-        await session.waitForPosition(at, () => cancelled)
-      } else {
-        seekTo.current = undefined
+      if (!resume) seekTo.current = undefined
+      session = new StreamSession(pb, restart, resume ? at : undefined)
+      try {
+        await session.open()
+      } catch (e) {
+        if (cancelled) return
+        if (e instanceof TranscodeBusyError) setFailure(t('video.player.busy'))
+        else escalate()
+        return
       }
       if (cancelled) return
-      pendingSeek.current = resume ? at : undefined
+      if (resume) {
+        if (!seeking.current) setPhase('resuming')
+        await session.waitForPosition(at, () => cancelled)
+      }
+      if (cancelled) return
+      offset.current = session.start
+      pendingSeek.current = resume ? Math.max(0, at - session.start) : undefined
       endedRef.current = false
+      switching.current = false
       player.replace({ uri: session.url, contentType: pb.hls ? 'hls' : 'progressive' })
       player.play()
     })()
     return () => {
       cancelled = true
-      session.close()
+      session?.close()
     }
-  }, [pb, player, restart, escalate, t])
+  }, [pb, seekGen, player, restart, escalate, t])
 
   useEventListener(player, 'statusChange', ({ status }) => {
+    if (switching.current) return
     if (status === 'readyToPlay') {
       if (pendingSeek.current !== undefined) {
         player.currentTime = pendingSeek.current
+        settle.current = { target: offset.current + pendingSeek.current, until: Date.now() + SETTLE_MS }
         pendingSeek.current = undefined
       }
       seekTo.current = undefined
+      seeking.current = false
       started.current = true
       setPhase('playing')
     } else if (status === 'error') {
@@ -285,6 +330,7 @@ export default function PlayerScreen() {
   const [duration, setDuration] = useState(0)
   // Hotová část rostoucího playlistu (přebalení) – dál přehrávač skočit neumí.
   const [available, setAvailable] = useState<number | undefined>()
+  const [readyFrom, setReadyFrom] = useState(0)
   const availableRef = useRef<number | undefined>(undefined)
   const [paused, setPaused] = useState(false)
   const [countdown, setCountdown] = useState<number | null>(null)
@@ -293,8 +339,16 @@ export default function PlayerScreen() {
   const endedRef = useRef(false)
 
   useEventListener(player, 'timeUpdate', ({ currentTime }) => {
-    timeRef.current = currentTime
-    setTime(currentTime)
+    // Při načítání (i nového převodu po skoku) hlásí přehrávač nesmysly.
+    if (switching.current || phaseRef.current !== 'playing') return
+    const at = offset.current + currentTime
+    const s = settle.current
+    if (s) {
+      if (Math.abs(at - s.target) > 2 && Date.now() < s.until) return
+      settle.current = undefined
+    }
+    timeRef.current = at
+    setTime(at)
     // Rostoucí playlist (přebalení) hlásí jen hotovou část – platí délka ze serveru.
     const total = pbRef.current?.duration_sec || player.duration
     if (total > 0) {
@@ -302,10 +356,11 @@ export default function PlayerScreen() {
       setDuration(total)
     }
     const growing = pbRef.current?.hls && pbRef.current.mode !== 'transcode'
-    const ready = growing && Number.isFinite(player.duration) && player.duration > 0 ? player.duration : undefined
+    const ready = growing && Number.isFinite(player.duration) && player.duration > 0 ? offset.current + player.duration : undefined
     availableRef.current = ready
     setAvailable(ready)
-    meter.current.tick(currentTime, player.playing)
+    setReadyFrom(offset.current)
+    meter.current.tick(at, player.playing)
     if (Date.now() - lastSave.current > SAVE_INTERVAL_MS) void save()
   })
 
@@ -363,6 +418,9 @@ export default function PlayerScreen() {
     resumeCheck.current = checkResume(qc, { episodeId: next.id })
     pendingSeek.current = undefined
     timeRef.current = 0
+    offset.current = 0
+    seeking.current = false
+    settle.current = undefined
     durationRef.current = 0
     lastSave.current = 0
     meter.current.reset()
@@ -371,6 +429,8 @@ export default function PlayerScreen() {
     setPaused(false)
     setFailure(null)
     setPhase('loading')
+    clearTimeout(scrubTimer.current)
+    scrubRef.current = undefined
     setScrubTo(undefined)
     setPanel(false)
     setChromeAt(Date.now())
@@ -378,7 +438,9 @@ export default function PlayerScreen() {
     upNextWarmed.current = false
     availableRef.current = undefined
     setAvailable(undefined)
+    setReadyFrom(0)
     setSubtitleKey(null)
+    setAspectChoice(undefined)
     setAudio(undefined)
     setMode(undefined)
     setAttempt(0)
@@ -410,8 +472,16 @@ export default function PlayerScreen() {
   const [chromeAt, setChromeAt] = useState(() => Date.now())
   const poke = useCallback(() => setChromeAt(Date.now()), [])
   const [panel, setPanel] = useState(false)
+  // Cíl přetáčení, dokud se nepotvrdí; ref pro obsluhu kláves (stav se
+  // mezi rychlými stisky nestihne překreslit).
   const [scrubTo, setScrubTo] = useState<number | undefined>()
+  const scrubRef = useRef<number | undefined>(undefined)
   const scrubTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const clearScrub = useCallback(() => {
+    clearTimeout(scrubTimer.current)
+    scrubRef.current = undefined
+    setScrubTo(undefined)
+  }, [])
   const [upNextDismissed, setUpNextDismissed] = useState(false)
   // Šipka dolů při skryté liště: ukázat ji a rovnou zaměřit tlačítka.
   const [focusButtons, setFocusButtons] = useState(false)
@@ -452,34 +522,47 @@ export default function PlayerScreen() {
 
   const commitScrub = useCallback(
     (target: number | undefined) => {
-      clearTimeout(scrubTimer.current)
-      setScrubTo(undefined)
+      clearScrub()
       if (target === undefined) return
       meter.current.reset()
-      player.currentTime = target
+      // Další stisk musí navázat na cíl, ne na polohu před skokem.
+      timeRef.current = target
+      setTime(target)
+      const cur = pbRef.current
+      const growing = cur?.hls && cur.mode !== 'transcode'
+      const ready = availableRef.current
+      if (growing && (target < offset.current || ready === undefined || target > ready - 2)) {
+        // Mimo hotovou část přebalení: převod na serveru znovu od cíle.
+        seekTo.current = target
+        seeking.current = true
+        player.pause()
+        setSeekGen((g) => g + 1)
+        return
+      }
+      settle.current = { target, until: Date.now() + SETTLE_MS }
+      player.currentTime = target - offset.current
     },
-    [player],
+    [clearScrub, player],
   )
 
   const scrubBy = useCallback(
     (delta: number) => {
       poke()
-      setScrubTo((prev) => {
-        const end = durationRef.current > 0 ? durationRef.current - 1 : Infinity
-        const ready = availableRef.current !== undefined ? availableRef.current - 2 : Infinity
-        const max = Math.max(0, Math.min(end, ready))
-        const next = Math.max(0, Math.min(max, (prev ?? timeRef.current) + delta))
-        clearTimeout(scrubTimer.current)
-        scrubTimer.current = setTimeout(() => commitScrub(next), SCRUB_COMMIT_MS)
-        return next
-      })
+      // Přetáčet jde po celé délce – co ještě není převedené, převede server.
+      const end = durationRef.current > 0 ? durationRef.current - 1 : Infinity
+      const next = Math.max(0, Math.min(end, (scrubRef.current ?? timeRef.current) + delta))
+      scrubRef.current = next
+      setScrubTo(next)
+      // Při držení odkládají potvrzení další tiky; potvrdí ho až puštění.
+      clearTimeout(scrubTimer.current)
+      scrubTimer.current = setTimeout(() => commitScrub(scrubRef.current), SCRUB_COMMIT_MS)
     },
     [commitScrub, poke],
   )
 
   const togglePlay = () => {
     poke()
-    if (scrubTo !== undefined) commitScrub(scrubTo)
+    if (scrubRef.current !== undefined) commitScrub(scrubRef.current)
     else if (player.playing) player.pause()
     else player.play()
   }
@@ -487,21 +570,11 @@ export default function PlayerScreen() {
   const restartEpisode = () => {
     poke()
     commitScrub(0)
-    player.play()
+    // Při novém převodu od začátku spustí přehrávání až nový zdroj.
+    if (!seeking.current) player.play()
   }
 
-  // Opakované stisky stejným směrem zrychlují (10 s → 30 s → 60 s).
-  const repeat = useRef({ dir: 0, count: 0, at: 0 })
-  const step = (dir: 1 | -1) => {
-    const now = Date.now()
-    const r = repeat.current
-    r.count = r.dir === dir && now - r.at < 700 ? r.count + 1 : 0
-    r.dir = dir
-    r.at = now
-    return dir * (r.count >= 8 ? 60 : r.count >= 4 ? 30 : 10)
-  }
-
-  // Opakované přetáčení při držené šipce (do puštění klávesy).
+  // Plynulé přetáčení při držené šipce (do puštění klávesy).
   const hold = useRef<ReturnType<typeof setInterval>>(undefined)
   const stopHold = () => {
     clearInterval(hold.current)
@@ -552,21 +625,25 @@ export default function PlayerScreen() {
     switch (type) {
       case 'left':
       case 'right':
-        return scrubBy(step(type === 'right' ? 1 : -1))
+        // Každý stisk přetočí o stejný kus; skočí se po chvíli bez stisku.
+        return scrubBy(type === 'right' ? SEEK_STEP : -SEEK_STEP)
       case 'longLeft':
       case 'longRight': {
-        // Držení: Android pošle long* jen při začátku (0) a puštění (1),
-        // opakování si přehrávač dělá sám – skoky se zrychlením 10 → 30 → 60 s.
+        // Držení: react-native-tvos pošle long* jen jednou při začátku (0,
+        // asi po 300 ms) a při puštění (1); opakování dělá přehrávač sám.
+        // Posuvník jede plynule a zrychluje s délkou držení, video skočí
+        // hned po puštění.
         stopHold()
-        if (e.eventKeyAction === 1) return
+        if (e.eventKeyAction === 1) return commitScrub(scrubRef.current)
         const dir = type === 'longRight' ? 1 : -1
-        scrubBy(step(dir))
         const started = Date.now()
+        scrubBy(dir * holdStep(0))
         hold.current = setInterval(() => {
-          // Pojistka: kdyby se puštění klávesy ztratilo, nepřetáčet donekonečna.
+          // Pojistka: kdyby se puštění klávesy ztratilo, nepřetáčet donekonečna
+          // (potvrzení pak přijde samo po SCRUB_COMMIT_MS).
           if (Date.now() - started > 30_000) return stopHold()
-          scrubBy(step(dir))
-        }, HOLD_REPEAT_MS)
+          scrubBy(dir * holdStep(Date.now() - started))
+        }, HOLD_TICK_MS)
         return
       }
       case 'select':
@@ -637,13 +714,41 @@ export default function PlayerScreen() {
     setAudio(index)
   }
 
+  // ---- poměr stran ----
+
+  // Ruční volba platí hned; undefined = podle rozhodnutí ze serveru.
+  const [aspectChoice, setAspectChoice] = useState<AspectRatio | null | undefined>()
+  const aspect = aspectChoice !== undefined ? aspectChoice : (pb?.aspect_ratio ?? null)
+  const win = useWindowDimensions()
+  const changeAspect = (ratio: AspectRatio | null) => {
+    setPanel(false)
+    setAspectChoice(ratio)
+    // Patří celému titulu: filmu, nebo seriálu (i jeho dalším dílům).
+    const showId = episode.data?.episode.show_id
+    const target = current.movieId ? (['movie', current.movieId] as const) : showId ? (['show', showId] as const) : undefined
+    if (!target) return
+    void setAspectRatio(target[0], target[1], ratio)
+      .then(() => {
+        // Předem načtená rozhodnutí jiných dílů nesou starý poměr. Aktuální
+        // se nesmí obnovit – nový objekt by znovu otevřel stream.
+        qc.removeQueries({ queryKey: ['sceniter', 'playback'], predicate: (q) => q.queryKey[2] !== mediaId })
+      })
+      // Neuložilo se – pro toto přehrání volba platí dál.
+      .catch(() => undefined)
+  }
+
   // ---- vykreslení ----
 
   const error = failure ?? (playback.isError ? playback.error.message : null)
 
   return (
     <View style={styles.root}>
-      <VideoView player={player} style={StyleSheet.absoluteFill} nativeControls={false} contentFit="contain" />
+      <VideoView
+        player={player}
+        style={aspect ? aspectBox(win, aspect) : StyleSheet.absoluteFill}
+        nativeControls={false}
+        contentFit={aspect ? 'fill' : 'contain'}
+      />
 
       <SubtitleOverlay cues={cues} time={time} size={prefs.subtitleSize} raised={chromeVisible || panel} />
 
@@ -655,6 +760,7 @@ export default function PlayerScreen() {
           time={time}
           duration={duration || pb?.duration_sec || 0}
           available={available}
+          readyFrom={readyFrom}
           scrubTo={scrubTo}
           paused={paused}
           visible={chromeVisible}
@@ -681,6 +787,8 @@ export default function PlayerScreen() {
         <TracksPanel
           pb={pb}
           subtitleKey={subtitleKey ?? ''}
+          aspect={aspect}
+          onAspect={changeAspect}
           onAudio={changeAudio}
           onSubtitle={(key) => {
             setSubtitleKey(key)
@@ -693,7 +801,7 @@ export default function PlayerScreen() {
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.text} />
           <T dim style={{ marginTop: px(24) }}>
-            {t(phase === 'resuming' ? 'video.player.resuming' : 'video.player.loading')}
+            {t(phase === 'resuming' ? 'video.player.resuming' : phase === 'seeking' ? 'video.tv.player.seeking' : 'video.player.loading')}
           </T>
         </View>
       ) : null}

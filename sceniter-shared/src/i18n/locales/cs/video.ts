@@ -155,6 +155,9 @@ export default {
     },
     info: 'Podrobnosti přehrávání',
     fullscreen: 'Celá obrazovka',
+    aspect: 'Poměr stran',
+    aspectAuto: 'Automaticky',
+    aspectHint: 'Platí pro celý titul na všech zařízeních.',
   },
   watchlist: {
     title: 'Chci vidět',
@@ -430,10 +433,11 @@ export default {
       desc: 'Sestupně',
     },
     player: {
-      tracks: 'Zvuk a titulky',
+      tracks: 'Zvuk, titulky a obraz',
       restart: 'Od začátku',
       nextEpisode: 'Další díl · {{episode}}',
       seekHint: 'Podržením se přetáčí rychleji',
+      seeking: 'Přetáčím…',
       endsAt: 'Skončí v {{time}}',
       showDetail: 'Seriál',
     },

@@ -6,6 +6,8 @@ export type TitleKind = 'movie' | 'show'
 export type ImageSource = '' | 'manual'
 /** Druh obrázku titulu, který jde nahrát (PUT …/images/{image}). */
 export type TitleImageKind = 'poster' | 'backdrop'
+/** Ruční poměr stran titulu pro přehrávač (soubor bývá chybně označený). */
+export type AspectRatio = '4:3' | '16:9'
 
 /** Knihovna – podsložka VIDEO_ROOT s typem obsahu a zdrojem metadat. */
 export interface Library {
@@ -102,6 +104,8 @@ export interface Movie {
   backdrop_source?: ImageSource
   /** Hodnocení zdroje v procentech (0–100). */
   rating?: number
+  /** Ruční poměr stran; chybí = podle souboru. */
+  aspect_ratio?: AspectRatio
   /** Obsazení a štáb – jen v detailu, ve výpisech prázdné. */
   credits: Credit[]
   genres: string[]
@@ -157,6 +161,8 @@ export interface Show {
   poster_source?: ImageSource
   backdrop_source?: ImageSource
   rating?: number
+  /** Ruční poměr stran; chybí = podle souboru. */
+  aspect_ratio?: AspectRatio
   /** Obsazení a štáb – jen v detailu, ve výpisech prázdné. */
   credits: Credit[]
   genres: string[]
@@ -504,6 +510,8 @@ export interface Playback {
   subtitles: SubtitleTrack[]
   unsupported_subtitles: number[]
   transcoding_available: boolean
+  /** Ruční poměr stran titulu; chybí = podle souboru. */
+  aspect_ratio?: AspectRatio
 }
 
 /** PUT /sceniter/progress */

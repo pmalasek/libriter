@@ -14,9 +14,9 @@ func Logger(next http.Handler) http.Handler {
 		next.ServeHTTP(ww, r)
 
 		slog.Info("request",
-			"method",   r.Method,
-			"path",     r.URL.Path,
-			"status",   ww.status,
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", ww.status,
 			"duration", time.Since(start),
 		)
 	})

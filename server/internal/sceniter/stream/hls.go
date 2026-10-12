@@ -48,6 +48,9 @@ type Options struct {
 	Height    int
 	MaxHeight int
 	HEVC      bool // obraz je HEVC – Safari chce tag hvc1
+	// Start (s) je místo, od kterého má přebalení nebo převod zvuku začít
+	// (skok mimo už hotovou část). Plný převod skáče po segmentech sám.
+	Start float64
 }
 
 // Session je jeden běžící (nebo doběhlý) převod do HLS.
@@ -58,6 +61,9 @@ type Session struct {
 	Mode      string    `json:"mode"`
 	Audio     *int      `json:"audio,omitempty"`
 	StartedAt time.Time `json:"started_at"`
+	// Start (s) je čas klíčového snímku, od kterého převod běží – nula
+	// časové osy playlistu. U plného převodu vždy 0.
+	Start float64 `json:"start,omitempty"`
 
 	key  string
 	dir  string
@@ -85,17 +91,19 @@ type SessionInfo struct {
 	Mode       string    `json:"mode"`
 	StartedAt  time.Time `json:"started_at"`
 	LastAccess time.Time `json:"last_access"`
+	Start      float64   `json:"start,omitempty"`
 	Running    bool      `json:"running"`
 	Error      string    `json:"error,omitempty"`
 }
 
 // Manager spouští a uklízí převody do HLS.
 type Manager struct {
-	ffmpeg string
-	root   string
-	max    int
-	idle   time.Duration
-	log    *slog.Logger
+	ffmpeg  string
+	ffprobe string
+	root    string
+	max     int
+	idle    time.Duration
+	log     *slog.Logger
 
 	appCtx context.Context
 
@@ -113,7 +121,9 @@ func NewManager(root string, max int, idle time.Duration) *Manager {
 		slog.Warn("ffmpeg nenalezen – videa půjdou přehrát jen přímo")
 		ffmpeg = ""
 	}
-	return &Manager{ffmpeg: ffmpeg, root: root, max: max, idle: idle,
+	// Bez ffprobe přebalení začíná vždy od začátku (skok jen do hotové části).
+	ffprobe, _ := exec.LookPath("ffprobe")
+	return &Manager{ffmpeg: ffmpeg, ffprobe: ffprobe, root: root, max: max, idle: idle,
 		log: slog.Default().With("component", "sceniter-hls"), appCtx: context.Background(),
 		sessions: map[string]*Session{}, byKey: map[string]*Session{}}
 }
@@ -152,7 +162,7 @@ func sessionKey(o Options) string {
 	if o.Audio != nil {
 		a = strconv.Itoa(*o.Audio)
 	}
-	return o.UserID.String() + "|" + o.MediaID.String() + "|" + o.Mode + "|" + a
+	return o.UserID.String() + "|" + o.MediaID.String() + "|" + o.Mode + "|" + a + "|" + strconv.FormatFloat(o.Start, 'f', 3, 64)
 }
 
 // Open vrátí session pro daný soubor a režim; existující se znovu použije
@@ -164,7 +174,29 @@ func (m *Manager) Open(o Options) (*Session, error) {
 	if o.Mode != ModeRemux && o.Mode != ModeTranscodeAudio && o.Mode != ModeTranscode {
 		return nil, fmt.Errorf("neznámý režim %q", o.Mode)
 	}
+	if o.Mode == ModeTranscode {
+		o.Start = 0
+	}
 	key := sessionKey(o)
+
+	m.mu.Lock()
+	if s, ok := m.byKey[key]; ok {
+		s.touch()
+		m.mu.Unlock()
+		return s, nil
+	}
+	m.mu.Unlock()
+
+	// Klíčový snímek se hledá mimo zámek (ffprobe čte soubor). Přehrávač
+	// master playlist načítá víc než jednou, proto se nejdřív zkusí běžící.
+	start := 0.0
+	if o.Start > 0 && m.ffprobe != "" {
+		k, err := keyframeBefore(m.appCtx, m.ffprobe, o.Path, o.Start)
+		if err != nil {
+			m.log.Warn("klíčový snímek pro skok nenalezen, převod od začátku", "media", o.MediaID, "err", err)
+		}
+		start = k
+	}
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -185,7 +217,7 @@ func (m *Manager) Open(o Options) (*Session, error) {
 
 	id := randomID()
 	s := &Session{ID: id, UserID: o.UserID, MediaID: o.MediaID, Mode: o.Mode, Audio: o.Audio,
-		StartedAt: time.Now(), key: key, dir: filepath.Join(m.root, "hls-"+id), opts: o, lastAccess: time.Now()}
+		StartedAt: time.Now(), Start: start, key: key, dir: filepath.Join(m.root, "hls-"+id), opts: o, lastAccess: time.Now()}
 	if err := os.MkdirAll(s.dir, 0o755); err != nil {
 		return nil, fmt.Errorf("pracovní adresář převodu: %w", err)
 	}
@@ -195,7 +227,7 @@ func (m *Manager) Open(o Options) (*Session, error) {
 	}
 	m.sessions[id] = s
 	m.byKey[key] = s
-	m.log.Info("převod spuštěn", "session", id, "mode", o.Mode, "media", o.MediaID)
+	m.log.Info("převod spuštěn", "session", id, "mode", o.Mode, "media", o.MediaID, "start", start)
 	return s, nil
 }
 
@@ -247,7 +279,7 @@ func (m *Manager) List() []SessionInfo {
 	for _, s := range m.sessions {
 		s.mu.Lock()
 		info := SessionInfo{ID: s.ID, UserID: s.UserID, MediaID: s.MediaID, Mode: s.Mode,
-			StartedAt: s.StartedAt, LastAccess: s.lastAccess, Running: s.running()}
+			StartedAt: s.StartedAt, LastAccess: s.lastAccess, Start: s.Start, Running: s.running()}
 		if s.err != nil {
 			info.Error = s.err.Error()
 		}
@@ -293,7 +325,7 @@ func (m *Manager) removeLocked(s *Session) {
 // session (restart při skoku).
 func (m *Manager) launch(s *Session, start int) error {
 	ctx, cancel := context.WithCancel(m.appCtx)
-	args := ffmpegArgs(s.opts, s.dir, start)
+	args := ffmpegArgs(s.opts, s.dir, start, s.Start)
 	cmd := exec.CommandContext(ctx, m.ffmpeg, args...)
 	s.stderr.Reset()
 	cmd.Stderr = &limitedBuffer{buf: &s.stderr, max: 8 << 10}
@@ -316,11 +348,16 @@ func (m *Manager) launch(s *Session, start int) error {
 	return nil
 }
 
-// ffmpegArgs sestaví příkaz pro převod do HLS (fMP4 segmenty).
-func ffmpegArgs(o Options, dir string, start int) []string {
+// ffmpegArgs sestaví příkaz pro převod do HLS (fMP4 segmenty). start je
+// segment, od kterého jede plný převod; from (s) klíčový snímek, od kterého
+// jede přebalení nebo převod zvuku – jeho čas je nulou nového playlistu.
+func ffmpegArgs(o Options, dir string, start int, from float64) []string {
 	args := []string{"-nostdin", "-hide_banner", "-loglevel", "error"}
-	if start > 0 {
+	switch {
+	case start > 0:
 		args = append(args, "-ss", strconv.Itoa(start*segmentSeconds))
+	case from > 0:
+		args = append(args, "-ss", strconv.FormatFloat(from, 'f', 3, 64))
 	}
 	args = append(args, "-i", o.Path, "-map", "0:v:0")
 	if o.Audio != nil {

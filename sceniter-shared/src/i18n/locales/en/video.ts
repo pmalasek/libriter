@@ -147,6 +147,9 @@ export default {
     },
     info: 'Playback details',
     fullscreen: 'Full screen',
+    aspect: 'Aspect ratio',
+    aspectAuto: 'Auto',
+    aspectHint: 'Applies to the whole title on every device.',
   },
   watchlist: {
     title: 'Watchlist',
@@ -416,10 +419,11 @@ export default {
       desc: 'Descending',
     },
     player: {
-      tracks: 'Audio and subtitles',
+      tracks: 'Audio, subtitles and picture',
       restart: 'From the start',
       nextEpisode: 'Next episode · {{episode}}',
       seekHint: 'Hold to skip faster',
+      seeking: 'Seeking…',
       endsAt: 'Ends at {{time}}',
       showDetail: 'Show',
     },
