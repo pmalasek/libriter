@@ -294,7 +294,7 @@ mobile-release: mobile-version
         echo "iOS jde sestavit jen na macOS – vzniká jen AAB."
     fi
     {{just_executable()}} "${recipes[@]}"
-    ls -lh {{mobile_dir}}/dist/libriter.aab {{mobile_dir}}/dist/Libriter.ipa 2>/dev/null
+    ls -lh {{mobile_dir}}/dist/libriter.aab {{mobile_dir}}/dist/Libriter.ipa 2>/dev/null || true  # na Linuxu IPA chybí
 
 # Zeptá se na zvýšení verze (patch/minor/major) a zvýší číslo buildu v app.json
 [private]
@@ -431,7 +431,7 @@ tv-release bump="":
         echo "Apple TV jde sestavit jen na macOS – vzniká jen AAB."
     fi
     {{just_executable()}} "${recipes[@]}"
-    ls -lh {{tv_dir}}/dist/sceniter-tv.aab {{tv_dir}}/dist/Sceniter.ipa 2>/dev/null
+    ls -lh {{tv_dir}}/dist/sceniter-tv.aab {{tv_dir}}/dist/Sceniter.ipa 2>/dev/null || true  # na Linuxu IPA chybí
 
 # Zeptá se na zvýšení verze (patch/minor/major) a zvýší číslo buildu v app.json
 [private]
