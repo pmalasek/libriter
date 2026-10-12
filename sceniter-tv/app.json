@@ -12,7 +12,7 @@
     "ios": {
       "bundleIdentifier": "cz.sceniter.tv",
       "appleTeamId": "QL5UHGHK98",
-      "buildNumber": "4",
+      "buildNumber": "5",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "cz.sceniter.tv",
-      "versionCode": 4,
+      "versionCode": 5,
       "usesCleartextTraffic": true,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
