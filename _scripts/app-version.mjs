@@ -1,5 +1,6 @@
-// Zvýší verzi mobilní aplikace před release buildem (just mobile-aab,
-// mobile-ipa, mobile-testflight).
+// Zvýší verzi aplikace před release buildem (just mobile-release, mobile-aab,
+// mobile-ipa, mobile-testflight, tv-release, tv-aab, tv-testflight).
+// Argument je adresář aplikace s app.json (libriter-mobile, sceniter-tv).
 //
 // Obchody nepřijmou build se stejným číslem, jaké už mají, a na zvýšení
 // v app.json se snadno zapomene – zjistí se to až po pětiminutovém buildu.
@@ -16,7 +17,12 @@ import { dirname, join } from 'node:path'
 import { createInterface } from 'node:readline/promises'
 import { fileURLToPath } from 'node:url'
 
-const file = join(dirname(fileURLToPath(import.meta.url)), '..', 'libriter-mobile', 'app.json')
+const dir = process.argv[2]
+if (!dir) {
+  console.error('Použití: node _scripts/app-version.mjs <adresář aplikace>')
+  process.exit(1)
+}
+const file = join(dirname(fileURLToPath(import.meta.url)), '..', dir, 'app.json')
 const app = JSON.parse(readFileSync(file, 'utf8'))
 const { expo } = app
 
@@ -38,7 +44,7 @@ if (!choice) {
     console.error('Chybí terminál pro volbu verze – nastav LIBRITER_BUMP=build|patch|minor|major|none.')
     process.exit(1)
   }
-  console.log(`Mobilní aplikace: verze ${version}, build ${build}`)
+  console.log(`${expo.name}: verze ${version}, build ${build}`)
   choices.forEach(([, v, b, label], i) => console.log(`  ${i}) ${label.padEnd(10)} → ${v} (build ${b})`))
   const rl = createInterface({ input: process.stdin, output: process.stdout })
   const answer = await rl.question('Volba [1]: ').then(
@@ -60,4 +66,4 @@ expo.version = newVersion
 expo.ios.buildNumber = String(newBuild)
 expo.android.versionCode = newBuild
 writeFileSync(file, JSON.stringify(app, null, 2) + '\n')
-console.log(`✓ Verze ${newVersion}, build ${newBuild} (libriter-mobile/app.json)`)
+console.log(`✓ Verze ${newVersion}, build ${newBuild} (${dir}/app.json)`)

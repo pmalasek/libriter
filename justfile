@@ -299,7 +299,7 @@ mobile-release: mobile-version
 # Zeptá se na zvýšení verze (patch/minor/major) a zvýší číslo buildu v app.json
 [private]
 mobile-version:
-    node _scripts/mobile-version.mjs
+    node _scripts/app-version.mjs {{mobile_dir}}
 
 # destination: export (IPA do dist/) nebo upload (rovnou do App Store Connect)
 [working-directory('libriter-mobile')]
@@ -408,7 +408,35 @@ tv-ios: tv-deps
 tv-apk: (tv-android-release "assembleRelease" "apk/release/app-release.apk" "sceniter-tv.apk")
 
 # Release AAB pro Google Play (Android TV) → sceniter-tv/dist/sceniter-tv.aab
-tv-aab: (tv-android-release "bundleRelease" "bundle/release/app-release.aab" "sceniter-tv.aab")
+tv-aab: tv-version (tv-android-release "bundleRelease" "bundle/release/app-release.aab" "sceniter-tv.aab")
+
+# Jen macOS + Xcode s tvOS SDK. method: app-store-connect (TestFlight a App
+# Store) nebo release-testing (ad hoc na registrovaná zařízení).
+#
+# Release IPA pro Apple TV → sceniter-tv/dist/Sceniter.ipa
+tv-ipa method="app-store-connect": tv-version (tv-ios-release method "export")
+
+# Jedno číslo buildu i verze pro obě platformy; na Linuxu jen Android.
+# bump: patch|minor|major|build|none, bez něj se zeptá.
+#
+# Zvýší verzi a sestaví AAB i IPA → sceniter-tv/dist/
+tv-release bump="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    LIBRITER_BUMP="{{bump}}" {{just_executable()}} tv-version
+    recipes=(tv-android-release bundleRelease bundle/release/app-release.aab sceniter-tv.aab)
+    if [ "$(uname)" = Darwin ]; then
+        recipes+=(tv-ios-release app-store-connect export)
+    else
+        echo "Apple TV jde sestavit jen na macOS – vzniká jen AAB."
+    fi
+    {{just_executable()}} "${recipes[@]}"
+    ls -lh {{tv_dir}}/dist/sceniter-tv.aab {{tv_dir}}/dist/Sceniter.ipa 2>/dev/null
+
+# Zeptá se na zvýšení verze (patch/minor/major) a zvýší číslo buildu v app.json
+[private]
+tv-version:
+    node _scripts/app-version.mjs {{tv_dir}}
 
 # Podepisuje stejným upload klíčem jako mobil (just mobile-keystore).
 [working-directory('sceniter-tv')]
@@ -430,34 +458,62 @@ tv-android-release task artifact out: tv-deps
     echo "→ {{tv_dir}}/dist/{{out}}"
 
 # Sestaví release pro Apple TV a nahraje ho do App Store Connect (TestFlight)
+tv-testflight: tv-version (tv-ios-release "app-store-connect" "upload")
+
+# destination: export (IPA do dist/) nebo upload (rovnou do App Store Connect)
 [working-directory('sceniter-tv')]
-tv-testflight: tv-deps
+[private]
+tv-ios-release method destination: tv-deps
     #!/usr/bin/env bash
     set -euo pipefail
     team="${LIBRITER_APPLE_TEAM:-$(node -p "require('./app.json').expo.ios.appleTeamId ?? ''")}"
+    if [ -z "$team" ]; then
+        echo "Chybí Apple Team ID: doplň ios.appleTeamId do app.json nebo nastav LIBRITER_APPLE_TEAM." >&2
+        exit 1
+    fi
     EXPO_TV=1 npx expo prebuild --platform ios
     echo "export NODE_BINARY=$(command -v node)" > ios/.xcode.env.local
     (cd ios && pod install)
+    out="$PWD/dist"
     archive="$PWD/ios/build/Sceniter.xcarchive"
+    mkdir -p "$out"
     xcodebuild -workspace ios/Sceniter.xcworkspace -scheme Sceniter \
         -configuration Release -destination 'generic/platform=tvOS' \
         -archivePath "$archive" -allowProvisioningUpdates \
         DEVELOPMENT_TEAM="$team" CODE_SIGN_STYLE=Automatic archive
     tmp="$(mktemp -d)"
-    cat > "$tmp/ExportOptions.plist" <<EOF
+    opts="$tmp/ExportOptions.plist"
+    cat > "$opts" <<EOF
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
     <plist version="1.0"><dict>
-      <key>method</key><string>app-store-connect</string>
+      <key>method</key><string>{{method}}</string>
       <key>teamID</key><string>$team</string>
       <key>signingStyle</key><string>automatic</string>
-      <key>destination</key><string>upload</string>
+      <key>destination</key><string>{{destination}}</string>
     </dict></plist>
     EOF
+    # export do $tmp: vedle IPA tam xcodebuild dává i logy a plisty
     xcodebuild -exportArchive -archivePath "$archive" -exportPath "$tmp" \
-        -exportOptionsPlist "$tmp/ExportOptions.plist" -allowProvisioningUpdates
+        -exportOptionsPlist "$opts" -allowProvisioningUpdates
+    if [ -f "$tmp/Sceniter.ipa" ]; then
+        # Stejná kontrola podpisu jako u mobilu (viz mobile-ios-release).
+        unzip -q "$tmp/Sceniter.ipa" -d "$tmp/check"
+        if ! codesign --verify --deep --strict -v "$tmp/check/Payload/Sceniter.app" 2>"$tmp/codesign.log"; then
+            cat "$tmp/codesign.log" >&2
+            echo "✗ IPA má neplatný podpis a App Store Connect ho odmítne. Nejčastější příčina: chybí lokální" >&2
+            echo "  certifikát Apple Distribution – Xcode → Settings → Accounts → Manage Certificates → + → Apple Distribution." >&2
+            rm -rf "$tmp"
+            exit 1
+        fi
+        mv "$tmp/Sceniter.ipa" "$out/"
+    fi
     rm -rf "$tmp"
-    echo "✓ Nahráno do App Store Connect."
+    if [ "{{destination}}" = upload ]; then
+        echo "✓ Nahráno do App Store Connect – v TestFlightu se build objeví po zpracování (obvykle 10–30 min)."
+    else
+        echo "→ {{tv_dir}}/dist/Sceniter.ipa"
+    fi
 
 # Ikony, bannery a Top Shelf z sceniter-tv/assets/brand/ (po změně loga)
 [working-directory('sceniter-tv')]

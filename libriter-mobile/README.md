@@ -234,10 +234,10 @@ just mobile-testflight # sestaví a rovnou nahraje do App Store Connect
 
 `mobile-release`, `mobile-aab`, `mobile-ipa` a `mobile-testflight` se před
 buildem zeptají na verzi a zapíšou ji do `app.json`
-([`_scripts/mobile-version.mjs`](../_scripts/mobile-version.mjs)):
+([`_scripts/app-version.mjs`](../_scripts/app-version.mjs)):
 
 ```
-Mobilní aplikace: verze 1.0.0, build 1
+Libriter: verze 1.0.0, build 1
   0) nic neměnit (druhá platforma téhož vydání) → 1.0.0 (build 1)
   1) jen build  → 1.0.0 (build 2)
   2) patch      → 1.0.1 (build 2)
