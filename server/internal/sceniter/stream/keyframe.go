@@ -11,55 +11,66 @@ import (
 	"time"
 )
 
-// keyframeWindows: jak daleko před cílem se hledá klíčový snímek (s). Běžné
-// GOP mají do 10 s; delší okno se zkusí, jen když kratší nic nenajde.
-var keyframeWindows = []float64{15, 60}
-
-// keyframeBefore najde čas posledního klíčového snímku obrazu nejvýš v at.
-// Přebalení (-c:v copy) umí začít jen na klíčovém snímku – s jeho přesným
-// časem v -ss ffmpeg začne právě tam a přehrávač zná posun časové osy.
-func keyframeBefore(ctx context.Context, ffprobe, path string, at float64) (float64, error) {
+// seekLanding zjistí, kde převod spuštěný s -ss at (s od začátku souboru,
+// jak ho chápe ffmpeg) skutečně začne. Kopírovaný obraz začíná na klíčovém
+// snímku, na který demuxer přistane – a to bývá i o několik sekund dřív
+// (MKV z ffmpegu má index jen po clusterech). Proto se přistání zjistí
+// stejným ffmpeg a stejným -ss a vrátí se jako čas od začátku souboru:
+// nula playlistu nového převodu v časové ose přehrávače.
+func seekLanding(ctx context.Context, ffmpeg, ffprobe, path string, at float64) (float64, error) {
 	if at <= 0 {
 		return 0, nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	for _, win := range keyframeWindows {
-		from := max(0, at-win)
-		// Konec intervalu ffprobe nečte – snímek přesně v at by vypadl.
-		out, err := exec.CommandContext(ctx, ffprobe, "-v", "error", "-select_streams", "v:0",
-			"-read_intervals", fmt.Sprintf("%.3f%%%.3f", from, at+0.01),
-			"-show_entries", "packet=pts_time,flags", "-of", "csv=p=0", path).Output()
-		if err != nil {
-			return 0, fmt.Errorf("ffprobe: %w", err)
-		}
-		if k, ok := lastKeyframe(out, at); ok {
-			return k, nil
-		}
-		if from == 0 {
-			break
-		}
+
+	// -ss se počítá od začátku souboru, -copyts ale vypíše absolutní čas –
+	// začátek souboru (u nahrávek z vysílání i několik sekund) se odečte.
+	out, err := exec.CommandContext(ctx, ffprobe, "-v", "error", "-show_entries", "format=start_time",
+		"-of", "csv=p=0", path).Output()
+	if err != nil {
+		return 0, fmt.Errorf("ffprobe: %w", err)
 	}
-	return 0, nil
+	fileStart, _ := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+
+	out, err = exec.CommandContext(ctx, ffmpeg, "-nostdin", "-v", "error",
+		"-ss", strconv.FormatFloat(at, 'f', 3, 64), "-noaccurate_seek", "-i", path,
+		"-map", "0:v:0", "-c", "copy", "-copyts", "-frames:v", "1", "-f", "framecrc", "-").Output()
+	if err != nil {
+		return 0, fmt.Errorf("ffmpeg: %w", err)
+	}
+	pts, ok := firstPacketPTS(out)
+	if !ok {
+		return 0, fmt.Errorf("ffmpeg nevypsal první snímek")
+	}
+	return max(0, pts-fileStart), nil
 }
 
-// lastKeyframe vybere z výstupu ffprobe (řádky "pts_time,flags") nejpozdější
-// klíčový snímek nejvýš v at.
-func lastKeyframe(out []byte, at float64) (float64, bool) {
-	best, found := 0.0, false
+// firstPacketPTS přečte pts prvního paketu z výstupu framecrc
+// ("#tb 0: 1/1000" a řádky "stream, dts, pts, duration, size, hash").
+func firstPacketPTS(out []byte) (float64, bool) {
+	num, den := 0.0, 0.0
 	sc := bufio.NewScanner(bytes.NewReader(out))
 	for sc.Scan() {
-		pts, flags, ok := strings.Cut(strings.TrimSpace(sc.Text()), ",")
-		if !ok || !strings.HasPrefix(flags, "K") {
+		line := strings.TrimSpace(sc.Text())
+		if tb, ok := strings.CutPrefix(line, "#tb 0:"); ok {
+			n, d, _ := strings.Cut(strings.TrimSpace(tb), "/")
+			num, _ = strconv.ParseFloat(n, 64)
+			den, _ = strconv.ParseFloat(d, 64)
 			continue
 		}
-		t, err := strconv.ParseFloat(pts, 64)
-		if err != nil || t > at {
+		if strings.HasPrefix(line, "#") || den == 0 {
 			continue
 		}
-		if !found || t > best {
-			best, found = t, true
+		f := strings.Split(line, ",")
+		if len(f) < 3 {
+			continue
 		}
+		pts, err := strconv.ParseFloat(strings.TrimSpace(f[2]), 64)
+		if err != nil {
+			return 0, false
+		}
+		return pts * num / den, true
 	}
-	return best, found
+	return 0, false
 }

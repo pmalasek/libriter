@@ -121,21 +121,93 @@ func TestManagerKeepAlive(t *testing.T) {
 	}
 }
 
-func TestKeyframeBefore(t *testing.T) {
-	src := testVideo(t)
+// broadcastVideo vyrobí 20s MKV jako nahrávka z vysílání: začátek v 1,4 s,
+// B-snímky, klíčový snímek po 2 s a zvuk AC3 (převádí se do AAC).
+func broadcastVideo(t *testing.T) string {
+	t.Helper()
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg není k dispozici")
+	}
+	p := filepath.Join(t.TempDir(), "broadcast.mkv")
+	out, err := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x240:rate=25:duration=20",
+		"-f", "lavfi", "-i", "sine=frequency=440:duration=20",
+		"-c:v", "libx264", "-preset", "veryfast", "-g", "50", "-bf", "3", "-c:a", "ac3",
+		"-output_ts_offset", "1.4", "-shortest", p).CombinedOutput()
+	if err != nil {
+		t.Skipf("ffmpeg neumí vyrobit testovací video: %v %s", err, out)
+	}
+	return p
+}
+
+func TestSeekLanding(t *testing.T) {
+	src := broadcastVideo(t)
 	ffprobe, err := exec.LookPath("ffprobe")
 	if err != nil {
 		t.Skip("ffprobe není k dispozici")
 	}
-	// Testovací video má klíčový snímek každou sekundu (-g 25 při 25 fps).
-	for at, want := range map[float64]float64{0: 0, 0.5: 0, 4.5: 4, 5: 5, 7.9: 7} {
-		got, err := keyframeBefore(context.Background(), ffprobe, src, at)
+	ffmpeg, _ := exec.LookPath("ffmpeg")
+	// Klíčové snímky jsou po 2 s od začátku souboru; přistání je nejvýš v cíli
+	// a vždy na některém z nich.
+	for _, at := range []float64{0, 0.5, 9, 14.2} {
+		got, err := seekLanding(context.Background(), ffmpeg, ffprobe, src, at)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if got != want {
-			t.Errorf("keyframeBefore(%v) = %v, chci %v", at, got, want)
+		if got > at+0.01 || got < at-6 {
+			t.Errorf("seekLanding(%v) = %v", at, got)
 		}
+		if r := got - 2*float64(int(got/2+0.5)); r > 0.01 || r < -0.01 {
+			t.Errorf("seekLanding(%v) = %v není klíčový snímek", at, got)
+		}
+	}
+}
+
+// Převod zvuku od místa skoku: obraz i zvuk musí v prvním segmentu začínat
+// spolu, jinak přehrávač (ExoPlayer ignoruje edit list) hraje zvuk mimo obraz.
+func TestManagerStartAudioSync(t *testing.T) {
+	src := broadcastVideo(t)
+	ffprobe, err := exec.LookPath("ffprobe")
+	if err != nil {
+		t.Skip("ffprobe není k dispozici")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	m := NewManager(t.TempDir(), 1, time.Minute)
+	m.Start(ctx)
+	s, err := m.Open(Options{UserID: uuid.New(), MediaID: uuid.New(), Path: src, Mode: ModeTranscodeAudio, Duration: 20, Start: 9})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Start <= 0 || s.Start > 9 {
+		t.Fatalf("začátek převodu %v", s.Start)
+	}
+	initPath, err := s.WaitFile(ctx, "init.mp4", 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	segPath, err := s.WaitFile(ctx, "seg_00000.m4s", 30*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	initData, _ := os.ReadFile(initPath)
+	segData, _ := os.ReadFile(segPath)
+	joined := filepath.Join(t.TempDir(), "s0.mp4")
+	if err := os.WriteFile(joined, append(initData, segData...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(ffprobe, "-v", "error", "-show_entries", "stream=codec_type,start_time", "-of", "csv=p=0", joined).Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	starts := map[string]float64{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		f := strings.Split(strings.TrimSuffix(line, ","), ",")
+		if len(f) >= 2 {
+			starts[f[0]], _ = strconv.ParseFloat(f[1], 64)
+		}
+	}
+	if d := starts["audio"] - starts["video"]; d > 0.2 || d < -0.2 {
+		t.Fatalf("zvuk a obraz začínají jinde: %v (%s)", starts, out)
 	}
 }
 
@@ -158,7 +230,8 @@ func TestManagerStart(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s.ID == first.ID || s.Start != 4 {
+	// Klíčové snímky jsou po sekundě: začne se na některém z nich před cílem.
+	if s.ID == first.ID || s.Start <= 0 || s.Start > 4.5 || s.Start != float64(int(s.Start)) {
 		t.Fatalf("skok: session %s (start %v), původní %s", s.ID, s.Start, first.ID)
 	}
 	if _, err := m.Lookup(first.ID, user); err != ErrSessionGone {
@@ -173,8 +246,8 @@ func TestManagerStart(t *testing.T) {
 	for {
 		data, _ := os.ReadFile(filepath.Join(s.Dir(), "index.m3u8"))
 		if strings.Contains(string(data), "#EXT-X-ENDLIST") {
-			// Playlist pokrývá jen zbytek od klíčového snímku (8 − 4 s).
-			if got := playlistSeconds(string(data)); got < 3.9 || got > 4.1 {
+			// Playlist pokrývá jen zbytek od začátku převodu.
+			if got := playlistSeconds(string(data)); got < 8-s.Start-0.1 || got > 8-s.Start+0.1 {
 				t.Fatalf("délka playlistu %v s:\n%s", got, data)
 			}
 			break

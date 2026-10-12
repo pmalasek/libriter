@@ -61,8 +61,8 @@ type Session struct {
 	Mode      string    `json:"mode"`
 	Audio     *int      `json:"audio,omitempty"`
 	StartedAt time.Time `json:"started_at"`
-	// Start (s) je čas klíčového snímku, od kterého převod běží – nula
-	// časové osy playlistu. U plného převodu vždy 0.
+	// Start (s od začátku souboru) je místo, kde převod skutečně začíná –
+	// nula časové osy playlistu. U plného převodu vždy 0.
 	Start float64 `json:"start,omitempty"`
 
 	key  string
@@ -187,13 +187,13 @@ func (m *Manager) Open(o Options) (*Session, error) {
 	}
 	m.mu.Unlock()
 
-	// Klíčový snímek se hledá mimo zámek (ffprobe čte soubor). Přehrávač
+	// Místo začátku se zjišťuje mimo zámek (ffmpeg čte soubor). Přehrávač
 	// master playlist načítá víc než jednou, proto se nejdřív zkusí běžící.
 	start := 0.0
 	if o.Start > 0 && m.ffprobe != "" {
-		k, err := keyframeBefore(m.appCtx, m.ffprobe, o.Path, o.Start)
+		k, err := seekLanding(m.appCtx, m.ffmpeg, m.ffprobe, o.Path, o.Start)
 		if err != nil {
-			m.log.Warn("klíčový snímek pro skok nenalezen, převod od začátku", "media", o.MediaID, "err", err)
+			m.log.Warn("začátek převodu pro skok nezjištěn, převod od začátku", "media", o.MediaID, "err", err)
 		}
 		start = k
 	}
@@ -325,7 +325,11 @@ func (m *Manager) removeLocked(s *Session) {
 // session (restart při skoku).
 func (m *Manager) launch(s *Session, start int) error {
 	ctx, cancel := context.WithCancel(m.appCtx)
-	args := ffmpegArgs(s.opts, s.dir, start, s.Start)
+	from := 0.0
+	if s.Start > 0 {
+		from = s.opts.Start // stejné -ss, jaké zjistilo přistání (seekLanding)
+	}
+	args := ffmpegArgs(s.opts, s.dir, start, from)
 	cmd := exec.CommandContext(ctx, m.ffmpeg, args...)
 	s.stderr.Reset()
 	cmd.Stderr = &limitedBuffer{buf: &s.stderr, max: 8 << 10}
@@ -349,15 +353,18 @@ func (m *Manager) launch(s *Session, start int) error {
 }
 
 // ffmpegArgs sestaví příkaz pro převod do HLS (fMP4 segmenty). start je
-// segment, od kterého jede plný převod; from (s) klíčový snímek, od kterého
-// jede přebalení nebo převod zvuku – jeho čas je nulou nového playlistu.
+// segment, od kterého jede plný převod; from (s) místo, od kterého jede
+// přebalení nebo převod zvuku (skutečný začátek viz seekLanding).
 func ffmpegArgs(o Options, dir string, start int, from float64) []string {
 	args := []string{"-nostdin", "-hide_banner", "-loglevel", "error"}
 	switch {
 	case start > 0:
 		args = append(args, "-ss", strconv.Itoa(start*segmentSeconds))
 	case from > 0:
-		args = append(args, "-ss", strconv.FormatFloat(from, 'f', 3, 64))
+		// Kopírovaný obraz začne na klíčovém snímku, kam demuxer přistane;
+		// převáděný zvuk musí začít tamtéž, ne přesně v from. Posun mezi
+		// stopami by šel do fMP4 jen přes edit list, který ExoPlayer ignoruje.
+		args = append(args, "-ss", strconv.FormatFloat(from, 'f', 3, 64), "-noaccurate_seek")
 	}
 	args = append(args, "-i", o.Path, "-map", "0:v:0")
 	if o.Audio != nil {
