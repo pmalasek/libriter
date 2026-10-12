@@ -12,11 +12,12 @@ import { i18n } from 'sceniter-shared'
 import { AuthProvider, useAuth } from '@/auth/AuthProvider'
 import { handleSectionBack } from '@/lib/nav'
 import { PrefsProvider } from '@/lib/prefs'
-import { Loading } from '@/components/States'
+import { StartupLoading } from '@/components/States'
 import { PairScreen } from '@/screens/PairScreen'
 import { colors } from '@/theme'
 
 void SplashScreen.preventAutoHideAsync()
+SplashScreen.setOptions({ fade: true, duration: 300 })
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -71,7 +72,7 @@ function Root() {
   const { status } = useAuth()
   useBackBehaviour(status === 'ready')
 
-  if (status === 'loading') return <Loading />
+  if (status === 'loading') return <StartupLoading />
   if (status !== 'ready') return <PairScreen />
   return (
     <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg }, animation: 'fade' }}>
