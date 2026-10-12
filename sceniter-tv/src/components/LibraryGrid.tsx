@@ -3,9 +3,9 @@ import { Dimensions, FlatList, StyleSheet, TVFocusGuideView, View, type ListRend
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import { useTranslation } from 'react-i18next'
-import { ArrowDownNarrowWideIcon, ArrowUpDownIcon, ArrowUpNarrowWideIcon, SearchIcon } from 'lucide-react-native'
+import { ArrowDownNarrowWideIcon, ArrowUpDownIcon, ArrowUpNarrowWideIcon, SearchIcon, TagIcon } from 'lucide-react-native'
 import type { Library, MovieSummary, ShowSummary, TitleKind } from 'sceniter-shared'
-import { useDebouncedPrefetch, useTitles } from '@/api/queries'
+import { useDebouncedPrefetch, useGenres, useTitles } from '@/api/queries'
 import { createFocusStore, useSettled } from '@/lib/focusStore'
 import { forgetIndex, recallIndex, rememberIndex } from '@/lib/gridMemory'
 import { openMovie, openSearch, openShow } from '@/lib/nav'
@@ -14,6 +14,7 @@ import { SORT_LABEL, type Sort } from '@/lib/sort'
 import { backdropImage, posterImage } from '@/lib/titles'
 import { bgAlpha, card, colors, px, radius, safe } from '@/theme'
 import { Button } from './Button'
+import { GenrePicker } from './GenrePicker'
 import { PosterCard } from './Cards'
 import { NAV_COLLAPSED } from './SideNav'
 import { SortPicker } from './SortPicker'
@@ -22,6 +23,8 @@ import { Empty, ErrorView, Loading } from './States'
 import { T } from './T'
 
 export type GridItem = MovieSummary | ShowSummary
+
+type Picker = 'sort' | 'genre'
 
 const usable = Dimensions.get('window').width - NAV_COLLAPSED - safe.x * 2
 const COLUMNS = Math.max(3, Math.floor((usable + card.gap) / (card.posterW + card.gap)))
@@ -79,14 +82,17 @@ function LibraryBackdrop({ store }: { store: ReturnType<typeof createFocusStore<
 }
 
 /**
- * Výpis jedné knihovny: nadpis s počtem, vpravo hledání, řazení a směr,
+ * Výpis jedné knihovny: nadpis s počtem, vpravo hledání, žánr, řazení a směr,
  * pod ním mřížka plakátů. Fokus se po návratu vrátí na poslední kartu.
+ * Žánr platí jen do odchodu z knihovny, řazení se pamatuje.
  */
 export function LibraryGrid({ library }: { library: Library }) {
   const { t } = useTranslation()
   const kind = library.kind
   const { sort, dir, setSort, setDir } = useLibrarySort(library.id)
-  const titles = useTitles(kind, { library: library.id, sort, dir })
+  const [genre, setGenre] = useState('')
+  const titles = useTitles(kind, { library: library.id, sort, dir, genre })
+  const genres = useGenres(library.id).data ?? []
   const prefetch = useDebouncedPrefetch()
   const items = useMemo(() => titles.data?.pages.flatMap((p) => p.items) ?? [], [titles.data])
   const total = titles.data?.pages[0]?.total
@@ -96,9 +102,9 @@ export function LibraryGrid({ library }: { library: Library }) {
   const [initialIndex] = useState(() => recallIndex(library.id))
   // Karta, která dostane fokus po namontování; -1 = žádná (fokus už je jinde).
   const [preferred, setPreferred] = useState(initialIndex)
-  const [picker, setPicker] = useState(false)
-  // Po zavření výběru se fokus vrátí na tlačítko řazení (klíč ho přemontuje).
-  const [sortFocus, setSortFocus] = useState(0)
+  const [picker, setPicker] = useState<Picker | null>(null)
+  // Po zavření výběru se fokus vrátí na tlačítko, které ho otevřelo (klíč ho přemontuje).
+  const [back, setBack] = useState<{ to: Picker; n: number }>({ to: 'sort', n: 0 })
 
   const onFocusItem = useCallback(
     (index: number, item: GridItem) => {
@@ -111,9 +117,9 @@ export function LibraryGrid({ library }: { library: Library }) {
   )
 
   const closePicker = useCallback(() => {
-    setPicker(false)
-    setSortFocus((n) => n + 1)
-  }, [])
+    setBack((b) => ({ to: picker ?? b.to, n: b.n + 1 }))
+    setPicker(null)
+  }, [picker])
 
   // Po přeskládání začíná výpis znovu shora; zapamatovaná karta už neplatí.
   const restart = useCallback(() => {
@@ -129,6 +135,15 @@ export function LibraryGrid({ library }: { library: Library }) {
       closePicker()
     },
     [closePicker, restart, setSort],
+  )
+
+  const chooseGenre = useCallback(
+    (g: string) => {
+      setGenre(g)
+      restart()
+      closePicker()
+    },
+    [closePicker, restart],
   )
 
   const toggleDir = useCallback(() => {
@@ -164,12 +179,21 @@ export function LibraryGrid({ library }: { library: Library }) {
         </View>
         <TVFocusGuideView autoFocus style={styles.tools}>
           <Button icon={SearchIcon} accessibilityLabel={t('video.nav.search')} onPress={openSearch} />
+          {genres.length > 0 || genre ? (
+            <Button
+              key={back.to === 'genre' ? back.n : 'genre'}
+              icon={TagIcon}
+              label={genre ? t('video.tv.genre.button', { value: genre }) : t('video.tv.genre.title')}
+              hasTVPreferredFocus={back.to === 'genre' && back.n > 0}
+              onPress={() => setPicker('genre')}
+            />
+          ) : null}
           <Button
-            key={sortFocus}
+            key={back.to === 'sort' ? back.n : 'sort'}
             icon={ArrowUpDownIcon}
             label={t('video.tv.sort.button', { value: t(SORT_LABEL[sort]) })}
-            hasTVPreferredFocus={sortFocus > 0 || (items.length === 0 && !titles.isPending)}
-            onPress={() => setPicker(true)}
+            hasTVPreferredFocus={back.to === 'sort' && (back.n > 0 || (items.length === 0 && !titles.isPending))}
+            onPress={() => setPicker('sort')}
           />
           <Button
             icon={dir === 'asc' ? ArrowDownNarrowWideIcon : ArrowUpNarrowWideIcon}
@@ -184,7 +208,7 @@ export function LibraryGrid({ library }: { library: Library }) {
       ) : !titles.data ? (
         <Loading />
       ) : items.length === 0 ? (
-        <Empty title={t(kind === 'movie' ? 'video.movies.empty' : 'video.shows.empty')} />
+        <Empty title={t(genre ? 'video.tv.genre.empty' : kind === 'movie' ? 'video.movies.empty' : 'video.shows.empty')} />
       ) : (
         <FlatList
           ref={listRef}
@@ -210,7 +234,8 @@ export function LibraryGrid({ library }: { library: Library }) {
         />
       )}
 
-      {picker ? <SortPicker value={sort} onSelect={chooseSort} onClose={closePicker} /> : null}
+      {picker === 'sort' ? <SortPicker value={sort} onSelect={chooseSort} onClose={closePicker} /> : null}
+      {picker === 'genre' ? <GenrePicker genres={genres} value={genre} onSelect={chooseGenre} onClose={closePicker} /> : null}
     </View>
   )
 }

@@ -432,6 +432,11 @@ export default {
       asc: 'Vzestupně',
       desc: 'Sestupně',
     },
+    genre: {
+      title: 'Žánr',
+      button: 'Žánr: {{value}}',
+      empty: 'V tomto žánru tu nic není.',
+    },
     player: {
       tracks: 'Zvuk, titulky a obraz',
       restart: 'Od začátku',

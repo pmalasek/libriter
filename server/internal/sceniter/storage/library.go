@@ -667,12 +667,16 @@ func (s *Store) GetMedia(ctx context.Context, id uuid.UUID) (*model.MediaFile, e
 	return &mf, srows.Err()
 }
 
-// Genres vrátí všechny žánry, které má nějaký film nebo seriál.
-func (s *Store) Genres(ctx context.Context) ([]string, error) {
+// Genres vrátí žánry, které má nějaký film nebo seriál.
+// library = uuid.Nil znamená všechny knihovny.
+func (s *Store) Genres(ctx context.Context, library uuid.UUID) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT name FROM sc_genres g WHERE EXISTS (SELECT 1 FROM sc_movie_genres WHERE genre_id = g.id)
-		   OR EXISTS (SELECT 1 FROM sc_show_genres WHERE genre_id = g.id)
-		ORDER BY name`)
+		SELECT name FROM sc_genres g
+		WHERE EXISTS (SELECT 1 FROM sc_movie_genres x JOIN sc_movies t ON t.id = x.movie_id
+			WHERE x.genre_id = g.id AND (?1 = '`+uuid.Nil.String()+`' OR t.library_id = ?1))
+		   OR EXISTS (SELECT 1 FROM sc_show_genres x JOIN sc_shows t ON t.id = x.show_id
+			WHERE x.genre_id = g.id AND (?1 = '`+uuid.Nil.String()+`' OR t.library_id = ?1))
+		ORDER BY name`, library)
 	if err != nil {
 		return nil, err
 	}

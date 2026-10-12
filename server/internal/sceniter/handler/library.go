@@ -201,9 +201,13 @@ func (h *Handler) Episode(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /sceniter/genres
+// GET /sceniter/genres?library= – bez knihovny žánry ze všech knihoven.
 func (h *Handler) Genres(w http.ResponseWriter, r *http.Request) {
-	g, err := h.Store.Genres(r.Context())
+	lib, ok := libraryQuery(w, r)
+	if !ok {
+		return
+	}
+	g, err := h.Store.Genres(r.Context(), lib)
 	if writeStoreError(w, err, "sceniter.not_found") {
 		return
 	}

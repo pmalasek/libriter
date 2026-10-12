@@ -419,6 +419,11 @@ export default {
       asc: 'Ascendente',
       desc: 'Descendente',
     },
+    genre: {
+      title: 'Género',
+      button: 'Género: {{value}}',
+      empty: 'No hay nada de este género.',
+    },
     player: {
       tracks: 'Audio, subtítulos e imagen',
       restart: 'Desde el principio',

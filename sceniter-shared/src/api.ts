@@ -87,8 +87,9 @@ export async function getSimilar(kind: TitleKind, id: string, o: Opts = {}): Pro
     : { movies: [], shows: list(await apiFetch<Show[] | null>(`${BASE}/shows/${id}/similar`, o)) }
 }
 
-export async function getGenres(o: Opts = {}): Promise<string[]> {
-  return list(await apiFetch<string[] | null>(`${BASE}/genres`, o))
+/** Žánry s nějakým titulem; s knihovnou jen ty z ní. */
+export async function getGenres(o: Opts = {}, library?: string): Promise<string[]> {
+  return list(await apiFetch<string[] | null>(`${BASE}/genres${params({ library })}`, o))
 }
 
 export async function search(q: string, o: Opts = {}): Promise<SearchResults> {

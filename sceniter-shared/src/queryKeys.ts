@@ -17,6 +17,7 @@ export const queryKeys = {
   person: (id: string) => ['sceniter', 'person', id] as const,
   similar: (kind: string, id: string) => ['sceniter', 'similar', kind, id] as const,
   genres: ['sceniter', 'genres'] as const,
+  genresIn: (library: string) => ['sceniter', 'genres', library] as const,
   search: (q: string) => ['sceniter', 'search', q] as const,
   watchlist: ['sceniter', 'watchlist'] as const,
   playback: (mediaId: string, audio?: number) => ['sceniter', 'playback', mediaId, audio ?? null] as const,

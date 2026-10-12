@@ -2,6 +2,7 @@ import { keepPreviousData, useInfiniteQuery, useQuery, useQueryClient } from '@t
 import { useCallback, useEffect, useRef } from 'react'
 import {
   getEpisode,
+  getGenres,
   getHome,
   getLibraries,
   getMovie,
@@ -95,10 +96,19 @@ export function useSearch(q: string) {
   })
 }
 
+/** Žánry jedné knihovny pro filtr výpisu. */
+export function useGenres(library: string) {
+  return useQuery({
+    queryKey: queryKeys.genresIn(library),
+    queryFn: ({ signal }) => getGenres({ signal }, library),
+    staleTime: 5 * 60_000,
+  })
+}
+
 const PAGE = 60
 
 /** Výpis titulů po stránkách – mřížka si dotahuje další při posunu dolů. */
-export function useTitles<K extends TitleKind>(kind: K, filter: { library?: string; sort?: string; dir?: string }) {
+export function useTitles<K extends TitleKind>(kind: K, filter: { library?: string; sort?: string; dir?: string; genre?: string }) {
   return useInfiniteQuery({
     queryKey: ['sceniter', 'tv-titles', kind, filter],
     queryFn: ({ pageParam, signal }) =>

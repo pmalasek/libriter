@@ -419,6 +419,11 @@ export default {
       asc: 'Croissant',
       desc: 'Décroissant',
     },
+    genre: {
+      title: 'Genre',
+      button: 'Genre : {{value}}',
+      empty: 'Rien dans ce genre ici.',
+    },
     player: {
       tracks: 'Audio, sous-titres et image',
       restart: 'Depuis le début',
