@@ -9,7 +9,9 @@ const COLUMNS = 3
 const PANEL_W = px(1240)
 const PAD = px(44)
 const GAP = px(14)
-const OPTION_W = Math.floor((PANEL_W - PAD * 2 - GAP * (COLUMNS - 1)) / COLUMNS)
+const BORDER = px(2)
+// Rezerva 1 px na zaokrouhlení, jinak se třetí sloupec zalomí.
+const OPTION_W = Math.floor((PANEL_W - BORDER * 2 - PAD * 2 - GAP * (COLUMNS - 1)) / COLUMNS) - 1
 
 /**
  * Výběr žánru přes obrazovku. Žánrů bývají desítky, proto mřížka po třech
@@ -65,7 +67,7 @@ export function GenrePicker({
 
 const styles = StyleSheet.create({
   scrim: { ...StyleSheet.absoluteFill, zIndex: 20, backgroundColor: colors.scrim, alignItems: 'center', justifyContent: 'center' },
-  panel: { width: PANEL_W, padding: PAD, borderRadius: radius.card, backgroundColor: colors.surface, borderWidth: px(2), borderColor: colors.edge },
+  panel: { width: PANEL_W, padding: PAD, borderRadius: radius.card, backgroundColor: colors.surface, borderWidth: BORDER, borderColor: colors.edge },
   title: { marginBottom: px(28) },
   scroll: { maxHeight: Dimensions.get('window').height * 0.7 },
   options: { flexDirection: 'row', flexWrap: 'wrap', gap: GAP },
