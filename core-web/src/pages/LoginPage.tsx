@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { useAuthConfig, useLogin } from '../api/hooks'
 import { useAuth } from '../auth/AuthContext'
 import { AuthShell } from '../components/layout/AuthShell'
@@ -14,22 +14,17 @@ export function LoginPage() {
   const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const { signIn } = useAuth()
-  const navigate = useNavigate()
   const location = useLocation()
   const login = useLogin()
   const authConfig = useAuthConfig()
-
-  const from = (location.state as { from?: string } | null)?.from ?? '/'
 
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     login.mutate(
       { login: identifier.trim(), password },
       {
-        onSuccess: (response) => {
-          signIn(response)
-          navigate(from, { replace: true })
-        },
+        // Přesměrování (vč. návratu na původní URL) řeší RedirectIfAuthenticated.
+        onSuccess: signIn,
       },
     )
   }
@@ -82,7 +77,7 @@ export function LoginPage() {
           {authConfig.data?.registration_enabled ? (
             <p className="mt-4 text-center text-sm text-muted-foreground">
               {t('auth.login.noAccount')}{' '}
-              <Link to="/register" className="font-medium text-primary underline-offset-4 hover:underline">
+              <Link to="/register" state={location.state} className="font-medium text-primary underline-offset-4 hover:underline">
                 {t('auth.login.registerLink')}
               </Link>
             </p>

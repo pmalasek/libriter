@@ -13,11 +13,23 @@ export function RequireAuth() {
   return <Outlet />
 }
 
-/** Přihlášeného uživatele odvede z loginu/registrace na hlavní stránku. */
+/** Cíl po přihlášení z location.state; jen relativní cesty, jinak "/". */
+export function safeFrom(state: unknown): string {
+  const from = (state as { from?: unknown } | null)?.from
+  return typeof from === 'string' && from.startsWith('/') && !from.startsWith('//') ? from : '/'
+}
+
+/**
+ * Přihlášeného uživatele odvede z loginu/registrace tam, odkud přišel
+ * (state.from z RequireAuth), jinak na hlavní stránku. Je to jediný zdroj
+ * přesměrování po přihlášení – LoginPage sama nenaviguje, jinak by se
+ * dva redirecty s různým cílem přebíjely.
+ */
 export function RedirectIfAuthenticated() {
   const { isAuthenticated } = useAuth()
+  const location = useLocation()
 
-  if (isAuthenticated) return <Navigate to="/" replace />
+  if (isAuthenticated) return <Navigate to={safeFrom(location.state)} replace />
 
   return <Outlet />
 }

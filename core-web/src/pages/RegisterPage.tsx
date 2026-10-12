@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate } from 'react-router'
+import { Link, useLocation } from 'react-router'
 import { useAuthConfig, useRegister } from '../api/hooks'
 import { currentLanguage, loginHint, LOGIN_PATTERN, roleLabel } from 'core-shared'
 import { useAuth } from '../auth/AuthContext'
@@ -20,7 +20,7 @@ export function RegisterPage() {
   const [password, setPassword] = useState('')
   const [localError, setLocalError] = useState<string | null>(null)
   const { signIn } = useAuth()
-  const navigate = useNavigate()
+  const location = useLocation()
   const register = useRegister()
   const authConfig = useAuthConfig()
 
@@ -42,10 +42,8 @@ export function RegisterPage() {
         ui_language: currentLanguage(),
       },
       {
-        onSuccess: (response) => {
-          signIn(response)
-          navigate('/', { replace: true })
-        },
+        // Přesměrování řeší RedirectIfAuthenticated (viz LoginPage).
+        onSuccess: signIn,
       },
     )
   }
@@ -134,7 +132,7 @@ export function RegisterPage() {
 
           <p className="mt-4 text-center text-sm text-muted-foreground">
             {t('auth.register.haveAccount')}{' '}
-            <Link to="/login" className="font-medium text-primary underline-offset-4 hover:underline">
+            <Link to="/login" state={location.state} className="font-medium text-primary underline-offset-4 hover:underline">
               {t('auth.register.loginLink')}
             </Link>
           </p>
