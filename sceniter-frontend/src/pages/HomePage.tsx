@@ -13,6 +13,7 @@ import { Poster } from '@/components/Poster'
 import { PosterCard } from '@/components/PosterCard'
 import { ProgressBar } from '@/components/ProgressBar'
 import { Shelf, ShelfItem } from '@/components/Shelf'
+import { libraryIcon } from '@/lib/libraryIcons'
 
 /** Největší šířka obrázku dílu na polici (CSS px) – načte se zmenšenina. */
 const STILL_WIDTH = 320
@@ -49,12 +50,22 @@ function ContinueCard({ item }: { item: ContinueItem }) {
   )
 }
 
-/** Nově přidané v jedné knihovně: plakáty filmů, nebo seriálů s nejnovějšími díly. */
-function LibraryShelf({ row }: { row: HomeLibrary }) {
+/**
+ * Nově přidané v jedné knihovně: plakáty filmů, nebo seriálů s nejnovějšími
+ * díly. Název knihovny je nadpisem a ikona je ta z navigace, aby se police
+ * knihoven daly rozeznat jedna od druhé i od „Pokračovat“ a „Chci vidět“.
+ */
+function LibraryShelf({ row, divider }: { row: HomeLibrary; divider: boolean }) {
   const { t } = useTranslation()
   const lib = row.library
   return (
-    <Shelf title={t('video.home.inLibrary', { name: lib.name })} to={`/library/${lib.id}?sort=added`}>
+    <Shelf
+      eyebrow={t('video.home.newIn')}
+      title={lib.name}
+      icon={libraryIcon(lib)}
+      to={`/library/${lib.id}?sort=added`}
+      divider={divider}
+    >
       {row.movies.map((m) => (
         <ShelfItem key={m.id}>
           <PosterCard movie={m} />
@@ -108,7 +119,7 @@ export function HomePage() {
       ) : null}
 
       {cont.length > 0 ? (
-        <Shelf title={t('video.home.continue')} className="mt-4">
+        <Shelf title={t('video.home.continue')} divider={false} className="mt-4">
           {cont.map((item) => (
             <ShelfItem key={(item.movie?.id ?? item.episode?.id) + String(item.next)} wide>
               <ContinueCard item={item} />
@@ -117,8 +128,8 @@ export function HomePage() {
         </Shelf>
       ) : null}
 
-      {rows.map((row) => (
-        <LibraryShelf key={row.library.id} row={row} />
+      {rows.map((row, i) => (
+        <LibraryShelf key={row.library.id} row={row} divider={cont.length > 0 || i > 0} />
       ))}
 
       {watchlist.length > 0 ? (

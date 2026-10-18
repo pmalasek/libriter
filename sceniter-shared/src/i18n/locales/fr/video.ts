@@ -18,6 +18,7 @@ export default {
   },
   home: {
     inLibrary: 'Nouveautés dans {{name}}',
+    newIn: 'Nouveautés dans la bibliothèque',
     noLibrariesTitle: 'Pas encore de bibliothèque',
     noLibrariesDescription: 'Un administrateur doit choisir les dossiers vidéo et indiquer s’ils contiennent des films ou des séries.',
     noLibrariesAction: 'Configurer les bibliothèques',

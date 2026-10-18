@@ -16,6 +16,7 @@ import (
 	coreservice "mediater/internal/core/service"
 	corestorage "mediater/internal/core/storage"
 	"mediater/internal/sceniter/migrations"
+	"mediater/internal/sceniter/model"
 	"mediater/internal/sceniter/storage"
 )
 
@@ -448,5 +449,105 @@ func TestShowFolders(t *testing.T) {
 	}
 	if f := got[1].Files; len(f) != 2 || !f[0].FromName || f[1].FromName || f[1].Name != "b.mkv" || f[1].Episode != 2 {
 		t.Errorf("soubory S02 = %+v", f)
+	}
+}
+
+// TestUpNext ověřuje výběr dílu „na řadě“ nad ručně sestaveným seriálem.
+func TestUpNext(t *testing.T) {
+	ids := make([]uuid.UUID, 5)
+	eps := make([]EpisodeWithProgress, 5)
+	for i := range eps {
+		ids[i] = uuid.New()
+		eps[i] = EpisodeWithProgress{Episode: model.Episode{ID: ids[i], Season: 1, Number: i + 1}}
+	}
+	done := func(i int) *model.WatchProgress { return &model.WatchProgress{EpisodeID: &ids[i], Completed: true} }
+	partial := func(i int) *model.WatchProgress { return &model.WatchProgress{EpisodeID: &ids[i], PositionSec: 120} }
+	with := func(progress map[int]*model.WatchProgress) []EpisodeWithProgress {
+		out := append([]EpisodeWithProgress(nil), eps...)
+		for i, p := range progress {
+			out[i].Progress = p
+		}
+		return out
+	}
+
+	cases := []struct {
+		name     string
+		episodes []EpisodeWithProgress
+		latest   *model.WatchProgress
+		want     int // index, -1 = nil
+	}{
+		{"prázdný seriál", nil, nil, -1},
+		{"bez rozkoukanosti", with(nil), nil, 0},
+		{"za posledním zhlédnutým", with(map[int]*model.WatchProgress{0: done(0), 1: done(1)}), done(1), 2},
+		{"naposledy označený dřívější díl", with(map[int]*model.WatchProgress{0: done(0), 1: done(1), 3: done(3)}), done(0), 4},
+		{"mezera se přeskočí", with(map[int]*model.WatchProgress{0: done(0), 2: done(2)}), done(2), 3},
+		{"rozkoukaný má přednost", with(map[int]*model.WatchProgress{0: done(0), 1: done(1), 2: partial(2)}), partial(2), 2},
+		{"rozkoukaný dřívější díl má přednost", with(map[int]*model.WatchProgress{0: partial(0), 3: done(3)}), partial(0), 0},
+		{"dokoukaný seriál", with(map[int]*model.WatchProgress{0: done(0), 1: done(1), 2: done(2), 3: done(3), 4: done(4)}), done(4), -1},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := upNext(c.episodes, c.latest)
+			switch {
+			case c.want < 0 && got != nil:
+				t.Fatalf("čekal nil, dostal díl %d", got.Number)
+			case c.want >= 0 && got == nil:
+				t.Fatalf("čekal díl %d, dostal nil", c.want+1)
+			case c.want >= 0 && got.ID != ids[c.want]:
+				t.Fatalf("čekal díl %d, dostal %d", c.want+1, got.Number)
+			}
+		})
+	}
+}
+
+// TestUpNextIgnoresMarkOrder: díl na řadě se řídí pořadím v seriálu, ne tím,
+// který díl uživatel označil naposledy – a „pokračovat“ ukazuje tentýž díl.
+func TestUpNextIgnoresMarkOrder(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	e1 := e.episode(t, "Docent", 1, 1)
+	e2 := e.episode(t, "Docent", 1, 2)
+	e3 := e.episode(t, "Docent", 1, 3)
+	e4 := e.episode(t, "Docent", 2, 1)
+	e5 := e.episode(t, "Docent", 2, 2)
+
+	// Označeno v pořadí S02E01, S01E02, S01E01 – naposledy změněný je S01E01.
+	for _, id := range []uuid.UUID{e4, e2, e1} {
+		time.Sleep(10 * time.Millisecond)
+		if err := e.lib.MarkWatched(ctx, e.userID, "episode", id, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shows, _ := e.store.ListShows(ctx, storage.ShowFilter{})
+	d, err := e.lib.Show(ctx, e.userID, shows[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.UpNext == nil || d.UpNext.ID != e5 {
+		t.Fatalf("čekal S02E02, up_next %+v", d.UpNext)
+	}
+	items, err := e.lib.Continue(ctx, e.userID, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(items) != 1 || items[0].Episode.ID != e5 || !items[0].Next {
+		t.Fatalf("pokračovat %+v", items)
+	}
+
+	// Rozkoukaný S01E03 má přednost před dílem za posledním zhlédnutým.
+	at := time.Now().Add(time.Second)
+	if err := e.lib.SaveProgress(ctx, e.userID, ProgressRequest{EpisodeID: &e3, PositionSec: 300, DurationSec: 1800, RecordedAt: &at}); err != nil {
+		t.Fatal(err)
+	}
+	d, err = e.lib.Show(ctx, e.userID, shows[0].ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.UpNext == nil || d.UpNext.ID != e3 {
+		t.Fatalf("čekal rozkoukaný S01E03, up_next %+v", d.UpNext)
+	}
+	items, _ = e.lib.Continue(ctx, e.userID, 10)
+	if len(items) != 1 || items[0].Episode.ID != e3 || items[0].Next {
+		t.Fatalf("pokračovat s rozkoukaným %+v", items)
 	}
 }

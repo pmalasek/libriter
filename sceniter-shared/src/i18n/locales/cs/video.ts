@@ -18,6 +18,7 @@ export default {
   },
   home: {
     inLibrary: 'Nově v knihovně {{name}}',
+    newIn: 'Nově v knihovně',
     noLibrariesTitle: 'Zatím žádné knihovny',
     noLibrariesDescription: 'Správce musí v administraci vybrat složky s videi a určit, zda obsahují filmy, nebo seriály.',
     noLibrariesAction: 'Nastavit knihovny',

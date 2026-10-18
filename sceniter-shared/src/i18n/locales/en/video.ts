@@ -18,6 +18,7 @@ export default {
   },
   home: {
     inLibrary: 'New in {{name}}',
+    newIn: 'New in library',
     noLibrariesTitle: 'No libraries yet',
     noLibrariesDescription: 'An administrator has to pick the video folders and say whether they contain movies or TV shows.',
     noLibrariesAction: 'Set up libraries',

@@ -1,5 +1,5 @@
 import { CheckCircle2Icon, CircleIcon, FolderPenIcon, PencilIcon, PlayIcon, SparklesIcon } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
@@ -17,6 +17,7 @@ import { useAuth } from 'core-web/src/auth/AuthContext'
 import { ErrorState } from 'core-web/src/components/ErrorState'
 import { Button } from 'core-web/src/components/ui/button'
 import { Skeleton } from 'core-web/src/components/ui/skeleton'
+import { cn } from 'core-web/src/lib/utils'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from 'core-web/src/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from 'core-web/src/components/ui/select'
 import { useSeason, useSetWatched, useShow } from '@/api/hooks'
@@ -34,12 +35,19 @@ import { ExternalLinks, SourceRating } from '@/components/MetaSource'
 /** Největší šířka náhledu dílu v řádku (CSS px). */
 const STILL_WIDTH = 192
 
-function EpisodeRow({ e }: { e: EpisodeWithProgress }) {
+/** Řádek dílu; `next` je díl na řadě (rozkoukaný, nebo první za zhlédnutými). */
+function EpisodeRow({ e, next = false, ref }: { e: EpisodeWithProgress; next?: boolean; ref?: React.Ref<HTMLLIElement> }) {
   const { t } = useTranslation()
   const setWatched = useSetWatched()
   const done = Boolean(e.progress?.completed)
   return (
-    <li className="glass inset-shadow-glass flex gap-4 rounded-2xl p-3 ring-1 ring-glass-edge">
+    <li
+      ref={ref}
+      className={cn(
+        'glass inset-shadow-glass flex gap-4 rounded-2xl p-3 ring-1',
+        next ? 'ring-primary/40 bg-primary/4' : 'ring-glass-edge',
+      )}
+    >
       <Link to={`/watch/episode/${e.id}`} className="group relative w-36 shrink-0 sm:w-48" aria-label={t('video.detail.play')}>
         <Poster
           src={imageUrl(e.still_path, undefined, STILL_WIDTH) ?? imageUrl(e.show_backdrop_path, undefined, STILL_WIDTH)}
@@ -56,6 +64,11 @@ function EpisodeRow({ e }: { e: EpisodeWithProgress }) {
         <p className="font-medium">
           <span className="text-muted-foreground">{e.number}. </span>
           {e.title || t('video.detail.episode', { number: e.number })}
+          {next ? (
+            <span className="ml-2 inline-block rounded-full bg-primary px-2 py-0.5 align-middle text-xs font-medium text-primary-foreground">
+              {t('video.home.nextEpisode')}
+            </span>
+          ) : null}
         </p>
         <p className="text-xs text-muted-foreground">
           {[e.air_date, e.runtime_min ? t('video.detail.runtime', { minutes: e.runtime_min }) : e.duration_sec ? formatClock(e.duration_sec) : null]
@@ -94,6 +107,18 @@ export function ShowDetailPage() {
     : undefined
   // Díly se načítají po řadách – seriál o stovkách dílů nepřijde najednou.
   const episodes = useSeason(id, current?.number)
+
+  // Díl na řadě se po otevření odroluje do zobrazení – jen jednou, ať se
+  // stránka nehýbe při každém odškrtnutí dílu nebo obnovení dat.
+  const nextRef = useRef<HTMLLIElement>(null)
+  const scrolled = useRef(false)
+  const nextId = up?.id
+  const loadedSeason = episodes.data?.number
+  useEffect(() => {
+    if (scrolled.current || !nextRef.current || loadedSeason === undefined) return
+    scrolled.current = true
+    nextRef.current.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }, [nextId, loadedSeason])
 
   if (show.isError) return <ErrorState error={show.error} onRetry={() => void show.refetch()} />
   if (!s) return <DetailSkeleton />
@@ -171,7 +196,12 @@ export function ShowDetailPage() {
           {episodes.isError ? <ErrorState error={episodes.error} onRetry={() => void episodes.refetch()} /> : null}
           <ul className="grid gap-3">
             {episodes.data
-              ? episodes.data.episodes.map((e) => <EpisodeRow key={e.id} e={e} />)
+              ? episodes.data.episodes.map((e, i) => {
+                  const next = e.id === up?.id
+                  // První díl první řady není kam rolovat – hlavička by zmizela.
+                  const first = i === 0 && current.number === s.seasons[0]?.number
+                  return <EpisodeRow key={e.id} e={e} next={next} ref={next && !first ? nextRef : undefined} />
+                })
               : Array.from({ length: Math.min(current.episode_count, 6) }, (_, i) => (
                   <Skeleton key={i} className="h-28 rounded-2xl sm:h-32" />
                 ))}

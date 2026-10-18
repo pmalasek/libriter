@@ -18,6 +18,7 @@ export default {
   },
   home: {
     inLibrary: 'Neu in {{name}}',
+    newIn: 'Neu in der Bibliothek',
     noLibrariesTitle: 'Noch keine Bibliotheken',
     noLibrariesDescription: 'Ein Administrator muss die Videoordner auswählen und festlegen, ob sie Filme oder Serien enthalten.',
     noLibrariesAction: 'Bibliotheken einrichten',

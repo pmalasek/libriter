@@ -91,8 +91,8 @@ type ShowDetail struct {
 	model.Show
 	Seasons []SeasonInfo    `json:"seasons"`
 	User    model.UserState `json:"user"`
-	// UpNext je díl, kterým má uživatel pokračovat (rozkoukaný, nebo další
-	// po naposledy dokoukaném, nebo první díl).
+	// UpNext je díl, kterým má uživatel pokračovat (rozkoukaný, nebo první
+	// nezhlédnutý za posledním zhlédnutým, nebo první díl).
 	UpNext *EpisodeWithProgress `json:"up_next,omitempty"`
 }
 
@@ -101,36 +101,20 @@ func (l *Library) Show(ctx context.Context, userID, id uuid.UUID) (*ShowDetail, 
 	if err != nil {
 		return nil, err
 	}
-	seasons, err := l.store.ListSeasons(ctx, id)
+	seasons, flat, latest, err := l.showEpisodes(ctx, userID, id)
 	if err != nil {
 		return nil, err
-	}
-	progress, err := l.store.ListProgress(ctx, userID, storage.ProgressFilter{ShowID: &id})
-	if err != nil {
-		return nil, err
-	}
-	byEpisode := map[uuid.UUID]*model.WatchProgress{}
-	var latest *model.WatchProgress
-	for i := range progress {
-		p := &progress[i]
-		if p.EpisodeID != nil {
-			byEpisode[*p.EpisodeID] = p
-			if latest == nil { // seřazeno od naposledy změněné
-				latest = p
-			}
-		}
 	}
 
 	out := &ShowDetail{Show: *sh, Seasons: []SeasonInfo{}}
-	var flat []EpisodeWithProgress
+	i := 0
 	for _, se := range seasons {
 		info := SeasonInfo{ID: se.ID, Number: se.Number, Title: se.Title, PosterPath: se.PosterPath, EpisodeCount: len(se.Episodes)}
-		for _, e := range se.Episodes {
-			ep := EpisodeWithProgress{Episode: e, Progress: byEpisode[e.ID]}
-			if ep.Progress != nil && ep.Progress.Completed {
+		for range se.Episodes {
+			if ep := flat[i]; ep.Progress != nil && ep.Progress.Completed {
 				info.WatchedCount++
 			}
-			flat = append(flat, ep)
+			i++
 		}
 		out.Seasons = append(out.Seasons, info)
 	}
@@ -174,28 +158,65 @@ func (l *Library) Season(ctx context.Context, userID, showID uuid.UUID, number i
 	return nil, storage.ErrNotFound
 }
 
-// upNext vybere díl, kterým uživatel pokračuje: naposledy sledovaný, pokud
-// není dokoukaný; jinak další po něm; bez historie první díl.
+// showEpisodes vrátí řady seriálu, všechny jeho díly v pořadí řad a čísel
+// i s rozkoukaností uživatele, a naposledy změněný záznam rozkoukanosti.
+func (l *Library) showEpisodes(ctx context.Context, userID, showID uuid.UUID) ([]model.Season, []EpisodeWithProgress, *model.WatchProgress, error) {
+	seasons, err := l.store.ListSeasons(ctx, showID)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	progress, err := l.store.ListProgress(ctx, userID, storage.ProgressFilter{ShowID: &showID})
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	byEpisode := map[uuid.UUID]*model.WatchProgress{}
+	var latest *model.WatchProgress
+	for i := range progress {
+		p := &progress[i]
+		if p.EpisodeID != nil {
+			byEpisode[*p.EpisodeID] = p
+			if latest == nil { // seřazeno od naposledy změněné
+				latest = p
+			}
+		}
+	}
+	var flat []EpisodeWithProgress
+	for _, se := range seasons {
+		for _, e := range se.Episodes {
+			flat = append(flat, EpisodeWithProgress{Episode: e, Progress: byEpisode[e.ID]})
+		}
+	}
+	return seasons, flat, latest, nil
+}
+
+// upNext vybere díl, kterým uživatel pokračuje. Rozkoukaný díl (naposledy
+// změněný, nedokoukaný) má přednost. Jinak je to první nezhlédnutý díl za
+// posledním zhlédnutým v pořadí seriálu – nezáleží tedy na tom, v jakém
+// pořadí uživatel díly zhlédl nebo označil, ani zda se k některému vrátil.
+// Bez jakékoli rozkoukanosti je to první díl; dokoukaný seriál dává nil.
 func upNext(episodes []EpisodeWithProgress, latest *model.WatchProgress) *EpisodeWithProgress {
 	if len(episodes) == 0 {
 		return nil
 	}
-	if latest == nil {
-		return &episodes[0]
-	}
-	for i := range episodes {
-		if episodes[i].ID != *latest.EpisodeID {
-			continue
+	if latest != nil && !latest.Completed {
+		for i := range episodes {
+			if episodes[i].ID == *latest.EpisodeID {
+				return &episodes[i]
+			}
 		}
-		if !latest.Completed {
+	}
+	lastWatched := -1
+	for i := range episodes {
+		if p := episodes[i].Progress; p != nil && p.Completed {
+			lastWatched = i
+		}
+	}
+	for i := lastWatched + 1; i < len(episodes); i++ {
+		if p := episodes[i].Progress; p == nil || !p.Completed {
 			return &episodes[i]
 		}
-		if i+1 < len(episodes) {
-			return &episodes[i+1]
-		}
-		return nil // seriál dokoukaný
 	}
-	return &episodes[0]
+	return nil // seriál dokoukaný
 }
 
 // Home je obsah domovské stránky.
@@ -210,9 +231,9 @@ type Home struct {
 
 // HomeLibrary je řádek domovské stránky za jednu knihovnu.
 type HomeLibrary struct {
-	Library  model.Library   `json:"library"`
-	Movies   []model.Movie   `json:"movies"`
-	Shows    []model.Show    `json:"shows"`
+	Library model.Library `json:"library"`
+	Movies  []model.Movie `json:"movies"`
+	Shows   []model.Show  `json:"shows"`
 }
 
 func (l *Library) Home(ctx context.Context, userID uuid.UUID) (*Home, error) {
@@ -288,21 +309,17 @@ func (l *Library) Continue(ctx context.Context, userID uuid.UUID, limit int) ([]
 		seenShow[e.ShowID] = true
 		item := model.ContinueItem{Kind: model.KindEpisode, Episode: e, Progress: &p}
 		if p.Completed {
-			next, err := l.store.NextEpisode(ctx, e.ID)
-			if errors.Is(err, storage.ErrNotFound) {
-				continue // seriál dokoukaný
-			}
+			// Stejné pravidlo jako v detailu seriálu, ať karta a tlačítko
+			// „Přehrát“ ukazují tentýž díl.
+			_, flat, latest, err := l.showEpisodes(ctx, userID, e.ShowID)
 			if err != nil {
 				return nil, err
 			}
-			np, err := l.store.GetProgress(ctx, userID, nil, &next.ID)
-			if err != nil && !errors.Is(err, storage.ErrNotFound) {
-				return nil, err
+			next := upNext(flat, latest)
+			if next == nil || next.MediaID == nil {
+				continue // seriál dokoukaný, nebo další díl zatím nemá soubor
 			}
-			if np != nil && np.Completed {
-				continue
-			}
-			item = model.ContinueItem{Kind: model.KindEpisode, Episode: next, Progress: np, Next: np == nil}
+			item = model.ContinueItem{Kind: model.KindEpisode, Episode: &next.Episode, Progress: next.Progress, Next: next.Progress == nil}
 		} else if e.MediaID == nil {
 			continue
 		}

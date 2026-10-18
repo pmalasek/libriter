@@ -18,6 +18,7 @@ export default {
   },
   home: {
     inLibrary: 'Novedades en {{name}}',
+    newIn: 'Novedades en la biblioteca',
     noLibrariesTitle: 'Todavía no hay bibliotecas',
     noLibrariesDescription: 'Un administrador tiene que elegir las carpetas de vídeo e indicar si contienen películas o series.',
     noLibrariesAction: 'Configurar bibliotecas',
