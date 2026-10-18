@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"path/filepath"
 	"testing"
@@ -19,6 +20,7 @@ import (
 )
 
 type env struct {
+	conn              *sql.DB
 	store             *storage.Store
 	lib               *Library
 	userID            uuid.UUID
@@ -49,7 +51,7 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &env{store: store, lib: NewLibrary(store), userID: u.ID, movieLib: movies.ID, showLib: shows.ID}
+	return &env{conn: conn, store: store, lib: NewLibrary(store), userID: u.ID, movieLib: movies.ID, showLib: shows.ID}
 }
 
 func (e *env) movie(t *testing.T, title string) (movieID, mediaID uuid.UUID) {
@@ -136,6 +138,44 @@ func TestSaveProgressDuplicateEvent(t *testing.T) {
 	}
 	if err := e.lib.SaveProgress(ctx, e.userID, req); !errors.Is(err, storage.ErrDuplicateEvent) {
 		t.Fatalf("opakovaná událost: %v", err)
+	}
+}
+
+func TestShowsSortedByLatestEpisode(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	old := e.episode(t, "Arabela", 1, 1)
+	e.episode(t, "Bylo nebylo", 1, 1)
+	fresh := e.episode(t, "Arabela", 1, 2)
+	// Arabela přibyla dřív, ale její nejnovější díl je nejmladší ze všech.
+	for id, at := range map[uuid.UUID]string{old: "2026-01-01 10:00:00", fresh: "2026-03-01 10:00:00"} {
+		if _, err := e.conn.ExecContext(ctx, `UPDATE sc_episodes SET created_at = ?2 WHERE id = ?1`, id, at); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := e.conn.ExecContext(ctx, `UPDATE sc_shows SET created_at = '2026-01-01 10:00:00' WHERE title = 'Arabela'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.conn.ExecContext(ctx, `UPDATE sc_shows SET created_at = '2026-02-01 10:00:00' WHERE title = 'Bylo nebylo'`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.conn.ExecContext(ctx, `UPDATE sc_episodes SET created_at = '2026-02-01 10:00:00' WHERE id NOT IN (?1, ?2)`, old, fresh); err != nil {
+		t.Fatal(err)
+	}
+
+	shows, err := e.store.ListShows(ctx, storage.ShowFilter{Sort: "added"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shows) != 2 || shows[0].Title != "Arabela" {
+		t.Fatalf("pořadí %+v", shows)
+	}
+	if want := time.Date(2026, 3, 1, 10, 0, 0, 0, time.UTC); !shows[0].LatestEpisodeAt.Equal(want) {
+		t.Errorf("latest_episode_at %v, chci %v", shows[0].LatestEpisodeAt, want)
+	}
+	asc, _ := e.store.ListShows(ctx, storage.ShowFilter{Sort: "added", Dir: "asc"})
+	if len(asc) != 2 || asc[0].Title != "Bylo nebylo" {
+		t.Fatalf("vzestupně %+v", asc)
 	}
 }
 

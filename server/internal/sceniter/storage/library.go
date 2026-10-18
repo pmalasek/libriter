@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -124,7 +125,10 @@ func titleWhere(kind string, library uuid.UUID, query, genre, matchState string,
 // (název vzestupně, ostatní od nejnovějšího / nejlepšího). Tituly bez roku
 // nebo hodnocení jdou vždy na konec; při shodě rozhoduje název vzestupně
 // a nakonec jedinečné id, aby stránky na sebe navazovaly.
-func titleOrder(sort, dir string) string {
+//
+// added je výraz pro klíč „added“ – u filmů datum přidání titulu, u seriálů
+// datum přidání nejnovějšího dílu (showLatestEpisode).
+func titleOrder(sort, dir, added string) string {
 	desc := sort != "" && sort != "title"
 	switch dir {
 	case "asc":
@@ -140,7 +144,7 @@ func titleOrder(sort, dir string) string {
 	case "year":
 		return ` ORDER BY t.year IS NULL, t.year` + d + `, t.title, t.id`
 	case "added":
-		return ` ORDER BY t.created_at` + d + `, t.title, t.id`
+		return ` ORDER BY ` + added + d + `, t.title, t.id`
 	case "rating":
 		return ` ORDER BY t.rating IS NULL, t.rating` + d + `, t.title, t.id`
 	default:
@@ -178,7 +182,7 @@ func (s *Store) ListMovies(ctx context.Context, f MovieFilter) ([]model.Movie, e
 		(SELECT id FROM sc_media_files WHERE movie_id = t.id ORDER BY size_bytes DESC, file_path LIMIT 1),
 		(SELECT duration_sec FROM sc_media_files WHERE movie_id = t.id ORDER BY size_bytes DESC, file_path LIMIT 1)
 		FROM sc_movies t JOIN sc_libraries l ON l.id = t.library_id
-		WHERE ` + where + titleOrder(f.Sort, f.Dir) + limitOffset(f.Limit, f.Offset)
+		WHERE ` + where + titleOrder(f.Sort, f.Dir, "t.created_at") + limitOffset(f.Limit, f.Offset)
 
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -288,12 +292,35 @@ const showCols = `
 	s.poster_path, s.backdrop_path, s.rating, s.match_state, s.match_attempted_at, s.created_at, s.updated_at,
 	s.poster_source, s.backdrop_source, s.aspect_ratio`
 
-// showCounts spočítá řady a díly, které mají soubor.
+// showLatestEpisode je datum přidání nejnovějšího dílu se souborem;
+// seriál bez dílů má datum přidání seriálu. Podle něj se řadí „added“.
+const showLatestEpisode = `
+	COALESCE((SELECT max(e.created_at) FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
+	   WHERE se.show_id = s.id AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)), s.created_at)`
+
+// showCounts spočítá řady a díly, které mají soubor, a datum nejnovějšího dílu.
 const showCounts = `
 	(SELECT count(DISTINCT se.id) FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
 	   WHERE se.show_id = s.id AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)),
 	(SELECT count(*) FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
-	   WHERE se.show_id = s.id AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id))`
+	   WHERE se.show_id = s.id AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)),` + showLatestEpisode
+
+// parseDBTime přečte čas z výrazu, který driver vrátí jako text
+// (sloupec bez deklarovaného typu, např. max(created_at)).
+func parseDBTime(v string) (time.Time, error) {
+	for _, layout := range []string{
+		"2006-01-02 15:04:05.999999999-07:00",
+		"2006-01-02T15:04:05.999999999-07:00",
+		"2006-01-02 15:04:05.999999999",
+		"2006-01-02T15:04:05.999999999",
+		time.RFC3339Nano,
+	} {
+		if t, err := time.Parse(layout, v); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("neznámý formát času %q", v)
+}
 
 func scanShow(sc interface{ Scan(...any) error }, extra ...any) (model.Show, error) {
 	var (
@@ -302,14 +329,18 @@ func scanShow(sc interface{ Scan(...any) error }, extra ...any) (model.Show, err
 		provider, metaID, external, aspect sql.NullString
 		year, rating                       sql.NullInt64
 		attempted                          sql.NullTime
+		latest                             string
 	)
 	dest := []any{&sh.ID, &sh.LibraryID, &sh.SourceKey, &sh.Title, &orig, &year, &overview, &status,
 		&provider, &metaID, &external,
 		&poster, &bd, &rating, &sh.MatchState, &attempted, &sh.CreatedAt, &sh.UpdatedAt,
 		&sh.PosterSource, &sh.BackdropSource, &aspect,
-		&sh.SeasonCount, &sh.EpisodeCount}
+		&sh.SeasonCount, &sh.EpisodeCount, &latest}
 	err := sc.Scan(append(dest, extra...)...)
 	if err != nil {
+		return sh, err
+	}
+	if sh.LatestEpisodeAt, err = parseDBTime(latest); err != nil {
 		return sh, err
 	}
 	sh.OriginalTitle, sh.Year, sh.Overview, sh.Status = ptrString(orig), ptrInt(year), ptrString(overview), ptrString(status)
@@ -358,9 +389,11 @@ func (s *Store) CountShows(ctx context.Context, f ShowFilter) (int, error) {
 // ListShows vrátí seriály, které mají aspoň jeden díl se souborem.
 func (s *Store) ListShows(ctx context.Context, f ShowFilter) ([]model.Show, error) {
 	where, args := f.where()
-	cols := strings.ReplaceAll(showCols, "s.", "t.") + `, ` + strings.ReplaceAll(showCounts, "= s.id", "= t.id")
+	alias := strings.NewReplacer("= s.id", "= t.id", "s.created_at", "t.created_at")
+	cols := strings.ReplaceAll(showCols, "s.", "t.") + `, ` + alias.Replace(showCounts)
+	latest := alias.Replace(showLatestEpisode)
 	q := `SELECT ` + cols + ` FROM sc_shows t JOIN sc_libraries l ON l.id = t.library_id
-		WHERE ` + where + titleOrder(f.Sort, f.Dir) + limitOffset(f.Limit, f.Offset)
+		WHERE ` + where + titleOrder(f.Sort, f.Dir, latest) + limitOffset(f.Limit, f.Offset)
 	rows, err := s.db.QueryContext(ctx, q, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list shows: %w", err)

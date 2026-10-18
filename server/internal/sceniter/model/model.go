@@ -176,6 +176,8 @@ type Show struct {
 	// Odvozené pro výpisy.
 	SeasonCount  int `json:"season_count"`
 	EpisodeCount int `json:"episode_count"`
+	// LatestEpisodeAt je datum přidání nejnovějšího dílu (bez dílů = CreatedAt).
+	LatestEpisodeAt time.Time `json:"latest_episode_at"`
 }
 
 // Season je řada seriálu.

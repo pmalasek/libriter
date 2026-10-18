@@ -174,6 +174,8 @@ export interface Show {
   updated_at: string
   season_count: number
   episode_count: number
+  /** Kdy přibyl nejnovější díl (bez dílů = created_at); podle něj se řadí „Přidáno“. */
+  latest_episode_at: string
 }
 
 /** Seriál ve stránkovaném výpisu. */
@@ -194,6 +196,7 @@ export type ShowSummary = Pick<
   | 'updated_at'
   | 'season_count'
   | 'episode_count'
+  | 'latest_episode_at'
 >
 
 export interface Episode {

@@ -54,7 +54,7 @@ export function TitleRow({ movie, show }: { movie?: MovieSummary; show?: ShowSum
           </>
         ) : null}
       </p>
-      <p className="hidden w-28 shrink-0 text-right text-xs text-muted-foreground md:block">{formatDate(title.created_at)}</p>
+      <p className="hidden w-28 shrink-0 text-right text-xs text-muted-foreground md:block">{formatDate(show ? show.latest_episode_at : title.created_at)}</p>
     </Link>
   )
 }
