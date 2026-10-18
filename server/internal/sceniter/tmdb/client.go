@@ -359,14 +359,45 @@ type Season struct {
 	Episodes   []Episode `json:"episodes"`
 }
 
-// Season vrátí řadu seriálu i s díly.
+// Season vrátí řadu seriálu i s díly. Prázdné popisy řady a dílů v jazyce
+// knihovny se doplní z angličtiny (čerstvé díly často překlad nemají).
 func (c *Client) Season(ctx context.Context, tvID, number int) (*Season, error) {
 	var s Season
 	path := fmt.Sprintf("/tv/%d/season/%d", tvID, number)
 	if err := c.get(ctx, path, url.Values{"language": {c.language}}, &s); err != nil {
 		return nil, err
 	}
+	if strings.HasPrefix(c.language, "en") || !s.missingOverview() {
+		return &s, nil
+	}
+	var en Season
+	if err := c.get(ctx, path, url.Values{"language": {"en-US"}}, &en); err != nil {
+		return &s, nil
+	}
+	if strings.TrimSpace(s.Overview) == "" {
+		s.Overview = en.Overview
+	}
+	byNumber := map[int]string{}
+	for _, e := range en.Episodes {
+		byNumber[e.Number] = e.Overview
+	}
+	for i := range s.Episodes {
+		if strings.TrimSpace(s.Episodes[i].Overview) == "" {
+			s.Episodes[i].Overview = byNumber[s.Episodes[i].Number]
+		}
+	}
 	return &s, nil
+}
+
+// missingOverview říká, jestli některý díl nemá popis. Chybějící popis
+// samotné řady dotaz navíc nespouští – mívá ho prázdný i anglická verze.
+func (s *Season) missingOverview() bool {
+	for _, e := range s.Episodes {
+		if strings.TrimSpace(e.Overview) == "" {
+			return true
+		}
+	}
+	return false
 }
 
 // ImageSize jsou velikosti obrázků, které Sceniter stahuje.

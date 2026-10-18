@@ -325,6 +325,10 @@ func (m *Matcher) autoMatch(ctx context.Context, force bool) {
 	m.match.Running, m.match.Current = false, ""
 	m.mu.Unlock()
 
+	if ctx.Err() == nil {
+		m.fillNewEpisodes(ctx, libs, retryDays, limited)
+	}
+
 	// Zdroj odmítá požadavky: odložené tituly dopáruje další běh po pauze.
 	var first string
 	for p := range limited {
@@ -768,21 +772,7 @@ func (m *Matcher) MatchShow(ctx context.Context, id uuid.UUID, provider, metaID 
 			m.log.Warn("řada ze zdroje", "zdroj", provider, "show", id, "season", se.Number, "err", err)
 			continue
 		}
-		sm := storage.SeasonMeta{Number: se.Number, Title: s.Name, Overview: s.Overview,
-			PosterPath: m.download(ctx, provider, s.PosterURL, fmt.Sprintf("season-%s-s%02d", id, se.Number))}
-		onDisk := map[int]bool{}
-		for _, e := range se.Episodes {
-			onDisk[e.Number] = true
-		}
-		for _, e := range s.Episodes {
-			em := storage.EpisodeMeta{Number: e.Number, Title: e.Title, Overview: e.Overview,
-				AirDate: e.AirDate, RuntimeMin: e.RuntimeMin}
-			if onDisk[e.Number] {
-				em.StillPath = m.download(ctx, provider, e.StillURL, fmt.Sprintf("still-%s-s%02de%02d", id, se.Number, e.Number))
-			}
-			sm.Episodes = append(sm.Episodes, em)
-		}
-		seasonMetas = append(seasonMetas, sm)
+		seasonMetas = append(seasonMetas, m.seasonMeta(ctx, provider, id, se.Number, s, onDiskNumbers))
 	}
 	if err := m.rateLimited(provider); err != nil {
 		return err
@@ -800,6 +790,82 @@ func (m *Matcher) MatchShow(ctx context.Context, id uuid.UUID, provider, metaID 
 		}
 	}
 	return nil
+}
+
+// seasonMeta převede řadu ze zdroje na metadata k uložení. Fotky dílů
+// (stills) stáhne jen pro díly ze stills, typicky ty na disku.
+func (m *Matcher) seasonMeta(ctx context.Context, provider string, showID uuid.UUID, number int,
+	s *plugin.SeasonMetadata, stills []int) storage.SeasonMeta {
+	sm := storage.SeasonMeta{Number: number, Title: s.Name, Overview: s.Overview,
+		PosterPath: m.download(ctx, provider, s.PosterURL, fmt.Sprintf("season-%s-s%02d", showID, number))}
+	want := map[int]bool{}
+	for _, n := range stills {
+		want[n] = true
+	}
+	for _, e := range s.Episodes {
+		em := storage.EpisodeMeta{Number: e.Number, Title: e.Title, Overview: e.Overview,
+			AirDate: e.AirDate, RuntimeMin: e.RuntimeMin}
+		if want[e.Number] {
+			em.StillPath = m.download(ctx, provider, e.StillURL, fmt.Sprintf("still-%s-s%02de%02d", showID, number, e.Number))
+		}
+		sm.Episodes = append(sm.Episodes, em)
+	}
+	return sm
+}
+
+// fillNewEpisodes doplní metadata dílům spárovaných seriálů, které přibyly
+// na disk až po spárování (automatické párování spárované seriály jinak
+// vynechává). Stahuje jen dotčené řady a ukládá jen čekající díly, takže
+// nepřepíše ruční úpravy ostatních dílů. Zdroje, které odmítají
+// požadavky, zapíše do limited; díly pak doplní další běh po pauze.
+func (m *Matcher) fillNewEpisodes(ctx context.Context, libs []model.Library, retryDays int, limited map[string]bool) {
+	filled := 0
+	for _, lib := range libs {
+		if lib.Kind != model.KindShow {
+			continue
+		}
+		shows, err := m.store.ListShowsWithPendingEpisodes(ctx, lib.ID, retryDays)
+		if err != nil {
+			m.log.Warn("díly bez metadat", "knihovna", lib.Name, "err", err)
+			continue
+		}
+	shows:
+		for _, sh := range shows {
+			if !m.supports(sh.Provider, model.KindShow) {
+				continue
+			}
+			for _, se := range sh.Seasons {
+				if ctx.Err() != nil {
+					return
+				}
+				if limited[sh.Provider] || m.rateLimited(sh.Provider) != nil {
+					limited[sh.Provider] = true
+					continue shows
+				}
+				s, err := m.plugins.Season(ctx, sh.Provider, plugin.Request{ID: sh.MetaID, Season: se.Number,
+					Episodes: se.Episodes, Language: lib.Language})
+				switch {
+				case plugin.IsRateLimited(err):
+					limited[sh.Provider] = true
+					continue shows
+				case plugin.IsNotFound(err):
+					s = &plugin.SeasonMetadata{}
+				case err != nil:
+					m.log.Warn("nové díly ze zdroje", "zdroj", sh.Provider, "show", sh.Title, "season", se.Number, "err", err)
+					continue
+				}
+				sm := m.seasonMeta(ctx, sh.Provider, sh.ID, se.Number, s, se.Episodes)
+				if err := m.store.ApplyNewEpisodesMeta(ctx, sh.ID, sm, se.Episodes); err != nil {
+					m.log.Warn("nové díly: uložení", "show", sh.Title, "season", se.Number, "err", err)
+					continue
+				}
+				filled += len(se.Episodes)
+			}
+		}
+	}
+	if filled > 0 {
+		m.log.Info("doplněna metadata nových dílů", "dílů", filled)
+	}
 }
 
 func (m *Matcher) titleMeta(ctx context.Context, provider, metaID string, d *plugin.VideoMetadata, imagePrefix string) storage.TitleMeta {

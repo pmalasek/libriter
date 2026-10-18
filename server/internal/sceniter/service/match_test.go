@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,7 +30,7 @@ func TestMain(m *testing.M) {
 // „Neznámý“ nenajde nic. Záložní zdroj „backup“ najde i „Neznámý“.
 func fakePlugin(name string) sdk.Plugin {
 	return sdk.Plugin{
-		Manifest: plugin.Manifest{Name: name, Title: name, Version: "1.0", Kinds: []string{plugin.KindMovie}},
+		Manifest: plugin.Manifest{Name: name, Title: name, Version: "1.0", Kinds: []string{plugin.KindMovie, plugin.KindShow}},
 		Search: func(_ context.Context, req plugin.Request) ([]plugin.SearchResult, error) {
 			switch req.Query.Title {
 			case "Blok":
@@ -43,6 +44,19 @@ func fakePlugin(name string) sdk.Plugin {
 		},
 		Fetch: func(_ context.Context, req plugin.Request) (any, error) {
 			return plugin.VideoMetadata{ID: req.ID, Title: req.ID}, nil
+		},
+		// Season zná díly 1–3 každé řady; seriál „Krátký“ jen díly 1–2.
+		Season: func(_ context.Context, req plugin.Request) (*plugin.SeasonMetadata, error) {
+			last := 3
+			if req.ID == "Krátký" {
+				last = 2
+			}
+			s := &plugin.SeasonMetadata{Number: req.Season, Name: fmt.Sprintf("Řada %d", req.Season)}
+			for n := 1; n <= last; n++ {
+				s.Episodes = append(s.Episodes, plugin.EpisodeMetadata{Number: n,
+					Title: fmt.Sprintf("Díl %d", n), Overview: fmt.Sprintf("Popis S%dE%d", req.Season, n)})
+			}
+			return s, nil
 		},
 	}
 }
@@ -182,5 +196,88 @@ func TestAutoMatchFallsBackToOtherProviders(t *testing.T) {
 	}
 	if st := m.MatchStatusNow(); st.Running || st.Total != 2 || st.Done != 2 || st.Matched != 2 || st.Failed != 0 {
 		t.Errorf("průběh %+v", st)
+	}
+}
+
+// Díly přidané do spárovaného seriálu dostanou metadata při dalším
+// automatickém párování. Ruční úpravy dřívějších dílů zůstanou.
+func TestAutoMatchFillsNewEpisodesOfMatchedShow(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	first := e.episode(t, "Sloní", 1, 1)
+	e.episode(t, "Sloní", 1, 2)
+	ep, err := e.store.GetEpisode(ctx, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	showID := ep.ShowID
+
+	m := NewMatcher(e.store, newFakeHost(t), t.TempDir())
+	if err := m.MatchShow(ctx, showID, "fake", "Sloní", model.MatchManual); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.conn.ExecContext(ctx, `UPDATE sc_episodes SET overview = 'Ruční' WHERE id = ?1`, first); err != nil {
+		t.Fatal(err)
+	}
+
+	third := e.episode(t, "Sloní", 1, 3)
+	newSeason := e.episode(t, "Sloní", 2, 1)
+	m.autoMatch(ctx, false)
+
+	overview := func(id uuid.UUID) string {
+		ep, err := e.store.GetEpisode(ctx, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ep.Overview == nil {
+			return ""
+		}
+		return *ep.Overview
+	}
+	for id, want := range map[uuid.UUID]string{first: "Ruční", third: "Popis S1E3", newSeason: "Popis S2E1"} {
+		if got := overview(id); got != want {
+			t.Errorf("popis dílu: %q, chci %q", got, want)
+		}
+	}
+	pending, err := e.store.ListShowsWithPendingEpisodes(ctx, e.showLib, matchRetryDays)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pending) != 0 {
+		t.Errorf("čekající díly po doplnění: %+v", pending)
+	}
+}
+
+// Díl, který zdroj nezná, se označí a do lhůty se znovu nezkouší.
+func TestAutoMatchUnknownEpisodeWaitsForRetry(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	first := e.episode(t, "Krátký", 1, 1)
+	ep, err := e.store.GetEpisode(ctx, first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewMatcher(e.store, newFakeHost(t), t.TempDir())
+	if err := m.MatchShow(ctx, ep.ShowID, "fake", "Krátký", model.MatchAuto); err != nil {
+		t.Fatal(err)
+	}
+	e.episode(t, "Krátký", 1, 3)
+
+	pending := func(retryDays int) int {
+		shows, err := e.store.ListShowsWithPendingEpisodes(ctx, e.showLib, retryDays)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return len(shows)
+	}
+	if n := pending(matchRetryDays); n != 1 {
+		t.Fatalf("před doplněním: %d", n)
+	}
+	m.autoMatch(ctx, false)
+	if n := pending(matchRetryDays); n != 0 {
+		t.Fatalf("neznámý díl se má %d dní vynechat, čeká %d", matchRetryDays, n)
+	}
+	if n := pending(0); n != 1 {
+		t.Fatalf("vynucené párování má díl bez popisu zkusit znovu: %d", n)
 	}
 }

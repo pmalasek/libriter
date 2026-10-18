@@ -173,14 +173,126 @@ func (s *Store) ApplySeasonMeta(ctx context.Context, showID uuid.UUID, m SeasonM
 		return fmt.Errorf("apply season meta: %w", err)
 	}
 	for _, e := range m.Episodes {
-		if _, err := tx.ExecContext(ctx, `
-			UPDATE sc_episodes SET title = COALESCE(?3, title), overview = COALESCE(?4, overview),
-			  air_date = COALESCE(?5, air_date), still_path = COALESCE(?6, still_path),
-			  runtime_min = COALESCE(?7, runtime_min)
-			WHERE season_id = ?1 AND number = ?2`,
-			seasonID, e.Number, nullStr(e.Title), nullStr(e.Overview), nullStr(e.AirDate),
-			nullStr(e.StillPath), nullInt(e.RuntimeMin)); err != nil {
-			return fmt.Errorf("apply episode meta: %w", err)
+		if err := applyEpisodeMeta(ctx, tx, seasonID, e); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func applyEpisodeMeta(ctx context.Context, tx *sql.Tx, seasonID uuid.UUID, e EpisodeMeta) error {
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE sc_episodes SET title = COALESCE(?3, title), overview = COALESCE(?4, overview),
+		  air_date = COALESCE(?5, air_date), still_path = COALESCE(?6, still_path),
+		  runtime_min = COALESCE(?7, runtime_min), meta_checked_at = CURRENT_TIMESTAMP
+		WHERE season_id = ?1 AND number = ?2`,
+		seasonID, e.Number, nullStr(e.Title), nullStr(e.Overview), nullStr(e.AirDate),
+		nullStr(e.StillPath), nullInt(e.RuntimeMin)); err != nil {
+		return fmt.Errorf("apply episode meta: %w", err)
+	}
+	return nil
+}
+
+// PendingSeason je řada spárovaného seriálu s díly, kterým chybí metadata.
+type PendingSeason struct {
+	Number   int
+	Episodes []int
+}
+
+// PendingShow je spárovaný seriál s díly, kterým chybí metadata (typicky
+// díly přidané na disk až po spárování).
+type PendingShow struct {
+	ID       uuid.UUID
+	Title    string
+	Provider string
+	MetaID   string
+	Seasons  []PendingSeason
+}
+
+// ListShowsWithPendingEpisodes vrátí spárované seriály knihovny, které mají
+// díly na disku bez zkontrolovaných metadat. Díl, u kterého zdroj popis
+// neznal, se zkusí znovu po retryDays dnech (0 = hned).
+func (s *Store) ListShowsWithPendingEpisodes(ctx context.Context, library uuid.UUID, retryDays int) ([]PendingShow, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT sh.id, sh.title, sh.meta_provider, sh.meta_id, se.number, e.number
+		FROM sc_shows sh
+		JOIN sc_seasons se ON se.show_id = sh.id
+		JOIN sc_episodes e ON e.season_id = se.id
+		WHERE sh.library_id = ?1
+		  AND sh.match_state IN (?2, ?3)
+		  AND sh.meta_provider IS NOT NULL AND sh.meta_id IS NOT NULL
+		  AND EXISTS (SELECT 1 FROM sc_media_files mf WHERE mf.episode_id = e.id)
+		  AND (e.meta_checked_at IS NULL
+		       OR (e.overview IS NULL AND (?4 = 0 OR e.meta_checked_at < datetime('now', ?5))))
+		ORDER BY sh.id, se.number, e.number`,
+		library, model.MatchAuto, model.MatchManual, retryDays, fmt.Sprintf("-%d days", retryDays))
+	if err != nil {
+		return nil, fmt.Errorf("pending episodes: %w", err)
+	}
+	defer rows.Close()
+	var out []PendingShow
+	for rows.Next() {
+		var (
+			id                       uuid.UUID
+			title, provider, metaID  string
+			seasonNumber, episodeNum int
+		)
+		if err := rows.Scan(&id, &title, &provider, &metaID, &seasonNumber, &episodeNum); err != nil {
+			return nil, fmt.Errorf("pending episodes: %w", err)
+		}
+		if len(out) == 0 || out[len(out)-1].ID != id {
+			out = append(out, PendingShow{ID: id, Title: title, Provider: provider, MetaID: metaID})
+		}
+		sh := &out[len(out)-1]
+		if len(sh.Seasons) == 0 || sh.Seasons[len(sh.Seasons)-1].Number != seasonNumber {
+			sh.Seasons = append(sh.Seasons, PendingSeason{Number: seasonNumber})
+		}
+		se := &sh.Seasons[len(sh.Seasons)-1]
+		se.Episodes = append(se.Episodes, episodeNum)
+	}
+	return out, rows.Err()
+}
+
+// ApplyNewEpisodesMeta doplní metadata jen vybraných dílů řady a označí je
+// jako zkontrolované (i ty, které zdroj nezná). Ostatní díly řady se
+// nemění; u řady se doplní jen chybějící název, popis a plakát, aby se
+// nepřepsaly ruční úpravy.
+func (s *Store) ApplyNewEpisodesMeta(ctx context.Context, showID uuid.UUID, m SeasonMeta, episodes []int) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	var seasonID uuid.UUID
+	err = tx.QueryRowContext(ctx, `SELECT id FROM sc_seasons WHERE show_id = ?1 AND number = ?2`, showID, m.Number).Scan(&seasonID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE sc_seasons SET title = COALESCE(title, ?2), overview = COALESCE(overview, ?3),
+		  poster_path = COALESCE(poster_path, ?4) WHERE id = ?1`,
+		seasonID, nullStr(m.Title), nullStr(m.Overview), nullStr(m.PosterPath)); err != nil {
+		return fmt.Errorf("apply season meta: %w", err)
+	}
+	wanted := map[int]bool{}
+	for _, n := range episodes {
+		wanted[n] = true
+	}
+	for _, e := range m.Episodes {
+		if wanted[e.Number] {
+			if err := applyEpisodeMeta(ctx, tx, seasonID, e); err != nil {
+				return err
+			}
+		}
+	}
+	for _, n := range episodes {
+		if _, err := tx.ExecContext(ctx, `UPDATE sc_episodes SET meta_checked_at = CURRENT_TIMESTAMP
+			WHERE season_id = ?1 AND number = ?2`, seasonID, n); err != nil {
+			return fmt.Errorf("mark episode meta: %w", err)
 		}
 	}
 	return tx.Commit()
