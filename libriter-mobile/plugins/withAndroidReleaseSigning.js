@@ -1,4 +1,8 @@
-const { withAppBuildGradle } = require('@expo/config-plugins')
+// Plugin sdílí i sceniter-tv (../libriter-mobile/plugins/…); bez fallbacku na
+// process.cwd() by Node hledal @expo/config-plugins jen v libriter-mobile/node_modules.
+const { withAppBuildGradle } = require(
+  require.resolve('@expo/config-plugins', { paths: [__dirname, process.cwd()] }),
+)
 
 /**
  * Podepisování release buildu Androidu vlastním klíčem.
