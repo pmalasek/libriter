@@ -9,7 +9,8 @@
 #      build-tools, watchman, udev pravidla pro telefon (Linux)
 #    - iOS jen na macOS: Xcode CLT, CocoaPods, kontrola Xcode
 #
-#  Podporované systémy: macOS (Homebrew), Ubuntu/Debian (apt), Fedora (dnf).
+#  Podporované systémy: macOS (Homebrew), Ubuntu/Debian (apt), Fedora (dnf),
+#  Arch/CachyOS (pacman).
 #  Skript je idempotentní – co už je, přeskočí. Stav ověří `just doctor`.
 #
 #  Proměnné: ANDROID_API, ANDROID_BUILD_TOOLS, CMDLINE_TOOLS_BUILD (viz lib.sh),
@@ -23,7 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 detect_os
 
 info "Systém: $OS_PRETTY ($ARCH), správce balíčků: ${PKG:-žádný}"
-[[ -z "$PKG" ]] && die "Neznámá distribuce. Podporováno: macOS, Ubuntu/Debian, Fedora."
+[[ -z "$PKG" ]] && die "Neznámá distribuce. Podporováno: macOS, Ubuntu/Debian, Fedora, Arch/CachyOS."
 
 ENV_DIR="$HOME/.config/libriter"
 ENV_FILE="$ENV_DIR/android-env.sh"
@@ -37,6 +38,9 @@ pkg_install() {
   case "$PKG" in
     apt) $SUDO env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends "$@" ;;
     dnf) $SUDO dnf install -y "$@" ;;
+    # Bez -y: samotná synchronizace databáze bez upgradu (-Sy) vede na Archu
+    # k částečnému upgradu. Při 404 je potřeba nejdřív `sudo pacman -Syu`.
+    pacman) $SUDO pacman -S --needed --noconfirm "$@" ;;
     brew) brew install "$@" ;;
   esac
 }
@@ -87,6 +91,7 @@ else
   case "$PKG" in
     apt)  pkg_install golang-go ;;
     dnf)  pkg_install golang ;;
+    pacman) pkg_install go ;;
     brew) pkg_install go ;;
   esac
 fi
@@ -97,6 +102,7 @@ else
   case "$PKG" in
     apt)  pkg_install ffmpeg ;;
     dnf)  pkg_install ffmpeg-free ;;   # ffprobe bez RPM Fusion
+    pacman) pkg_install ffmpeg ;;
     brew) pkg_install ffmpeg ;;
   esac
 fi
@@ -105,7 +111,7 @@ if have gh; then
   ok "gh"
 else
   pkg_update_once
-  pkg_install gh
+  if [[ "$PKG" == "pacman" ]]; then pkg_install github-cli; else pkg_install gh; fi
 fi
 
 # -----------------------------------------------------------------------------
@@ -147,6 +153,11 @@ else
       ;;
     dnf)
       for jdk_pkg in "java-${JAVA_PREFERRED}-openjdk-devel" "java-${JAVA_WANT}-openjdk-devel"; do
+        if pkg_install "$jdk_pkg"; then break; fi
+      done
+      ;;
+    pacman)
+      for jdk_pkg in "jdk${JAVA_PREFERRED}-openjdk" "jdk${JAVA_WANT}-openjdk"; do
         if pkg_install "$jdk_pkg"; then break; fi
       done
       ;;
@@ -222,6 +233,9 @@ case "$PKG" in
   dnf)
     pkg_install android-tools || true   # obsahuje udev pravidla pro adb
     ;;
+  pacman)
+    pkg_install android-udev || true   # udev pravidla (uaccess) pro telefon
+    ;;
 esac
 
 # -----------------------------------------------------------------------------
@@ -250,6 +264,27 @@ for rc in "${rc_files[@]}"; do
     ok "přidáno načtení do $rc"
   fi
 done
+
+# fish nenačte bash syntaxi; dostane vlastní soubor v conf.d, který fish
+# načítá sám, takže netřeba upravovat config.fish.
+if have fish || [[ -d "$HOME/.config/fish" ]]; then
+  FISH_CONF="$HOME/.config/fish/conf.d/libriter.fish"
+  mkdir -p "$(dirname "$FISH_CONF")"
+  cat > "$FISH_CONF" <<EOF
+# Generováno _scripts/setup.sh (Libriter): Android SDK
+set -gx ANDROID_HOME "$ANDROID_HOME"
+set -gx ANDROID_SDK_ROOT \$ANDROID_HOME
+set -gx JAVA_HOME "$JDK_HOME"
+fish_add_path --global --move --path \$ANDROID_HOME/cmdline-tools/latest/bin \$ANDROID_HOME/platform-tools \$ANDROID_HOME/emulator \$JAVA_HOME/bin
+
+# Node z nvm (nvm je bashový, ve fish PATH nenastaví): nejnovější verze
+if not type -q node; and test -d "\$HOME/.nvm/versions/node"
+    set -l node_bins \$HOME/.nvm/versions/node/*/bin
+    set -q node_bins[1]; and fish_add_path --global --path \$node_bins[-1]
+end
+EOF
+  ok "zapsáno $FISH_CONF"
+fi
 
 # -----------------------------------------------------------------------------
 #  8. iOS (jen macOS)

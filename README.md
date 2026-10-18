@@ -60,7 +60,7 @@ Nejrychlejší cesta na čerstvém stroji:
 
 ```bash
 just doctor   # ukáže, co chybí
-just setup    # doinstaluje (macOS přes Homebrew, Ubuntu/Debian přes apt, Fedora přes dnf)
+just setup    # doinstaluje (macOS přes Homebrew, Ubuntu/Debian přes apt, Fedora přes dnf, Arch/CachyOS přes pacman)
 ```
 
 `just setup` nainstaluje Go, ffprobe, Node (přes nvm), JDK 17–24 a Android SDK

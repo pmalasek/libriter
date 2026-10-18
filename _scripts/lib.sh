@@ -16,8 +16,8 @@ fail()  { printf '  %s✗%s %s\n' "$C_ERR" "$C_OFF" "$*"; }
 die()   { printf '%s✗ %s%s\n' "$C_ERR" "$*" "$C_OFF" >&2; exit 1; }
 
 # --- systém -----------------------------------------------------------------
-# OS      = macos | ubuntu | fedora | linux (neznámá distribuce)
-# PKG     = brew | apt | dnf | ""
+# OS      = macos | ubuntu | fedora | arch | linux (neznámá distribuce)
+# PKG     = brew | apt | dnf | pacman | ""
 # ARCH    = arm64 | x86_64
 detect_os() {
   ARCH="$(uname -m)"
@@ -32,6 +32,7 @@ detect_os() {
         case "${ID:-} ${ID_LIKE:-}" in
           *ubuntu*|*debian*) OS="ubuntu"; PKG="apt" ;;
           *fedora*|*rhel*)   OS="fedora"; PKG="dnf" ;;
+          *arch*)            OS="arch"; PKG="pacman" ;;   # Arch, CachyOS, EndeavourOS, Manjaro
         esac
         OS_PRETTY="${PRETTY_NAME:-Linux}"
       fi
