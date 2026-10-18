@@ -2,7 +2,7 @@
   "expo": {
     "name": "Sceniter",
     "slug": "sceniter-tv",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "scheme": "sceniter",
     "orientation": "landscape",
     "icon": "./assets/icon.png",
@@ -12,7 +12,7 @@
     "ios": {
       "bundleIdentifier": "cz.sceniter.tv",
       "appleTeamId": "QL5UHGHK98",
-      "buildNumber": "9",
+      "buildNumber": "10",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSAppTransportSecurity": {
@@ -22,7 +22,7 @@
     },
     "android": {
       "package": "cz.sceniter.tv",
-      "versionCode": 9,
+      "versionCode": 10,
       "usesCleartextTraffic": true,
       "blockedPermissions": [
         "android.permission.READ_EXTERNAL_STORAGE",
