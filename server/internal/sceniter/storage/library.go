@@ -565,29 +565,6 @@ func (s *Store) NextEpisode(ctx context.Context, id uuid.UUID) (*model.Episode, 
 	return &e, nil
 }
 
-// RecentEpisodes vrátí naposledy přidané díly (napříč seriály).
-// library = uuid.Nil znamená všechny zapnuté knihovny.
-func (s *Store) RecentEpisodes(ctx context.Context, library uuid.UUID, limit int) ([]model.Episode, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT `+episodeCols+episodeFrom+`
-		JOIN sc_libraries lib ON lib.id = sh.library_id
-		WHERE lib.enabled = 1 AND (?2 = '`+uuid.Nil.String()+`' OR sh.library_id = ?2)
-		  AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)
-		ORDER BY e.created_at DESC, se.number DESC, e.number DESC LIMIT ?1`, limit, library)
-	if err != nil {
-		return nil, fmt.Errorf("recent episodes: %w", err)
-	}
-	defer rows.Close()
-	out := []model.Episode{}
-	for rows.Next() {
-		e, err := scanEpisode(rows)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, e)
-	}
-	return out, rows.Err()
-}
-
 // ListMedia vrátí soubory filmu nebo dílu včetně stop a titulků, největší první.
 func (s *Store) ListMedia(ctx context.Context, movieID, episodeID *uuid.UUID) ([]model.MediaFile, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT id FROM sc_media_files

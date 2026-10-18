@@ -7,8 +7,8 @@ import {
   remainingLabel,
   t as tr,
   type ContinueItem,
-  type Episode,
   type Movie,
+  type Show,
   type WatchlistItem,
 } from 'sceniter-shared'
 import { useDebouncedPrefetch, useHome } from '@/api/queries'
@@ -80,7 +80,7 @@ export default function HomeScreen() {
     if (!data || store.get()) return
     const first =
       (data.continue[0] && continueHero(data.continue[0])) ||
-      data.libraries.flatMap((l) => l.movies.map(movieHero)).find((h) => h.backdrop)
+      data.libraries.flatMap((l) => [...l.movies.map(movieHero), ...l.shows.map(showHero)]).find((h) => h.backdrop)
     if (first) store.set(first)
   }, [data, store])
 
@@ -136,7 +136,7 @@ export default function HomeScreen() {
           }}
         />
 
-        {data.libraries.map(({ library, movies, episodes }) =>
+        {data.libraries.map(({ library, movies, shows }) =>
           library.kind === 'movie' ? (
             <Row<Movie>
               key={library.id}
@@ -157,21 +157,21 @@ export default function HomeScreen() {
               )}
             />
           ) : (
-            <Row<Episode>
+            <Row<Show>
               key={library.id}
               title={t('video.home.inLibrary', { name: library.name })}
-              items={episodes}
+              items={shows}
               inset={INSET}
-              itemWidth={card.wideW}
-              keyOf={(e) => e.id}
-              render={(e, i) => (
-                <WideCard
-                  title={e.show_title ?? ''}
-                  subtitle={episodeShort(e)}
-                  image={wideImage(e.still_path, e.created_at) ?? wideImage(e.show_backdrop_path)}
+              itemWidth={card.posterW}
+              keyOf={(s) => s.id}
+              render={(s, i) => (
+                <PosterCard
+                  title={s.title}
+                  subtitle={t('video.shows.episodes', { count: s.episode_count })}
+                  image={posterImage(s)}
                   hasTVPreferredFocus={i === 0 && takePreferred()}
-                  onFocus={() => focus(episodeHero(e), ['show', e.show_id])}
-                  onPress={() => openShow(e.show_id)}
+                  onFocus={() => focus(showHero(s), ['show', s.id])}
+                  onPress={() => openShow(s.id)}
                 />
               )}
             />

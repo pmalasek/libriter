@@ -177,6 +177,22 @@ func TestShowsSortedByLatestEpisode(t *testing.T) {
 	if len(asc) != 2 || asc[0].Title != "Bylo nebylo" {
 		t.Fatalf("vzestupně %+v", asc)
 	}
+
+	// Domovská stránka: police seriálové knihovny má každý seriál jednou,
+	// seřazené podle nejnovějšího dílu.
+	home, err := e.lib.Home(ctx, e.userID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var row *HomeLibrary
+	for i := range home.Libraries {
+		if len(home.Libraries[i].Shows) > 0 {
+			row = &home.Libraries[i]
+		}
+	}
+	if row == nil || len(row.Shows) != 2 || row.Shows[0].Title != "Arabela" || row.Shows[1].Title != "Bylo nebylo" {
+		t.Fatalf("home %+v", row)
+	}
 }
 
 func TestContinueAndUpNext(t *testing.T) {

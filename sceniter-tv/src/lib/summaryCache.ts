@@ -30,7 +30,7 @@ function find(qc: QueryClient, kind: TitleKind, id: string): CachedTitle | undef
     const pool: (Movie | Show | undefined)[] =
       kind === 'movie'
         ? [...home.libraries.flatMap((l) => l.movies), ...home.continue.map((c) => c.movie), ...home.watchlist.map((w) => w.movie)]
-        : [...home.continue.map((c) => c.show), ...home.watchlist.map((w) => w.show)]
+        : [...home.libraries.flatMap((l) => l.shows), ...home.continue.map((c) => c.show), ...home.watchlist.map((w) => w.show)]
     const found = pool.find(hit)
     if (found) return found
   }

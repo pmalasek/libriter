@@ -49,7 +49,7 @@ function ContinueCard({ item }: { item: ContinueItem }) {
   )
 }
 
-/** Nově přidané v jedné knihovně: plakáty filmů, nebo obrázky nových dílů. */
+/** Nově přidané v jedné knihovně: plakáty filmů, nebo seriálů s nejnovějšími díly. */
 function LibraryShelf({ row }: { row: HomeLibrary }) {
   const { t } = useTranslation()
   const lib = row.library
@@ -60,18 +60,9 @@ function LibraryShelf({ row }: { row: HomeLibrary }) {
           <PosterCard movie={m} />
         </ShelfItem>
       ))}
-      {row.episodes.map((e) => (
-        <ShelfItem key={e.id} wide>
-          <Link to={`/shows/${e.show_id}`} className="group block outline-none">
-            <Poster
-              src={imageUrl(e.still_path, undefined, STILL_WIDTH) ?? imageUrl(e.show_backdrop_path, undefined, STILL_WIDTH)}
-              title={e.show_title ?? ''}
-              aspect="still"
-              className="transition-transform duration-200 group-hover:-translate-y-0.5"
-            />
-            <p className="mt-2 truncate text-sm font-medium">{e.show_title}</p>
-            <p className="truncate text-xs text-muted-foreground">{episodeLabel(e)}</p>
-          </Link>
+      {row.shows.map((s) => (
+        <ShelfItem key={s.id}>
+          <PosterCard show={s} />
         </ShelfItem>
       ))}
     </Shelf>

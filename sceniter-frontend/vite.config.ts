@@ -41,5 +41,8 @@ export default defineConfig({
   build: {
     outDir,
     emptyOutDir: true,
+    // hls.js (~575 kB) se načítá dynamicky až v přehrávači a dál dělit nejde
+    // (je to jeden předsestavený soubor) – limit je nad ním, ať varování nehlásí šum.
+    chunkSizeWarningLimit: 600,
   },
 })

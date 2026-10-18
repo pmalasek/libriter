@@ -202,7 +202,8 @@ func upNext(episodes []EpisodeWithProgress, latest *model.WatchProgress) *Episod
 type Home struct {
 	Continue []model.ContinueItem `json:"continue"`
 	// Libraries jsou řádky „nově přidané“ – jeden za každou zapnutou knihovnu
-	// v nastaveném pořadí; knihovna filmů plní Movies, seriálů Episodes.
+	// v nastaveném pořadí; knihovna filmů plní Movies, seriálů Shows (seřazené
+	// podle nejnovějšího přidaného dílu).
 	Libraries []HomeLibrary   `json:"libraries"`
 	Watchlist []WatchlistItem `json:"watchlist"`
 }
@@ -211,7 +212,7 @@ type Home struct {
 type HomeLibrary struct {
 	Library  model.Library   `json:"library"`
 	Movies   []model.Movie   `json:"movies"`
-	Episodes []model.Episode `json:"episodes"`
+	Shows    []model.Show    `json:"shows"`
 }
 
 func (l *Library) Home(ctx context.Context, userID uuid.UUID) (*Home, error) {
@@ -225,16 +226,16 @@ func (l *Library) Home(ctx context.Context, userID uuid.UUID) (*Home, error) {
 	}
 	rows := make([]HomeLibrary, 0, len(libs))
 	for _, lib := range libs {
-		row := HomeLibrary{Library: lib, Movies: []model.Movie{}, Episodes: []model.Episode{}}
+		row := HomeLibrary{Library: lib, Movies: []model.Movie{}, Shows: []model.Show{}}
 		if lib.Kind == model.KindShow {
-			row.Episodes, err = l.store.RecentEpisodes(ctx, lib.ID, 20)
+			row.Shows, err = l.store.ListShows(ctx, storage.ShowFilter{Library: lib.ID, Sort: "added", Limit: 20})
 		} else {
 			row.Movies, err = l.store.ListMovies(ctx, storage.MovieFilter{Library: lib.ID, Sort: "added", Limit: 20})
 		}
 		if err != nil {
 			return nil, err
 		}
-		if len(row.Movies)+len(row.Episodes) > 0 {
+		if len(row.Movies)+len(row.Shows) > 0 {
 			rows = append(rows, row)
 		}
 	}

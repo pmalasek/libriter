@@ -231,7 +231,9 @@ func TestManagerStart(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Klíčové snímky jsou po sekundě: začne se na některém z nich před cílem.
-	if s.ID == first.ID || s.Start <= 0 || s.Start > 4.5 || s.Start != float64(int(s.Start)) {
+	// Začátek se počítá od začátku souboru, který nové ffmpeg kvůli AC3
+	// posouvají o pár ms do záporu – proto tolerance.
+	if r := s.Start - float64(int(s.Start+0.5)); s.ID == first.ID || s.Start <= 0 || s.Start > 4.5 || r > 0.01 || r < -0.01 {
 		t.Fatalf("skok: session %s (start %v), původní %s", s.ID, s.Start, first.ID)
 	}
 	if _, err := m.Lookup(first.ID, user); err != ErrSessionGone {

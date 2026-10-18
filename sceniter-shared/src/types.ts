@@ -341,7 +341,8 @@ export interface WatchlistItem {
 export interface HomeLibrary {
   library: Library
   movies: Movie[]
-  episodes: Episode[]
+  /** Seriály seřazené podle nejnovějšího přidaného dílu. */
+  shows: Show[]
 }
 
 export interface Home {
