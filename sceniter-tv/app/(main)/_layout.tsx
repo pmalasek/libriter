@@ -15,7 +15,8 @@ const FOCUS_GIVE_UP_MS = 3000
  * Hlavní sekce s bočním menu; detaily a přehrávač jsou nad nimi bez menu.
  *
  * OK v menu otevře sekci a předá fokus do ní (menu se tím sbalí). Zpět v sekci
- * zaměří menu, Zpět z menu přejde na Domů, Zpět na Domů aplikaci opustí.
+ * (i na Domů) zaměří menu, Zpět z menu přejde na Domů, Zpět z menu na Domů
+ * aplikaci opustí.
  */
 export default function MainLayout() {
   const current = sectionOf(usePathname())
@@ -60,13 +61,25 @@ export default function MainLayout() {
   // Šipka vpravo z menu: řady karet na Domů začínají pod menu a Android je
   // pak nebere jako cíl „vpravo“ – fokus by v menu zůstal. Uvolnění klávesy
   // přijde až po nativním pohybu, takže tohle zasáhne jen, když se nic nestalo.
+  // Šipka vlevo z první karty na Domů: z téhož důvodu menu nenajde. Fokus se
+  // v obsahu od stisku nepohnul → zaměřit menu. Snímek z prvního stisku, ať
+  // podržení šipky přes celou řadu po puštění do menu neskočí.
+  const contentMoves = useRef(0)
+  const leftAt = useRef<number | null>(null)
   useTVEventHandler((e) => {
     if (e.eventType === 'right' && e.eventKeyAction === 1 && menuFocused.current) content.current?.requestTVFocus()
+    if (e.eventType !== 'left') return
+    if (e.eventKeyAction === 0) {
+      leftAt.current ??= contentMoves.current
+    } else if (e.eventKeyAction === 1) {
+      if (!menuFocused.current && leftAt.current === contentMoves.current) nav.current?.focus()
+      leftAt.current = null
+    }
   })
 
   useEffect(() => {
     setSectionBack(() => {
-      if (current === 'home' || menuFocused.current) return false
+      if (menuFocused.current) return false
       nav.current?.focus()
       return true
     })
@@ -81,7 +94,13 @@ export default function MainLayout() {
           prvek přes celou plochu, a na Domů (obsah i pod menu) by šipka vpravo
           z menu nenašla cíl. requestTVFocus na View zaměří první prvek uvnitř;
           collapsable={false}, jinak by ho Fabric zploštil a nebylo by co volat. */}
-      <View ref={content} collapsable={false} style={[styles.content, { marginLeft: current === 'home' ? 0 : NAV_COLLAPSED }]}>
+      <View
+        ref={content}
+        collapsable={false}
+        // onFocus na TV probublává – každý pohyb fokusu v obsahu.
+        onFocus={() => void contentMoves.current++}
+        style={[styles.content, { marginLeft: current === 'home' ? 0 : NAV_COLLAPSED }]}
+      >
         <Slot />
       </View>
       <SideNav

@@ -38,7 +38,8 @@ focusManager.setEventListener((setFocused) => {
 
 /**
  * Zpět (Menu na Siri Remote, Back na Android TV): o krok zpět v zásobníku,
- * v sekci nejdřív do bočního menu, z menu na Domů, z Domů pryč z aplikace.
+ * v sekci (i na Domů) nejdřív do bočního menu, z menu na Domů, z menu na Domů
+ * pryč z aplikace.
  * Na tvOS musí Menu na domovské obrazovce patřit systému (požadavek App
  * Store) – tam se klávesa uvolní.
  */
