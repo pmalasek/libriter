@@ -1,0 +1,62 @@
+# Libriter + Sceniter – PRODUKČNÍ instance
+#
+# Na serveru: /opt/libriter/compose.yaml (vedle .env a data/).
+#   cd /opt/libriter && docker compose up -d
+#
+# Weby: audiobooks/libriter.helpdesk24.works, libriter/audio.pem-tech.eu,
+#       sceniter.helpdesk24.works, sceniter/video.pem-tech.eu
+# (nginx proxuje na 172.24.0.46:8081 – port i hosty se nemění).
+#
+# Knihovny leží na NAS (172.24.0.6). NFS připojuje Docker sám jako volume,
+# ne bind-mountem z hostitele: když NAS není dostupný, kontejner nenastartuje
+# – místo toho, aby uviděl prázdný adresář a scanner bral knihovnu jako
+# prázdnou. Cesty uvnitř kontejneru jsou stejné jako na hostiteli
+# (/mnt/nfs_music, /mnt/nfs_video), takže .env zůstává beze změny.
+
+name: libriter
+
+services:
+  mediater:
+    image: mediater:${MEDIATER_TAG:-latest}
+    container_name: libriter
+    restart: unless-stopped
+    # Pozor: v .env nepsat komentář za hodnotu (KEY=hodnota # text). Docker ho
+    # odstraní jen po mezeře – po tabulátoru zůstane součástí hodnoty.
+    env_file: .env
+    environment:
+      # Soubory na NFS jsou 777 – zachovat, aby je mohli upravovat i ostatní
+      # klienti NAS (dříve UMask=0000 v systemd unitu).
+      UMASK: "0000"
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./data:/app/data
+      - nfs_music:/mnt/nfs_music
+      - nfs_video:/mnt/nfs_video
+      - transcode:/var/cache/mediater/transcode
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  nfs_music:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=172.24.0.6,nfsvers=4.1,rw,hard,proto=tcp,timeo=600,retrans=2"
+      device: ":/volume1/music"
+  nfs_video:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=172.24.0.6,nfsvers=4.1,rw,hard,proto=tcp,timeo=600,retrans=2"
+      device: ":/volume1/video"
+  transcode:

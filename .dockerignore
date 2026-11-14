@@ -1,0 +1,28 @@
+# Build kontext pro Dockerfile – jen weby, sdílené balíčky a server.
+**/node_modules
+**/.expo
+.git
+.claude
+bin
+dist
+docs
+deploy
+packaging
+sceniter-tv
+server/data
+server/tmp
+server/internal/*/web/dist/*
+!server/internal/*/web/dist/.gitkeep
+.env
+.env.*
+**/.env
+**/.env.*
+
+# Mobil není součástí image; npm workspaces ale potřebují jeho package.json.
+libriter-mobile/*
+!libriter-mobile/package.json
+
+# Ze skriptů jen postinstall hooky npm.
+_scripts/*
+!_scripts/restore-expo-sqlite-sources.mjs
+!_scripts/patch-track-player-android.mjs
