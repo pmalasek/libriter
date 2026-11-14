@@ -536,7 +536,9 @@ docker-build:
     #!/usr/bin/env bash
     set -euo pipefail
     version="${MEDIATER_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
-    docker build --build-arg MEDIATER_VERSION="$version" \
+    # --provenance=false: bez atestace má opakovaný build z cache stejné ID image,
+    # takže docker-deploy pozná, že image na serveru už je, a kontejner nevyměňuje.
+    docker build --provenance=false --build-arg MEDIATER_VERSION="$version" \
         -t "mediater:$version" -t mediater:latest .
     echo "Image: mediater:$version"
 
