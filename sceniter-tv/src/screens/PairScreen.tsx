@@ -4,13 +4,14 @@ import { LinearGradient } from 'expo-linear-gradient'
 import * as Device from 'expo-device'
 import QRCode from 'react-native-qrcode-svg'
 import { useTranslation } from 'react-i18next'
-import { ArrowRightIcon, RefreshCwIcon, ServerIcon } from 'lucide-react-native'
+import { ArrowRightIcon, RefreshCwIcon, ServerIcon, ShieldAlertIcon } from 'lucide-react-native'
 import { apiFetch, ApiError, type DeviceStart, type DeviceTokenResponse } from 'sceniter-shared'
 import { useAuth } from '@/auth/AuthProvider'
 import { Button } from '@/components/Button'
+import { InsecureNotice } from '@/components/InsecureNotice'
 import { T } from '@/components/T'
 import { useDownFromInput } from '@/lib/inputEscape'
-import { displayServer, serverCandidates } from '@/lib/serverUrl'
+import { displayServer, hasServerScheme, isInsecure, isLocalHost, serverCandidates } from '@/lib/serverUrl'
 import { loadRecentServers } from '@/lib/storage'
 import { colors, fonts, px, radius, safe } from '@/theme'
 
@@ -44,7 +45,9 @@ async function isServer(url: string): Promise<boolean> {
 
 /**
  * Krok 1: adresa serveru. Naposledy použité servery jsou nahoře jako
- * tlačítka (stačí OK); novou adresu stačí zadat bez https://.
+ * tlačítka (stačí OK); novou adresu stačí zadat bez https://. Bez schématu
+ * se http:// zkouší jen u adres v místní síti – veřejný server bez HTTPS
+ * musí uživatel zadat s http:// výslovně (a uvidí varování).
  */
 function ServerStep() {
   const { t } = useTranslation()
@@ -76,7 +79,10 @@ function ServerStep() {
           return
         }
       }
-      setError(t('video.tv.pair.serverError'))
+      // Veřejná adresa bez schématu se zkoušela jen přes https – poradit http://.
+      setError(
+        !hasServerScheme(input) && !isLocalHost(input) ? t('video.tv.pair.httpsError') : t('video.tv.pair.serverError'),
+      )
     } finally {
       setBusy(false)
     }
@@ -96,7 +102,7 @@ function ServerStep() {
           {recent.map((url, i) => (
             <Button
               key={url}
-              icon={ServerIcon}
+              icon={isInsecure(url) ? ShieldAlertIcon : ServerIcon}
               label={displayServer(url)}
               primary={i === 0}
               hasTVPreferredFocus={i === 0}
@@ -104,6 +110,7 @@ function ServerStep() {
               onPress={() => void connect(url)}
             />
           ))}
+          {recent.some(isInsecure) ? <InsecureNotice text={t('video.tv.pair.insecureRecent')} /> : null}
         </View>
       ) : null}
       <T dim style={styles.hint}>
@@ -124,6 +131,7 @@ function ServerStep() {
         hasTVPreferredFocus={recent.length === 0}
         style={styles.input}
       />
+      {isInsecure(value) ? <InsecureNotice style={{ marginTop: px(20) }} /> : null}
       {error ? <T style={styles.error}>{error}</T> : null}
       <Button
         ref={connectRef}
@@ -246,6 +254,7 @@ function CodeStep() {
         <T variant="title" style={{ color: colors.accent, marginTop: px(8) }}>
           {host}/link
         </T>
+        {isInsecure(server ?? '') ? <InsecureNotice style={{ marginTop: px(16) }} /> : null}
         <T variant="section" dim style={{ marginTop: px(36) }}>
           {t('video.tv.pair.step2')}
         </T>

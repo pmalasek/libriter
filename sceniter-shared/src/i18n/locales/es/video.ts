@@ -371,12 +371,15 @@ export default {
   tv: {
     pair: {
       serverTitle: 'Conectar con el servidor',
-      serverHint: 'Basta con el nombre del servidor, p. ej. video.example.es; https:// se añade solo.',
+      serverHint: 'Basta con el nombre del servidor, p. ej. video.example.es; https:// se añade solo. En direcciones de la red doméstica también se prueba http://.',
       serverPlaceholder: 'video.example.es',
       recentServers: 'Usados recientemente',
       connect: 'Conectar',
       connecting: 'Conectando…',
       serverError: 'Ningún servidor Sceniter responde en esta dirección.',
+      httpsError: 'No se pudo conectar con un servidor Sceniter en esta dirección mediante https://. Si el servidor funciona sin HTTPS, escribe la dirección con http:// de forma explícita; la conexión no estará cifrada.',
+      insecure: 'La conexión con el servidor no está cifrada (http://). En la red doméstica no suele ser un problema, pero a través de Internet cualquiera en el camino puede interceptarla.',
+      insecureRecent: 'Los servidores con http:// no usan una conexión cifrada.',
       title: 'Iniciar sesión en Sceniter',
       step1: 'En tu móvil u ordenador, abre',
       step2: 'e introduce este código:',
