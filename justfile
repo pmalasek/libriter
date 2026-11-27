@@ -77,6 +77,10 @@ i18n-check:
     npm run i18n:check -w libriter-shared
     npm run i18n:check -w sceniter-shared
 
+# Testy sdíleného TS kódu (node:test přes tsx)
+test-js:
+    npm test -w core-shared
+
 # go vet ./...
 [working-directory('server')]
 vet:
