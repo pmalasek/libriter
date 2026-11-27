@@ -1,48 +1,36 @@
-import { BookmarkIcon, HomeIcon, SearchIcon, SettingsIcon, type LucideIcon } from 'lucide-react'
-import type { ParseKeys } from 'i18next'
+import { BookmarkIcon, HomeIcon, LayoutGridIcon, SearchIcon, SettingsIcon, ShieldIcon } from 'lucide-react'
 import { useAuth } from 'core-web/src/auth/AuthContext'
 import { isAdmin } from 'core-web/src/auth/permissions'
+import type { NavItem } from 'core-web/src/components/layout/navTypes'
 import { useLibraries } from '@/api/hooks'
 import { libraryIcon } from '@/lib/libraryIcons'
 
-export interface NavItem {
-  to: string
-  /** Popisek z překladů; knihovny mají místo něj vlastní název (label). */
-  labelKey?: ParseKeys
-  label?: string
-  icon: LucideIcon
-  end?: boolean
-  /** Patří do spodní lišty na telefonu (vejdou se čtyři + „Více“). */
-  primary?: boolean
-}
-
-const HOME: NavItem = { to: '/', labelKey: 'video.nav.home', icon: HomeIcon, end: true, primary: true }
+const HOME: NavItem = { to: '/', labelKey: 'video.nav.home', icon: HomeIcon, end: true, tab: true }
+// Rozcestník knihoven je jen pro telefon – na širší obrazovce jsou knihovny
+// přímo v panelu.
+const BROWSE: NavItem = { to: '/browse', labelKey: 'video.nav.browse', icon: LayoutGridIcon, tab: true, side: false }
 const TAIL: NavItem[] = [
-  { to: '/watchlist', labelKey: 'video.nav.watchlist', icon: BookmarkIcon, primary: true },
-  { to: '/search', labelKey: 'video.nav.search', icon: SearchIcon },
+  { to: '/search', labelKey: 'video.nav.search', icon: SearchIcon, tab: true },
+  { to: '/watchlist', labelKey: 'video.nav.watchlist', icon: BookmarkIcon, tab: true },
 ]
-const ADMIN: NavItem = { to: '/admin', labelKey: 'video.nav.admin', icon: SettingsIcon }
-
-/** Kolik knihoven se vejde do spodní lišty telefonu (zbytek je ve „Více“). */
-const PRIMARY_LIBRARIES = 2
+const SETTINGS: NavItem = { to: '/profile', labelKey: 'layout.nav.settings', icon: SettingsIcon, footer: true }
+const ADMIN: NavItem = { to: '/admin', labelKey: 'video.nav.admin', icon: ShieldIcon, footer: true }
 
 /**
- * Položky navigace pro rail i spodní lištu: domů, knihovny v pořadí
- * z administrace, seznam a hledání. Administraci vidí jen admin.
+ * Položky navigace pro panel i spodní lištu. Panel: domů, knihovny v pořadí
+ * z administrace, hledání a seznam; v patičce nastavení a administrace
+ * (tu vidí jen admin, skutečnou ochranou je server). Telefon: Domů,
+ * Procházet, Hledat, Chci vidět a „Více“.
  */
 export function useNavItems(): NavItem[] {
   const { user } = useAuth()
   const libraries = useLibraries()
-  const libs: NavItem[] = (libraries.data ?? []).map((lib, i) => ({
+  // Na telefonu jsou knihovny v „Procházet“, ne v panelu „Více“.
+  const libs: NavItem[] = (libraries.data ?? []).map((lib) => ({
     to: `/library/${lib.id}`,
     label: lib.name,
     icon: libraryIcon(lib),
-    primary: i < PRIMARY_LIBRARIES,
+    more: false,
   }))
-  return [HOME, ...libs, ...TAIL, ...(isAdmin(user) ? [ADMIN] : [])]
-}
-
-/** Text položky – vlastní název knihovny, nebo překlad. */
-export function navLabel(item: NavItem, t: (key: ParseKeys) => string): string {
-  return item.label ?? (item.labelKey ? t(item.labelKey) : '')
+  return [HOME, BROWSE, ...libs, ...TAIL, SETTINGS, ...(isAdmin(user) ? [ADMIN] : [])]
 }

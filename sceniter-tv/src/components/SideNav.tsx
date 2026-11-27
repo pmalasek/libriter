@@ -1,10 +1,10 @@
 import { forwardRef, useCallback, useImperativeHandle, useRef, useState, type ReactNode } from 'react'
 import { Animated, ScrollView, StyleSheet, TVFocusGuideView, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
-import { ClapperboardIcon } from 'lucide-react-native'
 import { useNavItems, type NavKey } from '@/lib/navItems'
 import { bgAlpha, colors, fonts, px, radius } from '@/theme'
 import { Focusable } from './Focusable'
+import { LogoMark } from './LogoMark'
 
 export const NAV_COLLAPSED = px(176)
 const NAV_EXPANDED = px(460)
@@ -100,7 +100,7 @@ export const SideNav = forwardRef<SideNavHandle, SideNavProps>(
           style={StyleSheet.absoluteFill}
         />
         <View style={styles.logo}>
-          <ClapperboardIcon size={px(40)} color={colors.accent} />
+          <LogoMark size={px(48)} />
         </View>
         <TVFocusGuideView
           style={styles.items}

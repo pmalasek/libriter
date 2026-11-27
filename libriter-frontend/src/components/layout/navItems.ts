@@ -4,36 +4,24 @@ import {
   LayersIcon,
   LibraryIcon,
   SettingsIcon,
+  ShieldIcon,
   UsersIcon,
-  type LucideIcon,
 } from 'lucide-react'
-import type { ParseKeys } from 'i18next'
+import type { NavItem } from 'core-web/src/components/layout/navTypes'
 import { useSessions } from '@/api/hooks'
 import { useAuth } from '@/auth/AuthContext'
 import { isAdmin } from '@/auth/permissions'
 
-export interface NavItem {
-  to: string
-  /** Klíč popisku v katalogu překladů; přeloží se až při vykreslení. */
-  labelKey: ParseKeys
-  icon: LucideIcon
-  /** Odkaz svítí jen na přesné adrese – jinak by ho podbarvily i detaily. */
-  end?: boolean
-  /**
-   * Patří do spodní lišty na mobilu. Zbytek se na úzké obrazovce schová do
-   * nabídky „Více“, protože vedle sebe se vejde jen pět záložek.
-   */
-  primary?: boolean
-}
-
-const HOME: NavItem = { to: '/', labelKey: 'layout.nav.home', icon: HomeIcon, end: true, primary: true }
+// tab = záložka spodní lišty na telefonu; zbytek se tam schová do „Více“.
+const HOME: NavItem = { to: '/', labelKey: 'layout.nav.home', icon: HomeIcon, end: true, tab: true }
 const SESSIONS: NavItem = { to: '/sessions', labelKey: 'layout.nav.sessions', icon: HeadphonesIcon }
 const LIBRARY: NavItem[] = [
-  { to: '/books', labelKey: 'layout.nav.books', icon: LibraryIcon, end: true, primary: true },
-  { to: '/authors', labelKey: 'layout.nav.authors', icon: UsersIcon, primary: true },
-  { to: '/series', labelKey: 'layout.nav.series', icon: LayersIcon, primary: true },
+  { to: '/books', labelKey: 'layout.nav.books', icon: LibraryIcon, end: true, tab: true },
+  { to: '/authors', labelKey: 'layout.nav.authors', icon: UsersIcon, tab: true },
+  { to: '/series', labelKey: 'layout.nav.series', icon: LayersIcon, tab: true },
 ]
-const ADMIN: NavItem = { to: '/admin', labelKey: 'layout.nav.admin', icon: SettingsIcon }
+const SETTINGS: NavItem = { to: '/profile', labelKey: 'layout.nav.settings', icon: SettingsIcon, footer: true }
+const ADMIN: NavItem = { to: '/admin', labelKey: 'layout.nav.admin', icon: ShieldIcon, footer: true }
 
 /**
  * Položky navigace pro rail i spodní lištu – aby pravidla viditelnosti
@@ -50,6 +38,7 @@ export function useNavItems(): NavItem[] {
     HOME,
     ...(listening ? [SESSIONS] : []),
     ...LIBRARY,
+    SETTINGS,
     ...(isAdmin(user) ? [ADMIN] : []),
   ]
 }

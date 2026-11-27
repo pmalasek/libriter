@@ -1,16 +1,20 @@
+import { lchCss } from './color'
 import { t } from './i18n'
-import type { ColorScheme, ThemeMode } from './types'
+import { THEMES } from './themes'
+import type { AppearanceProduct, ColorScheme, ThemeMode, User } from './types'
+
+export const DEFAULT_COLOR_SCHEME: ColorScheme = 'midnight'
 
 /**
- * Barevná schémata, ze kterých si uživatel vybírá v profilu. `color` je ukázka
- * pro přepínač; skutečná paleta se odvozuje z odstínu (viz schemeHues).
+ * Barevná témata, ze kterých si uživatel vybírá v profilu. `brand` a `metal`
+ * jsou ukázky pro přepínač – témata se liší hlavně brand barvou (zlato mají
+ * Emerald i Burgundy skoro stejné), proto přepínač ukazuje obě.
  */
-export const COLOR_SCHEMES = [
-  { value: 'teal', color: 'oklch(0.52 0.1 195)' },
-  { value: 'blue', color: 'oklch(0.52 0.14 255)' },
-  { value: 'violet', color: 'oklch(0.52 0.14 300)' },
-  { value: 'green', color: 'oklch(0.52 0.14 150)' },
-] as const
+export const COLOR_SCHEMES = (['midnight', 'emerald', 'burgundy'] as const).map((value) => ({
+  value,
+  brand: lchCss(THEMES[value].dark.brand),
+  metal: lchCss(THEMES[value].dark.metal),
+}))
 
 export const THEME_MODES = [{ value: 'light' }, { value: 'dark' }, { value: 'system' }] as const
 
@@ -23,19 +27,29 @@ export function themeModeLabel(mode: ThemeMode): string {
 }
 
 /**
- * Odstíny schémat v OKLCH. Web je má v CSS (`--scheme-hue`,
- * `--scheme-highlight-hue`), mobil z nich počítá paletu v JS – proto jsou
- * tady, aby obě aplikace vycházely z jedněch čísel.
+ * Schémata z dřívějších verzí. Uložená volba (prohlížeč, mobil, starší server)
+ * se tiše převede na nejbližší nové téma – stejně jako to dělá migrace
+ * 021_color_schemes na serveru.
  */
-export const schemeHues: Record<ColorScheme, { hue: number; highlight: number }> = {
-  teal: { hue: 195, highlight: 50 },
-  blue: { hue: 255, highlight: 65 },
-  violet: { hue: 300, highlight: 25 },
-  green: { hue: 150, highlight: 80 },
+const LEGACY_SCHEMES: Record<string, ColorScheme> = {
+  teal: 'midnight',
+  blue: 'midnight',
+  green: 'emerald',
+  violet: 'burgundy',
 }
 
 export function parseScheme(value: string | null | undefined): ColorScheme {
-  return COLOR_SCHEMES.find((scheme) => scheme.value === value)?.value ?? 'teal'
+  const known = COLOR_SCHEMES.find((scheme) => scheme.value === value)?.value
+  if (known) return known
+  return (value && LEGACY_SCHEMES[value]) || DEFAULT_COLOR_SCHEME
+}
+
+/** Téma uživatele v daném produktu (Sceniter bez vlastní volby = téma Libriteru). */
+export function userColorScheme(
+  user: Pick<User, 'color_scheme' | 'sceniter_color_scheme'>,
+  product: AppearanceProduct,
+): ColorScheme {
+  return parseScheme(product === 'sceniter' ? (user.sceniter_color_scheme ?? user.color_scheme) : user.color_scheme)
 }
 
 export function parseThemeMode(value: string | null | undefined): ThemeMode {

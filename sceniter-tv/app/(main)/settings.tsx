@@ -1,6 +1,8 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import Constants from 'expo-constants'
+import { reloadAppAsync } from 'expo'
+import { COLOR_SCHEMES, colorSchemeLabel, type ColorScheme } from 'sceniter-shared'
 import { useTranslation } from 'react-i18next'
 import { LogOutIcon, ServerIcon } from 'lucide-react-native'
 import { useAuth } from '@/auth/AuthProvider'
@@ -10,7 +12,8 @@ import { T } from '@/components/T'
 import { usePrefs } from '@/lib/prefs'
 import { isInsecure } from '@/lib/serverUrl'
 import type { SubtitleMode, SubtitleSize } from '@/lib/storage'
-import { colors, px, radius, safe } from '@/theme'
+import { saveTheme } from '@/lib/theme'
+import { colors, colorScheme, px, radius, safe } from '@/theme'
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -27,6 +30,20 @@ export default function SettingsScreen() {
   const { t } = useTranslation()
   const { user, server, signOut, changeServer } = useAuth()
   const { prefs, update } = usePrefs()
+  const [reloading, setReloading] = useState(false)
+
+  // Barvy jsou ve stylech celé aplikace – nové téma se projeví po novém
+  // načtení. Uložit se musí dřív, než se aplikace načte znovu.
+  async function changeTheme(scheme: ColorScheme) {
+    if (scheme === colorScheme || reloading) return
+    setReloading(true)
+    await saveTheme(scheme)
+    try {
+      await reloadAppAsync('theme')
+    } catch {
+      // Bez nového načtení se téma použije při příštím spuštění (hláška zůstane).
+    }
+  }
 
   const modes: { key: SubtitleMode; label: string }[] = [
     { key: 'off', label: t('video.tv.settings.subtitlesNever') },
@@ -61,6 +78,24 @@ export default function SettingsScreen() {
             <Button key={s.key} label={s.label} selected={prefs.subtitleSize === s.key} onPress={() => update({ subtitleSize: s.key })} />
           ))}
         </View>
+      </Section>
+
+      <Section title={t('video.tv.settings.appearance')}>
+        <View style={styles.options}>
+          {COLOR_SCHEMES.map((scheme) => (
+            <Button
+              key={scheme.value}
+              label={colorSchemeLabel(scheme.value)}
+              selected={colorScheme === scheme.value}
+              onPress={() => void changeTheme(scheme.value)}
+            />
+          ))}
+        </View>
+        {reloading ? (
+          <T dim style={{ marginTop: px(16) }}>
+            {t('video.tv.settings.themeReload')}
+          </T>
+        ) : null}
       </Section>
 
       <Section title={t('video.tv.settings.account')}>

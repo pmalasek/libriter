@@ -1,4 +1,4 @@
-import { LogOutIcon, UserIcon } from 'lucide-react'
+import { ChevronDownIcon, LogOutIcon, UserIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router'
 import { roleLabel } from 'core-shared'
@@ -15,6 +15,7 @@ import {
 } from '../ui/dropdown-menu'
 import { initials } from 'core-shared'
 import { cn } from '../../lib/utils'
+import { AppVersion } from './AppVersion'
 
 /**
  * Účet v hlavičce (jen avatar) nebo v patičce sidebaru (showName – avatar
@@ -40,12 +41,8 @@ export function UserMenu({ showName = false, className }: { showName?: boolean; 
             <Avatar className="size-8">
               <AvatarFallback className="text-xs">{initials(user.display_name)}</AvatarFallback>
             </Avatar>
-            <span className="min-w-0 text-left">
-              <span className="block truncate text-sm font-medium">{user.display_name}</span>
-              <span className="block truncate text-xs font-normal text-muted-foreground">
-                {roleLabel(user.role)}
-              </span>
-            </span>
+            <span className="min-w-0 flex-1 truncate text-left text-sm font-medium">{user.display_name}</span>
+            <ChevronDownIcon className="mr-1 size-4 shrink-0 text-muted-foreground" />
           </Button>
         ) : (
           <Button variant="ghost" size="icon" aria-label={t('layout.account.menu')} className={className}>
@@ -77,6 +74,7 @@ export function UserMenu({ showName = false, className }: { showName?: boolean; 
           <LogOutIcon />
           {t('layout.account.signOut')}
         </DropdownMenuItem>
+        <AppVersion className="px-2 pt-2 pb-1" />
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -12,14 +12,14 @@ const font = join(here, '../../node_modules/@expo-google-fonts/bricolage-grotesq
 const mark = readFileSync(join(here, 'mark.svg'), 'utf8')
 const markInner = mark.replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '')
 
-/** Tmavé pozadí s jemnou tyrkysovou září – stejné jako v aplikaci. */
+/** Tmavé pozadí s jemnou modrou září tématu Midnight – stejné jako v aplikaci. */
 function background(w, h) {
   return `
   <defs>
     <radialGradient id="glow" cx="0.3" cy="0.2" r="0.9">
-      <stop offset="0" stop-color="#0E4F4F"/>
-      <stop offset="0.55" stop-color="#0D1A1D"/>
-      <stop offset="1" stop-color="#0B0B0F"/>
+      <stop offset="0" stop-color="#1B3A8F"/>
+      <stop offset="0.55" stop-color="#0F162C"/>
+      <stop offset="1" stop-color="#070A14"/>
     </radialGradient>
   </defs>
   <rect width="${w}" height="${h}" fill="url(#glow)"/>`

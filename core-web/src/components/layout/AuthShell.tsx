@@ -17,7 +17,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
       {/* Přehrávač tu není, takže pozadí nemá co rozmazávat – jen aurora. */}
       <AuroraBackdrop className="fixed -z-10" />
 
-      <aside className="bg-brand-gradient relative m-4 hidden flex-col justify-between rounded-4xl p-12 text-primary-foreground shadow-glass-lg ring-1 ring-white/20 inset-shadow-[0_1px_0_0_oklch(1_0_0/0.35)] lg:flex">
+      <aside className="bg-brand-surface relative m-4 hidden flex-col justify-between rounded-4xl p-12 text-brand-foreground shadow-glass-lg ring-1 ring-white/20 inset-shadow-[0_1px_0_0_oklch(1_0_0/0.35)] lg:flex">
         <div className="self-start rounded-2xl bg-white/90 p-3 shadow-glass dark:bg-background/90">
           <Logo size="lg" />
         </div>

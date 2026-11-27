@@ -20,6 +20,7 @@ import { openDb } from '@/db/schema'
 import { PlayerProvider } from '@/player/PlayerProvider'
 import { registerBackgroundSync, unregisterBackgroundSync } from '@/sync/backgroundSync'
 import { syncEngine } from '@/sync/syncEngine'
+import { DEFAULT_COLOR_SCHEME } from 'libriter-shared'
 import { palette, ThemeProvider, useTheme } from '@/theme'
 
 // react-native-track-player hlásí při startu čtyři varování o metodách
@@ -153,5 +154,5 @@ function AuthGate() {
  */
 function Splash() {
   const mode = useColorScheme() === 'dark' ? 'dark' : 'light'
-  return <View style={{ flex: 1, backgroundColor: palette('teal', mode).background }} />
+  return <View style={{ flex: 1, backgroundColor: palette(DEFAULT_COLOR_SCHEME, mode).background }} />
 }

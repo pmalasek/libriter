@@ -191,7 +191,7 @@ func TestDeviceTokensAreReaderOnly(t *testing.T) {
 		e.expect(e.req("PUT", "/api/v1/users/"+adminID+"/language", tok, map[string]string{"ui_language": "cs"}),
 			http.StatusOK, "", name+": jazyk")
 		e.expect(e.req("PUT", "/api/v1/users/"+adminID+"/appearance", tok,
-			map[string]string{"color_scheme": "teal", "theme_mode": "dark"}), http.StatusOK, "", name+": vzhled")
+			map[string]string{"color_scheme": "emerald", "theme_mode": "dark"}), http.StatusOK, "", name+": vzhled")
 		e.streamToken(tok)
 	}
 }
@@ -449,4 +449,21 @@ func TestLoginUnknownUser(t *testing.T) {
 		http.StatusUnauthorized, "auth.invalid_credentials", "neznámý účet")
 	e.expect(e.req("POST", "/api/v1/auth/login", "", map[string]string{"login": "ctenar@example.com", "password": "spatne"}),
 		http.StatusUnauthorized, "auth.invalid_credentials", "špatné heslo")
+}
+
+// Verze serveru je jen pro přihlášené – web ji ukazuje v patičce navigace.
+func TestVersionRequiresLogin(t *testing.T) {
+	e := newAuthEnv(t, nil)
+	e.user("reader@example.com", "reader")
+	tok := e.login("reader@example.com", "tajneheslo")
+
+	e.expect(e.req("GET", "/api/v1/version", "", nil), http.StatusUnauthorized, "", "bez přihlášení")
+	rec := e.req("GET", "/api/v1/version", tok, nil)
+	e.expect(rec, http.StatusOK, "", "přihlášený")
+	var body struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body.Version == "" {
+		t.Fatalf("verze: %q %v", rec.Body.String(), err)
+	}
 }

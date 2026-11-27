@@ -27,10 +27,10 @@ func TestUserAppearancePersistsAcrossLoginAndProfileEdits(t *testing.T) {
 		return user
 	}
 	before := readUser()
-	if before.ColorScheme != "teal" || before.ThemeMode != "system" {
+	if before.ColorScheme != "midnight" || before.ThemeMode != "system" {
 		t.Fatalf("default appearance: %+v", before)
 	}
-	for _, scheme := range []string{"blue", "violet", "green", "teal"} {
+	for _, scheme := range []string{"emerald", "burgundy", "midnight"} {
 		for _, mode := range []string{"light", "dark", "system"} {
 			rec := env.do(t, http.MethodPut, path+"/appearance", token, map[string]string{"color_scheme": scheme, "theme_mode": mode})
 			if rec.Code != http.StatusOK {
@@ -45,9 +45,37 @@ func TestUserAppearancePersistsAcrossLoginAndProfileEdits(t *testing.T) {
 			}
 		}
 	}
-	rec := env.do(t, http.MethodPut, path+"/appearance", token, map[string]string{"color_scheme": "violet", "theme_mode": "dark"})
+	// Starší mobilní aplikace posílá schémata z dřívějších verzí – server je
+	// převede na nová témata místo odmítnutí.
+	for legacy, want := range map[string]string{"teal": "midnight", "blue": "midnight", "green": "emerald", "violet": "burgundy"} {
+		rec := env.do(t, http.MethodPut, path+"/appearance", token, map[string]string{"color_scheme": legacy, "theme_mode": "dark"})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("legacy %s: %d %s", legacy, rec.Code, rec.Body.String())
+		}
+		if saved := readUser(); saved.ColorScheme != want {
+			t.Fatalf("legacy %s saved as %q", legacy, saved.ColorScheme)
+		}
+	}
+	rec := env.do(t, http.MethodPut, path+"/appearance", token, map[string]string{"color_scheme": "burgundy", "theme_mode": "dark"})
 	if rec.Code != http.StatusOK {
 		t.Fatal(rec.Body.String())
+	}
+
+	// Sceniter má vlastní téma; dokud ho uživatel nenastaví, není v profilu
+	// (klient použije téma Libriteru). Režim zobrazení je společný.
+	if readUser().SceniterColorScheme != nil {
+		t.Fatal("sceniter_color_scheme má být bez volby prázdné")
+	}
+	rec = env.do(t, http.MethodPut, path+"/appearance", token, map[string]string{"color_scheme": "emerald", "theme_mode": "dark", "product": "sceniter"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("sceniter: %d %s", rec.Code, rec.Body.String())
+	}
+	if saved := readUser(); saved.ColorScheme != "burgundy" || saved.SceniterColorScheme == nil || *saved.SceniterColorScheme != "emerald" {
+		t.Fatalf("oddělená témata: %+v", saved)
+	}
+	rec = env.do(t, http.MethodPut, path+"/appearance", token, map[string]string{"color_scheme": "emerald", "theme_mode": "dark", "product": "nesmysl"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("neznámý produkt: %d", rec.Code)
 	}
 	rec = env.do(t, http.MethodPut, path, token, map[string]string{"display_name": "Nové jméno", "email": "updated@example.com", "current_password": "tajneheslo"})
 	if rec.Code != http.StatusOK {
@@ -59,11 +87,11 @@ func TestUserAppearancePersistsAcrossLoginAndProfileEdits(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if user.ColorScheme != "violet" || user.ThemeMode != "dark" {
+	if user.ColorScheme != "burgundy" || user.ThemeMode != "dark" {
 		t.Fatalf("login appearance: %+v", user)
 	}
 	users, err := env.users.List(context.Background())
-	if err != nil || len(users) != 1 || users[0].ColorScheme != "violet" {
+	if err != nil || len(users) != 1 || users[0].ColorScheme != "burgundy" {
 		t.Fatalf("list: %+v, %v", users, err)
 	}
 }
@@ -102,7 +130,7 @@ func TestUserAppearanceRejectsUnauthorizedAndInvalidChanges(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if user.ColorScheme != "teal" || user.ThemeMode != "system" || user.Role != model.RoleReader {
+	if user.ColorScheme != "midnight" || user.ThemeMode != "system" || user.Role != model.RoleReader {
 		t.Fatalf("rejected request changed profile: %+v", user)
 	}
 }

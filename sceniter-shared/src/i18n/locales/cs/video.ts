@@ -9,6 +9,7 @@ export default {
     show: 'Seriál',
   },
   nav: {
+    browse: 'Procházet',
     home: 'Domů',
     movies: 'Filmy',
     shows: 'Seriály',
@@ -17,6 +18,13 @@ export default {
     admin: 'Administrace',
   },
   home: {
+    featured: 'Doporučeno',
+    badgeNew: 'Nové',
+    moreInfo: 'Více informací',
+    remainingMinutes: 'Zbývá {{minutes}} min',
+    heroSlide: 'Doporučený titul {{n}} z {{total}}',
+    heroPrev: 'Předchozí doporučení',
+    heroNext: 'Další doporučení',
     inLibrary: 'Nově v knihovně {{name}}',
     newIn: 'Nově v knihovně',
     noLibrariesTitle: 'Zatím žádné knihovny',
@@ -28,6 +36,15 @@ export default {
     emptyDescription: 'Filmy a seriály se tu objeví, jakmile server najde videa v adresáři knihovny.',
     nextEpisode: 'Další díl',
     remaining: 'zbývá {{time}}',
+  },
+  browse: {
+    title: 'Procházet',
+    subtitle: 'Vyberte kategorii a objevte obsah ve své knihovně',
+    empty: 'Zatím tu nejsou žádné knihovny.',
+    titles_one: '{{count}} titul',
+    titles_few: '{{count}} tituly',
+    titles_many: '{{count}} titulu',
+    titles_other: '{{count}} titulů',
   },
   list: {
     showAll: 'Zobrazit vše',
@@ -447,6 +464,8 @@ export default {
       large: 'Velké',
       about: 'O aplikaci',
       version: 'Verze {{version}}',
+      appearance: 'Vzhled',
+      themeReload: 'Načítám aplikaci s novým tématem… Pokud se nic nestane, projeví se po dalším spuštění.',
     },
     nav: {
       settings: 'Nastavení',

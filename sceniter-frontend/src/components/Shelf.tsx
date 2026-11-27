@@ -37,7 +37,7 @@ export function Shelf({
           {Icon ? (
             <span
               aria-hidden
-              className="inset-shadow-glass flex size-10 shrink-0 items-center justify-center rounded-2xl bg-primary/12 text-primary ring-1 ring-primary/20"
+              className="inset-shadow-glass bg-brand-surface flex size-10 shrink-0 items-center justify-center rounded-2xl text-metal ring-1 ring-metal/30"
             >
               <Icon className="size-5" />
             </span>
@@ -69,5 +69,5 @@ export function Shelf({
 }
 
 export function ShelfItem({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
-  return <div className={cn('shrink-0 snap-start', wide ? 'w-64 sm:w-72' : 'w-32 sm:w-40')}>{children}</div>
+  return <div className={cn('shrink-0 snap-start', wide ? 'w-72 sm:w-80' : 'w-36 sm:w-44')}>{children}</div>
 }

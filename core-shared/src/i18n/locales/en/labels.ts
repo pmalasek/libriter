@@ -89,10 +89,9 @@ export default {
     added: 'Date added',
   },
   colorScheme: {
-    teal: 'Teal',
-    blue: 'Blue',
-    violet: 'Violet',
-    green: 'Green',
+    midnight: 'Midnight Blue & Copper',
+    emerald: 'Emerald & Gold',
+    burgundy: 'Burgundy & Gold',
   },
   themeMode: {
     light: 'Light',

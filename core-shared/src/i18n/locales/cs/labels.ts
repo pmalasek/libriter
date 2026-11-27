@@ -89,10 +89,9 @@ export default {
     added: 'Datum přidání',
   },
   colorScheme: {
-    teal: 'Tyrkysová',
-    blue: 'Modrá',
-    violet: 'Fialová',
-    green: 'Zelená',
+    midnight: 'Půlnoční modrá a měď',
+    emerald: 'Smaragd a zlato',
+    burgundy: 'Burgundská a zlato',
   },
   themeMode: {
     light: 'Světlý',

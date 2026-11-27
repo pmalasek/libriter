@@ -11,7 +11,7 @@ export function PersonPhoto({ src, name, className }: { src?: string; name: stri
       <div
         aria-hidden
         className={cn(
-          'bg-brand-gradient flex aspect-[2/3] w-full items-center justify-center rounded-2xl text-primary-foreground shadow-glass ring-1 ring-white/15',
+          'bg-brand-surface flex aspect-[2/3] w-full items-center justify-center rounded-2xl text-brand-foreground shadow-glass ring-1 ring-white/15',
           className,
         )}
       >

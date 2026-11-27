@@ -1,5 +1,6 @@
 export default {
   nav: {
+    settings: 'Nastavení',
     home: 'Domů',
     sessions: 'Právě posloucháno',
     books: 'Knihy',
@@ -11,6 +12,7 @@ export default {
     more: 'Více',
   },
   homeLink: 'Libriter – domů',
+  version: 'Verze {{version}}',
   pageLoading: 'Načítání stránky…',
   nowPlaying: 'Právě hraje',
   account: {

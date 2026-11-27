@@ -55,6 +55,7 @@ type ShowSummary struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 	SeasonCount      int        `json:"season_count"`
 	EpisodeCount     int        `json:"episode_count"`
+	LatestEpisodeAt  time.Time  `json:"latest_episode_at"`
 }
 
 // Summary zúží seriál na záznam výpisu.
@@ -64,6 +65,7 @@ func (s Show) Summary() ShowSummary {
 		PosterPath: s.PosterPath, BackdropPath: s.BackdropPath, Rating: s.Rating,
 		MatchState: s.MatchState, MatchAttemptedAt: s.MatchAttemptedAt, SourceKey: s.SourceKey,
 		CreatedAt: s.CreatedAt, UpdatedAt: s.UpdatedAt, SeasonCount: s.SeasonCount, EpisodeCount: s.EpisodeCount,
+		LatestEpisodeAt: s.LatestEpisodeAt,
 	}
 }
 

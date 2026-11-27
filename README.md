@@ -529,21 +529,28 @@ React + TypeScript + Tailwind v4, komponenty shadcn/ui (Radix), routing
 karty, hlavičky detailů i dialogy – jsou mléčně průsvitné, se světlou linkou po
 horní hraně a měkkým stínem, a plavou nad pozadím celé aplikace. Tím pozadím je
 rozmazaná obálka právě přehrávané knihy; při přechodu na jinou se prolne a když
-nic nehraje, dýchá pod obsahem klidná záře v odstínu zvoleného schématu. Hlavní
-barvou zůstává tyrkysová z loga (nebo modrá, fialová a zelená podle profilu),
-oranžová slouží jako doplněk pro zvýraznění. Nadpisy sází Bricolage Grotesque,
-běžný text Geist; obojí je součástí balíčku, nic se nenačítá z cizích serverů.
+nic nehraje, dýchá pod obsahem klidná záře v barvě zvoleného tématu. Na výběr
+jsou tři témata, každé ve světlém i tmavém režimu: **Midnight Blue & Copper**
+(výchozí), **Emerald & Gold** a **Burgundy & Gold**. Každé stojí na třech
+barvách – tmavý povrch, sytá brand barva (aktivní položka menu, avatar, záře)
+a kov (měď nebo zlato) pro interaktivní prvky: tlačítka, průběh, odkazy,
+štítky. Nadpisy sází Bricolage Grotesque, běžný text Geist; obojí je součástí
+balíčku, nic se nenačítá z cizích serverů.
 
-Barvy, průhlednosti skla, zaoblení, stíny i utility `glass`, `glass-strong`
-a `glass-popover` jsou pohromadě v `libriter-frontend/src/index.css` – změna
-tokenů přebarví celou aplikaci. Sklo nesou jen panely nejvyšší úrovně; tlačítka,
+Čísla témat jsou jednou v `core-shared/src/themes.ts` (z nich počítá barvy
+mobil i televize) a web je má jako proměnné `--t-*` v
+`core-web/src/styles/base.css`; shodu obou hlídá `just test-js`. Tam jsou
+i průhlednosti skla, zaoblení, stíny a utility `glass`, `glass-strong`,
+`glass-popover`, `bg-brand-gradient` (kovový přechod) a `bg-brand-surface`
+(plocha v brand barvě) – změna tokenů přebarví celou aplikaci. Sklo nesou jen panely nejvyšší úrovně; tlačítka,
 odznaky a pole uvnitř nich mají jen průsvitnou barvu, protože rozostření uvnitř
 rozostření rozmazává obsah panelu, ne stránku. Bez podpory `backdrop-filter`,
 při systémovém nastavení omezené průhlednosti nebo vyššího kontrastu se plochy
 vrátí k neprůhledným; při omezeném pohybu se záře i prolínání zastaví.
 
-**Rozvržení:** na širokém displeji stojí vlevo úzký sloupek ikon, uprostřed obsah
-a vpravo panel *Právě hraje* s velkou obálkou, jezdcem, ovládáním a kapitolami –
+**Rozvržení:** na širokém displeji stojí vlevo panel navigace s logem,
+popisky, nastavením, účtem a verzí serveru (na užším okně se zúží na sloupek
+ikon), uprostřed obsah a vpravo panel *Právě hraje* s velkou obálkou, jezdcem, ovládáním a kapitolami –
 poslech tak nemusí nic otevírat. Na užší obrazovce panel nahradí plovoucí kapsle
 u spodní hrany, která se klepnutím rozvine na celou obrazovku; na telefonu vede
 navigace spodní lištou se záložkami (zbytek je pod *Více*). Úvodní stránka je
@@ -642,8 +649,10 @@ Přihlášený uživatel se drží v `localStorage` (JWT + profil). Profil i rol
 při otevření rozhraní srovnají se serverem, takže změna role se projeví bez
 nového přihlášení.
 
-Barevné schéma (tyrkysová, modrá, fialová nebo zelená) a režim zobrazení
+Barevné téma (Midnight, Emerald, Burgundy) a režim zobrazení
 (`light`, `dark`, `system`) se ukládají automaticky do profilu v databázi.
+Libriter a Sceniter mají každý vlastní téma (Sceniter bez vlastní volby
+převezme téma Libriteru), režim zobrazení je společný.
 Po přihlášení na jiném zařízení má profil přednost před místním nastavením.
 Vzhled lze změnit pod ikonou palety i v sekci **Profil → Vzhled**.
 Nepřihlášeným uživatelům se volba ukládá pouze v prohlížeči.

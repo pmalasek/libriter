@@ -56,7 +56,7 @@ Knihovna je podsložka přímo pod `VIDEO_ROOT`. Nastavuje ji admin v
 | Složka | Podsložka `VIDEO_ROOT`; nabízejí se jen ty, které knihovnou ještě nejsou. |
 | Typ | Filmy, nebo seriály – určuje, jak scanner soubory zařadí. Po založení ho nejde změnit. |
 | Zobrazovaný název | Položka v menu a nadpis řádku na domovské stránce. |
-| Ikona | Ikona v menu z nabídky; bez volby podle typu (filmový pás / televize). |
+| Ikona | Ikona v menu a na dlaždici v *Procházet*; bez volby podle typu (filmový pás / televize). |
 | Jazyk metadat | Jazyk, ve kterém zdroj vrací názvy a popisy (ISO 639-1). |
 | Výchozí zdroj metadat | Plugin, se kterým se tituly párují automaticky; bez zdroje se nepárují. |
 | Zapnutá | Vypnutá knihovna se neprochází ani nezobrazuje, data zůstávají. |
@@ -73,6 +73,19 @@ Například:
 Pořadí knihoven (šipky) je pořadí v menu a na domovské stránce. Smazání
 knihovny smaže z databáze její tituly včetně rozkoukanosti a hodnocení;
 soubory na disku zůstávají. Soubory mimo knihovny scanner ignoruje.
+
+### Web: domovská stránka a Procházet
+
+Domovská stránka začíná bannerem doporučených titulů – nejnovějších s obrázkem
+pozadí, střídavě z knihoven (nejvýš pět, samy se střídají). Pod ním jsou police
+*Pokračovat ve sledování*, nově přidané v každé knihovně a *Chci vidět*.
+Štítek **Nové** dostane titul přidaný v posledních 14 dnech (seriál podle
+nejnovějšího dílu), **4K** titul, jehož největší soubor má obraz 4K.
+
+Na telefonu vede spodní lišta na Domů, **Procházet**, Hledat a Chci vidět;
+Procházet ukazuje knihovny jako dlaždice s obrázkem z jejich obsahu (pozadí
+nejlépe hodnoceného titulu), ikonou a počtem titulů. Na širší obrazovce jsou
+knihovny přímo v levém panelu.
 
 ## Uspořádání souborů
 
@@ -274,6 +287,11 @@ a ikona z administrace, pořadí jako na webu) a Nastavení. Výpis knihovny má
 jediné tlačítko řazení; volba se pamatuje v televizi pro každou knihovnu.
 OK v menu otevře sekci a předá fokus do ní. Zpět v sekci zaměří menu, z menu
 vede na Domů, z Domů ven z aplikace.
+
+**Vzhled.** Televize je vždy tmavá; barevné téma (Midnight, Emerald, Burgundy)
+se volí v Nastavení → Vzhled a pamatuje se v televizi. Bez volby převezme
+téma Sceniteru spárovaného účtu. Barvy se načítají při startu, proto změna
+tématu aplikaci znovu načte.
 
 **Přehrávač.** Fokus drží posuvník: každý stisk šipky vlevo/vpravo přetočí
 o 10 s (video skočí po chvíli bez stisku), držení posouvá posuvník plynule

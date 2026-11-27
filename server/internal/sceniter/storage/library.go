@@ -18,7 +18,9 @@ const movieCols = `
 	m.id, m.library_id, m.source_key, m.title, m.original_title, m.year, m.overview, m.tagline, m.runtime_min,
 	m.meta_provider, m.meta_id, m.external_ids_json, m.poster_path, m.backdrop_path, m.rating,
 	m.match_state, m.match_attempted_at, m.created_at, m.updated_at, m.poster_source, m.backdrop_source,
-	m.aspect_ratio`
+	m.aspect_ratio,
+	(SELECT max(f.width) FROM sc_media_files f WHERE f.movie_id = m.id),
+	(SELECT max(f.height) FROM sc_media_files f WHERE f.movie_id = m.id)`
 
 // mainMovieFile vybere hlavní soubor filmu: největší (nejlepší verzi).
 const mainMovieFile = `(SELECT id FROM sc_media_files WHERE movie_id = m.id ORDER BY size_bytes DESC, file_path LIMIT 1)`
@@ -29,11 +31,12 @@ func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, e
 		orig, overview, tagline, poster, bd sql.NullString
 		provider, metaID, external, aspect  sql.NullString
 		year, runtime, rating               sql.NullInt64
+		width, height                       sql.NullInt64
 		attempted                           sql.NullTime
 	)
 	dest := []any{&m.ID, &m.LibraryID, &m.SourceKey, &m.Title, &orig, &year, &overview, &tagline, &runtime,
 		&provider, &metaID, &external, &poster, &bd, &rating, &m.MatchState, &attempted, &m.CreatedAt, &m.UpdatedAt,
-		&m.PosterSource, &m.BackdropSource, &aspect}
+		&m.PosterSource, &m.BackdropSource, &aspect, &width, &height}
 	if err := sc.Scan(append(dest, extra...)...); err != nil {
 		return m, err
 	}
@@ -42,6 +45,7 @@ func scanMovie(sc interface{ Scan(...any) error }, extra ...any) (model.Movie, e
 	m.ExternalIDs = model.UnmarshalExternalIDs(ptrString(external))
 	m.PosterPath, m.BackdropPath, m.Rating = ptrString(poster), ptrString(bd), ptrInt(rating)
 	m.AspectRatio = ptrString(aspect)
+	m.VideoWidth, m.VideoHeight = ptrInt(width), ptrInt(height)
 	if attempted.Valid {
 		m.MatchAttemptedAt = &attempted.Time
 	}
@@ -298,12 +302,17 @@ const showLatestEpisode = `
 	COALESCE((SELECT max(e.created_at) FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
 	   WHERE se.show_id = s.id AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)), s.created_at)`
 
-// showCounts spočítá řady a díly, které mají soubor, a datum nejnovějšího dílu.
+// showCounts spočítá řady a díly, které mají soubor, datum nejnovějšího dílu
+// a největší rozměry obrazu přes soubory dílů.
 const showCounts = `
 	(SELECT count(DISTINCT se.id) FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
 	   WHERE se.show_id = s.id AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)),
 	(SELECT count(*) FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
-	   WHERE se.show_id = s.id AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)),` + showLatestEpisode
+	   WHERE se.show_id = s.id AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.episode_id = e.id)),` + showLatestEpisode + `,
+	(SELECT max(f.width) FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
+	   JOIN sc_media_files f ON f.episode_id = e.id WHERE se.show_id = s.id),
+	(SELECT max(f.height) FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
+	   JOIN sc_media_files f ON f.episode_id = e.id WHERE se.show_id = s.id)`
 
 // parseDBTime přečte čas z výrazu, který driver vrátí jako text
 // (sloupec bez deklarovaného typu, např. max(created_at)).
@@ -330,12 +339,13 @@ func scanShow(sc interface{ Scan(...any) error }, extra ...any) (model.Show, err
 		year, rating                       sql.NullInt64
 		attempted                          sql.NullTime
 		latest                             string
+		width, height                      sql.NullInt64
 	)
 	dest := []any{&sh.ID, &sh.LibraryID, &sh.SourceKey, &sh.Title, &orig, &year, &overview, &status,
 		&provider, &metaID, &external,
 		&poster, &bd, &rating, &sh.MatchState, &attempted, &sh.CreatedAt, &sh.UpdatedAt,
 		&sh.PosterSource, &sh.BackdropSource, &aspect,
-		&sh.SeasonCount, &sh.EpisodeCount, &latest}
+		&sh.SeasonCount, &sh.EpisodeCount, &latest, &width, &height}
 	err := sc.Scan(append(dest, extra...)...)
 	if err != nil {
 		return sh, err
@@ -348,6 +358,7 @@ func scanShow(sc interface{ Scan(...any) error }, extra ...any) (model.Show, err
 	sh.ExternalIDs = model.UnmarshalExternalIDs(ptrString(external))
 	sh.PosterPath, sh.BackdropPath, sh.Rating = ptrString(poster), ptrString(bd), ptrInt(rating)
 	sh.AspectRatio = ptrString(aspect)
+	sh.VideoWidth, sh.VideoHeight = ptrInt(width), ptrInt(height)
 	if attempted.Valid {
 		sh.MatchAttemptedAt = &attempted.Time
 	}

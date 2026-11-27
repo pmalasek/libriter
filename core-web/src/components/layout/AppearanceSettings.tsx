@@ -3,7 +3,7 @@ import { useTheme } from 'next-themes'
 import { useTranslation } from 'react-i18next'
 import { Button } from '../ui/button'
 import { cn } from '../../lib/utils'
-import { COLOR_SCHEMES, colorSchemeLabel, useColorScheme } from '../../theme/colorScheme'
+import { COLOR_SCHEMES, colorSchemeLabel, schemeSwatch, useColorScheme } from '../../theme/colorScheme'
 
 const MODES = [
   { value: 'light', icon: SunIcon, labelKey: 'layout.appearance.light' },
@@ -54,7 +54,8 @@ export function AppearanceSettings() {
       <div className="space-y-2">
         <p id="appearance-scheme" className="text-sm font-medium">{t('layout.appearance.colorScheme')}</p>
         <div role="radiogroup" aria-labelledby="appearance-scheme" className={PILL}>
-          {COLOR_SCHEMES.map(({ value, color }) => {
+          {COLOR_SCHEMES.map((scheme) => {
+            const { value } = scheme
             const active = value === colorScheme
             return (
               <Button
@@ -74,7 +75,7 @@ export function AppearanceSettings() {
                     'size-3.5 shrink-0 rounded-full border border-foreground/15',
                     active && 'ring-2 ring-primary/40 ring-offset-1 ring-offset-background',
                   )}
-                  style={{ backgroundColor: color }}
+                  style={schemeSwatch(scheme)}
                 />
                 {colorSchemeLabel(value)}
               </Button>

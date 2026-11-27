@@ -3,6 +3,7 @@ import { useColorScheme } from 'react-native'
 import * as SystemUI from 'expo-system-ui'
 import {
   apiFetch,
+  DEFAULT_COLOR_SCHEME,
   parseScheme,
   parseThemeMode,
   type ColorScheme,
@@ -38,12 +39,12 @@ export function useTheme(): ThemeValue {
  * Vzhled podle profilu, stejně jako na webu (ColorSchemeProvider): schéma a
  * režim jsou uložené u uživatele na serveru, takže platí na všech zařízeních.
  * Lokální kopie v `settings` slouží pro start bez sítě – bez ní by aplikace
- * v letadle naběhla ve výchozí tyrkysové a přebarvila se až po přihlášení.
+ * v letadle naběhla ve výchozím tématu a přebarvila se až po přihlášení.
  */
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const { user, updateUser } = useAuth()
   const system = useColorScheme()
-  const [local, setLocal] = useState<UserAppearance>({ color_scheme: 'teal', theme_mode: 'system' })
+  const [local, setLocal] = useState<UserAppearance>({ color_scheme: DEFAULT_COLOR_SCHEME, theme_mode: 'system' })
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {

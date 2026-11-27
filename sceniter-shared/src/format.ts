@@ -1,5 +1,5 @@
-import { apiUrl, currentLanguage, formatClock, t, thumbUrl } from 'core-shared'
-import type { Credit, CreditRole, Episode, Movie, Person, Show, Stream, WatchProgress } from './types'
+import { apiUrl, currentLanguage, formatClock, oklch, t, thumbUrl } from 'core-shared'
+import type { Credit, CreditRole, Episode, Library, Movie, Person, Show, Stream, WatchProgress } from './types'
 
 /** „S01E02“ – kód dílu do výpisů. */
 export function episodeCode(season: number, episode: number): string {
@@ -38,40 +38,11 @@ export function placeholderHue(title: string): number {
   return h % 360
 }
 
-/** OKLCH → sRGB hex (ořez do gamutu). Televize CSS barvy neumí, web i TV tak dostanou stejné odstíny. */
-function oklchToHex(L: number, C: number, hue: number): string {
-  const h = (hue * Math.PI) / 180
-  const a = C * Math.cos(h)
-  const b = C * Math.sin(h)
-  const l_ = L + 0.3963377774 * a + 0.2158037573 * b
-  const m_ = L - 0.1055613458 * a - 0.0638541728 * b
-  const s_ = L - 0.0894841775 * a - 1.291485548 * b
-  const l = l_ ** 3
-  const m = m_ ** 3
-  const s = s_ ** 3
-  const lin = [
-    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
-    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
-    -0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s,
-  ]
-  return (
-    '#' +
-    lin
-      .map((x) => {
-        const c = Math.min(1, Math.max(0, x))
-        const srgb = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055
-        return Math.round(srgb * 255)
-          .toString(16)
-          .padStart(2, '0')
-      })
-      .join('')
-  )
-}
-
 /** Tři zastávky přechodu náhradního plakátu (shora dolů: světlá → tmavá). */
 export function placeholderGradient(title: string): [string, string, string] {
   const hue = placeholderHue(title)
-  return [oklchToHex(0.66, 0.13, hue), oklchToHex(0.44, 0.12, hue), oklchToHex(0.26, 0.07, hue)]
+  // Televize CSS barvy neumí – web i TV tak dostanou stejné hex odstíny.
+  return [oklch(0.66, 0.13, hue), oklch(0.44, 0.12, hue), oklch(0.26, 0.07, hue)]
 }
 
 /** První písmeno nebo číslice názvu – vodoznak na náhradním plakátu. */
@@ -98,6 +69,24 @@ export function creditsWithRole(credits: Credit[], role: CreditRole): Credit[] {
 
 export function backdropUrl(title: Pick<Movie | Show, 'backdrop_path' | 'updated_at'>): string | undefined {
   return imageUrl(title.backdrop_path, title.updated_at)
+}
+
+/** Obrázek knihovny na rozcestníku „Procházet“. */
+export function libraryCoverUrl(lib: Pick<Library, 'cover_path' | 'cover_updated_at'>, width?: number): string | undefined {
+  return imageUrl(lib.cover_path, lib.cover_updated_at, width)
+}
+
+/** Jak dlouho je titul „nový“ (štítek Nové) – od přidání, u seriálu od posledního dílu. */
+export const NEW_TITLE_DAYS = 14
+
+export function isNewTitle(title: { created_at: string; latest_episode_at?: string }, now = Date.now()): boolean {
+  const added = Date.parse(title.latest_episode_at ?? title.created_at)
+  return Number.isFinite(added) && now - added < NEW_TITLE_DAYS * 24 * 3600 * 1000
+}
+
+/** Je obraz ve 4K? (podle největšího souboru titulu) */
+export function isUhd(title: { video_width?: number; video_height?: number }): boolean {
+  return resolutionLabel(title.video_width, title.video_height) === '4K'
 }
 
 /** Rozlišení podle výšky obrazu: 2160 → „4K“, 1080 → „1080p“. */
@@ -187,6 +176,13 @@ export function remainingLabel(p: WatchProgress | undefined | null, durationSec?
   const d = p?.duration_sec || durationSec || 0
   if (!p || p.completed || d <= 0) return ''
   return t('video.home.remaining', { time: formatClock(Math.max(0, d - p.position_sec)) })
+}
+
+/** Zbývající čas v minutách („Zbývá 24 min“), nebo prázdný řetězec. */
+export function remainingMinutesLabel(p: WatchProgress | undefined | null, durationSec?: number): string {
+  const d = p?.duration_sec || durationSec || 0
+  if (!p || p.completed || d <= 0) return ''
+  return t('video.home.remainingMinutes', { minutes: Math.max(1, Math.round((d - p.position_sec) / 60)) })
 }
 
 /** Má smysl nabídnout „Pokračovat od…“? (ne u úplného začátku ani konce). */

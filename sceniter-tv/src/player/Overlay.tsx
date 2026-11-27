@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     bottom: px(200),
     padding: px(36),
     borderRadius: radius.card,
-    backgroundColor: 'rgba(23,30,35,0.94)',
+    backgroundColor: colors.panel,
     borderWidth: px(2),
     borderColor: colors.edge,
     maxWidth: px(900),

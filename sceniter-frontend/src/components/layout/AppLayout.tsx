@@ -1,14 +1,22 @@
+import { SearchIcon } from 'lucide-react'
 import { Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet } from 'react-router'
 import { useRefreshProfile } from 'core-web/src/auth/useRefreshProfile'
 import { AuroraBackdrop } from 'core-web/src/components/layout/AuroraBackdrop'
-import { Logo } from './Logo'
-import { NavRail } from './NavRail'
-import { TabBar } from './TabBar'
+import { useWideNav } from 'core-web/src/components/layout/navTypes'
+import { SideNav } from 'core-web/src/components/layout/SideNav'
+import { TabBar } from 'core-web/src/components/layout/TabBar'
+import { UserMenu } from 'core-web/src/components/layout/UserMenu'
+import { Button } from 'core-web/src/components/ui/button'
+import { cn } from 'core-web/src/lib/utils'
+import { Logo, LogoMark } from './Logo'
+import { useNavItems } from './navItems'
 
 export function AppLayout() {
   const { t } = useTranslation()
+  const items = useNavItems()
+  const wide = useWideNav()
 
   // Role v prohlížeči může být z minulého přihlášení – srovnáme ji se serverem.
   useRefreshProfile()
@@ -17,16 +25,25 @@ export function AppLayout() {
     <div className="min-h-svh text-foreground">
       <AuroraBackdrop className="fixed -z-10" />
 
-      <NavRail />
-      <TabBar />
+      <SideNav items={items} wide={wide} logo={<Logo size="md" />} mark={<LogoMark />} brand="Sceniter" />
+      <TabBar items={items} />
 
-      <header className="glass inset-shadow-glass sticky top-0 z-30 flex h-14 items-center px-4 md:hidden">
+      <header className="glass inset-shadow-glass sticky top-0 z-30 flex h-14 items-center justify-between gap-2 px-4 md:hidden">
         <Link to="/" className="flex items-center" aria-label={t('layout.homeLink')}>
           <Logo size="sm" />
         </Link>
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to="/search" aria-label={t('video.nav.search')}>
+              <SearchIcon className="size-5" />
+            </Link>
+          </Button>
+          <UserMenu />
+        </div>
       </header>
 
-      <div className="md:pl-[5.5rem]">
+      {/* Panel vlevo ukrajuje šířku; obsah se vystředí ve zbylém místě. */}
+      <div className={cn(wide ? 'md:pl-62' : 'md:pl-[5.5rem]')}>
         <main className="@container mx-auto max-w-[96rem] px-4 pt-4 pb-24 sm:px-6 md:pb-8 lg:px-8">
           <Suspense
             fallback={

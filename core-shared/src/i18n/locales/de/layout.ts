@@ -1,5 +1,6 @@
 export default {
   nav: {
+    settings: 'Einstellungen',
     home: 'Startseite',
     sessions: 'Aktuelle Hörsitzungen',
     books: 'Bücher',
@@ -11,6 +12,7 @@ export default {
     more: 'Mehr',
   },
   homeLink: 'Libriter – Startseite',
+  version: 'Version {{version}}',
   pageLoading: 'Seite wird geladen…',
   nowPlaying: 'Aktuelle Wiedergabe',
   account: {

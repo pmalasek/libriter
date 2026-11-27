@@ -173,12 +173,14 @@ func (h *UserHandler) UpdateAppearance(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ColorScheme string `json:"color_scheme"`
 		ThemeMode   string `json:"theme_mode"`
+		// Product: "sceniter" = vlastní téma Sceniteru; jinak téma Libriteru.
+		Product string `json:"product"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
 		return
 	}
-	u, err := h.svc.UpdateAppearance(r.Context(), id, req.ColorScheme, req.ThemeMode)
+	u, err := h.svc.UpdateAppearance(r.Context(), id, req.Product, req.ColorScheme, req.ThemeMode)
 	switch {
 	case errors.Is(err, service.ErrInvalidSetting):
 		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())

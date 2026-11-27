@@ -89,10 +89,9 @@ export default {
     added: 'Date d’ajout',
   },
   colorScheme: {
-    teal: 'Bleu sarcelle',
-    blue: 'Bleu',
-    violet: 'Violet',
-    green: 'Vert',
+    midnight: 'Bleu nuit et cuivre',
+    emerald: 'Émeraude et or',
+    burgundy: 'Bourgogne et or',
   },
   themeMode: {
     light: 'Clair',

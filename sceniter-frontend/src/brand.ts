@@ -5,6 +5,7 @@ import { Logo } from '@/components/layout/Logo'
 /** Značka Sceniteru pro sdílené obrazovky přihlášení a registrace. */
 export const sceniterBrand: Brand = {
   name: 'Sceniter',
+  product: 'sceniter',
   Logo,
   features: [
     { icon: FilmIcon, labelKey: 'video.shell.library' },

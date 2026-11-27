@@ -9,6 +9,7 @@ export default {
     show: 'Série',
   },
   nav: {
+    browse: 'Parcourir',
     home: 'Accueil',
     movies: 'Films',
     shows: 'Séries',
@@ -17,6 +18,13 @@ export default {
     admin: 'Administration',
   },
   home: {
+    featured: 'À la une',
+    badgeNew: 'Nouveau',
+    moreInfo: 'Plus d’infos',
+    remainingMinutes: 'Encore {{minutes}} min',
+    heroSlide: 'Titre à la une {{n}} sur {{total}}',
+    heroPrev: 'Titre à la une précédent',
+    heroNext: 'Titre à la une suivant',
     inLibrary: 'Nouveautés dans {{name}}',
     newIn: 'Nouveautés dans la bibliothèque',
     noLibrariesTitle: 'Pas encore de bibliothèque',
@@ -28,6 +36,13 @@ export default {
     emptyDescription: 'Les films et séries apparaîtront ici dès que le serveur trouvera des vidéos dans le dossier de la bibliothèque.',
     nextEpisode: 'Épisode suivant',
     remaining: 'encore {{time}}',
+  },
+  browse: {
+    title: 'Parcourir',
+    subtitle: 'Choisissez une catégorie et explorez votre bibliothèque',
+    empty: 'Aucune bibliothèque pour l’instant.',
+    titles_one: '{{count}} titre',
+    titles_other: '{{count}} titres',
   },
   list: {
     showAll: 'Tout afficher',
@@ -434,6 +449,8 @@ export default {
       large: 'Grands',
       about: 'À propos',
       version: 'Version {{version}}',
+      appearance: 'Apparence',
+      themeReload: 'Rechargement avec le nouveau thème… Sinon, il s’appliquera au prochain lancement.',
     },
     nav: {
       settings: 'Réglages',

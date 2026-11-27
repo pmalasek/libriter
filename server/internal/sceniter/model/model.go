@@ -55,6 +55,10 @@ type Library struct {
 
 	// ItemCount je počet filmů nebo seriálů se soubory.
 	ItemCount int `json:"item_count"`
+	// CoverPath je obrázek, který knihovnu zastupuje na rozcestníku (pozadí
+	// nebo plakát nejlépe hodnoceného titulu); CoverUpdatedAt obchází cache.
+	CoverPath      *string    `json:"cover_path,omitempty"`
+	CoverUpdatedAt *time.Time `json:"cover_updated_at,omitempty"`
 }
 
 // Role osob u titulu.
@@ -141,6 +145,10 @@ type Movie struct {
 	// Odvozené pro výpisy: délka hlavního souboru a jeho ID.
 	DurationSec *float64   `json:"duration_sec,omitempty"`
 	MediaID     *uuid.UUID `json:"media_id,omitempty"`
+	// VideoWidth/VideoHeight jsou největší rozměry obrazu ze souborů filmu
+	// (štítek 4K na kartách); nil = soubor ještě nebyl prozkoumán.
+	VideoWidth  *int `json:"video_width,omitempty"`
+	VideoHeight *int `json:"video_height,omitempty"`
 }
 
 // Show je seriál.
@@ -178,6 +186,9 @@ type Show struct {
 	EpisodeCount int `json:"episode_count"`
 	// LatestEpisodeAt je datum přidání nejnovějšího dílu (bez dílů = CreatedAt).
 	LatestEpisodeAt time.Time `json:"latest_episode_at"`
+	// VideoWidth/VideoHeight jsou největší rozměry obrazu přes soubory dílů.
+	VideoWidth  *int `json:"video_width,omitempty"`
+	VideoHeight *int `json:"video_height,omitempty"`
 }
 
 // Season je řada seriálu.

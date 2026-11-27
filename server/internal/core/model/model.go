@@ -38,6 +38,37 @@ type Permission struct {
 // UILanguages jsou podporované jazyky rozhraní; první je výchozí.
 var UILanguages = []string{"en", "cs", "fr", "de", "es"}
 
+// ColorSchemes jsou barevná témata rozhraní; první je výchozí. Seznam
+// zrcadlí core-shared/src/appearance.ts a CHECK v migraci 021_color_schemes.
+var ColorSchemes = []string{"midnight", "emerald", "burgundy"}
+
+// legacyColorSchemes převádí schémata starších verzí na nová témata – starší
+// mobilní aplikace je posílá dál, dokud se neaktualizuje.
+var legacyColorSchemes = map[string]string{
+	"teal":   "midnight",
+	"blue":   "midnight",
+	"green":  "emerald",
+	"violet": "burgundy",
+}
+
+// Produkty s vlastním barevným tématem (PUT /users/{id}/appearance, pole
+// product). Prázdný product = Libriter (a starší klienti).
+const (
+	AppearanceLibriter = "libriter"
+	AppearanceSceniter = "sceniter"
+)
+
+// NormalizeColorScheme vrátí platné téma, nebo false pro neznámou hodnotu.
+func NormalizeColorScheme(scheme string) (string, bool) {
+	for _, s := range ColorSchemes {
+		if s == scheme {
+			return s, true
+		}
+	}
+	s, ok := legacyColorSchemes[scheme]
+	return s, ok
+}
+
 // DefaultUILanguage je jazyk rozhraní pro nové uživatele.
 const DefaultUILanguage = "en"
 
@@ -50,7 +81,9 @@ type User struct {
 	PasswordHash string `json:"-"`
 	Role         string `json:"role"`
 	ColorScheme  string `json:"color_scheme"`
-	ThemeMode    string `json:"theme_mode"`
+	// SceniterColorScheme je téma Sceniteru; nil = stejné jako ColorScheme.
+	SceniterColorScheme *string `json:"sceniter_color_scheme,omitempty"`
+	ThemeMode           string  `json:"theme_mode"`
 	// UILanguage je jazyk uživatelského rozhraní (cs, en, fr, de, es).
 	UILanguage string    `json:"ui_language"`
 	CreatedAt  time.Time `json:"created_at"`
