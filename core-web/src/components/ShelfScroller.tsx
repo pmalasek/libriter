@@ -119,10 +119,13 @@ export function ShelfScroller({ children }: { children: ReactNode }) {
           posunuté položky se nelepí na kraj obrazovky. Odsazení posuvu
           (scroll-px) se rovná odsazení police: položky zaskakují na hranu
           obsahu a začátek police (scrollLeft 0) je platná poloha snapu, takže
-          levá šipka na začátku opravdu zmizí. */}
+          levá šipka na začátku opravdu zmizí.
+          Posuvník ořezává i svisle (overflow-x vynutí i overflow-y), proto
+          má nahoře i dole rezervu py-2 na zvednutí a rámeček karty při
+          najetí; -mt-2 ji vyrovná, aby se police neposunula. */}
       <div
         ref={scrollerRef}
-        className="-mx-4 scroll-px-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 lg:-mx-8 lg:scroll-px-8 lg:px-8"
+        className="-mx-4 -mt-2 scroll-px-4 overflow-x-auto px-4 py-2 [scrollbar-width:none] sm:-mx-6 sm:scroll-px-6 sm:px-6 lg:-mx-8 lg:scroll-px-8 lg:px-8"
       >
         <div ref={trackRef} className="flex snap-x snap-mandatory gap-4">
           {children}
@@ -158,9 +161,10 @@ function ShelfArrow({
       onClick={onClick}
       className={cn(
         // Jen myš: na dotykových zařízeních se police posouvá prstem a šipky
-        // by zakrývaly obálky. Svisle na středu pásu položek (bez spodního
-        // pb-2), vodorovně na hraně obsahu – zasahuje do odsazení police.
-        'absolute top-[calc(50%-0.25rem)] z-10 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full',
+        // by zakrývaly obálky. Svisle na středu pásu položek (rezerva py-2
+        // je nahoře i dole stejná), vodorovně na hraně obsahu – zasahuje do
+        // odsazení police.
+        'absolute top-1/2 z-10 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full',
         '[@media(hover:hover)_and_(pointer:fine)]:flex',
         side === 'prev' ? 'left-0 -translate-x-1/2' : 'right-0 translate-x-1/2',
         'glass-strong inset-shadow-glass text-foreground shadow-glass ring-1 ring-glass-edge',

@@ -48,7 +48,7 @@ export function PosterCard({
     return (
       <Link to={to} className="group block outline-none" aria-label={subtitle ? `${title.title}, ${subtitle}` : title.title}>
         <div className="relative overflow-hidden rounded-2xl ring-1 ring-glass-edge transition-[transform,box-shadow] duration-200 group-hover:-translate-y-0.5 group-hover:ring-2 group-hover:ring-primary group-focus-visible:ring-2 group-focus-visible:ring-primary">
-          <Poster src={posterUrl(title, POSTER_WIDTH)} title={title.title} kind={movie ? 'movie' : 'show'} year={title.year} className="rounded-none shadow-none ring-0" />
+          <Poster src={posterUrl(title, POSTER_WIDTH)} title={title.title} kind={movie ? 'movie' : 'show'} year={title.year} className="rounded-none shadow-none ring-0" bare />
           <div aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
           {isNewTitle(title) ? (
             <span className="absolute top-2 right-2 rounded-full bg-metal px-2 py-0.5 text-[11px] font-semibold text-metal-foreground shadow-sm">
