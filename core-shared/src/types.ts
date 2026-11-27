@@ -10,13 +10,20 @@ export type ColorScheme = 'midnight' | 'emerald' | 'burgundy'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 
+/** Produkt s vlastním barevným tématem; režim zobrazení je společný. */
+export type AppearanceProduct = 'libriter' | 'sceniter'
+
 export interface UserAppearance {
   color_scheme: ColorScheme
   theme_mode: ThemeMode
+  /** Komu téma patří (PUT /users/{id}/appearance); chybí = Libriter. */
+  product?: AppearanceProduct
 }
 
 export interface User extends UserAppearance {
   id: string
+  /** Vlastní téma Sceniteru; chybí = stejné jako color_scheme. */
+  sceniter_color_scheme?: ColorScheme
   /** Jazyk rozhraní z profilu. */
   ui_language: UILanguage
   display_name: string

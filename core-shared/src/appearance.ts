@@ -1,7 +1,7 @@
 import { lchCss } from './color'
 import { t } from './i18n'
 import { THEMES } from './themes'
-import type { ColorScheme, ThemeMode } from './types'
+import type { AppearanceProduct, ColorScheme, ThemeMode, User } from './types'
 
 export const DEFAULT_COLOR_SCHEME: ColorScheme = 'midnight'
 
@@ -42,6 +42,14 @@ export function parseScheme(value: string | null | undefined): ColorScheme {
   const known = COLOR_SCHEMES.find((scheme) => scheme.value === value)?.value
   if (known) return known
   return (value && LEGACY_SCHEMES[value]) || DEFAULT_COLOR_SCHEME
+}
+
+/** Téma uživatele v daném produktu (Sceniter bez vlastní volby = téma Libriteru). */
+export function userColorScheme(
+  user: Pick<User, 'color_scheme' | 'sceniter_color_scheme'>,
+  product: AppearanceProduct,
+): ColorScheme {
+  return parseScheme(product === 'sceniter' ? (user.sceniter_color_scheme ?? user.color_scheme) : user.color_scheme)
 }
 
 export function parseThemeMode(value: string | null | undefined): ThemeMode {

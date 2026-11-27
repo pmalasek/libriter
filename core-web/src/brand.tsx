@@ -1,4 +1,5 @@
 import type { LucideIcon } from 'lucide-react'
+import type { AppearanceProduct } from 'core-shared'
 import { createContext, useContext } from 'react'
 
 /**
@@ -9,6 +10,8 @@ import { createContext, useContext } from 'react'
 export interface Brand {
   /** Krátký název produktu („Libriter“, „Sceniter“). */
   name: string
+  /** Produkt – každý má v profilu vlastní barevné téma. */
+  product: AppearanceProduct
   Logo: React.ComponentType<{ size?: 'sm' | 'md' | 'lg'; className?: string }>
   /** Body na úvodním panelu přihlášení; labelKey je klíč i18n. */
   features: readonly { icon: LucideIcon; labelKey: string }[]

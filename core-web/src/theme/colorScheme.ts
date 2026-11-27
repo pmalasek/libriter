@@ -1,5 +1,5 @@
 import { createContext, useContext, type CSSProperties } from 'react'
-import { DEFAULT_COLOR_SCHEME, parseScheme, type ColorScheme } from 'core-shared'
+import { DEFAULT_COLOR_SCHEME, parseScheme, type AppearanceProduct, type ColorScheme } from 'core-shared'
 
 // Seznam schémat a jejich rozpoznání se sdílí s mobilní aplikací
 // (core-shared/src/appearance.ts).
@@ -10,11 +10,16 @@ export function schemeSwatch({ brand, metal }: { brand: string; metal: string })
   return { backgroundImage: `linear-gradient(135deg, ${brand} 50%, ${metal} 50%)` }
 }
 
-export const STORAGE_KEY = 'libriter.color-scheme'
+/** Místní kopie tématu – každý produkt vlastní (mohou běžet na jednom originu). */
+export function storageKey(product: AppearanceProduct): string {
+  return `${product}.color-scheme`
+}
 
-export function readScheme(): ColorScheme {
+export function readScheme(product: AppearanceProduct): ColorScheme {
   try {
-    return parseScheme(localStorage.getItem(STORAGE_KEY))
+    // Sceniter bez vlastní volby převezme téma Libriteru (dřív bylo společné).
+    const own = localStorage.getItem(storageKey(product))
+    return parseScheme(own ?? localStorage.getItem(storageKey('libriter')))
   } catch {
     return DEFAULT_COLOR_SCHEME
   }

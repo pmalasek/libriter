@@ -4,16 +4,18 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { apiFetch } from 'core-shared'
 import { coreQueryKeys as queryKeys } from 'core-shared'
-import { lchHex, t, THEMES, type User, type UserAppearance } from 'core-shared'
+import { lchHex, t, THEMES, userColorScheme, type User, type UserAppearance } from 'core-shared'
 import { useAuth } from '../auth/AuthContext'
-import { ColorSchemeContext, parseScheme, readScheme, STORAGE_KEY } from './colorScheme'
+import { useBrand } from '../brand'
+import { ColorSchemeContext, parseScheme, readScheme, storageKey } from './colorScheme'
 
 export function ColorSchemeProvider({ children }: { children: React.ReactNode }) {
   const { user, updateUser } = useAuth()
   const { theme, resolvedTheme, setTheme } = useTheme()
   const queryClient = useQueryClient()
-  const [localScheme, setScheme] = useState(readScheme)
-  const colorScheme = user ? parseScheme(user.color_scheme) : localScheme
+  const { product } = useBrand()
+  const [localScheme, setScheme] = useState(() => readScheme(product))
+  const colorScheme = user ? userColorScheme(user, product) : localScheme
   const profileMode = user ? (user.theme_mode ?? 'system') : undefined
   const saving = useRef(false)
 
@@ -25,11 +27,11 @@ export function ColorSchemeProvider({ children }: { children: React.ReactNode })
   useLayoutEffect(() => {
     document.documentElement.dataset.colorScheme = colorScheme
     try {
-      localStorage.setItem(STORAGE_KEY, colorScheme)
+      localStorage.setItem(storageKey(product), colorScheme)
     } catch {
       // Místní cache není podmínkou pro použití vzhledu z profilu.
     }
-  }, [colorScheme])
+  }, [colorScheme, product])
 
   // Barva lišty prohlížeče na telefonu (a okna nainstalované aplikace) ladí
   // s pozadím tématu.
@@ -43,13 +45,13 @@ export function ColorSchemeProvider({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (user) return
     const syncScheme = (event: StorageEvent) => {
-      if (event.storageArea === localStorage && (event.key === STORAGE_KEY || event.key === null)) {
+      if (event.storageArea === localStorage && (event.key === storageKey(product) || event.key === null)) {
         setScheme(parseScheme(event.newValue))
       }
     }
     window.addEventListener('storage', syncScheme)
     return () => window.removeEventListener('storage', syncScheme)
-  }, [user])
+  }, [user, product])
 
   const updateAppearance = useMutation({
     mutationFn: async (appearance: UserAppearance) => {
@@ -83,12 +85,13 @@ export function ColorSchemeProvider({ children }: { children: React.ReactNode })
     saveAppearance({
       color_scheme: parseScheme(value),
       theme_mode: theme === 'light' || theme === 'dark' ? theme : 'system',
+      product,
     })
   }
 
   function setThemeMode(value: string) {
     if (value !== 'light' && value !== 'dark' && value !== 'system') return
-    saveAppearance({ color_scheme: colorScheme, theme_mode: value })
+    saveAppearance({ color_scheme: colorScheme, theme_mode: value, product })
   }
 
   return (

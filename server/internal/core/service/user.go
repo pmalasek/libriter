@@ -80,7 +80,14 @@ func (u *UserService) Update(ctx context.Context, id uuid.UUID, displayName, ema
 	return usr, err
 }
 
-func (u *UserService) UpdateAppearance(ctx context.Context, id uuid.UUID, colorScheme, themeMode string) (*model.User, error) {
+// UpdateAppearance uloží barevné téma produktu ("" nebo "libriter",
+// "sceniter") a společný režim zobrazení.
+func (u *UserService) UpdateAppearance(ctx context.Context, id uuid.UUID, product, colorScheme, themeMode string) (*model.User, error) {
+	switch product {
+	case "", model.AppearanceLibriter, model.AppearanceSceniter:
+	default:
+		return nil, fmt.Errorf("%w: neznámý produkt", ErrInvalidSetting)
+	}
 	colorScheme, ok := model.NormalizeColorScheme(colorScheme)
 	if !ok {
 		return nil, fmt.Errorf("%w: neznámé barevné schéma", ErrInvalidSetting)
@@ -90,7 +97,7 @@ func (u *UserService) UpdateAppearance(ctx context.Context, id uuid.UUID, colorS
 	default:
 		return nil, fmt.Errorf("%w: neznámý režim zobrazení", ErrInvalidSetting)
 	}
-	usr, err := u.store.UpdateUserAppearance(ctx, id, colorScheme, themeMode)
+	usr, err := u.store.UpdateUserAppearance(ctx, id, product, colorScheme, themeMode)
 	if errors.Is(err, storage.ErrNotFound) {
 		return nil, ErrNotFound
 	}

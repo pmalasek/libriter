@@ -5,6 +5,7 @@ import { Logo } from '@/components/layout/Logo'
 /** Značka Libriteru pro sdílené obrazovky přihlášení a registrace. */
 export const libriterBrand: Brand = {
   name: 'Libriter',
+  product: 'libriter',
   Logo,
   features: [
     { icon: LibraryIcon, labelKey: 'auth.shell.features.library' },

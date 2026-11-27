@@ -60,6 +60,23 @@ func TestUserAppearancePersistsAcrossLoginAndProfileEdits(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatal(rec.Body.String())
 	}
+
+	// Sceniter má vlastní téma; dokud ho uživatel nenastaví, není v profilu
+	// (klient použije téma Libriteru). Režim zobrazení je společný.
+	if readUser().SceniterColorScheme != nil {
+		t.Fatal("sceniter_color_scheme má být bez volby prázdné")
+	}
+	rec = env.do(t, http.MethodPut, path+"/appearance", token, map[string]string{"color_scheme": "emerald", "theme_mode": "dark", "product": "sceniter"})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("sceniter: %d %s", rec.Code, rec.Body.String())
+	}
+	if saved := readUser(); saved.ColorScheme != "burgundy" || saved.SceniterColorScheme == nil || *saved.SceniterColorScheme != "emerald" {
+		t.Fatalf("oddělená témata: %+v", saved)
+	}
+	rec = env.do(t, http.MethodPut, path+"/appearance", token, map[string]string{"color_scheme": "emerald", "theme_mode": "dark", "product": "nesmysl"})
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("neznámý produkt: %d", rec.Code)
+	}
 	rec = env.do(t, http.MethodPut, path, token, map[string]string{"display_name": "Nové jméno", "email": "updated@example.com", "current_password": "tajneheslo"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("profile: %d %s", rec.Code, rec.Body.String())

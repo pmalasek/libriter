@@ -25,7 +25,7 @@ func (s *Store) CreateUser(ctx context.Context, displayName, email, login, passw
 	const qUser = `
 		INSERT INTO users (id, display_name, email, login, password_hash)
 		VALUES (?1, ?2, ?3, NULLIF(?4, ''), ?5)
-		RETURNING id, display_name, email, login, password_hash, created_at, updated_at, color_scheme, theme_mode, ui_language`
+		RETURNING id, display_name, email, login, password_hash, created_at, updated_at, color_scheme, theme_mode, ui_language, sceniter_color_scheme`
 
 	row := tx.QueryRowContext(ctx, qUser, uuid.New(), displayName, email, login, passwordHash)
 	u, err := scanUser(row)
@@ -55,7 +55,7 @@ func (s *Store) GetUserByIdentifier(ctx context.Context, identifier string) (*mo
 	const q = `
 		SELECT u.id, u.display_name, u.email, u.login, u.password_hash,
 		       COALESCE(r.name, 'reader') AS role,
-		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode, u.ui_language
+		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode, u.ui_language, u.sceniter_color_scheme
 		FROM users u
 		LEFT JOIN user_roles ur ON ur.user_id = u.id
 		LEFT JOIN roles r       ON r.id = ur.role_id
@@ -75,7 +75,7 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (*model.User, 
 	const q = `
 		SELECT u.id, u.display_name, u.email, u.login, u.password_hash,
 		       COALESCE(r.name, 'reader') AS role,
-		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode, u.ui_language
+		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode, u.ui_language, u.sceniter_color_scheme
 		FROM users u
 		LEFT JOIN user_roles ur ON ur.user_id = u.id
 		LEFT JOIN roles r       ON r.id = ur.role_id
@@ -95,7 +95,7 @@ func (s *Store) GetUserByID(ctx context.Context, id uuid.UUID) (*model.User, err
 	const q = `
 		SELECT u.id, u.display_name, u.email, u.login, u.password_hash,
 		       COALESCE(r.name, 'reader') AS role,
-		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode, u.ui_language
+		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode, u.ui_language, u.sceniter_color_scheme
 		FROM users u
 		LEFT JOIN user_roles ur ON ur.user_id = u.id
 		LEFT JOIN roles r       ON r.id = ur.role_id
@@ -115,7 +115,7 @@ func (s *Store) ListUsers(ctx context.Context) ([]model.User, error) {
 	const q = `
 		SELECT u.id, u.display_name, u.email, u.login, u.password_hash,
 		       COALESCE(r.name, 'reader') AS role,
-		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode, u.ui_language
+		       u.created_at, u.updated_at, u.color_scheme, u.theme_mode, u.ui_language, u.sceniter_color_scheme
 		FROM users u
 		LEFT JOIN user_roles ur ON ur.user_id = u.id
 		LEFT JOIN roles r       ON r.id = ur.role_id
@@ -145,7 +145,7 @@ func (s *Store) UpdateUser(ctx context.Context, id uuid.UUID, displayName, email
 		UPDATE users
 		SET display_name = ?2, email = ?3, login = NULLIF(?4, ''), updated_at = CURRENT_TIMESTAMP
 		WHERE id = ?1
-		RETURNING id, display_name, email, login, password_hash, created_at, updated_at, color_scheme, theme_mode, ui_language`
+		RETURNING id, display_name, email, login, password_hash, created_at, updated_at, color_scheme, theme_mode, ui_language, sceniter_color_scheme`
 
 	row := s.db.QueryRowContext(ctx, q, id, displayName, email, login)
 	u, err := scanUser(row)
@@ -167,8 +167,14 @@ func (s *Store) UpdateUser(ctx context.Context, id uuid.UUID, displayName, email
 }
 
 // UpdateUserAppearance mění pouze vzhled, osobní údaje ponechá nedotčené.
-func (s *Store) UpdateUserAppearance(ctx context.Context, id uuid.UUID, colorScheme, themeMode string) (*model.User, error) {
-	const q = `UPDATE users SET color_scheme = ?2, theme_mode = ?3,
+// Barevné téma se uloží produktu (model.ProductSceniter má vlastní, ostatní
+// sdílí color_scheme); režim zobrazení je společný.
+func (s *Store) UpdateUserAppearance(ctx context.Context, id uuid.UUID, product, colorScheme, themeMode string) (*model.User, error) {
+	column := "color_scheme"
+	if product == model.AppearanceSceniter {
+		column = "sceniter_color_scheme"
+	}
+	q := `UPDATE users SET ` + column + ` = ?2, theme_mode = ?3,
 		updated_at = CURRENT_TIMESTAMP WHERE id = ?1`
 	res, err := s.db.ExecContext(ctx, q, id, colorScheme, themeMode)
 	if err != nil {
@@ -359,22 +365,28 @@ func userConflict(err error) error {
 
 func scanUser(row RowScanner) (*model.User, error) {
 	var u model.User
-	var login sql.NullString
-	err := row.Scan(&u.ID, &u.DisplayName, &u.Email, &login, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt, &u.ColorScheme, &u.ThemeMode, &u.UILanguage)
+	var login, sceniterScheme sql.NullString
+	err := row.Scan(&u.ID, &u.DisplayName, &u.Email, &login, &u.PasswordHash, &u.CreatedAt, &u.UpdatedAt, &u.ColorScheme, &u.ThemeMode, &u.UILanguage, &sceniterScheme)
 	if err != nil {
 		return nil, err
 	}
 	u.Login = login.String
+	if sceniterScheme.Valid {
+		u.SceniterColorScheme = &sceniterScheme.String
+	}
 	return &u, nil
 }
 
 func scanUserWithRole(row RowScanner) (*model.User, error) {
 	var u model.User
-	var login sql.NullString
-	err := row.Scan(&u.ID, &u.DisplayName, &u.Email, &login, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt, &u.ColorScheme, &u.ThemeMode, &u.UILanguage)
+	var login, sceniterScheme sql.NullString
+	err := row.Scan(&u.ID, &u.DisplayName, &u.Email, &login, &u.PasswordHash, &u.Role, &u.CreatedAt, &u.UpdatedAt, &u.ColorScheme, &u.ThemeMode, &u.UILanguage, &sceniterScheme)
 	if err != nil {
 		return nil, err
 	}
 	u.Login = login.String
+	if sceniterScheme.Valid {
+		u.SceniterColorScheme = &sceniterScheme.String
+	}
 	return &u, nil
 }

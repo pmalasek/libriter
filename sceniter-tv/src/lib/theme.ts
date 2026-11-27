@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store'
-import { DEFAULT_COLOR_SCHEME, parseScheme, parseSession, type ColorScheme } from 'sceniter-shared'
+import { DEFAULT_COLOR_SCHEME, parseScheme, parseSession, userColorScheme, type ColorScheme } from 'sceniter-shared'
 
 // Téma je samostatný klíč, ne součást sceniter.prefs: čte se synchronně
 // ještě před vykreslením (barvy jsou ve StyleSheet.create při načtení modulů).
@@ -15,7 +15,7 @@ export function readThemeSync(): ColorScheme {
     const stored = SecureStore.getItem(THEME_KEY)
     if (stored) return parseScheme(stored)
     const user = parseSession(SecureStore.getItem(SESSION_KEY))?.user
-    return user ? parseScheme(user.color_scheme) : DEFAULT_COLOR_SCHEME
+    return user ? userColorScheme(user, 'sceniter') : DEFAULT_COLOR_SCHEME
   } catch {
     return DEFAULT_COLOR_SCHEME
   }
