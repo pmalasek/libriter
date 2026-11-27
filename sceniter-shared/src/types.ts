@@ -29,6 +29,9 @@ export interface Library {
   updated_at: string
   /** Filmy nebo seriály se soubory. */
   item_count: number
+  /** Obrázek knihovny na rozcestníku (jen ve výpisu povolených knihoven). */
+  cover_path?: string
+  cover_updated_at?: string
 }
 
 /** POST/PATCH /sceniter/admin/libraries – dir a kind jen při založení. */
@@ -121,6 +124,9 @@ export interface Movie {
   duration_sec?: number
   /** Hlavní soubor filmu – ten se přehrává. */
   media_id?: string
+  /** Největší rozměry obrazu ze souborů (štítek 4K). */
+  video_width?: number
+  video_height?: number
 }
 
 /**
@@ -178,6 +184,9 @@ export interface Show {
   episode_count: number
   /** Kdy přibyl nejnovější díl (bez dílů = created_at); podle něj se řadí „Přidáno“. */
   latest_episode_at: string
+  /** Největší rozměry obrazu přes soubory dílů (štítek 4K). */
+  video_width?: number
+  video_height?: number
 }
 
 /** Seriál ve stránkovaném výpisu. */

@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -53,6 +54,36 @@ func (s *Store) ListLibraries(ctx context.Context, onlyEnabled bool) ([]model.Li
 		out = append(out, l)
 	}
 	return out, rows.Err()
+}
+
+// FillLibraryCover doplní knihovně obrázek pro rozcestník: pozadí nejlépe
+// hodnoceného titulu se soubory, jinak jeho plakát. Bez obrázků zůstane nil.
+func (s *Store) FillLibraryCover(ctx context.Context, l *model.Library) error {
+	var q string
+	if l.Kind == model.KindMovie {
+		q = `SELECT coalesce(t.backdrop_path, t.poster_path), t.updated_at FROM sc_movies t
+			WHERE t.library_id = ?1 AND coalesce(t.backdrop_path, t.poster_path) IS NOT NULL
+			  AND EXISTS (SELECT 1 FROM sc_media_files f WHERE f.movie_id = t.id)`
+	} else {
+		q = `SELECT coalesce(t.backdrop_path, t.poster_path), t.updated_at FROM sc_shows t
+			WHERE t.library_id = ?1 AND coalesce(t.backdrop_path, t.poster_path) IS NOT NULL
+			  AND EXISTS (SELECT 1 FROM sc_seasons se JOIN sc_episodes e ON e.season_id = se.id
+			              JOIN sc_media_files f ON f.episode_id = e.id WHERE se.show_id = t.id)`
+	}
+	q += ` ORDER BY t.backdrop_path IS NULL, coalesce(t.rating, 0) DESC, t.created_at DESC LIMIT 1`
+	var (
+		path    string
+		updated time.Time
+	)
+	err := s.db.QueryRowContext(ctx, q, l.ID).Scan(&path, &updated)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("library cover: %w", err)
+	}
+	l.CoverPath, l.CoverUpdatedAt = &path, &updated
+	return nil
 }
 
 // GetLibrary vrátí knihovnu podle ID.

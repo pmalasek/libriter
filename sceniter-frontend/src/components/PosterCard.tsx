@@ -2,7 +2,7 @@ import { CheckCircle2Icon } from 'lucide-react'
 import { cn } from 'core-web/src/lib/utils'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { posterUrl, progressRatio, type MovieSummary, type ShowSummary, type WatchProgress } from 'sceniter-shared'
+import { isNewTitle, posterUrl, progressRatio, type MovieSummary, type ShowSummary, type WatchProgress } from 'sceniter-shared'
 import { Poster } from './Poster'
 import { ProgressBar } from './ProgressBar'
 import type { PosterSize } from '@/lib/posterGrid'
@@ -17,6 +17,7 @@ export function PosterCard({
   progress,
   caption,
   size = 'tiles',
+  overlay = false,
 }: {
   movie?: MovieSummary
   show?: ShowSummary
@@ -25,6 +26,12 @@ export function PosterCard({
   caption?: string
   /** Malé dlaždice mají drobnější písmo (viz POSTER_LAYOUT). */
   size?: PosterSize
+  /**
+   * Název a rok přes spodek plakátu se štítkem „Nové“ – pro police na
+   * domovské stránce. Mřížky ho nepoužívají: virtualizace počítá s textem
+   * pod plakátem (POSTER_LAYOUT).
+   */
+  overlay?: boolean
 }) {
   const { t } = useTranslation()
   const title = movie ?? show
@@ -36,6 +43,37 @@ export function PosterCard({
     : title.year
       ? String(title.year)
       : ''
+
+  if (overlay) {
+    return (
+      <Link to={to} className="group block outline-none" aria-label={subtitle ? `${title.title}, ${subtitle}` : title.title}>
+        <div className="relative overflow-hidden rounded-2xl ring-1 ring-glass-edge transition-[transform,box-shadow] duration-200 group-hover:-translate-y-0.5 group-hover:ring-2 group-hover:ring-primary group-focus-visible:ring-2 group-focus-visible:ring-primary">
+          <Poster src={posterUrl(title, POSTER_WIDTH)} title={title.title} kind={movie ? 'movie' : 'show'} year={title.year} className="rounded-none shadow-none ring-0" />
+          <div aria-hidden className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/90 via-black/50 to-transparent" />
+          {isNewTitle(title) ? (
+            <span className="absolute top-2 right-2 rounded-full bg-metal px-2 py-0.5 text-[11px] font-semibold text-metal-foreground shadow-sm">
+              {t('video.home.badgeNew')}
+            </span>
+          ) : null}
+          {progress?.completed ? (
+            <span
+              role="img"
+              aria-label={t('video.detail.watched')}
+              title={t('video.detail.watched')}
+              className="absolute top-2 left-2 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm"
+            >
+              <CheckCircle2Icon className="size-4" />
+            </span>
+          ) : null}
+          <div className="absolute inset-x-2.5 bottom-2.5 text-white">
+            <p className="font-heading line-clamp-2 text-sm leading-tight font-semibold drop-shadow sm:text-base">{title.title}</p>
+            {subtitle ? <p className="mt-0.5 text-xs text-white/75">{subtitle}</p> : null}
+            {ratio > 0 && ratio < 1 ? <ProgressBar value={ratio} className="mt-1.5 bg-white/25" /> : null}
+          </div>
+        </div>
+      </Link>
+    )
+  }
 
   return (
     <Link to={to} className="group block outline-none">

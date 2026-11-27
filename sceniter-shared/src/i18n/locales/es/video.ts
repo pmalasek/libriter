@@ -9,6 +9,7 @@ export default {
     show: 'Serie',
   },
   nav: {
+    browse: 'Explorar',
     home: 'Inicio',
     movies: 'Películas',
     shows: 'Series',
@@ -17,6 +18,13 @@ export default {
     admin: 'Administración',
   },
   home: {
+    featured: 'Destacado',
+    badgeNew: 'Nuevo',
+    moreInfo: 'Más información',
+    remainingMinutes: 'Quedan {{minutes}} min',
+    heroSlide: 'Título destacado {{n}} de {{total}}',
+    heroPrev: 'Destacado anterior',
+    heroNext: 'Destacado siguiente',
     inLibrary: 'Novedades en {{name}}',
     newIn: 'Novedades en la biblioteca',
     noLibrariesTitle: 'Todavía no hay bibliotecas',
@@ -28,6 +36,13 @@ export default {
     emptyDescription: 'Las películas y series aparecerán aquí cuando el servidor encuentre vídeos en la carpeta de la biblioteca.',
     nextEpisode: 'Siguiente episodio',
     remaining: 'quedan {{time}}',
+  },
+  browse: {
+    title: 'Explorar',
+    subtitle: 'Elige una categoría y explora tu biblioteca',
+    empty: 'Todavía no hay bibliotecas.',
+    titles_one: '{{count}} título',
+    titles_other: '{{count}} títulos',
   },
   list: {
     showAll: 'Ver todo',

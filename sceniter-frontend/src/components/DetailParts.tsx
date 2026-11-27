@@ -69,12 +69,12 @@ export function SimilarShelf({ kind, id }: { kind: TitleKind; id: string }) {
     <Shelf title={t('video.detail.similar')}>
       {items.movies.map((m) => (
         <ShelfItem key={m.id}>
-          <PosterCard movie={m} />
+          <PosterCard movie={m} overlay />
         </ShelfItem>
       ))}
       {items.shows.map((s) => (
         <ShelfItem key={s.id}>
-          <PosterCard show={s} />
+          <PosterCard show={s} overlay />
         </ShelfItem>
       ))}
     </Shelf>

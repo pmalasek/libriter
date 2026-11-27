@@ -44,9 +44,19 @@ func NewLibraries(store *storage.Store, root string, plugins *plugin.Host, chang
 	return &Libraries{store: store, root: root, plugins: plugins, changed: changed}
 }
 
-// List vrátí knihovny; onlyEnabled vynechá vypnuté.
+// List vrátí knihovny; onlyEnabled vynechá vypnuté. Povolené knihovny (výpis
+// pro diváky) dostanou i obrázek pro rozcestník; administrace ho nepotřebuje.
 func (l *Libraries) List(ctx context.Context, onlyEnabled bool) ([]model.Library, error) {
-	return l.store.ListLibraries(ctx, onlyEnabled)
+	libs, err := l.store.ListLibraries(ctx, onlyEnabled)
+	if err != nil || !onlyEnabled {
+		return libs, err
+	}
+	for i := range libs {
+		if err := l.store.FillLibraryCover(ctx, &libs[i]); err != nil {
+			return nil, err
+		}
+	}
+	return libs, nil
 }
 
 // Candidates vrátí podsložky VIDEO_ROOT, které ještě nejsou knihovnou.

@@ -1,5 +1,5 @@
 import { apiUrl, currentLanguage, formatClock, oklch, t, thumbUrl } from 'core-shared'
-import type { Credit, CreditRole, Episode, Movie, Person, Show, Stream, WatchProgress } from './types'
+import type { Credit, CreditRole, Episode, Library, Movie, Person, Show, Stream, WatchProgress } from './types'
 
 /** „S01E02“ – kód dílu do výpisů. */
 export function episodeCode(season: number, episode: number): string {
@@ -69,6 +69,24 @@ export function creditsWithRole(credits: Credit[], role: CreditRole): Credit[] {
 
 export function backdropUrl(title: Pick<Movie | Show, 'backdrop_path' | 'updated_at'>): string | undefined {
   return imageUrl(title.backdrop_path, title.updated_at)
+}
+
+/** Obrázek knihovny na rozcestníku „Procházet“. */
+export function libraryCoverUrl(lib: Pick<Library, 'cover_path' | 'cover_updated_at'>, width?: number): string | undefined {
+  return imageUrl(lib.cover_path, lib.cover_updated_at, width)
+}
+
+/** Jak dlouho je titul „nový“ (štítek Nové) – od přidání, u seriálu od posledního dílu. */
+export const NEW_TITLE_DAYS = 14
+
+export function isNewTitle(title: { created_at: string; latest_episode_at?: string }, now = Date.now()): boolean {
+  const added = Date.parse(title.latest_episode_at ?? title.created_at)
+  return Number.isFinite(added) && now - added < NEW_TITLE_DAYS * 24 * 3600 * 1000
+}
+
+/** Je obraz ve 4K? (podle největšího souboru titulu) */
+export function isUhd(title: { video_width?: number; video_height?: number }): boolean {
+  return resolutionLabel(title.video_width, title.video_height) === '4K'
 }
 
 /** Rozlišení podle výšky obrazu: 2160 → „4K“, 1080 → „1080p“. */
@@ -158,6 +176,13 @@ export function remainingLabel(p: WatchProgress | undefined | null, durationSec?
   const d = p?.duration_sec || durationSec || 0
   if (!p || p.completed || d <= 0) return ''
   return t('video.home.remaining', { time: formatClock(Math.max(0, d - p.position_sec)) })
+}
+
+/** Zbývající čas v minutách („Zbývá 24 min“), nebo prázdný řetězec. */
+export function remainingMinutesLabel(p: WatchProgress | undefined | null, durationSec?: number): string {
+  const d = p?.duration_sec || durationSec || 0
+  if (!p || p.completed || d <= 0) return ''
+  return t('video.home.remainingMinutes', { minutes: Math.max(1, Math.round((d - p.position_sec) / 60)) })
 }
 
 /** Má smysl nabídnout „Pokračovat od…“? (ne u úplného začátku ani konce). */

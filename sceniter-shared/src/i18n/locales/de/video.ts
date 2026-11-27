@@ -9,6 +9,7 @@ export default {
     show: 'Serie',
   },
   nav: {
+    browse: 'Entdecken',
     home: 'Start',
     movies: 'Filme',
     shows: 'Serien',
@@ -17,6 +18,13 @@ export default {
     admin: 'Verwaltung',
   },
   home: {
+    featured: 'Empfohlen',
+    badgeNew: 'Neu',
+    moreInfo: 'Mehr Infos',
+    remainingMinutes: 'Noch {{minutes}} Min.',
+    heroSlide: 'Empfehlung {{n}} von {{total}}',
+    heroPrev: 'Vorherige Empfehlung',
+    heroNext: 'Nächste Empfehlung',
     inLibrary: 'Neu in {{name}}',
     newIn: 'Neu in der Bibliothek',
     noLibrariesTitle: 'Noch keine Bibliotheken',
@@ -28,6 +36,13 @@ export default {
     emptyDescription: 'Filme und Serien erscheinen hier, sobald der Server Videos im Bibliotheksordner findet.',
     nextEpisode: 'Nächste Folge',
     remaining: 'noch {{time}}',
+  },
+  browse: {
+    title: 'Entdecken',
+    subtitle: 'Wähle eine Kategorie und entdecke deine Bibliothek',
+    empty: 'Noch keine Bibliotheken.',
+    titles_one: '{{count}} Titel',
+    titles_other: '{{count}} Titel',
   },
   list: {
     showAll: 'Alle anzeigen',

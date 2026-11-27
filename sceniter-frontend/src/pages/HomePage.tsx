@@ -1,7 +1,7 @@
 import { FilmIcon, FolderPlusIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { episodeLabel, imageUrl, posterUrl, progressRatio, remainingLabel, type ContinueItem, type HomeLibrary } from 'sceniter-shared'
+import type { HomeLibrary } from 'sceniter-shared'
 import { useAuth } from 'core-web/src/auth/AuthContext'
 import { isAdmin } from 'core-web/src/auth/permissions'
 import { EmptyState } from 'core-web/src/components/EmptyState'
@@ -9,46 +9,11 @@ import { ErrorState } from 'core-web/src/components/ErrorState'
 import { Button } from 'core-web/src/components/ui/button'
 import { useHome, useLibraries } from '@/api/hooks'
 import { Attribution } from '@/components/Attribution'
-import { Poster } from '@/components/Poster'
+import { ContinueCard } from '@/components/ContinueCard'
+import { HomeHero } from '@/components/HomeHero'
 import { PosterCard } from '@/components/PosterCard'
-import { ProgressBar } from '@/components/ProgressBar'
 import { Shelf, ShelfItem } from '@/components/Shelf'
 import { libraryIcon } from '@/lib/libraryIcons'
-
-/** Největší šířka obrázku dílu na polici (CSS px) – načte se zmenšenina. */
-const STILL_WIDTH = 320
-
-/** Karta „Pokračovat“: obrázek dílu nebo pozadí filmu, název a zbývající čas. */
-function ContinueCard({ item }: { item: ContinueItem }) {
-  const { t } = useTranslation()
-  const movie = item.movie
-  const episode = item.episode
-  const to = movie ? `/watch/movie/${movie.id}` : `/watch/episode/${episode!.id}`
-  const still = movie
-    ? imageUrl(movie.backdrop_path, movie.updated_at, STILL_WIDTH) ?? posterUrl(movie, STILL_WIDTH)
-    : imageUrl(episode!.still_path, undefined, STILL_WIDTH) ??
-      imageUrl(episode!.show_backdrop_path, undefined, STILL_WIDTH) ??
-      (item.show ? imageUrl(item.show.backdrop_path, item.show.updated_at, STILL_WIDTH) : undefined)
-  const title = movie ? movie.title : (item.show?.title ?? episode!.show_title ?? '')
-  const sub = movie ? remainingLabel(item.progress, movie.duration_sec) : episodeLabel(episode!)
-  const ratio = progressRatio(item.progress, movie?.duration_sec ?? episode?.duration_sec)
-
-  return (
-    <Link to={to} className="group block outline-none">
-      <div className="relative rounded-2xl transition-transform duration-200 group-hover:-translate-y-0.5 group-focus-visible:ring-3 group-focus-visible:ring-ring/50">
-        <Poster src={still} title={title} aspect="still" />
-        {item.next ? (
-          <span className="absolute top-2 left-2 rounded-full bg-primary px-2 py-0.5 text-xs font-medium text-primary-foreground shadow-sm">
-            {t('video.home.nextEpisode')}
-          </span>
-        ) : null}
-        <ProgressBar value={ratio} className="absolute inset-x-3 bottom-3" />
-      </div>
-      <p className="mt-2 truncate text-sm font-medium">{title}</p>
-      <p className="truncate text-xs text-muted-foreground">{sub}</p>
-    </Link>
-  )
-}
 
 /**
  * Nově přidané v jedné knihovně: plakáty filmů, nebo seriálů s nejnovějšími
@@ -68,12 +33,12 @@ function LibraryShelf({ row, divider }: { row: HomeLibrary; divider: boolean }) 
     >
       {row.movies.map((m) => (
         <ShelfItem key={m.id}>
-          <PosterCard movie={m} />
+          <PosterCard movie={m} overlay />
         </ShelfItem>
       ))}
       {row.shows.map((s) => (
         <ShelfItem key={s.id}>
-          <PosterCard show={s} />
+          <PosterCard show={s} overlay />
         </ShelfItem>
       ))}
     </Shelf>
@@ -96,6 +61,7 @@ export function HomePage() {
   return (
     <div>
       <h1 className="font-heading sr-only">{t('video.nav.home')}</h1>
+      <HomeHero rows={rows} />
       {noLibraries ? (
         <div className="mt-6">
           <EmptyState
@@ -119,7 +85,7 @@ export function HomePage() {
       ) : null}
 
       {cont.length > 0 ? (
-        <Shelf title={t('video.home.continue')} divider={false} className="mt-4">
+        <Shelf title={t('video.home.continue')} divider={false} className="mt-2">
           {cont.map((item) => (
             <ShelfItem key={(item.movie?.id ?? item.episode?.id) + String(item.next)} wide>
               <ContinueCard item={item} />
@@ -136,7 +102,7 @@ export function HomePage() {
         <Shelf title={t('video.home.watchlist')} to="/watchlist">
           {watchlist.map((w) => (
             <ShelfItem key={(w.movie?.id ?? w.show?.id) as string}>
-              <PosterCard movie={w.movie} show={w.show} />
+              <PosterCard movie={w.movie} show={w.show} overlay />
             </ShelfItem>
           ))}
         </Shelf>

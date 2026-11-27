@@ -9,6 +9,7 @@ export default {
     show: 'Show',
   },
   nav: {
+    browse: 'Browse',
     home: 'Home',
     movies: 'Movies',
     shows: 'TV shows',
@@ -17,6 +18,13 @@ export default {
     admin: 'Administration',
   },
   home: {
+    featured: 'Featured',
+    badgeNew: 'New',
+    moreInfo: 'More info',
+    remainingMinutes: '{{minutes}} min left',
+    heroSlide: 'Featured title {{n}} of {{total}}',
+    heroPrev: 'Previous featured title',
+    heroNext: 'Next featured title',
     inLibrary: 'New in {{name}}',
     newIn: 'New in library',
     noLibrariesTitle: 'No libraries yet',
@@ -28,6 +36,13 @@ export default {
     emptyDescription: 'Movies and shows appear here once the server finds video files in the library folder.',
     nextEpisode: 'Next episode',
     remaining: '{{time}} left',
+  },
+  browse: {
+    title: 'Browse',
+    subtitle: 'Pick a category and explore your library',
+    empty: 'There are no libraries yet.',
+    titles_one: '{{count}} title',
+    titles_other: '{{count}} titles',
   },
   list: {
     showAll: 'Show all',
