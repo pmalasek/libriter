@@ -54,7 +54,13 @@ echo "→ Go závislosti staženy"
 #  .env
 # -------------------------------------------------------------
 
-cat > .env << 'ENV'
+# Klíč pro podpis tokenů se generuje pro každou instalaci zvlášť – vzorová
+# hodnota by šla zneužít k padělání tokenů a server ji odmítne.
+JWT_SECRET="$(openssl rand -hex 32)"
+
+# Heredoc bez uvozovek, aby se dosadil vygenerovaný klíč. Jiné znaky $ ani `
+# v něm nejsou.
+cat > .env << ENV
 # Server
 SERVER_PORT=8080
 SERVER_ENV=development
@@ -63,7 +69,7 @@ SERVER_ENV=development
 DB_PATH=./data/libriter.db
 
 # JWT
-JWT_SECRET=change-me-before-production
+JWT_SECRET=${JWT_SECRET}
 JWT_EXPIRY_HOURS=72
 
 # Soubory

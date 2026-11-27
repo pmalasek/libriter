@@ -145,10 +145,40 @@ var DefaultLanguageProviders = map[string][]string{
 // podepisuje a ověřuje tokeny.
 func Load() (*Config, error) {
 	cfg := load()
-	if cfg.JWT.Secret == "" {
-		return nil, fmt.Errorf("JWT_SECRET není nastaven (hledal jsem .env: %s)", envFileOrNone(cfg.EnvFile))
+	if err := checkJWTSecret(cfg); err != nil {
+		return nil, err
 	}
 	return cfg, nil
+}
+
+// PlaceholderJWTSecret je vzorová hodnota z dřívější dokumentace. Je veřejně
+// známá, takže by s ní kdokoli mohl podepsat vlastní token.
+const PlaceholderJWTSecret = "change-me-before-production"
+
+// MinJWTSecretLen je nejmenší délka JWT_SECRET v bajtech (256 bitů pro HS256).
+const MinJWTSecretLen = 32
+
+// jwtSecretHint radí, jak bezpečný klíč vyrobit.
+const jwtSecretHint = "vygenerujte ho příkazem `openssl rand -hex 32`"
+
+// checkJWTSecret odmítne chybějící nebo zjevně slabý JWT_SECRET. Vzorovou
+// hodnotu odmítá vždy, krátký klíč jen v produkci – při vývoji stačí varování.
+func checkJWTSecret(cfg *Config) error {
+	secret := cfg.JWT.Secret
+	switch {
+	case secret == "":
+		return fmt.Errorf("JWT_SECRET není nastaven (hledal jsem .env: %s); %s", envFileOrNone(cfg.EnvFile), jwtSecretHint)
+	case secret == PlaceholderJWTSecret:
+		return fmt.Errorf("JWT_SECRET obsahuje vzorovou hodnotu %q, kterou zná každý; %s", PlaceholderJWTSecret, jwtSecretHint)
+	case len(secret) < MinJWTSecretLen:
+		if cfg.Server.Env == "production" {
+			return fmt.Errorf("JWT_SECRET je příliš krátký (%d bajtů, v produkci je potřeba aspoň %d); %s",
+				len(secret), MinJWTSecretLen, jwtSecretHint)
+		}
+		slog.Warn("JWT_SECRET je příliš krátký, v produkci server nenastartuje; vygenerujte ho příkazem `openssl rand -hex 32`",
+			"délka", len(secret), "minimum", MinJWTSecretLen)
+	}
+	return nil
 }
 
 // LoadCLI načte konfiguraci pro příkazy, které nepracují s tokeny
