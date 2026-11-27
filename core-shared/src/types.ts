@@ -110,10 +110,36 @@ export interface UpdateUserRequest {
   display_name: string
   email: string
   login: string
+  /** Povinné, když uživatel mění vlastní e-mail nebo login. */
+  current_password?: string
 }
 
 export interface ChangePasswordRequest {
   password: string
+  /** Povinné při změně vlastního hesla; admin u cizího účtu ho neposílá. */
+  current_password?: string
+}
+
+// --- přihlášená zařízení a odhlášení (GET /users/{id}/devices …) ---
+
+export type DeviceSessionScope = 'mobile' | 'tv'
+
+/** Přihlášené zařízení – mobilní aplikace nebo televize. */
+export interface DeviceSession {
+  id: string
+  scope: DeviceSessionScope
+  device_name: string
+  created_at: string
+  last_seen_at: string
+}
+
+/**
+ * Odpověď na změnu hesla a „Odhlásit všude“. Token přijde, jen když volající
+ * mění vlastní účet – dosavadní tokeny přestaly platit a web si uloží nový.
+ */
+export interface SessionResetResponse {
+  status: string
+  token?: string
 }
 
 export function roleLabel(role: Role): string {
@@ -171,6 +197,9 @@ const AUDIT_ACTIONS = [
   'user.role_change',
   'user.delete',
   'user.password_reset',
+  'user.password_change',
+  'user.device_revoke',
+  'user.logout_all',
   'settings.metadata_update',
   'settings.registration_update',
   'settings.library_update',

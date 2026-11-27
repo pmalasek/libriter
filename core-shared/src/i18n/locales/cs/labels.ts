@@ -15,6 +15,9 @@ export default {
       role_change: 'Změna role',
       delete: 'Smazání účtu',
       password_reset: 'Reset hesla',
+      password_change: 'Změna hesla',
+      device_revoke: 'Odhlášení zařízení',
+      logout_all: 'Odhlášení všude',
     },
     settings: {
       metadata_update: 'Změna zdrojů metadat',
