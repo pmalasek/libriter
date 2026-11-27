@@ -448,6 +448,8 @@ export default {
       large: 'Groß',
       about: 'Über die App',
       version: 'Version {{version}}',
+      appearance: 'Darstellung',
+      themeReload: 'Die App wird mit dem neuen Design neu geladen … Falls nicht, gilt es beim nächsten Start.',
     },
     nav: {
       settings: 'Einstellungen',

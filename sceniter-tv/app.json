@@ -7,8 +7,8 @@
     "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
-    "backgroundColor": "#0D1216",
-    "primaryColor": "#0B7A7A",
+    "backgroundColor": "#0B1020",
+    "primaryColor": "#1B3A8F",
     "ios": {
       "bundleIdentifier": "cz.sceniter.tv",
       "appleTeamId": "QL5UHGHK98",
@@ -65,7 +65,7 @@
           "image": "./assets/splash.png",
           "imageWidth": 220,
           "resizeMode": "contain",
-          "backgroundColor": "#0D1216"
+          "backgroundColor": "#0B1020"
         }
       ],
       "../libriter-mobile/plugins/withAndroidReleaseSigning"

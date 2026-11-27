@@ -464,6 +464,8 @@ export default {
       large: 'Velké',
       about: 'O aplikaci',
       version: 'Verze {{version}}',
+      appearance: 'Vzhled',
+      themeReload: 'Načítám aplikaci s novým tématem… Pokud se nic nestane, projeví se po dalším spuštění.',
     },
     nav: {
       settings: 'Nastavení',

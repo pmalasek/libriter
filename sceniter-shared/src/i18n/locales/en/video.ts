@@ -448,6 +448,8 @@ export default {
       large: 'Large',
       about: 'About',
       version: 'Version {{version}}',
+      appearance: 'Appearance',
+      themeReload: 'Reloading with the new theme… If nothing happens, it applies the next time the app starts.',
     },
     nav: {
       settings: 'Settings',

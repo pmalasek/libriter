@@ -449,6 +449,8 @@ export default {
       large: 'Grandes',
       about: 'Acerca de',
       version: 'Versión {{version}}',
+      appearance: 'Apariencia',
+      themeReload: 'Recargando con el nuevo tema… Si no ocurre nada, se aplicará la próxima vez que abras la app.',
     },
     nav: {
       settings: 'Ajustes',

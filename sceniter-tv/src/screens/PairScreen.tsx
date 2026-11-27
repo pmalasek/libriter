@@ -19,7 +19,7 @@ import { colors, fonts, px, radius, safe } from '@/theme'
 function Glow() {
   return (
     <LinearGradient
-      colors={['#0E4F4F', '#0D1A1D', colors.bg]}
+      colors={[colors.brandDeep, colors.surface, colors.bg]}
       locations={[0, 0.5, 1]}
       start={{ x: 0, y: 0 }}
       end={{ x: 0.9, y: 1 }}

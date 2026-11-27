@@ -1,4 +1,6 @@
 import { Dimensions, Platform } from 'react-native'
+import { lchHex, lchRgba, oklch, oklchToRgb, THEMES } from 'sceniter-shared'
+import { readThemeSync } from './lib/theme'
 
 /**
  * Rozměry se navrhují pro plochu 1920 bodů na šířku (tvOS v 1080p) a
@@ -13,34 +15,47 @@ export function px(n: number): number {
 }
 
 /**
- * Paleta „měď na petroleji“: tmavý podklad s petrolejovým nádechem, teplý
- * měděný akcent, bílý fokus. Teplý akcent na chladném podkladu drží kontrast
- * i s pestrými plakáty a ladí s webem (teal + oranžová).
+ * Paleta z barevného tématu (core-shared/src/themes.ts) – televize je vždy
+ * tmavá. Téma se čte jednou při startu: barvy jsou ve StyleSheet.create
+ * po celé aplikaci, proto změna tématu v Nastavení aplikaci znovu načte.
+ *
+ * Kov tématu (měď, zlato) je akcent, brand barva tématu jen záře v pozadí;
+ * fokus zůstává bílý – na televizi musí být vidět na první pohled.
  */
+export const colorScheme = readThemeSync()
+const t = THEMES[colorScheme].dark
+const [bgR, bgG, bgB] = oklchToRgb(...t.background)
+const [fgR, fgG, fgB] = oklchToRgb(...t.foreground)
+const [ml, mc, mh] = t.metal
+
 export const colors = {
-  bg: '#0D1216',
-  surface: '#171E23',
-  surfaceHi: '#212A31',
-  text: '#F7F3EC',
-  textDim: 'rgba(247,243,236,0.68)',
-  textFaint: 'rgba(247,243,236,0.44)',
-  accent: '#E59A4A',
-  accentDeep: '#B5702A',
+  bg: lchHex(t.background),
+  surface: lchHex(t.card),
+  surfaceHi: lchHex(t.secondary),
+  /** Neprůhledný panel nad videem (nabídka dalšího dílu). */
+  panel: lchRgba(t.card, 0.94),
+  brand: lchHex(t.brand),
+  brandDeep: lchHex(t.brandDeep),
+  text: lchHex(t.foreground),
+  textDim: `rgba(${fgR},${fgG},${fgB},0.68)`,
+  textFaint: `rgba(${fgR},${fgG},${fgB},0.44)`,
+  accent: lchHex(t.metal),
+  accentDeep: oklch(ml - 0.2, mc, mh),
   /** Halo kolem zaměřené karty, vybrané pozadí. */
-  accentSoft: 'rgba(229,154,74,0.2)',
+  accentSoft: lchRgba(t.metal, 0.2),
   focus: '#FFFFFF',
-  onFocus: '#0D1216',
+  onFocus: lchHex(t.background),
   danger: '#FF6B6B',
-  scrim: 'rgba(13,18,22,0.92)',
+  scrim: `rgba(${bgR},${bgG},${bgB},0.92)`,
   /** Jemná světlá hrana karet a panelů, ať se neslévají s pozadím. */
   edge: 'rgba(255,255,255,0.08)',
-  /** Skvrny záře v pozadí (Glow): petrolejová a měděná – krytí určuje Glow. */
-  glowCool: '#26707A',
-  glowWarm: '#E59A4A',
+  /** Skvrny záře v pozadí (Glow): brand a kov tématu – krytí určuje Glow. */
+  glowCool: lchHex(t.brand),
+  glowWarm: lchHex(t.metal),
 }
 
 /** Barva pozadí s průhledností – přechody nad obrázky a menu. */
-export const bgAlpha = (a: number) => `rgba(13,18,22,${a})`
+export const bgAlpha = (a: number) => `rgba(${bgR},${bgG},${bgB},${a})`
 
 export const fonts = {
   heading: 'BricolageGrotesque_700Bold',

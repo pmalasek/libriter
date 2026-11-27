@@ -449,6 +449,8 @@ export default {
       large: 'Grands',
       about: 'À propos',
       version: 'Version {{version}}',
+      appearance: 'Apparence',
+      themeReload: 'Rechargement avec le nouveau thème… Sinon, il s’appliquera au prochain lancement.',
     },
     nav: {
       settings: 'Réglages',
