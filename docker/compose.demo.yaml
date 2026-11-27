@@ -17,8 +17,9 @@ services:
     # Pozor: v .env nepsat komentář za hodnotu (KEY=hodnota # text). Docker ho
     # odstraní jen po mezeře – po tabulátoru zůstane součástí hodnoty.
     # TRUSTED_PROXIES v .env: adresa, ze které kontejner vidí spojení od
-    # nginxu (IP nginx stroje), např. TRUSTED_PROXIES=78.156.131.251. Bez ní
-    # všichni klienti sdílejí jeden limit přihlášení.
+    # nginxu – vnitřní IP nginx stroje (na něm `ip route get 172.24.0.46`,
+    # údaj src), např. TRUSTED_PROXIES=172.24.0.10. Bez ní všichni klienti
+    # sdílejí jeden limit přihlášení. Podrobnosti v compose.prod.yaml.
     env_file: .env
     # Jen na vnitřní adrese hostitele: nginx běží na jiném stroji a připojuje
     # se na 172.24.0.46. 127.0.0.1 by ho odřízl, 0.0.0.0 by backend vystavil

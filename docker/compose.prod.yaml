@@ -37,10 +37,12 @@ services:
       # Adresy reverzních proxy, kterým server věří hlavičky X-Real-IP /
       # X-Forwarded-For (podle nich počítá limity přihlášení na klienta).
       # Hodnota patří do .env vedle tohoto souboru – musí to být adresa, ze
-      # které kontejner vidí spojení od nginxu (IP nginx stroje, případně
-      # bránu Docker sítě, když spojení prochází NATem), např.:
-      #   TRUSTED_PROXIES=78.156.131.251
-      # Bez ní všichni klienti sdílejí jeden limit přihlášení.
+      # které kontejner vidí spojení od nginxu: vnitřní IP nginx stroje
+      # (na něm ji ukáže `ip route get 172.24.0.46`, údaj src), např.:
+      #   TRUSTED_PROXIES=172.24.0.10
+      # Kdyby Docker spojení přeposílal přes userland-proxy, vidí kontejner
+      # místo ní bránu své sítě – pak přidat i tu. Bez správné hodnoty
+      # všichni klienti sdílejí jeden limit přihlášení.
     # Jen na vnitřní adrese hostitele: nginx běží na jiném stroji a připojuje
     # se na 172.24.0.46. 127.0.0.1 by ho odřízl, 0.0.0.0 by backend vystavil
     # na všech rozhraních mimo nginx (bez HSTS, rate limitu a TLS).
