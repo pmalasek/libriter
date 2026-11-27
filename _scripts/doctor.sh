@@ -70,16 +70,26 @@ else
 fi
 if [[ -d "$ANDROID_HOME" ]]; then s=0; else s=1; fi
 check 1 "ANDROID_HOME" $s "$ANDROID_HOME" "adresář $ANDROID_HOME neexistuje; just setup"
-have sdkmanager; check 1 "sdkmanager (cmdline-tools)" $? "$(sdkmanager --version 2>/dev/null | head -n1)" "just setup"
+# cmdline-tools ≥ 23 mají `android sdk` a sdkmanager je jen zastaralý obal
+# (jeho --version by vypsal varování); starší mají jen sdkmanager.
+if have android; then
+  check 1 "android sdk (cmdline-tools)" 0 "$(android --version 2>/dev/null | head -n1)" "just setup"
+  sdk_hint() { echo "android sdk install \"$1/$2\""; }
+  license_hint="licence se u \`android sdk\` přijímají samy; just setup"
+else
+  have sdkmanager; check 1 "sdkmanager (cmdline-tools)" $? "$(sdkmanager --version 2>/dev/null | head -n1)" "just setup"
+  sdk_hint() { echo "sdkmanager \"$1;$2\""; }
+  license_hint="$license_hint"
+fi
 have adb; check 1 "adb (platform-tools)" $? "$(adb version 2>/dev/null | head -n1 | awk '{print $5}')" "just setup"
 plats="$(ls -d "$ANDROID_HOME"/platforms/android-* 2>/dev/null | sed 's#.*/android-##' | sort -n | tr '\n' ' ')"
 [[ -n "$plats" ]] && s=0 || s=1
-check 1 "platforms" $s "android-$(echo "$plats" | tr ' ' ',' | sed 's/,$//;s/,/, android-/g')" "sdkmanager \"platforms;android-$ANDROID_API\""
+check 1 "platforms" $s "android-$(echo "$plats" | tr ' ' ',' | sed 's/,$//;s/,/, android-/g')" "$(sdk_hint platforms "android-$ANDROID_API")"
 bts="$(ls "$ANDROID_HOME"/build-tools 2>/dev/null | sort -V | tr '\n' ' ')"
 [[ -n "$bts" ]] && s=0 || s=1
-check 1 "build-tools" $s "${bts% }" "sdkmanager \"build-tools;$ANDROID_BUILD_TOOLS\""
+check 1 "build-tools" $s "${bts% }" "$(sdk_hint build-tools "$ANDROID_BUILD_TOOLS")"
 if [[ -f "$ANDROID_HOME/licenses/android-sdk-license" ]]; then s=0; else s=1; fi
-check 1 "licence SDK přijaté" $s "" "yes | sdkmanager --licenses"
+check 1 "licence SDK přijaté" $s "" "$license_hint"
 [[ -d "$ANDROID_HOME/ndk" ]] && s=0 || s=1
 check 0 "NDK" $s "$(ls "$ANDROID_HOME"/ndk 2>/dev/null | sort -V | tail -n1)" "volitelné, Gradle si stáhne verzi podle projektu"
 have watchman; check 0 "watchman" $? "$(watchman --version 2>/dev/null)" "volitelné, zrychluje Metro"

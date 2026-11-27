@@ -202,14 +202,31 @@ fi
 export JAVA_HOME="$JDK_HOME"
 export PATH="$CMDLINE_DIR/bin:$ANDROID_HOME/platform-tools:$JAVA_HOME/bin:$PATH"
 
-info "Přijímám licence SDK a instaluji balíčky (může trvat několik minut)"
-yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
-sdkmanager --sdk_root="$ANDROID_HOME" \
-  "platform-tools" \
-  "platforms;android-${ANDROID_API}" \
-  "build-tools;${ANDROID_BUILD_TOOLS}" \
-  "cmdline-tools;latest" \
-  || warn "Některý SDK balíček se nepodařilo nainstalovat. Zkontroluj ANDROID_API / ANDROID_BUILD_TOOLS v _scripts/lib.sh."
+sdk_failed() {
+  warn "Některý SDK balíček se nepodařilo nainstalovat. Zkontroluj ANDROID_API / ANDROID_BUILD_TOOLS v _scripts/lib.sh."
+}
+if [[ -x "$CMDLINE_DIR/bin/android" ]]; then
+  # cmdline-tools ≥ 23: sdkmanager je jen zastaralý obal kolem `android sdk`
+  # (a hlásí to při každém volání); licence se už zvlášť nepřijímají.
+  info "Instaluji SDK balíčky (může trvat několik minut)"
+  android --sdk="$ANDROID_HOME" sdk install \
+    "platform-tools" \
+    "platforms/android-${ANDROID_API}" \
+    "build-tools/${ANDROID_BUILD_TOOLS}" \
+    "cmdline-tools/latest" \
+    </dev/null || sdk_failed
+else
+  # Starší cmdline-tools (čerstvě stažené v kroku výš): sdkmanager. Instalace
+  # cmdline-tools;latest je povýší, další běh už jde přes `android sdk`.
+  info "Přijímám licence SDK a instaluji balíčky (může trvat několik minut)"
+  yes | sdkmanager --sdk_root="$ANDROID_HOME" --licenses >/dev/null || true
+  sdkmanager --sdk_root="$ANDROID_HOME" \
+    "platform-tools" \
+    "platforms;android-${ANDROID_API}" \
+    "build-tools;${ANDROID_BUILD_TOOLS}" \
+    "cmdline-tools;latest" \
+    || sdk_failed
+fi
 
 # -----------------------------------------------------------------------------
 #  6. Android: watchman, přístup k telefonu přes USB (Linux)
@@ -217,6 +234,9 @@ sdkmanager --sdk_root="$ANDROID_HOME" \
 info "Android: watchman a USB ladění"
 if have watchman; then
   ok "watchman"
+elif [[ "$PKG" == "pacman" ]]; then
+  # Na Archu je watchman jen v AUR – pacman by skončil „cíl nebyl nalezen“.
+  warn "watchman je na Archu jen v AUR (např. \`paru -S watchman-bin\`); Metro funguje i bez něj, jen pomaleji sleduje soubory."
 else
   pkg_update_once
   pkg_install watchman || warn "watchman není k dispozici; Metro funguje i bez něj, jen pomaleji sleduje soubory."
@@ -234,7 +254,13 @@ case "$PKG" in
     pkg_install android-tools || true   # obsahuje udev pravidla pro adb
     ;;
   pacman)
-    pkg_install android-udev || true   # udev pravidla (uaccess) pro telefon
+    # udev pravidla (uaccess) pro telefon; nainstalovaný balíček se přeskočí,
+    # jinak pacman hlásí „je aktuální -- vynechat“.
+    if pacman -Qq android-udev >/dev/null 2>&1; then
+      ok "android-udev"
+    else
+      pkg_install android-udev || true
+    fi
     ;;
 esac
 
