@@ -236,6 +236,10 @@ func (h *BookHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	book, err := h.svc.Create(r.Context(), in)
+	if errors.Is(err, service.ErrInvalidFilePath) {
+		writeError(w, http.StatusBadRequest, "validation.invalid", err.Error())
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při vytváření knihy")
 		return
@@ -279,9 +283,9 @@ func (h *BookHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /api/v1/books/{id}  (editor+)
 //
-// Mění jen pole, která klient skutečně poslal. Existuje vedle PUT proto, že
-// file_path se přes API nevystavuje (model.Book má json:"-"), takže úplná
-// náhrada by cestu k audiu přepsala prázdnou hodnotou.
+// Mění jen pole, která klient skutečně poslal (PUT nahrazuje všechna pole,
+// která spravuje editor). Interní cesty file_path a cover_path se z těla
+// nepřebírají ani tady, ani v PUT – spravuje je scanner a služba obálek.
 func (h *BookHandler) Patch(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUID(w, r, "id")
 	if !ok {
@@ -368,12 +372,16 @@ type bookRequest struct {
 	Title           string   `json:"title"`
 	Narrator        *string  `json:"narrator"`
 	DurationSeconds int      `json:"duration_seconds"`
-	FilePath        string   `json:"file_path"`
-	CoverPath       *string  `json:"cover_path"`
-	Language        string   `json:"language"`
-	Description     *string  `json:"description"`
-	InternalRating  *int16   `json:"internal_rating"`
-	PublishedYear   *int     `json:"published_year"`
+	// FilePath se bere jen při založení knihy (POST) a musí ležet v AUDIO_ROOT;
+	// PUT ho ignoruje a ponechá uložený.
+	FilePath string `json:"file_path"`
+	// CoverPath se přijímá kvůli starším klientům (DisallowUnknownFields),
+	// ale ignoruje se – obálku nastavuje jen scanner a služba obálek.
+	CoverPath      *string `json:"cover_path"`
+	Language       string  `json:"language"`
+	Description    *string `json:"description"`
+	InternalRating *int16  `json:"internal_rating"`
+	PublishedYear  *int    `json:"published_year"`
 }
 
 func (req *bookRequest) toInput() (storage.BookInput, error) {
@@ -408,7 +416,6 @@ func (req *bookRequest) toInput() (storage.BookInput, error) {
 		Narrator:        req.Narrator,
 		DurationSeconds: req.DurationSeconds,
 		FilePath:        strings.TrimSpace(req.FilePath),
-		CoverPath:       req.CoverPath,
 		Language:        normalizeLanguage(req.Language),
 		Description:     req.Description,
 		InternalRating:  req.InternalRating,
@@ -432,7 +439,8 @@ func (req *bookRequest) toInput() (storage.BookInput, error) {
 
 // bookPatchRequest je bookRequest pro částečnou aktualizaci – každé pole nese
 // navíc informaci, jestli ho klient poslal. file_path chybí schválně: cestu
-// k audiu spravuje výhradně scanner a klient ji nikdy nevidí.
+// k audiu spravuje výhradně scanner. cover_path se přijímá (starší klienti ho
+// posílají a DisallowUnknownFields by vrátil 400), ale ignoruje se.
 type bookPatchRequest struct {
 	AuthorIDs      Optional[[]string] `json:"author_ids"`
 	SeriesID       Optional[*string]  `json:"series_id"`
@@ -441,12 +449,13 @@ type bookPatchRequest struct {
 	Narrator       Optional[*string]  `json:"narrator"`
 	// duration_seconds zůstává i tady povinně kladné – nulová délka by rozbila
 	// zobrazení i budoucí přehrávání.
-	DurationSeconds Optional[int]     `json:"duration_seconds"`
-	CoverPath       Optional[*string] `json:"cover_path"`
-	Language        Optional[string]  `json:"language"`
-	Description     Optional[*string] `json:"description"`
-	InternalRating  Optional[*int16]  `json:"internal_rating"`
-	PublishedYear   Optional[*int]    `json:"published_year"`
+	DurationSeconds Optional[int] `json:"duration_seconds"`
+	// CoverPath se ignoruje (viz výše).
+	CoverPath      Optional[*string] `json:"cover_path"`
+	Language       Optional[string]  `json:"language"`
+	Description    Optional[*string] `json:"description"`
+	InternalRating Optional[*int16]  `json:"internal_rating"`
+	PublishedYear  Optional[*int]    `json:"published_year"`
 }
 
 // toPatch ověří poslaná pole a vrátí funkci, která je zanese do vstupu knihy.
@@ -511,9 +520,6 @@ func (req *bookPatchRequest) toPatch() (func(*storage.BookInput), error) {
 		}
 		if req.DurationSeconds.Set {
 			in.DurationSeconds = req.DurationSeconds.Value
-		}
-		if req.CoverPath.Set {
-			in.CoverPath = req.CoverPath.Value
 		}
 		if req.Language.Set && req.Language.Value != "" {
 			in.Language = req.Language.Value

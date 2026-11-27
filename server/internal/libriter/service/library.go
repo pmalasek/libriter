@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"path"
+	"strings"
 
+	"mediater/internal/libriter/audiostore"
 	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/scanner"
 	"mediater/internal/libriter/storage"
@@ -18,6 +21,8 @@ type bookRemover interface {
 	DeleteBook(ctx context.Context, id uuid.UUID, deleteFiles bool) (scanner.DeleteResult, error)
 	// DefaultLanguage je jazyk nové knihy, když ho klient neposlal.
 	DefaultLanguage(ctx context.Context) string
+	// AudioRoot je kořen knihovny; file_path nové knihy musí ležet v něm.
+	AudioRoot() string
 }
 
 type BookService struct {
@@ -41,12 +46,44 @@ func (b *BookService) GetByID(ctx context.Context, id uuid.UUID) (*model.Book, e
 	return book, err
 }
 
+// ErrInvalidFilePath znamená, že file_path nové knihy neleží v AUDIO_ROOT.
+var ErrInvalidFilePath = errors.New("file_path musí být relativní cesta uvnitř knihovny")
+
+// Create založí knihu z API. file_path musí být relativní cesta uvnitř
+// AUDIO_ROOT (ověří se i přes symbolické odkazy) a cover_path se nepřebírá:
+// obálku ukládá jen scanner nebo služba obálek, jinak by editor mohl knihu
+// navázat na libovolný soubor a ten by se při mazání knihy smazal.
 func (b *BookService) Create(ctx context.Context, in storage.BookInput) (*model.Book, error) {
+	clean, ok := b.cleanFilePath(in.FilePath)
+	if !ok {
+		return nil, ErrInvalidFilePath
+	}
+	in.FilePath = clean
+	in.CoverPath = nil
 	return b.store.CreateBook(ctx, in)
 }
 
+// cleanFilePath ověří adresář knihy relativní k AUDIO_ROOT a vrátí ho
+// v normalizovaném tvaru (lomítka, bez „./“).
+func (b *BookService) cleanFilePath(rel string) (string, bool) {
+	rel = path.Clean(strings.TrimSpace(rel))
+	if rel == "." || rel == "/" {
+		return "", false
+	}
+	if _, ok := audiostore.Resolve(b.scanner.AudioRoot(), rel); !ok {
+		return "", false
+	}
+	return rel, true
+}
+
+// Update nahradí pole knihy, která spravuje editor. Interní cesty
+// (file_path, cover_path) a album tag zůstanou uložené – spravuje je scanner
+// a služba obálek a podle nich se mažou soubory; z API se nepřebírají.
 func (b *BookService) Update(ctx context.Context, id uuid.UUID, in storage.BookInput) (*model.Book, error) {
-	book, err := b.store.UpdateBook(ctx, id, in)
+	book, err := b.store.PatchBook(ctx, id, func(current *storage.BookInput) {
+		in.FilePath, in.CoverPath, in.AlbumTag = current.FilePath, current.CoverPath, current.AlbumTag
+		*current = in
+	})
 	if errors.Is(err, storage.ErrNotFound) {
 		return nil, ErrNotFound
 	}
@@ -161,6 +198,8 @@ func (a *AuthorService) GetByID(ctx context.Context, id uuid.UUID) (*model.Autho
 }
 
 func (a *AuthorService) Create(ctx context.Context, in storage.AuthorInput) (*model.Author, error) {
+	// Fotku nahrává jen AuthorImageService; cesta z API se nepřebírá.
+	in.ImagePath = nil
 	author, err := a.store.CreateAuthor(ctx, in)
 	if errors.Is(err, storage.ErrConflict) {
 		return nil, ErrConflict
@@ -169,7 +208,12 @@ func (a *AuthorService) Create(ctx context.Context, in storage.AuthorInput) (*mo
 }
 
 func (a *AuthorService) Update(ctx context.Context, id uuid.UUID, in storage.AuthorInput) (*model.Author, error) {
-	author, err := a.store.UpdateAuthor(ctx, id, in)
+	// image_path spravuje jen AuthorImageService (a podle něj maže soubory);
+	// hodnota z API se nepřebírá.
+	author, err := a.store.PatchAuthor(ctx, id, func(current *storage.AuthorInput) {
+		in.ImagePath = current.ImagePath
+		*current = in
+	})
 	switch {
 	case errors.Is(err, storage.ErrNotFound):
 		return nil, ErrNotFound
