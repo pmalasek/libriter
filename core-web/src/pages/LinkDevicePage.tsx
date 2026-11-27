@@ -1,3 +1,4 @@
+import { TriangleAlertIcon } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router'
@@ -61,7 +62,19 @@ export function LinkDevicePage() {
             user: user?.display_name ?? '',
           })}
         </p>
-        {approve.error ? <p className="text-sm text-destructive">{approve.error.message}</p> : null}
+        {/* Útočník může oběti poslat odkaz se svým kódem – schválením by
+            přihlásil svou televizi k jejímu účtu. */}
+        <div
+          role="alert"
+          className="flex gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-100"
+        >
+          <TriangleAlertIcon className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
+          <div className="space-y-1">
+            <p className="font-semibold">{t('auth.link.warningTitle')}</p>
+            <p>{t('auth.link.warning')}</p>
+          </div>
+        </div>
+        {approve.error ?<p className="text-sm text-destructive">{approve.error.message}</p> : null}
         <div className="flex gap-2">
           <Button variant="outline" className="flex-1" onClick={reset} disabled={approve.isPending}>
             {t('auth.link.cancel')}

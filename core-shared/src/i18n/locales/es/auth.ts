@@ -41,6 +41,8 @@ export default {
     code: 'Código del televisor',
     check: 'Continuar',
     confirm: '¿Iniciar sesión en {{name}} con la cuenta {{user}}?',
+    warningTitle: 'Permite solo tu propio televisor',
+    warning: 'Permítelo solo si ahora mismo ves exactamente este código en tu propio televisor. Si otra persona te ha enviado el código o el enlace, no lo permitas: obtendría acceso a tu cuenta.',
     unnamed: 'Televisor',
     approve: 'Permitir',
     approving: 'Permitiendo…',
