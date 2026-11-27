@@ -1,4 +1,5 @@
 import { FolderOpenIcon } from 'lucide-react'
+import { createElement } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { libraryCoverUrl, placeholderGradient, type Library } from 'sceniter-shared'
@@ -51,7 +52,6 @@ export function BrowsePage() {
 
 function LibraryTile({ lib, wide }: { lib: Library; wide: boolean }) {
   const { t } = useTranslation()
-  const Icon = libraryIcon(lib)
   const cover = libraryCoverUrl(lib, COVER_WIDTH)
   const [top, mid, bottom] = placeholderGradient(lib.name)
 
@@ -77,7 +77,7 @@ function LibraryTile({ lib, wide }: { lib: Library; wide: boolean }) {
       <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-t from-black/85 via-black/30 to-brand/10" />
 
       <div className="absolute inset-x-3 bottom-3 flex items-center gap-2.5 text-white">
-        <Icon className="size-6 shrink-0 text-metal drop-shadow" />
+        {createElement(libraryIcon(lib), { className: 'size-6 shrink-0 text-metal drop-shadow' })}
         <div className="min-w-0">
           <p className="font-heading truncate text-base leading-tight font-semibold drop-shadow sm:text-lg">{lib.name}</p>
           <p className="truncate text-xs text-white/75">{t('video.browse.titles', { count: lib.item_count })}</p>
