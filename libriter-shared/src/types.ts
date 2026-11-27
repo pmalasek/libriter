@@ -483,14 +483,18 @@ export interface MetadataLanguageProfile {
 export interface MetadataSettings {
   providers: AdminProvider[]
   languages: MetadataLanguageProfile[]
-  google_books_api_key: string
+  /** Server klíč Google Books nevrací, jen jestli je nastavený. */
+  google_books_api_key_set: boolean
+  /** Platný klíč pochází z konfigurace serveru (GOOGLE_BOOKS_API_KEY). */
+  google_books_api_key_from_env: boolean
 }
 
 /** PUT /admin/settings/metadata – backend má DisallowUnknownFields. */
 export interface MetadataSettingsRequest {
   providers: { name: string; enabled: boolean }[]
   languages: { language: string; providers: { name: string; enabled: boolean }[] }[]
-  google_books_api_key: string
+  /** Chybí nebo null = klíč beze změny, '' = smazat, jinak nastavit. */
+  google_books_api_key?: string | null
 }
 
 /** GET a PUT /admin/settings/library */

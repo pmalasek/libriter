@@ -14,10 +14,12 @@ import (
 
 // metadataSettingsResponse je nastavení zdrojů obohacené o schopnosti, které
 // zdroj má – rozhraní podle nich ukazuje, že Google Books autory neumí.
+// Klíč Google Books se nevrací, jen to, jestli je nastavený.
 type metadataSettingsResponse struct {
-	Providers         []metadataProviderResponse `json:"providers"`
-	Languages         []metadataLanguageResponse `json:"languages"`
-	GoogleBooksAPIKey string                     `json:"google_books_api_key"`
+	Providers                []metadataProviderResponse `json:"providers"`
+	Languages                []metadataLanguageResponse `json:"languages"`
+	GoogleBooksAPIKeySet     bool                       `json:"google_books_api_key_set"`
+	GoogleBooksAPIKeyFromEnv bool                       `json:"google_books_api_key_from_env"`
 }
 
 type metadataLanguageResponse struct {
@@ -60,6 +62,9 @@ func (h *AdminHandler) MetadataSettings(w http.ResponseWriter, r *http.Request) 
 // Tělo nahrazuje celé nastavení: pořadí v seznamu je pořadí, ve kterém se
 // zdroje zkoušejí; languages jsou vlastní pořadí pro jazyky knih. Po uložení se řetězec zdrojů rovnou vymění, takže změna
 // platí bez restartu serveru.
+//
+// google_books_api_key: chybí nebo null = beze změny (GET klíč nevrací, klient
+// ho tedy nezná), "" = smazat, jinak nastavit.
 func (h *AdminHandler) SetMetadataSettings(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Providers []providerSettingRequest `json:"providers"`
@@ -67,7 +72,7 @@ func (h *AdminHandler) SetMetadataSettings(w http.ResponseWriter, r *http.Reques
 			Language  string                   `json:"language"`
 			Providers []providerSettingRequest `json:"providers"`
 		} `json:"languages"`
-		GoogleBooksAPIKey string `json:"google_books_api_key"`
+		GoogleBooksAPIKey *string `json:"google_books_api_key"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
@@ -75,9 +80,12 @@ func (h *AdminHandler) SetMetadataSettings(w http.ResponseWriter, r *http.Reques
 	}
 
 	in := service.MetadataSettings{
-		Providers:         toProviderSettings(req.Providers),
-		Languages:         make([]service.LanguageProfile, 0, len(req.Languages)),
-		GoogleBooksAPIKey: req.GoogleBooksAPIKey,
+		Providers:             toProviderSettings(req.Providers),
+		Languages:             make([]service.LanguageProfile, 0, len(req.Languages)),
+		KeepGoogleBooksAPIKey: req.GoogleBooksAPIKey == nil,
+	}
+	if req.GoogleBooksAPIKey != nil {
+		in.GoogleBooksAPIKey = *req.GoogleBooksAPIKey
 	}
 	for _, l := range req.Languages {
 		in.Languages = append(in.Languages, service.LanguageProfile{
@@ -99,15 +107,16 @@ func (h *AdminHandler) SetMetadataSettings(w http.ResponseWriter, r *http.Reques
 	profiles := saved.Profiles()
 	h.registry.Rebuild(profiles, metadata.ProviderConfig{GoogleBooksAPIKey: saved.GoogleBooksAPIKey})
 
-	// Klíč do auditu nepatří – stačí, že se změnil.
+	// Klíč do auditu nepatří – stačí, jestli se měnil a jestli je nastavený.
 	h.audit.Record(r.Context(), actorID(r), service.AuditEvent{
 		Action:     service.AuditSettingsMetadata,
 		TargetType: service.AuditTargetSettings,
 		TargetID:   service.SettingMetadataProviders,
 		Details: map[string]any{
-			"providers":                  profiles.Default,
-			"languages":                  profiles.ByLanguage,
-			"google_books_api_key_saved": saved.GoogleBooksAPIKey != "",
+			"providers":                    profiles.Default,
+			"languages":                    profiles.ByLanguage,
+			"google_books_api_key_saved":   saved.GoogleBooksAPIKey != "",
+			"google_books_api_key_changed": req.GoogleBooksAPIKey != nil,
 		},
 	})
 
@@ -135,9 +144,10 @@ func (h *AdminHandler) describeMetadata(settings service.MetadataSettings) metad
 	}
 
 	out := metadataSettingsResponse{
-		Providers:         describe(settings.Providers),
-		Languages:         make([]metadataLanguageResponse, 0, len(settings.Languages)),
-		GoogleBooksAPIKey: settings.GoogleBooksAPIKey,
+		Providers:                describe(settings.Providers),
+		Languages:                make([]metadataLanguageResponse, 0, len(settings.Languages)),
+		GoogleBooksAPIKeySet:     settings.GoogleBooksAPIKey != "",
+		GoogleBooksAPIKeyFromEnv: settings.GoogleBooksAPIKeyFromEnv,
 	}
 	for _, l := range settings.Languages {
 		out.Languages = append(out.Languages, metadataLanguageResponse{

@@ -46,6 +46,13 @@ type MetadataSettings struct {
 	Providers         []ProviderSetting `json:"providers"`
 	Languages         []LanguageProfile `json:"languages"`
 	GoogleBooksAPIKey string            `json:"google_books_api_key"`
+	// GoogleBooksAPIKeyFromEnv říká, že platný klíč pochází z konfigurace
+	// (GOOGLE_BOOKS_API_KEY), ne z uloženého nastavení. Jen pro čtení.
+	GoogleBooksAPIKeyFromEnv bool `json:"-"`
+	// KeepGoogleBooksAPIKey je jen pro SetMetadata: true = klíč se nemění
+	// a GoogleBooksAPIKey se ignoruje. Klient klíč nezná (API ho nevrací),
+	// takže uložení pořadí zdrojů ho nesmí smazat.
+	KeepGoogleBooksAPIKey bool `json:"-"`
 }
 
 // Profiles převede nastavení na jména zapnutých zdrojů – přesně to, co
@@ -178,6 +185,8 @@ func defaultMetadata(cfg config.MetadataConfig, known []string) MetadataSettings
 		Providers:         defaultProviders(cfg.Providers, known),
 		Languages:         make([]LanguageProfile, 0, len(cfg.LanguageProviders)),
 		GoogleBooksAPIKey: cfg.GoogleBooksAPIKey,
+		// Uložený klíč (i prázdný) ho v Metadata přebije.
+		GoogleBooksAPIKeyFromEnv: cfg.GoogleBooksAPIKey != "",
 	}
 
 	languages := make([]string, 0, len(cfg.LanguageProviders))
@@ -254,6 +263,7 @@ func (s *SettingsService) Metadata(ctx context.Context) (MetadataSettings, error
 			return MetadataSettings{}, fmt.Errorf("klíč Google Books: %w", err)
 		}
 		out.GoogleBooksAPIKey = key
+		out.GoogleBooksAPIKeyFromEnv = false
 	case !errors.Is(err, storage.ErrNotFound):
 		return MetadataSettings{}, err
 	}
@@ -265,6 +275,7 @@ func (s *SettingsService) Metadata(ctx context.Context) (MetadataSettings, error
 		}
 		if key != "" {
 			out.GoogleBooksAPIKey = key
+			out.GoogleBooksAPIKeyFromEnv = false
 		}
 	}
 
@@ -310,17 +321,20 @@ func (s *SettingsService) SetMetadata(ctx context.Context, in MetadataSettings) 
 		return MetadataSettings{}, err
 	}
 
-	key := strings.TrimSpace(in.GoogleBooksAPIKey)
-	if err := s.setJSON(ctx, SettingGoogleBooksAPIKey, key); err != nil {
-		return MetadataSettings{}, err
-	}
-	if s.googleKey != nil {
-		if err := s.googleKey.SetValue(ctx, googleBooksPlugin, googleBooksKey, key); err != nil {
+	if !in.KeepGoogleBooksAPIKey {
+		key := strings.TrimSpace(in.GoogleBooksAPIKey)
+		if err := s.setJSON(ctx, SettingGoogleBooksAPIKey, key); err != nil {
 			return MetadataSettings{}, err
+		}
+		if s.googleKey != nil {
+			if err := s.googleKey.SetValue(ctx, googleBooksPlugin, googleBooksKey, key); err != nil {
+				return MetadataSettings{}, err
+			}
 		}
 	}
 
-	return MetadataSettings{Providers: providers, Languages: languages, GoogleBooksAPIKey: key}, nil
+	// Platný klíč (i nezměněný, třeba z .env) se zjistí znovu čtením.
+	return s.Metadata(ctx)
 }
 
 // checkProviders odmítne neznámý nebo zdvojený zdroj. Jména normalizuje na

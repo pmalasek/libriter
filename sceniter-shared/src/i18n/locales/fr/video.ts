@@ -371,12 +371,15 @@ export default {
   tv: {
     pair: {
       serverTitle: 'Connexion au serveur',
-      serverHint: 'Le nom du serveur suffit, par ex. video.example.fr – https:// est ajouté automatiquement.',
+      serverHint: 'Le nom du serveur suffit, par ex. video.example.fr – https:// est ajouté automatiquement. Pour une adresse du réseau local, http:// est aussi essayé.',
       serverPlaceholder: 'video.example.fr',
       recentServers: 'Utilisés récemment',
       connect: 'Se connecter',
       connecting: 'Connexion…',
       serverError: 'Aucun serveur Sceniter ne répond à cette adresse.',
+      httpsError: 'Impossible de joindre un serveur Sceniter à cette adresse via https://. Si le serveur fonctionne sans HTTPS, saisissez explicitement l’adresse avec http:// – la connexion ne sera alors pas chiffrée.',
+      insecure: 'La connexion au serveur n’est pas chiffrée (http://). Sur le réseau local, ce n’est généralement pas un problème, mais via Internet, n’importe qui sur le trajet peut l’intercepter.',
+      insecureRecent: 'Les serveurs en http:// n’utilisent pas de connexion chiffrée.',
       title: 'Se connecter à Sceniter',
       step1: 'Sur votre téléphone ou ordinateur, ouvrez',
       step2: 'et saisissez ce code :',

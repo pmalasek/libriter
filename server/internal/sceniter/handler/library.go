@@ -196,6 +196,10 @@ func (h *Handler) Episode(w http.ResponseWriter, r *http.Request) {
 	if writeStoreError(w, err, "show.not_found") {
 		return
 	}
+	if err := h.Library.ApplyUserAspect(ctx, userID(r), nil, show); err != nil {
+		writeStoreError(w, err, "show.not_found")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"episode": e, "show": show, "files": files, "progress": progress, "next": next,
 	})
@@ -413,7 +417,8 @@ func (h *Handler) SetRating(w http.ResponseWriter, r *http.Request) {
 
 // PUT /sceniter/aspect/{kind}/{id}  {"aspect_ratio": "4:3" | "16:9" | null}
 // – ruční poměr stran titulu pro přehrávač (soubor bývá chybně označený).
-// Platí pro všechny uživatele; nastavit ho může kdokoli přihlášený.
+// Platí jen pro přihlášeného uživatele; null jeho volbu smaže a platí zase
+// sdílená výchozí hodnota titulu.
 func (h *Handler) SetAspectRatio(w http.ResponseWriter, r *http.Request) {
 	movieID, showID, ok := titleRef(w, r)
 	if !ok {
@@ -426,7 +431,7 @@ func (h *Handler) SetAspectRatio(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "validation.invalid", "poměr stran musí být 4:3, 16:9 nebo null")
 		return
 	}
-	if writeStoreError(w, h.Store.SetAspectRatio(r.Context(), movieID, showID, req.AspectRatio), "sceniter.not_found") {
+	if writeStoreError(w, h.Store.SetAspectRatio(r.Context(), userID(r), movieID, showID, req.AspectRatio), "sceniter.not_found") {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

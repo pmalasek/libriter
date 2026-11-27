@@ -384,12 +384,15 @@ export default {
   tv: {
     pair: {
       serverTitle: 'Připojení k serveru',
-      serverHint: 'Stačí název serveru, třeba video.example.cz – https:// se doplní samo.',
+      serverHint: 'Stačí název serveru, třeba video.example.cz – https:// se doplní samo. U adresy v domácí síti se zkusí i http://.',
       serverPlaceholder: 'video.example.cz',
       recentServers: 'Naposledy použité',
       connect: 'Připojit',
       connecting: 'Připojuji…',
       serverError: 'Na této adrese neodpovídá žádný server Sceniter.',
+      httpsError: 'Přes https:// se na této adrese nepodařilo spojit se serverem Sceniter. Pokud server běží bez HTTPS, zadejte adresu výslovně s http:// – spojení pak nebude šifrované.',
+      insecure: 'Spojení se serverem není šifrované (http://). V domácí síti to obvykle nevadí, přes internet ho ale může kdokoli po cestě odposlechnout.',
+      insecureRecent: 'Servery s http:// nemají šifrované spojení.',
       title: 'Přihlášení do Sceniteru',
       step1: 'Na telefonu nebo počítači otevřete',
       step2: 'a zadejte tento kód:',

@@ -41,6 +41,8 @@ export default {
     code: 'Kód z televize',
     check: 'Pokračovat',
     confirm: 'Přihlásit zařízení {{name}} k účtu {{user}}?',
+    warningTitle: 'Povolte jen svou televizi',
+    warning: 'Povolte jen tehdy, když přesně tento kód právě teď vidíte na své vlastní televizi. Pokud vám kód nebo odkaz poslal někdo jiný, nepovolujte – získal by přístup k vašemu účtu.',
     unnamed: 'Televize',
     approve: 'Povolit',
     approving: 'Povoluji…',

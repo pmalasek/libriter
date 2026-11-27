@@ -77,7 +77,7 @@ func (h *Handler) Playback(w http.ResponseWriter, r *http.Request) {
 	resp := PlaybackResponse{MediaID: mf.ID, DurationSec: mf.DurationSec, TokenExpiry: expires, Decision: d,
 		TranscodingAvailable: h.HLS.Available(), Subtitles: []subtitleTrack{}}
 	// Poměr stran je jen kosmetika – jeho chyba přehrávání neshodí.
-	if ratio, err := h.Store.MediaAspectRatio(r.Context(), mf.ID); err != nil {
+	if ratio, err := h.Store.MediaAspectRatio(r.Context(), userID(r), mf.ID); err != nil {
 		slog.Warn("poměr stran titulu", "media", mf.ID, "err", err)
 	} else {
 		resp.AspectRatio = ratio

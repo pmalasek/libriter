@@ -5,8 +5,10 @@ import { useTranslation } from 'react-i18next'
 import { LogOutIcon, ServerIcon } from 'lucide-react-native'
 import { useAuth } from '@/auth/AuthProvider'
 import { Button } from '@/components/Button'
+import { InsecureNotice } from '@/components/InsecureNotice'
 import { T } from '@/components/T'
 import { usePrefs } from '@/lib/prefs'
+import { isInsecure } from '@/lib/serverUrl'
 import type { SubtitleMode, SubtitleSize } from '@/lib/storage'
 import { colors, px, radius, safe } from '@/theme'
 
@@ -68,6 +70,7 @@ export default function SettingsScreen() {
           <T dim style={{ marginTop: px(16) }}>
             {t('video.tv.settings.server')}: {server}
           </T>
+          {server && isInsecure(server) ? <InsecureNotice style={{ marginTop: px(12) }} /> : null}
         </View>
         <View style={[styles.options, { marginTop: px(24) }]}>
           <Button icon={LogOutIcon} label={t('video.tv.settings.signOut')} onPress={() => void signOut()} />

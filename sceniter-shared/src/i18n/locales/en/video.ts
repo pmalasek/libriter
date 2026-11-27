@@ -370,12 +370,15 @@ export default {
   tv: {
     pair: {
       serverTitle: 'Connect to your server',
-      serverHint: 'Just the server name, e.g. video.example.com – https:// is added for you.',
+      serverHint: 'Just the server name, e.g. video.example.com – https:// is added for you. Addresses on your home network also try http://.',
       serverPlaceholder: 'video.example.com',
       recentServers: 'Recently used',
       connect: 'Connect',
       connecting: 'Connecting…',
       serverError: 'No Sceniter server responds at this address.',
+      httpsError: 'Could not reach a Sceniter server at this address over https://. If the server runs without HTTPS, type the address with http:// explicitly – the connection will then not be encrypted.',
+      insecure: 'The connection to the server is not encrypted (http://). That is usually fine on your home network, but over the internet anyone along the way can intercept it.',
+      insecureRecent: 'Servers with http:// do not use an encrypted connection.',
       title: 'Sign in to Sceniter',
       step1: 'On your phone or computer, open',
       step2: 'and enter this code:',

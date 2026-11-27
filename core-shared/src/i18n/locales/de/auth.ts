@@ -41,6 +41,8 @@ export default {
     code: 'Code vom Fernseher',
     check: 'Weiter',
     confirm: '{{name}} mit dem Konto {{user}} anmelden?',
+    warningTitle: 'Erlaube nur deinen eigenen Fernseher',
+    warning: 'Erlaube das nur, wenn du genau diesen Code gerade auf deinem eigenen Fernseher siehst. Hat dir jemand anderes den Code oder Link geschickt, erlaube es nicht – sonst bekommt diese Person Zugriff auf dein Konto.',
     unnamed: 'Fernseher',
     approve: 'Erlauben',
     approving: 'Wird erlaubt…',

@@ -9,6 +9,7 @@ import {
   type AdminProvider,
   type MetadataLanguageProfile,
   type MetadataSettings,
+  type MetadataSettingsRequest,
 } from '@/api/types'
 import { LanguageSelect } from '@/components/LanguageSelect'
 import { Badge } from '@/components/ui/badge'
@@ -114,7 +115,10 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
   const languageList = useLanguages()
   const [providers, setProviders] = useState<AdminProvider[]>(settings.providers)
   const [languages, setLanguages] = useState<MetadataLanguageProfile[]>(settings.languages)
-  const [apiKey, setApiKey] = useState(settings.google_books_api_key)
+  // Server klíč nevrací: apiKey je jen nově zadaný klíč, clearKey žádost
+  // o smazání uloženého. Bez obojího se klíč při uložení vůbec neposílá.
+  const [apiKey, setApiKey] = useState('')
+  const [clearKey, setClearKey] = useState(false)
   const [baseline, setBaseline] = useState(settings)
 
   // Po uložení (nebo změně z jiného okna) převezmeme stav ze serveru. React
@@ -124,15 +128,18 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
     setBaseline(settings)
     setProviders(settings.providers)
     setLanguages(settings.languages)
-    setApiKey(settings.google_books_api_key)
+    setApiKey('')
+    setClearKey(false)
   }
 
   const save = useSaveMetadataSettings()
 
+  const newKey = apiKey.trim()
   const dirty =
     JSON.stringify(providers) !== JSON.stringify(settings.providers) ||
     JSON.stringify(languages) !== JSON.stringify(settings.languages) ||
-    apiKey !== settings.google_books_api_key
+    newKey !== '' ||
+    clearKey
 
   function addLanguage(code: string) {
     if (languages.some((l) => l.language === code)) {
@@ -154,12 +161,16 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
   }
 
   function handleSave() {
+    const body: MetadataSettingsRequest = {
+      providers: toRequest(providers),
+      languages: languages.map((l) => ({ language: l.language, providers: toRequest(l.providers) })),
+    }
+    // Klíč posíláme jen při změně – chybějící pole ho na serveru ponechá.
+    if (newKey !== '') body.google_books_api_key = newKey
+    else if (clearKey) body.google_books_api_key = ''
+
     save.mutate(
-      {
-        providers: toRequest(providers),
-        languages: languages.map((l) => ({ language: l.language, providers: toRequest(l.providers) })),
-        google_books_api_key: apiKey.trim(),
-      },
+      body,
       {
         onSuccess: () => toast.success(t('admin.metadata.saved')),
         onError: (error) => toast.error(error.message),
@@ -232,12 +243,38 @@ export function MetadataSourcesEditor({ settings }: { settings: MetadataSettings
         <CardContent>
           <div className="space-y-2">
             <Label htmlFor="google_books_api_key">{t('admin.metadata.apiKey')}</Label>
-            <Input
-              id="google_books_api_key"
-              value={apiKey}
-              placeholder={t('admin.metadata.optional')}
-              onChange={(e) => setApiKey(e.target.value)}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                id="google_books_api_key"
+                type="password"
+                autoComplete="new-password"
+                className="min-w-0 flex-1"
+                value={apiKey}
+                disabled={clearKey}
+                placeholder={
+                  settings.google_books_api_key_set && !clearKey
+                    ? t('admin.metadata.apiKeySet')
+                    : t('admin.metadata.optional')
+                }
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+              {settings.google_books_api_key_set ? (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setClearKey(!clearKey)
+                    setApiKey('')
+                  }}
+                >
+                  {clearKey ? t('admin.metadata.apiKeyKeep') : t('admin.metadata.apiKeyClear')}
+                </Button>
+              ) : null}
+            </div>
+            {clearKey ? (
+              <p className="text-sm text-destructive">{t('admin.metadata.apiKeyWillClear')}</p>
+            ) : settings.google_books_api_key_from_env ? (
+              <p className="text-sm text-muted-foreground">{t('admin.metadata.apiKeyFromEnv')}</p>
+            ) : null}
           </div>
         </CardContent>
       </Card>
