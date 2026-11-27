@@ -21,6 +21,8 @@ import (
 	"path/filepath"
 	"time"
 
+	"mediater/internal/core/fsroot"
+	"mediater/internal/libriter/audiostore"
 	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/storage"
 
@@ -52,6 +54,10 @@ type ImportBook struct {
 // ErrImportTargetExists znamená, že cílový soubor už v knihovně je.
 var ErrImportTargetExists = errors.New("cílový soubor už v knihovně existuje")
 
+// ErrImportOutsideRoot znamená, že cílová cesta (i přes symbolický odkaz
+// existující složky) vede mimo AUDIO_ROOT.
+var ErrImportOutsideRoot = errors.New("cílová cesta vede mimo knihovnu")
+
 // AudioRoot vrátí kořen knihovny (importér podle něj hlídá kolize).
 func (s *Scanner) AudioRoot() string {
 	return s.audioRoot
@@ -69,6 +75,9 @@ func (s *Scanner) ImportBook(ctx context.Context, in ImportBook) (*model.Book, e
 	// Kolize se hlídají před prvním přesunem, aby import nenechal knihu
 	// v knihovně napůl.
 	for _, ch := range in.Chapters {
+		if _, ok := audiostore.Resolve(s.audioRoot, ch.RelPath); !ok {
+			return nil, fmt.Errorf("%w: %s", ErrImportOutsideRoot, ch.RelPath)
+		}
 		if exists, err := s.store.ChapterExistsByFilePath(ctx, ch.RelPath); err != nil {
 			return nil, err
 		} else if exists {
@@ -166,10 +175,20 @@ func (s *Scanner) pinChapterOrder(ctx context.Context, bookID uuid.UUID) error {
 
 // placeFile přesune soubor ze stagingu do knihovny. Staging bývá na stejném
 // disku a stačí přejmenování; jinak se soubor zkopíruje a originál smaže.
+//
+// Cíl musí po překladu symbolických odkazů ležet v AUDIO_ROOT: existující
+// složka autora může být odkaz a zápis by jím jinak prošel ven z knihovny.
 func (s *Scanner) placeFile(f ImportFile) error {
-	dst := filepath.Join(s.audioRoot, f.RelPath)
+	dst, ok := audiostore.Resolve(s.audioRoot, f.RelPath)
+	if !ok {
+		return fmt.Errorf("%w: %s", ErrImportOutsideRoot, f.RelPath)
+	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return fmt.Errorf("vytvoření adresáře: %w", err)
+	}
+	// Po vytvoření složek ještě jednou – mezitím mohl vzniknout odkaz.
+	if !fsroot.Contains(s.audioRoot, filepath.Dir(dst)) {
+		return fmt.Errorf("%w: %s", ErrImportOutsideRoot, f.RelPath)
 	}
 	if _, err := os.Lstat(dst); err == nil {
 		return fmt.Errorf("%w: %s", ErrImportTargetExists, f.RelPath)

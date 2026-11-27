@@ -15,10 +15,16 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/text/encoding/charmap"
+
+	"mediater/internal/core/fsroot"
 )
 
 // ErrUnsupportedSubtitle znamená titulky, které nejde převést do WebVTT.
 var ErrUnsupportedSubtitle = errors.New("titulky nejde převést do WebVTT")
+
+// maxSubtitleBytes je strop velikosti externích titulků; i dlouhý film má
+// titulky v řádu stovek kB.
+const maxSubtitleBytes = 16 << 20
 
 // Subtitles převádí titulky do WebVTT a výsledek si pamatuje na disku.
 type Subtitles struct {
@@ -46,7 +52,9 @@ func (s *Subtitles) Embedded(ctx context.Context, cacheKey, abs string, idx int)
 // přes ffmpeg, VTT se jen ověří.
 func (s *Subtitles) External(ctx context.Context, cacheKey, abs, format string) ([]byte, error) {
 	return s.cached(cacheKey, func() ([]byte, error) {
-		data, err := os.ReadFile(abs)
+		// Cesta prošla stream.Resolve (uvnitř VIDEO_ROOT); tady se navíc
+		// odmítne FIFO a zařízení a čte se jen do rozumné velikosti.
+		data, err := fsroot.ReadFile(abs, maxSubtitleBytes)
 		if err != nil {
 			return nil, err
 		}

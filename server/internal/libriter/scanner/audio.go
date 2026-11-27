@@ -18,12 +18,12 @@ package scanner
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
+	"mediater/internal/core/fsroot"
 	"mediater/internal/libriter/model"
 
 	"github.com/dhowden/tag"
@@ -76,7 +76,8 @@ func extractMeta(absPath, dirName string) (*AudioMeta, error) {
 // readTagMeta přečte jen to, co je v tagech souboru – bez náhradních hodnot
 // a bez délky. Chybějící nebo nečitelné tagy nejsou chyba.
 func readTagMeta(absPath string) (*AudioMeta, error) {
-	f, err := os.Open(absPath)
+	// O_NONBLOCK a kontrola typu: FIFO by obyčejné os.Open zablokovalo.
+	f, _, err := fsroot.OpenFile(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}

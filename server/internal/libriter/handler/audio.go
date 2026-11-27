@@ -7,12 +7,12 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 	"time"
 
+	"mediater/internal/core/fsroot"
 	"mediater/internal/libriter/audiostore"
 	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/service"
@@ -142,18 +142,14 @@ func (h *AudioHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, err := os.Open(abs)
+	// Odkaz ven z knihovny ani FIFO (to by obyčejné os.Open zablokovalo)
+	// se nevydá; typ souboru se ověřuje na otevřeném deskriptoru.
+	file, info, err := fsroot.Open(h.audioRoot, chapter.FilePath)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "audio.not_found", "audio soubor nenalezen")
 		return
 	}
 	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		writeError(w, http.StatusNotFound, "audio.not_found", "audio soubor nenalezen")
-		return
-	}
 
 	// Server má WriteTimeout 60 s kvůli běžnému API; hodinová kapitola
 	// přehrávaná v reálném čase by se do něj nevešla.
