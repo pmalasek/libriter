@@ -5,6 +5,7 @@ import {
   apiFetch,
   setAuthToken,
   setBaseUrl,
+  serverCandidates,
   setUnauthorizedHandler,
   t,
   type AuthResponse,
@@ -81,7 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = useCallback<AuthValue['signIn']>(async (input) => {
-    const url = input.serverUrl.trim().replace(/\/+$/, '')
+    // Bez schématu se doplní https:// (http:// jen výslovně – k veřejné adrese
+    // ho přihlašovací obrazovka nechá potvrdit).
+    const url = serverCandidates(input.serverUrl)[0] ?? ''
     if (!url) throw new ApiError(0, t('mobile.auth.serverUrlRequired'))
 
     // Adresa musí platit dřív, než se pošle první požadavek.

@@ -15,11 +15,13 @@ const SCHEME = /^https?:\/\//i
  * Schéma ani zbytek adresy nemění.
  */
 export function normalizeServerInput(input: string): string {
-  return input
+  const raw = input
     .trim()
     .replace(/\/+$/, '')
     .replace(/\/api\/v1$/i, '')
     .replace(/\/+$/, '')
+  // Samotné schéma (nevyplněné „https://“) není adresa.
+  return /^https?:$/i.test(raw) ? '' : raw
 }
 
 /** Má adresa výslovně uvedené schéma http:// nebo https://? */

@@ -20,6 +20,12 @@ describe('normalizeServerInput', () => {
     assert.equal(normalizeServerInput('nas:8081/api/v1'), 'nas:8081')
     assert.equal(normalizeServerInput('   '), '')
   })
+
+  it('samotné schéma není adresa', () => {
+    assert.equal(normalizeServerInput('https://'), '')
+    assert.equal(normalizeServerInput('http:/'), '')
+    assert.deepEqual(serverCandidates('https://'), [])
+  })
 })
 
 describe('serverHost', () => {
