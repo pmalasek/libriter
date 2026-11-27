@@ -110,11 +110,14 @@ func runServe() error {
 
 	addr := fmt.Sprintf(":%d", cfg.Server.Port)
 	srv := &http.Server{
-		Addr:         addr,
-		Handler:      r,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:    addr,
+		Handler: r,
+		// Hlavičky musí dorazit rychle, jinak by pomalí klienti (slowloris)
+		// drželi spojení otevřená celých ReadTimeout.
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
 	}
 
 	srvErr := make(chan error, 1)
@@ -149,6 +152,9 @@ func runServe() error {
 // webová rozhraní produktů vybíraná podle hostname.
 func newRouter(cfg *config.Config, deps product.Deps, prods []product.Product) http.Handler {
 	r := chi.NewRouter()
+	// Bezpečnostní hlavičky jako první, aby je dostala každá odpověď – API,
+	// SPA, /health i chyba 500 z Recovereru.
+	r.Use(middleware.SecurityHeaders)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.RealIP)
 	r.Use(middleware.Logger)
