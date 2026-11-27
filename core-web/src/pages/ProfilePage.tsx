@@ -8,7 +8,7 @@ import {
   useUpdateProfile,
   useUserDevices,
 } from '../api/hooks'
-import { formatDateTime, loginHint, LOGIN_PATTERN, roleLabel, type DeviceSession } from 'core-shared'
+import { formatDateTime, loginHint, LOGIN_PATTERN, MIN_PASSWORD, roleLabel, type DeviceSession } from 'core-shared'
 import { useAuth } from '../auth/AuthContext'
 import { PageHeader } from '../components/PageHeader'
 import { useTranslation } from 'react-i18next'
@@ -30,8 +30,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
 import { formatDate } from 'core-shared'
-
-const MIN_PASSWORD = 8
 
 export function ProfilePage() {
   const { t } = useTranslation()

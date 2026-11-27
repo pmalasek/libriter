@@ -139,6 +139,9 @@ export function UserTable({
                       variant="ghost"
                       size="icon"
                       aria-label={t('admin.users.table.resetPassword', { email: user.email })}
+                      // Vlastní heslo se mění v profilu se současným heslem;
+                      // server by reset bez něj odmítl.
+                      disabled={isSelf}
                       onClick={() => onResetPassword(user)}
                     >
                       <KeyRoundIcon />
