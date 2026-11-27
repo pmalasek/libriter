@@ -58,7 +58,7 @@ export default {
     deleted: 'Account {{email}} has been deleted.',
     deleteTitle: 'Delete account?',
     deleteDescription:
-      'Account <strong>{{email}}</strong> will be deleted along with its playback positions and bookmarks. Books in the library are not affected.',
+      'Account <strong>{{email}}</strong> will be deleted along with its playback positions, history and bookmarks. The library content is not affected.',
     deleting: 'Deleting…',
     passwordTooShort: 'Password must be at least {{min}} characters long.',
     fields: {
@@ -157,7 +157,7 @@ export default {
       'With registration disabled, accounts are created only by an administrator (Users tab or the <code>libriter user add</code> command).',
     enable: 'Allow public registration',
     defaultRole: 'Role of new accounts',
-    roleHint: 'A reader can only browse the library, an editor can edit books and authors.',
+    roleHint: 'A reader can only browse the library, an editor can edit its content and metadata.',
   },
   unsavedChanges: 'You have unsaved changes.',
   metadata: {

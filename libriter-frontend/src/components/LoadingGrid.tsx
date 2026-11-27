@@ -1,5 +1,9 @@
+import { LoadingList } from 'core-web/src/components/LoadingList'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { ViewMode } from '@/lib/sorting'
+
+// LoadingList je sdílený s ostatními produkty (core-web).
+export { LoadingList }
 
 const GRID: Record<Exclude<ViewMode, 'list'>, string> = {
   tiles: 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5',
@@ -17,16 +21,6 @@ export function LoadingGrid({ count = 8, view = 'tiles' }: { count?: number; vie
           <Skeleton className="h-4 w-4/5" />
           <Skeleton className="h-3 w-2/3" />
         </div>
-      ))}
-    </div>
-  )
-}
-
-export function LoadingList({ count = 6 }: { count?: number }) {
-  return (
-    <div className="space-y-3">
-      {Array.from({ length: count }, (_, i) => (
-        <Skeleton key={i} className="h-16 w-full rounded-2xl" />
       ))}
     </div>
   )

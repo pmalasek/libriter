@@ -58,7 +58,7 @@ export default {
     empty: 'No hay usuarios',
     deleted: 'La cuenta {{email}} se ha eliminado.',
     deleteTitle: '¿Eliminar cuenta?',
-    deleteDescription: 'La cuenta <strong>{{email}}</strong> se eliminará junto con sus posiciones de reproducción y marcadores. Los libros de la biblioteca no se verán afectados.',
+    deleteDescription: 'La cuenta <strong>{{email}}</strong> se eliminará junto con sus posiciones de reproducción, su historial y sus marcadores. El contenido de la biblioteca no se verá afectado.',
     deleting: 'Eliminando…',
     passwordTooShort: 'La contraseña debe tener al menos {{min}} caracteres.',
     fields: {
@@ -156,7 +156,7 @@ export default {
     description: 'Con el registro desactivado, solo un administrador puede crear cuentas (pestaña Usuarios o comando <code>libriter user add</code>).',
     enable: 'Permitir el registro público',
     defaultRole: 'Rol de las cuentas nuevas',
-    roleHint: 'Un lector solo puede explorar la biblioteca; un editor puede editar libros y autores.',
+    roleHint: 'Un lector solo puede explorar la biblioteca; un editor puede editar su contenido y los metadatos.',
   },
   unsavedChanges: 'Tienes cambios sin guardar.',
   metadata: {

@@ -60,7 +60,7 @@ export default {
     deleted: 'Účet {{email}} byl smazán.',
     deleteTitle: 'Smazat účet?',
     deleteDescription:
-      'Účet <strong>{{email}}</strong> se smaže i s jeho pozicemi v přehrávání a záložkami. Knihy v knihovně to nijak nezmění.',
+      'Účet <strong>{{email}}</strong> se smaže i s jeho pozicemi v přehrávání, historií a záložkami. Obsah knihovny to nijak nezmění.',
     deleting: 'Mažu…',
     passwordTooShort: 'Heslo musí mít alespoň {{min}} znaků.',
     fields: {
@@ -160,7 +160,7 @@ export default {
       'Při vypnuté registraci zakládá účty výhradně administrátor (záložka Uživatelé nebo příkaz <code>libriter user add</code>).',
     enable: 'Povolit veřejnou registraci',
     defaultRole: 'Role nového účtu',
-    roleHint: 'Čtenář si knihovnu jen prohlíží, editor smí upravovat knihy a autory.',
+    roleHint: 'Čtenář si knihovnu jen prohlíží, editor smí upravovat její obsah a metadata.',
   },
   unsavedChanges: 'Máte neuložené změny.',
   metadata: {

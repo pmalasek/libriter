@@ -57,7 +57,7 @@ export default {
     empty: 'Keine Benutzer',
     deleted: 'Konto {{email}} wurde gelöscht.',
     deleteTitle: 'Konto löschen?',
-    deleteDescription: 'Konto <strong>{{email}}</strong> wird zusammen mit seinen Wiedergabepositionen und Lesezeichen gelöscht. Bücher in der Bibliothek sind nicht betroffen.',
+    deleteDescription: 'Konto <strong>{{email}}</strong> wird zusammen mit seinen Wiedergabepositionen, seinem Verlauf und seinen Lesezeichen gelöscht. Der Inhalt der Bibliothek ist nicht betroffen.',
     deleting: 'Wird gelöscht…',
     passwordTooShort: 'Das Passwort muss mindestens {{min}} Zeichen lang sein.',
     fields: {
@@ -155,7 +155,7 @@ export default {
     description: 'Bei deaktivierter Registrierung werden Konten nur von einem Administrator erstellt (Registerkarte Benutzer oder Befehl <code>libriter user add</code>).',
     enable: 'Öffentliche Registrierung erlauben',
     defaultRole: 'Rolle neuer Konten',
-    roleHint: 'Ein Leser kann die Bibliothek nur durchsuchen, ein Bearbeiter kann Bücher und Autoren bearbeiten.',
+    roleHint: 'Ein Leser kann die Bibliothek nur durchsuchen, ein Bearbeiter kann ihren Inhalt und die Metadaten bearbeiten.',
   },
   unsavedChanges: 'Du hast ungespeicherte Änderungen.',
   metadata: {
