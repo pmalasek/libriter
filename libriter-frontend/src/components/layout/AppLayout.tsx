@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet } from 'react-router'
 import { useAuth } from '@/auth/AuthContext'
@@ -8,16 +8,23 @@ import { ImportProgressToast } from '@/components/admin/ImportProgressToast'
 import { PlayerCapsule } from '@/components/player/PlayerCapsule'
 import { cn } from '@/lib/utils'
 import { usePlayer } from '@/player/playerContext'
+import { useWideNav } from 'core-web/src/components/layout/navTypes'
+import { SideNav } from 'core-web/src/components/layout/SideNav'
+import { TabBar } from 'core-web/src/components/layout/TabBar'
 import { AmbientBackdrop } from './AmbientBackdrop'
-import { Logo } from './Logo'
-import { NavRail } from './NavRail'
+import { Logo, LogoMark } from './Logo'
 import { NowPlayingColumn } from './NowPlayingColumn'
-import { TabBar } from './TabBar'
+import { UserMenu } from './UserMenu'
+import { useNavItems } from './navItems'
 
 export function AppLayout() {
   const { t } = useTranslation()
   const player = usePlayer()
   const { user } = useAuth()
+  const items = useNavItems()
+  // Při poslechu ukrajuje vpravo sloupec přehrávače – široký panel se pak
+  // vejde až na opravdu široké okno.
+  const wide = useWideNav(!!player.session)
 
   // Role v prohlížeči může být z minulého přihlášení – srovnáme ji se serverem.
   useRefreshProfile()
@@ -25,23 +32,29 @@ export function AppLayout() {
   return (
     // Bez vlastního pozadí: kreslí ho AmbientBackdrop pod obsahem a body
     // (viz index.css) drží barvu i tam, kde se pozadí nevykreslí.
-    <div className="min-h-svh text-foreground">
+    <div
+      className="min-h-svh text-foreground"
+      // Šířka levé navigace pro kapsli přehrávače, která se centruje do obsahu.
+      style={{ '--nav-w': wide ? '15.5rem' : '4.75rem' } as CSSProperties}
+    >
       <AmbientBackdrop />
 
-      {/* Od md ikonový rail vlevo, pod ním na telefonu spodní lišta záložek. */}
-      <NavRail />
-      <TabBar />
+      {/* Od md navigace vlevo (panel, nebo ikonový sloupek), na telefonu
+          spodní lišta záložek. */}
+      <SideNav items={items} wide={wide} logo={<Logo size="sm" />} mark={<LogoMark />} brand="Libriter" />
+      <TabBar items={items} />
 
-      {/* Hlavička je jen na telefonu – rail značku i účet unese sám. */}
-      <header className="glass inset-shadow-glass sticky top-0 z-30 flex h-14 items-center px-4 md:hidden">
+      {/* Hlavička je jen na telefonu – panel značku i účet unese sám. */}
+      <header className="glass inset-shadow-glass sticky top-0 z-30 flex h-14 items-center justify-between gap-2 px-4 md:hidden">
         <Link to="/" className="flex items-center" aria-label={t('layout.homeLink')}>
           <Logo size="sm" />
         </Link>
+        <UserMenu />
       </header>
 
-      {/* Rail a sloupec s přehrávaným ukrajují po stranách; obsah se uvnitř
+      {/* Navigace a sloupec s přehrávaným ukrajují po stranách; obsah se uvnitř
           zbylého místa vystředí. Sloupec je jen tehdy, když poslech běží. */}
-      <div className={cn('md:pl-[5.5rem]', player.session && 'xl:pr-[22.75rem]')}>
+      <div className={cn(wide ? 'md:pl-62' : 'md:pl-[5.5rem]', player.session && 'xl:pr-[22.75rem]')}>
         <main
           className={cn(
             // @container: stránky se řídí šířkou obsahu, ne okna – na tabletu

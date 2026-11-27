@@ -31,6 +31,18 @@ import { useAuth } from '../auth/AuthContext'
 
 // Hooky účtu společné všem produktům: přihlášení, registrace a profil.
 
+/** Verze serveru (patička navigace). Za běhu se nemění, načte se jednou. */
+export function useServerVersion() {
+  const { user } = useAuth()
+  return useQuery({
+    queryKey: queryKeys.version,
+    queryFn: () => apiFetch<{ version: string }>('/version'),
+    enabled: !!user,
+    staleTime: Infinity,
+    select: (data) => data.version,
+  })
+}
+
 export function useUser(id: string | undefined) {
   return useQuery({
     queryKey: queryKeys.user(id ?? ''),

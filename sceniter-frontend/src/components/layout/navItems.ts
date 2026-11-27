@@ -1,34 +1,25 @@
-import { BookmarkIcon, HomeIcon, SearchIcon, SettingsIcon, type LucideIcon } from 'lucide-react'
-import type { ParseKeys } from 'i18next'
+import { BookmarkIcon, HomeIcon, SearchIcon, SettingsIcon, ShieldIcon } from 'lucide-react'
 import { useAuth } from 'core-web/src/auth/AuthContext'
 import { isAdmin } from 'core-web/src/auth/permissions'
+import type { NavItem } from 'core-web/src/components/layout/navTypes'
 import { useLibraries } from '@/api/hooks'
 import { libraryIcon } from '@/lib/libraryIcons'
 
-export interface NavItem {
-  to: string
-  /** Popisek z překladů; knihovny mají místo něj vlastní název (label). */
-  labelKey?: ParseKeys
-  label?: string
-  icon: LucideIcon
-  end?: boolean
-  /** Patří do spodní lišty na telefonu (vejdou se čtyři + „Více“). */
-  primary?: boolean
-}
-
-const HOME: NavItem = { to: '/', labelKey: 'video.nav.home', icon: HomeIcon, end: true, primary: true }
+const HOME: NavItem = { to: '/', labelKey: 'video.nav.home', icon: HomeIcon, end: true, tab: true }
 const TAIL: NavItem[] = [
-  { to: '/watchlist', labelKey: 'video.nav.watchlist', icon: BookmarkIcon, primary: true },
+  { to: '/watchlist', labelKey: 'video.nav.watchlist', icon: BookmarkIcon, tab: true },
   { to: '/search', labelKey: 'video.nav.search', icon: SearchIcon },
 ]
-const ADMIN: NavItem = { to: '/admin', labelKey: 'video.nav.admin', icon: SettingsIcon }
+const SETTINGS: NavItem = { to: '/profile', labelKey: 'layout.nav.settings', icon: SettingsIcon, footer: true }
+const ADMIN: NavItem = { to: '/admin', labelKey: 'video.nav.admin', icon: ShieldIcon, footer: true }
 
 /** Kolik knihoven se vejde do spodní lišty telefonu (zbytek je ve „Více“). */
-const PRIMARY_LIBRARIES = 2
+const TAB_LIBRARIES = 2
 
 /**
- * Položky navigace pro rail i spodní lištu: domů, knihovny v pořadí
- * z administrace, seznam a hledání. Administraci vidí jen admin.
+ * Položky navigace pro panel i spodní lištu: domů, knihovny v pořadí
+ * z administrace, seznam a hledání; v patičce nastavení a administrace
+ * (tu vidí jen admin, skutečnou ochranou je server).
  */
 export function useNavItems(): NavItem[] {
   const { user } = useAuth()
@@ -37,12 +28,7 @@ export function useNavItems(): NavItem[] {
     to: `/library/${lib.id}`,
     label: lib.name,
     icon: libraryIcon(lib),
-    primary: i < PRIMARY_LIBRARIES,
+    tab: i < TAB_LIBRARIES,
   }))
-  return [HOME, ...libs, ...TAIL, ...(isAdmin(user) ? [ADMIN] : [])]
-}
-
-/** Text položky – vlastní název knihovny, nebo překlad. */
-export function navLabel(item: NavItem, t: (key: ParseKeys) => string): string {
-  return item.label ?? (item.labelKey ? t(item.labelKey) : '')
+  return [HOME, ...libs, ...TAIL, SETTINGS, ...(isAdmin(user) ? [ADMIN] : [])]
 }

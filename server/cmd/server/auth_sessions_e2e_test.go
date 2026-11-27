@@ -450,3 +450,20 @@ func TestLoginUnknownUser(t *testing.T) {
 	e.expect(e.req("POST", "/api/v1/auth/login", "", map[string]string{"login": "ctenar@example.com", "password": "spatne"}),
 		http.StatusUnauthorized, "auth.invalid_credentials", "špatné heslo")
 }
+
+// Verze serveru je jen pro přihlášené – web ji ukazuje v patičce navigace.
+func TestVersionRequiresLogin(t *testing.T) {
+	e := newAuthEnv(t, nil)
+	e.user("reader@example.com", "reader")
+	tok := e.login("reader@example.com", "tajneheslo")
+
+	e.expect(e.req("GET", "/api/v1/version", "", nil), http.StatusUnauthorized, "", "bez přihlášení")
+	rec := e.req("GET", "/api/v1/version", tok, nil)
+	e.expect(rec, http.StatusOK, "", "přihlášený")
+	var body struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil || body.Version == "" {
+		t.Fatalf("verze: %q %v", rec.Body.String(), err)
+	}
+}

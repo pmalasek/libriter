@@ -1,11 +1,15 @@
 package handler
 
 import (
+	"net/http"
+
 	"github.com/go-chi/chi/v5"
 
+	"mediater/internal/core/httpx"
 	"mediater/internal/core/middleware"
 	"mediater/internal/core/model"
 	"mediater/internal/core/service"
+	"mediater/internal/core/version"
 )
 
 // Handlers sdružuje handlery jádra pro registraci rout.
@@ -38,6 +42,10 @@ func RegisterRoutes(r chi.Router, auth *service.AuthService, h Handlers) {
 
 		// Token pro přehrávače (<audio>, <video> neumí poslat hlavičku)
 		r.Get("/auth/stream-token", h.Auth.StreamToken)
+
+		// Verze serveru do patičky navigace. Jen po přihlášení – anonymnímu
+		// návštěvníkovi verze nic nedá, útočníkovi napoví, co zkoušet.
+		r.Get("/version", Version)
 
 		// Uživatelé - vlastní profil (volá i mobil)
 		r.Get("/users/{id}", h.Users.Get)
@@ -83,4 +91,9 @@ func RegisterRoutes(r chi.Router, auth *service.AuthService, h Handlers) {
 			r.Put("/admin/plugins/{name}/config", h.Plugins.SetConfig)
 		})
 	})
+}
+
+// Version vrátí verzi serveru (GET /api/v1/version).
+func Version(w http.ResponseWriter, _ *http.Request) {
+	httpx.WriteJSON(w, http.StatusOK, map[string]string{"version": version.String()})
 }

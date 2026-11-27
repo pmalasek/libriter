@@ -30,7 +30,7 @@ export function PlayerCapsule() {
       <div
         role="region"
         aria-label={t('player.region')}
-        className="glass-strong inset-shadow-glass fixed bottom-[5.5rem] left-1/2 z-40 h-16 w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-full px-2 shadow-glass-lg ring-1 ring-glass-edge md:bottom-3 md:left-[calc(50%+2.25rem)] md:w-[min(36rem,calc(100%-7rem))] xl:hidden"
+        className="glass-strong inset-shadow-glass fixed bottom-[5.5rem] left-1/2 z-40 h-16 w-[min(36rem,calc(100%-1.5rem))] -translate-x-1/2 rounded-full px-2 shadow-glass-lg ring-1 ring-glass-edge md:bottom-3 md:left-[calc(50%+var(--nav-w)/2)] md:w-[min(36rem,calc(100%-var(--nav-w)-1.5rem))] xl:hidden"
       >
         <div className="flex h-full items-center gap-1">
           <button
