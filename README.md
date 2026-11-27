@@ -937,9 +937,11 @@ požadavku (s krátkou cache).
 Vlastní účet vrátí na `DELETE` `400` a poslední administrátor `409` (platí
 i pro snížení jeho role).
 
-Kdo mění **vlastní** údaje nebo heslo (`PUT /users/{id}`,
-`PUT /users/{id}/password`), posílá i `current_password`; admin u cizího
-účtu ne. Změna hesla i reset adminem odhlásí všechny ostatní relace
+Kdo mění **vlastní** heslo, e-mail nebo přihlašovací jméno
+(`PUT /users/{id}/password`, `PUT /users/{id}`), posílá i `current_password`;
+samotná změna zobrazovaného jména ho nepotřebuje a admin u cizího účtu také ne.
+Chybějící heslo vrátí `400` `auth.current_password_required`, špatné `403`
+`auth.current_password_invalid`. Změna hesla i reset adminem odhlásí všechny ostatní relace
 účtu (web, mobily, televize) a zapíše se do auditu. Při změně vlastního hesla
 vrátí odpověď nový token, se kterým web zůstane přihlášený.
 
