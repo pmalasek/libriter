@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -150,24 +151,25 @@ func TestSecurityHeaders(t *testing.T) {
 
 	tests := []struct {
 		name, method, path string
-		wantStatus         int
+		wantStatus         []int
 		wantCSP            string
 	}{
-		{"veřejné API", http.MethodGet, "/api/v1/auth/config", http.StatusOK, middleware.APIContentSecurityPolicy},
-		{"API bez přihlášení", http.MethodGet, "/api/v1/users/me", http.StatusUnauthorized, middleware.APIContentSecurityPolicy},
-		{"neznámé API", http.MethodGet, "/api/v1/nonsense", http.StatusNotFound, middleware.APIContentSecurityPolicy},
-		{"chybná metoda API", http.MethodDelete, "/api/v1/auth/config", http.StatusMethodNotAllowed, middleware.APIContentSecurityPolicy},
-		// Frontend v testech sestavený není, SPA vrací stránku s návodem (503).
-		{"SPA kořen", http.MethodGet, "/", http.StatusServiceUnavailable, middleware.WebContentSecurityPolicy},
-		{"SPA podstránka", http.MethodGet, "/books/123", http.StatusServiceUnavailable, middleware.WebContentSecurityPolicy},
-		{"health", http.MethodGet, "/health", http.StatusOK, middleware.WebContentSecurityPolicy},
+		{"veřejné API", http.MethodGet, "/api/v1/auth/config", []int{http.StatusOK}, middleware.APIContentSecurityPolicy},
+		{"API bez přihlášení", http.MethodGet, "/api/v1/users/me", []int{http.StatusUnauthorized}, middleware.APIContentSecurityPolicy},
+		{"neznámé API", http.MethodGet, "/api/v1/nonsense", []int{http.StatusNotFound}, middleware.APIContentSecurityPolicy},
+		{"chybná metoda API", http.MethodDelete, "/api/v1/auth/config", []int{http.StatusMethodNotAllowed}, middleware.APIContentSecurityPolicy},
+		// Bez sestaveného frontendu vrací SPA stránku s návodem (503), po
+		// `just frontend` index.html (200) – hlavičky musí být v obou případech.
+		{"SPA kořen", http.MethodGet, "/", []int{http.StatusOK, http.StatusServiceUnavailable}, middleware.WebContentSecurityPolicy},
+		{"SPA podstránka", http.MethodGet, "/books/123", []int{http.StatusOK, http.StatusServiceUnavailable}, middleware.WebContentSecurityPolicy},
+		{"health", http.MethodGet, "/health", []int{http.StatusOK}, middleware.WebContentSecurityPolicy},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			rec := httptest.NewRecorder()
 			r.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
-			if rec.Code != tc.wantStatus {
-				t.Errorf("stav %d, chci %d", rec.Code, tc.wantStatus)
+			if !slices.Contains(tc.wantStatus, rec.Code) {
+				t.Errorf("stav %d, chci jeden z %v", rec.Code, tc.wantStatus)
 			}
 			h := rec.Header()
 			for key, want := range map[string]string{
