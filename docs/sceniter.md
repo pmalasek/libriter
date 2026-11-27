@@ -2,13 +2,14 @@
 
 Sceniter je druhý produkt na stejném serveru jako Libriter. Sdílí s ním účty,
 přihlášení, role, administraci uživatelů a nasazení (jedna binárka, jedna
-databáze, jeden balíček `.deb`). Má vlastní webové rozhraní na vlastní doméně
+databáze, jeden Docker image nebo balíček `.deb`). Má vlastní webové rozhraní na vlastní doméně
 a vlastní API pod `/api/v1/sceniter/`.
 
 ## Zapnutí
 
 Sceniter je vypnutý, dokud není nastavený `VIDEO_ROOT`. Minimální konfigurace
-v `/etc/libriter/libriter.env` (vývoj: `server/.env`):
+v `.env` (Docker: v adresáři instance, balíček: `/etc/libriter/libriter.env`,
+vývoj: `server/.env`):
 
 ```bash
 VIDEO_ROOT=/srv/video                 # adresář s filmy a seriály (stačí čtení)
@@ -232,7 +233,7 @@ Vše pod `/api/v1/sceniter`. Přehrávací cesty nesou streamovací token v adre
 | `PUT /progress/{movie\|episode}/{id}/watched`, `DELETE /progress/…` | reader | Zhlédnuto / nezhlédnuto |
 | `GET /watchlist`, `PUT\|DELETE /watchlist/{movie\|show}/{id}` | reader | Seznam „chci vidět“ |
 | `PUT /ratings/{movie\|show}/{id}` | reader | Hodnocení 1–10 nebo `null` |
-| `PUT /aspect/{movie\|show}/{id}` | reader | Ruční poměr stran pro přehrávač `4:3` / `16:9` nebo `null` (podle souboru); platí pro všechny |
+| `PUT /aspect/{movie\|show}/{id}` | reader | Ruční poměr stran pro přehrávač `4:3` / `16:9` nebo `null` (zpět na výchozí); platí jen pro volajícího uživatele |
 | `PATCH /movies/{id}`, `/shows/{id}` | editor | Ruční úprava názvu, roku, popisu |
 | `GET /metadata/providers` | editor | Zdroje video metadat (pluginy) |
 | `GET /metadata/search?kind=&q=&year=&provider=&language=&title=` | editor | Hledání u zdroje; bez `provider` zdroj knihovny titulu |
@@ -244,6 +245,17 @@ Vše pod `/api/v1/sceniter`. Přehrávací cesty nesou streamovací token v adre
 | `POST /admin/metadata/refresh-all`, `GET /admin/metadata/refresh` | admin | Obnova metadat spárovaných titulů, její průběh |
 | `GET /admin/library/unmatched`, `GET /admin/stats` | admin | Nespárované tituly, statistiky |
 | `GET /admin/transcode`, `DELETE /admin/transcode/{session}` | admin | Běžící převody |
+| `GET /admin/watching` | admin | Přehled sledování po uživatelích: celkový čas, počet titulů, poslední sledování |
+| `GET /admin/watching/{userId}?days=90` | admin | Sledování jednoho uživatele po dnech: titul (u epizody seriál, řada a díl), sekundy, první a poslední čas |
+
+Poměr stran nastavený uživatelem se ukládá zvlášť pro každého
+(`sc_user_aspect`); bez vlastní volby platí sdílená hodnota titulu, jinak
+poměr podle souboru. Tvar API se tím nezměnil.
+
+Statistika sledování (`sc_watch_history`) se zapisuje s každým uložením
+pozice – titul × den se součtem sekund a časem prvního a posledního
+sledování. Zpětně se nedopočítává; data přibývají až od verze, která ji
+přidala. „Označit jako nezhlédnuté“ historii nemaže, smazání uživatele ano.
 
 Chyby mají stejný tvar jako v Libriteru: `{"error": "…", "code": "sceniter.disabled"}`.
 
@@ -273,22 +285,47 @@ minutě dílu se nabídne další díl, po dohrání běží odpočet. React Nat
 posílá na Androidu do JS jen uvolnění klávesy, Přehrát/Pauzu obslouží media
 session přehrávače.
 
-**Adresa serveru** stačí bez schématu: zkusí se https://, pak http://. Posledních
-pět serverů se pamatuje a nabízí jako tlačítka.
+**Adresa serveru.** Posledních pět serverů se pamatuje a nabízí jako
+tlačítka. Kterým protokolem se televize připojí, záleží na zadání:
+
+| Zadání | Co se zkusí |
+|---|---|
+| bez schématu, adresa v místní síti (privátní IPv4/IPv6, `.local`, `.lan`, `.home.arpa`, jednoslovný název) | `https://`, když selže, `http://` |
+| bez schématu, veřejná doména nebo IP | jen `https://`; když selže, hláška poradí napsat `http://` výslovně |
+| `https://…` | jen HTTPS |
+| `http://…` | jen HTTP – přijme se, ale televize ukazuje varování o nešifrovaném spojení (i u uloženého serveru) |
+
+Bez HTTPS putuje heslo i token čitelně po síti; doma za routerem je to
+přijatelné, přes internet ne. Proto veřejná adresa nikdy nepřejde na HTTP
+potichu. Cleartext v `app.json` zůstává povolený – Android neumí povolit jen
+rozsahy místních IP. Mobilní aplikace Libriteru doplní k adrese bez schématu
+`https://`, `http://` k veřejné adrese přijme až po potvrzení varování.
 
 **Párování.** Televize se nepřihlašuje heslem. Po zadání adresy serveru ukáže
 kód a QR; uživatel ho na telefonu nebo počítači potvrdí na stránce `/link`
 (web Sceniteru i Libriteru) a televize dostane token se scope `tv` (platí jako
-mobilní token, 365 dní). Kód platí 10 minut a leží v databázi (tabulka
+mobilní token, 365 dní). Stránka `/link` upozorňuje, ať uživatel párování
+schválí jen tehdy, když kód vidí na své televizi – kdo kód podstrčí, dostal
+by jinak přístup k účtu. Kód platí 10 minut a leží v databázi (tabulka
 `device_codes`, jen hash `device_code`), takže párování přežije restart
 serveru; prošlý kód televize sama nahradí novým.
 
+Token televize smí jen to, co čtenář (i u účtu admina), a je to relace
+zařízení: uživatel ji vidí ve webovém **Profilu → Zařízení** pod názvem
+z párování a může ji odvolat, stejně jako **Odhlásit všude** nebo změna hesla.
+Odvolaná televize dostane `401` a musí se spárovat znovu.
+
 | Metoda a cesta | Role | Popis |
 |---|---|---|
-| `POST /api/v1/auth/device/start` `{"device_name"}` | veřejné | `device_code`, `user_code` (ABCD-EFGH), `verification_path`, `interval` |
-| `POST /api/v1/auth/device/token` `{"device_code"}` | veřejné | 428 `auth.device_pending`, 429 `auth.device_slow_down`, 410 `auth.device_expired`, jinak `{token, user}` |
-| `GET /api/v1/auth/device/{user_code}` | přihlášený | Které zařízení se páruje |
-| `POST /api/v1/auth/device/approve` `{"user_code"}` | přihlášený | Schválí párování |
+| `POST /api/v1/auth/device/start` `{"device_name"}` | veřejné | `device_code`, `user_code` (ABCD-EFGH), `verification_path`, `interval`; nejvýš 10 za 10 minut na IP |
+| `POST /api/v1/auth/device/token` `{"device_code"}` | veřejné | 428 `auth.device_pending`, 429 `auth.device_slow_down`, 410 `auth.device_expired`, jinak `{token, user}`; nejvýš 60 za minutu na IP |
+| `GET /api/v1/auth/device/{user_code}` | webová relace | Které zařízení se páruje |
+| `POST /api/v1/auth/device/approve` `{"user_code"}` | webová relace | Schválí párování |
+
+„Webová relace“ je přihlášení z prohlížeče; token mobilu nebo televize tu
+dostane `403` `auth.web_session_required`, aby si zařízení nemohlo samo
+schválit další token. Překročení limitu na IP vrací `429` `auth.rate_limited`
+s `Retry-After`.
 
 **Přehrávání** sdílí pravidla s webem (`sceniter-shared/src/playback.ts`):
 eskalace režimu při chybě, keepalive převodu, ukládání pozice. U přebalení
@@ -298,35 +335,117 @@ neumí), takže vypadají na obou platformách stejně.
 
 ## Nasazení na helpdesk24.works
 
-Pořadí kroků při prvním nasazení verze 2.0:
+Libriter i Sceniter běží v jednom Docker kontejneru na serveru 172.24.0.46,
+produkce i demo každé zvlášť. Nginx s TLS je na jiném stroji
+(78.156.131.251) a proxuje na vnitřní adresu serveru:
 
-1. **Záloha databáze** na backendu (172.24.0.46):
-   `sudo systemctl stop libriter && sudo cp -a /var/lib/libriter/libriter.db{,.pre-2.0}`
-   (a soubory `-wal`/`-shm`, pokud existují), pak `sudo systemctl start libriter`.
-2. **Balíček**: `sudo apt install ./libriter_2.0.0_amd64.deb`. Konfigurace
-   zůstane, na její konec se doplní nové proměnné.
-3. **Konfigurace** v `/etc/libriter/libriter.env`: `LIBRITER_HOST`,
-   `SCENITER_HOST`, `VIDEO_ROOT`, případně `TMDB_API_KEY`; pak
-   `sudo systemctl restart libriter` a `journalctl -u libriter -f` (migrace
-   `module=sceniter`, průchod videoknihovnou).
-4. **DNS**: záznam A `video.helpdesk24.works` → 78.156.131.251.
-5. **nginx** (78.156.131.251): upstream se přesouvá do samostatného souboru,
-   protože ho sdílí obě domény.
-   ```bash
-   sudo cp deploy/nginx/libriter-upstream.conf /etc/nginx/conf.d/
-   sudo cp deploy/nginx/audiobooks.helpdesk24.works.conf deploy/nginx/video.helpdesk24.works.conf /etc/nginx/sites-available/
-   sudo ln -s /etc/nginx/sites-available/video.helpdesk24.works.conf /etc/nginx/sites-enabled/
-   sudo nginx -t && sudo systemctl reload nginx
-   sudo certbot --nginx -d video.helpdesk24.works
-   ```
-   Nový `audiobooks…conf` už upstream neobsahuje – když se zkopíruje bez
-   `libriter-upstream.conf`, `nginx -t` selže na neznámém upstreamu; když se
-   naopak ponechá starý soubor s upstreamem, selže na duplicitě. Certbot
-   přidal do starého souboru blok `:443` – před kopírováním ho přeneste, nebo
-   po kopírování spusťte `certbot --nginx -d audiobooks.helpdesk24.works` znovu.
-6. **Ověření**: `curl -sI https://video.helpdesk24.works/health`, přihlášení
-   stejným účtem jako do Libriteru, přehrání filmu; mobilní aplikace Libriteru
-   (přihlášení, přehrání kapitoly, synchronizace pozice).
+| Instance | Adresář na serveru | Port (jen na 172.24.0.46) | Domény |
+|---|---|---|---|
+| produkce | `/opt/libriter` | `8081` | Libriter a Sceniter na helpdesk24.works a pem-tech.eu (seznam v hlavičce compose) |
+| demo | `/opt/libriter-demo` | `8082` | libriter.demo.helpdesk24.works, sceniter.demo.helpdesk24.works |
+
+V adresáři instance je `compose.yaml` (vzor
+[docker/compose.prod.yaml](../docker/compose.prod.yaml), resp.
+[compose.demo.yaml](../docker/compose.demo.yaml)), `.env` a `data/`
+(databáze, obálky, obrázky, import). Compose, `.env` ani nginx se při nasazení
+**nekopírují** – po změně vzoru v repozitáři je upravte na serveru ručně.
+Novou verzi nasadí z vývojového stroje:
+
+```bash
+just docker-deploy demo    # nejdřív demo
+just docker-deploy prod    # pak produkce (zeptá se na potvrzení)
+```
+
+Recept sestaví image, přenese ho na server (`MEDIATER_DOCKER_HOST`, výchozí
+172.24.0.46), spustí `docker compose up -d` a počká na healthcheck. Podrobně
+v [README – Nasazení v Dockeru](../README.md#5-nasazení-v-dockeru).
+
+### `.env` instance
+
+Kromě cest a hostů (`LIBRITER_HOST`, `SCENITER_HOST`, `VIDEO_ROOT`, …) musí
+`.env` obsahovat:
+
+- **`SERVER_PORT`** – `8081` (produkce), `8082` (demo); musí sedět s `ports`
+  v compose.
+- **`JWT_SECRET`** – aspoň 32 bajtů (`openssl rand -hex 32`). Image běží se
+  `SERVER_ENV=production`, takže s krátkou nebo vzorovou hodnotou
+  (`change-me-before-production`) kontejner nenastartuje.
+- **`TRUSTED_PROXIES`** – adresa, ze které kontejner vidí spojení od nginxu:
+  vnitřní IP nginx stroje (na něm `ip route get 172.24.0.46`, údaj `src`).
+  Bez ní server bere za IP klienta adresu nginxu a limity přihlášení sdílejí
+  všichni uživatelé – jeden útočník by zablokoval přihlášení všem.
+
+### nginx
+
+Konfigurace je v [deploy/nginx/](../deploy/nginx/):
+
+- `libriter-upstream.conf` → `/etc/nginx/conf.d/` – upstream na
+  `172.24.0.46:8081`, formát logu bez query stringu (`mediater_noquery`)
+  a zóna limitu pro `/api/v1/auth/`; vše sdílí oba virtuální servery.
+- `audiobooks.helpdesk24.works.conf`, `video.helpdesk24.works.conf` →
+  `/etc/nginx/sites-available/` (symlink do `sites-enabled/`).
+
+```bash
+sudo cp deploy/nginx/libriter-upstream.conf /etc/nginx/conf.d/
+sudo cp deploy/nginx/audiobooks.helpdesk24.works.conf deploy/nginx/video.helpdesk24.works.conf /etc/nginx/sites-available/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Co konfigurace dělá:
+
+- **Logy bez tokenů.** Přehrávání nese token v adrese (`?t=`); formát
+  `mediater_noquery` zapisuje jen cestu (`$uri`), takže token v logu nezůstane
+  na žádné cestě ani doméně – i když přes doménu Sceniteru přijde požadavek
+  na audio Libriteru.
+- **Limit `/api/v1/auth/`** 10 požadavků za minutu na IP (burst 20), mimo
+  `stream-token`, `config` a `device/token`, které klienti volají často.
+  Backend má navíc vlastní limity na IP a přihlašovací jméno.
+- **Hlavičky k backendu:** `X-Real-IP`, `X-Forwarded-*`; `True-Client-IP` se
+  maže, aby ji klient nepodvrhl.
+- **HSTS** posílá nginx (`max-age` 2 roky, `includeSubDomains`), ostatní
+  bezpečnostní hlavičky (CSP, `X-Frame-Options`, …) backend. `add_header`
+  uvnitř `location` ruší hlavičky ze `server` bloku – žádná location ho
+  proto nemá.
+
+Soubory jsou záměrně jen HTTP; blok `:443` a přesměrování doplní
+`sudo certbot --nginx -d <doména>`. Certbot zapisuje do souboru
+v `sites-available/` – při kopírování nové verze z repozitáře se jeho blok
+`:443` přepíše, proto po kopírování spusťte certbot pro dotčené domény znovu
+(nebo blok přeneste ručně). Když `nginx -t` hlásí neznámý upstream, chybí
+`libriter-upstream.conf` v `conf.d/`; když duplicitu, je upstream definovaný
+ještě v jiném souboru.
+
+### Ověření po nasazení
+
+```bash
+curl -sI https://video.helpdesk24.works/ | grep -iE 'strict-transport|content-security|x-frame'
+ssh 172.24.0.46 'ss -ltnp | grep -E ":808[12]"'      # jen 172.24.0.46:8081 / :8082
+ssh 172.24.0.46 'ls -l /opt/libriter/data/libriter.db*'  # -rw------- (0600)
+sudo grep -c '?t=' /var/log/nginx/video.access.log /var/log/nginx/audiobooks.access.log  # na nginx stroji – po nasazení nepřibývá
+```
+
+Dál přihlášení stejným účtem do Libriteru i Sceniteru, přehrání filmu
+a kapitoly, mobilní aplikace (přihlášení, přehrání, synchronizace pozice)
+a spárování televize.
+
+### Dopady aktualizace se zabezpečením
+
+- **Registrace** se na instancích, kde ji admin nikdy neuložil, po
+  aktualizaci zavře (nově výchozí stav). Na demu ji případně zapněte
+  v **Administrace → Registrace**.
+- **`JWT_SECRET`** zkontrolujte v `/opt/libriter/.env` i
+  `/opt/libriter-demo/.env` ještě před nasazením (viz výš).
+- **`TRUSTED_PROXIES`** nastavte a po nasazení ověřte, že se limit přihlášení
+  počítá na klienta (několik chybných přihlášení z jedné IP nesmí zablokovat
+  jinou).
+- **Staré tokeny** (vydané před verzí s relacemi zařízení) zůstávají platné
+  a nejdou odvolat jednotlivě; zneplatní je změna hesla nebo **Odhlásit
+  všude** v profilu. U admin účtů to po nasazení doporučujeme udělat.
+- **Práva souborů:** databáze se při startu sama nastaví na `0600`; importy
+  nově vznikají `0644`, takže ostatní klienti NAS do nahraných knih nemohou
+  zapisovat (číst ano).
+- **Mobilní a TV aplikace** fungují dál bez aktualizace; nové sestavení je
+  potřeba jen kvůli novému zacházení s adresou serveru (viz výš).
 
 ## Omezení
 
@@ -337,5 +456,6 @@ Pořadí kroků při prvním nasazení verze 2.0:
   nemají přesně 6 s; prohlížeče to zvládají.
 - Přihlášení je na každé doméně zvlášť (vlastní úložiště prohlížeče), účet je
   ale stejný.
-- Uživatele a role spravuje administrace Libriteru.
+- Uživatele, registraci a audit spravuje administrace kteréhokoli z obou webů
+  (účty jsou společné).
 - TV aplikace (Apple TV, Google TV) jsou v `sceniter-tv/` (viz výše).

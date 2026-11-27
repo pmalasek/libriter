@@ -32,8 +32,10 @@ mediater/               # monorepo (pracovní zastřešující název)
 ├── libriter-mobile/    # mobilní aplikace Libriteru (Expo; docs/mobile-app-plan.md)
 ├── sceniter-shared/    # TS Sceniteru (typy, formátování, texty)
 ├── sceniter-frontend/  # web Sceniteru (React + Vite + Tailwind + hls.js)
+├── Dockerfile          # image mediater (oba weby, backend, pluginy, ffmpeg)
+├── docker/             # compose pro demo a produkci, entrypoint kontejneru
 ├── packaging/deb/      # balíček .deb (jméno zůstává `libriter`)
-├── deploy/nginx/       # reverse proxy pro obě domény
+├── deploy/nginx/       # reverse proxy pro obě domény (běží na jiném stroji)
 ├── _scripts/           # pomocné skripty
 ├── bin/                # sestavená binárka bin/mediater (just build)
 └── server/data/        # vývojová data (DB_PATH, AUDIO_ROOT, …)
@@ -163,9 +165,14 @@ SERVER_ENV=development          # development | production
 # Databáze (SQLite – soubor i schéma se vytvoří automaticky při startu)
 DB_PATH=./data/libriter.db
 
-# JWT – NUTNÉ ZMĚNIT před nasazením do produkce!
-JWT_SECRET=change-me-before-production
+# JWT – povinné. Vygenerujte: openssl rand -hex 32
+# (bez hodnoty server nenastartuje; pravidla viz Bezpečnost níže)
+JWT_SECRET=
 JWT_EXPIRY_HOURS=72
+
+# Reverzní proxy, kterým server věří X-Real-IP / X-Forwarded-For
+# (IP nebo CIDR, čárkou oddělené; výchozí jen localhost)
+TRUSTED_PROXIES=127.0.0.0/8,::1
 
 # Soubory
 AUDIO_ROOT=./data/audio         # kořenový adresář audio souborů
@@ -173,6 +180,7 @@ COVER_ROOT=./data/covers        # kořenový adresář obálek knih
 AUTHOR_IMAGE_ROOT=./data/author-images   # fotky autorů (výchozí = vedle COVER_ROOT)
 IMPORT_ROOT=./data/import       # staging importu knih (mimo AUDIO_ROOT)
 MAX_UPLOAD_MB=3072              # limit jednoho importu knih (součet souborů)
+IMPORT_MAX_SESSIONS=5           # kolik importů smí být rozpracovaných najednou
 
 # Výchozí jazyk nových knih, když ho neuvádějí tagy ani ten, kdo knihu zakládá
 DEFAULT_BOOK_LANGUAGE=cs
@@ -188,9 +196,6 @@ GOOGLE_BOOKS_API_KEY=           # nepovinné, viz Metadata knih
 > Jakmile je admin uloží v administraci, platí nastavení z databáze a změny
 > v `.env` se už neprojeví (viz Administrace).
 
-> **Bezpečnost:** `JWT_SECRET` musí být v produkci silný náhodný řetězec.
-> Vygenerujte ho např. pomocí: `openssl rand -hex 32`
-
 Webové rozhraní ani CLI žádné další proměnné nepotřebují – `.env` zůstává stejný.
 Vývojový server Vite přebírá adresu backendu z `BACKEND_URL` (výchozí
 `http://localhost:8080`), což je proměnná prostředí, ne součást `.env`.
@@ -204,6 +209,75 @@ před hodnotami z `.env`.
 vztahují k adresáři toho `.env` – ne k aktuálnímu adresáři. `bin/mediater` tak
 míří na stejná data, ať ho spustíte odkudkoli. Cesta předaná proměnnou prostředí
 se ponechává tak, jak je.
+
+### Bezpečnost
+
+**`JWT_SECRET`** podepisuje všechny tokeny. Vygenerujte ho příkazem
+`openssl rand -hex 32` (64 znaků). Server:
+
+- nenastartuje bez hodnoty a se vzorovou hodnotou `change-me-before-production`
+  z dřívějších verzí `env.example` – v žádném prostředí;
+- se `SERVER_ENV=production` (výchozí v Docker image i v balíčku .deb) odmítne
+  tajemství kratší než 32 bajtů, v ostatních prostředích jen varuje v logu.
+
+Změna `JWT_SECRET` odhlásí všechny – web, mobily i televize. CLI tajemství
+nepotřebuje ani nekontroluje (viz Příkazová řádka).
+
+**Registrace** je na nové instanci **vypnutá**. Zapíná ji admin
+v **Administrace → Registrace** (tamtéž role nových účtů). Platí to i pro
+instance po aktualizaci, na kterých admin nastavení registrace nikdy neuložil
+– ty se zavřou; kdo ji chce mít otevřenou, zapne ji v administraci.
+
+**Skutečná IP klienta a `TRUSTED_PROXIES`.** Server bere IP klienta
+z `X-Real-IP` / `X-Forwarded-For` jen tehdy, když spojení přichází z adresy
+v `TRUSTED_PROXIES` (IP nebo CIDR oddělené čárkou, výchozí
+`127.0.0.0/8,::1`); `True-Client-IP` ignoruje vždy. Běží-li nginx na jiném
+stroji (nebo před kontejnerem), musí tu být adresa, ze které server spojení
+od nginxu vidí – jinak jsou všichni klienti pro limity níž jedna IP a jeden
+útočník zablokuje přihlášení všem.
+
+**Limity požadavků** (odpověď `429` s kódem `auth.rate_limited`
+a hlavičkou `Retry-After`):
+
+| Cesta | Limit |
+|---|---|
+| `POST /auth/login` | 10 za minutu na IP a 10 neúspěšných pokusů za 10 minut na přihlašovací jméno |
+| `POST /auth/register` | 5 za hodinu na IP |
+| `POST /auth/device/start` (párování TV) | 10 za 10 minut na IP |
+| `POST /auth/device/token` (TV čeká na schválení) | 60 za minutu na IP |
+
+Nginx v [deploy/nginx/](deploy/nginx/) k tomu přidává hrubý limit na IP pro
+`/api/v1/auth/`.
+
+**Tokeny zařízení.** Mobilní aplikace a televize dostávají vlastní dlouhodobý
+token, který smí jen to, co čtenář (role **reader**), i když účet patří
+editorovi nebo adminovi. Správa účtu (jméno, e-mail, heslo, seznam zařízení)
+a schválení párování televize jdou jen z webu. V **Profilu → Zařízení** vidí
+uživatel přihlášené mobily a televize, jednotlivě je odhlásí, nebo dá
+**Odhlásit všude**. Změna hesla (i reset adminem) odhlásí všechny ostatní
+relace; web, ze kterého se heslo měnilo, zůstane přihlášený.
+
+**Hlavičky.** Bezpečnostní hlavičky (`Content-Security-Policy`,
+`X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`) posílá server
+sám. `Strict-Transport-Security` patří k TLS, a proto ji nastavuje nginx;
+server ji přidá jen tehdy, když požadavek přišel od důvěryhodné proxy
+s `X-Forwarded-Proto: https` (konfigurace v `deploy/nginx/` serverovou
+hlavičku skryje a posílá vlastní, aby nebyla dvakrát).
+
+**Práva souborů.** Databázi (`libriter.db`, `-wal`, `-shm`) server vždy
+nastaví na `0600` a chybějící adresář pro ni založí jako `0700`. Nahrané
+a rozbalené importy vznikají jako `0644` – nezávisle na umasku procesu.
+
+**Import knih** (administrace) má dva stropy. Jeden import smí nahrát nejvýš
+`MAX_UPLOAD_MB` (součet nahraných souborů; obsah rozbalených zipů má vlastní
+limit stejné velikosti). Místo se rezervuje před zápisem, takže limit
+nepřekročí ani souběžně nahrávané soubory, a analýza nezačne, dokud se
+nějaký soubor ještě zapisuje (`409` `import.upload_in_progress`).
+Rozpracovaných importů (nahrávání, analýza, náhled, probíhající import) smí
+být nejvýš `IMPORT_MAX_SESSIONS` (výchozí 5) – další vrátí `429`
+`import.too_many_sessions`, dokud se některý nedokončí nebo nesmaže. Staging
+(`IMPORT_ROOT`) tak v nejhorším potřebuje zhruba
+`2 × IMPORT_MAX_SESSIONS × MAX_UPLOAD_MB` místa.
 
 ---
 
@@ -316,18 +390,74 @@ konfiguraci i uživatele, data nechá. Příkazy CLI na serveru:
 sudo -u libriter LIBRITER_ENV_FILE=/etc/libriter/libriter.env libriter user list
 ```
 
+### 5. Nasazení v Dockeru
+
+Produkce i demo na helpdesk24.works běží v Dockeru na serveru 172.24.0.46;
+nginx s TLS je na jiném stroji (78.156.131.251) a proxuje na tento server
+(konfigurace v [deploy/nginx/](deploy/nginx/), postup v
+[docs/sceniter.md](docs/sceniter.md#nasazení-na-helpdesk24works)).
+
+```bash
+just docker-build           # image mediater:<verze> + mediater:latest
+just docker-deploy demo     # sestaví, nahraje a restartuje demo
+just docker-deploy prod     # totéž pro produkci (zeptá se na potvrzení)
+```
+
+- **Image** ([Dockerfile](Dockerfile)) obsahuje binárku `/app/mediater`
+  s vestavěnými weby, pluginy metadat v `/app/plugins` a ffmpeg. Běží pod
+  uid:gid `1026:100` (stejně jako dřívější systémový uživatel), pracovní
+  adresář je `/app`, takže relativní cesty z `.env` (`./data/…`) míří do
+  připojeného `/app/data`. Verzi bere z `MEDIATER_VERSION`, jinak
+  z `git describe`.
+- **`just docker-deploy`** image sestaví, na server ho přenese přes
+  `docker save | ssh docker load` (jen když tam ještě není), spustí
+  `docker compose up -d` v adresáři instance, počká na healthcheck a smaže
+  staré image (kromě běžících a `MEDIATER_KEEP_IMAGES` dalších, výchozí 2).
+  Cílový server určuje `MEDIATER_DOCKER_HOST` (výchozí `172.24.0.46`), potřeba
+  je SSH a `sudo docker` na něm.
+- **Compose a `.env` se na server nekopírují.** Leží tam ručně spravované
+  v `/opt/libriter` (produkce) a `/opt/libriter-demo` (demo), vedle adresáře
+  `data/`. Vzory jsou [docker/compose.prod.yaml](docker/compose.prod.yaml)
+  a [docker/compose.demo.yaml](docker/compose.demo.yaml); po jejich změně
+  v repozitáři je potřeba soubor na serveru upravit ručně (stejně tak
+  nginx). V `.env` nepište komentář za hodnotu (`KEY=hodnota # text`).
+- **Porty**: produkce poslouchá na `8081`, demo na `8082` (`SERVER_PORT`
+  v `.env` instance) a compose je publikuje **jen na vnitřní adrese**
+  `172.24.0.46:8081` / `172.24.0.46:8082`, kam se připojuje nginx. Na
+  `127.0.0.1` by se nginx z jiného stroje nedostal, bez adresy by backend
+  visel na všech rozhraních mimo nginx. Ověření: `ss -ltnp | grep 808`.
+- **`TRUSTED_PROXIES`** v `.env` instance nastavte na adresu, ze které
+  kontejner vidí nginx (vnitřní IP nginx stroje – na něm ji ukáže
+  `ip route get 172.24.0.46`, údaj `src`). Bez ní sdílejí všichni klienti
+  jeden limit přihlášení.
+- **`UMASK`**: produkce ho nastavuje na `0000` (dříve `UMask=0000` v systemd
+  unitu), entrypoint ho uplatní před startem. Umask jen ubírá práva, která
+  aplikace žádá: složky vznikají `755`, soubory (importy, obálky) `644`
+  a databáze vždy `600`. Ostatní klienti NAS tedy knihy čtou, ale nemohou
+  do nich zapisovat.
+- Kontejner běží s `read_only: true`, bez capabilities a s
+  `no-new-privileges`; zapisuje jen do `data/`, `/tmp` a volume s převody.
+  Knihovny na NAS připojuje produkce jako NFS volume – když NAS není
+  dostupný, kontejner nenastartuje místo toho, aby viděl prázdnou knihovnu.
+
+Před nasazením verze, která zpřísnila `JWT_SECRET` (viz Bezpečnost), zkontrolujte
+`JWT_SECRET` v obou `.env` – se vzorovou nebo krátkou hodnotou kontejner
+nenastartuje a `docker-deploy` skončí na healthchecku.
+
 ### Přehled cílů (justfile)
 
 | Cíl | Popis |
 |-----|-------|
-| `just build` | Oba weby i backend → `bin/mediater` |
+| `just build` | Oba weby, backend → `bin/mediater` a pluginy metadat → `bin/plugins` |
 | `just frontend` | `npm ci` v kořeni + build obou webů (výstup do `server/internal/{libriter,sceniter}/web/dist`) |
 | `just backend` | `go build` s aktuálně sestavenými weby |
+| `just plugins` | Pluginy metadat (`server/cmd/plugins/*`) → `bin/plugins/mediater-meta-<jméno>` |
 | `just dev-backend` | `go run ./cmd/server` |
 | `just dev-frontend` | web Libriteru: `npm run dev` (5173) |
 | `just dev-sceniter` | web Sceniteru: `npm run dev` (5174) |
 | `just vet` | `go vet ./...` |
-| `just typecheck` | `tsc` ve všech workspaces (sdílené balíčky, weby, mobil) |
+| `just vulncheck` | `govulncheck ./...` – známé zranitelnosti v závislostech backendu |
+| `just typecheck` | `tsc` ve všech workspaces (sdílené balíčky, weby, mobil) a v TV aplikaci |
 | `just i18n-check` | Úplnost překladů jádra, Libriteru a Sceniteru |
 | `just mobile-start` | Metro bundler mobilní aplikace (dev build) |
 | `just mobile-ios` | Sestaví a spustí aplikaci na připojeném iPhonu |
@@ -339,9 +469,20 @@ sudo -u libriter LIBRITER_ENV_FILE=/etc/libriter/libriter.env libriter user list
 | `just mobile-testflight` | Sestaví iOS release a nahraje ho do App Store Connect (TestFlight) |
 | `just mobile-keystore` | Jednorázově vytvoří podepisovací klíč pro Android release |
 | `just mobile-keystore-import <soubor>` | Naimportuje existující klíč (další stroj, záloha) |
+| `just tv-start` | Metro bundler TV aplikace Sceniteru (pro nainstalovaný debug build) |
+| `just tv-android` | Sestaví a spustí TV aplikaci na Android TV / Google TV (`adb connect <ip>`) nebo v emulátoru |
+| `just tv-ios` | Totéž v simulátoru Apple TV (jen macOS + Xcode s tvOS SDK) |
+| `just tv-apk` | Release APK k ruční instalaci na Google TV → `sceniter-tv/dist/` |
+| `just tv-aab` | Release AAB pro Google Play (Android TV) → `sceniter-tv/dist/` |
+| `just tv-ipa` | Release IPA pro Apple TV → `sceniter-tv/dist/` |
+| `just tv-release` | Zvýší verzi TV aplikace a sestaví AAB i IPA |
+| `just tv-testflight` | Sestaví release pro Apple TV a nahraje ho do TestFlight |
+| `just tv-brand-assets` | Ikony, bannery a Top Shelf z `sceniter-tv/assets/brand/` (po změně loga) |
 | `just setup` | Nainstaluje vývojové nástroje (viz Požadavky) |
 | `just doctor` | Zkontroluje, co z nástrojů je a co chybí |
-| `just deploy` | Nový release: verze, `.deb` a GitHub release (viz níže) |
+| `just deploy` | Nový release: verze, `.deb` a GitHub release (viz výš) |
+| `just docker-build` | Docker image `mediater:<verze>` + `mediater:latest` |
+| `just docker-deploy demo\|prod` | Sestaví image, nahraje ho na server a restartuje instanci (viz Nasazení v Dockeru) |
 | `just clean` | Smaže `bin/` a sestavené weby |
 
 Backend jde sestavit i bez frontendu (`just backend` na čerstvém klonu) – server
@@ -353,7 +494,8 @@ pak na `/` vrátí stránku s návodem a HTTP 503, ale API funguje normálně.
 > souboru selže.
 
 Při prvním startu backend automaticky:
-- vytvoří soubor databáze na cestě `DB_PATH` (včetně adresáře)
+- vytvoří soubor databáze na cestě `DB_PATH` s právy `0600` (chybějící adresář
+  s `0700`); existující databázi práva při každém startu zúží na `0600`
 - aplikuje migrace z `internal/core/db/migrations/` a produktů – všechny tabulky
   (authors, series, books, book_authors, chapters, tags, users, roles,
   permissions, ratings, ...)
@@ -493,6 +635,11 @@ Po přihlášení na jiném zařízení má profil přednost před místním nas
 Vzhled lze změnit pod ikonou palety i v sekci **Profil → Vzhled**.
 Nepřihlášeným uživatelům se volba ukládá pouze v prohlížeči.
 
+Změna e-mailu nebo hesla v **Profilu** chce i současné heslo. Sekce
+**Profil → Zařízení** ukazuje přihlášené mobily a televize; každé jde
+odhlásit zvlášť a tlačítko **Odhlásit všude** zneplatní všechny tokeny účtu
+(tento prohlížeč zůstane přihlášený). Totéž udělá změna hesla.
+
 ### Administrace (role admin)
 
 Položka **Administrace** v navigaci vede na `/admin` a vidí ji jen
@@ -503,9 +650,9 @@ administrátor. Má sedm záložek:
 | **Přehled** | Počty knih, autorů, sérií, uživatelů a kapitol, celková délka, kolik knih nemá obálku či popis, kolik kapitol má placeholder délku 1 s a kolik knih vypadá na duplicitu. Vedle toho verze serveru, prostředí, doba běhu, cesty k datům, dostupnost `ffprobe` a volné místo na disku s audiem. |
 | **Uživatelé** | Seznam účtů, změna role přímo v řádku, reset hesla, smazání a založení nového účtu s libovolnou rolí. |
 | **Poslechy** | U každého účtu rozposlouchané a doposlechnuté poslechy, které knihy už slyšel a deník poslechu – kolik času u které knihy za den odposlouchal. Deník i stav knih přežijí smazání poslechu. |
-| **Zdroje metadat** | Zapnutí a vypnutí jednotlivých zdrojů, změna pořadí šipkami a klíč pro Google Books. Uložení platí okamžitě, server se nerestartuje. |
+| **Zdroje metadat** | Zapnutí a vypnutí jednotlivých zdrojů, změna pořadí šipkami a klíč pro Google Books (po uložení se už nezobrazuje, jde jen nahradit nebo smazat). Uložení platí okamžitě, server se nerestartuje. |
 | **Knihovna** | Stav scanneru (běží / poslední průchod / počet souborů / chyby) včetně upozornění na právě založené duplicity, ruční spuštění průchodu, kontrola kapitol a chybějících souborů, hlášení možných duplikátů a sloučení rozdělených knih. Všechno s náhledem před provedením. |
-| **Registrace** | Přepínač veřejné registrace a role, kterou nový účet dostane. |
+| **Registrace** | Přepínač veřejné registrace (na nové instanci vypnutá) a role, kterou nový účet dostane. |
 | **Audit** | Výpis administrativních zásahů – kdo, kdy, co a s jakými detaily. |
 
 Vlastní účet si admin nemůže smazat ani si sám snížit roli a poslední
@@ -578,7 +725,8 @@ mu do databáze zapisoval pod rukama.
 
 CLI čte stejný `.env` jako server a samo aplikuje chybějící migrace, takže
 funguje i na prázdné databázi. Server ani scanner přitom nespouští a **nevyžaduje
-`JWT_SECRET`** – žádné tokeny nepodepisuje.
+`JWT_SECRET`** – žádné tokeny nepodepisuje, a proto ani nekontroluje jeho sílu.
+Heslo zadané v CLI platí stejná pravidla jako na webu (8 až 72 bajtů).
 
 Před dotazem na heslo vypíše, který `.env` a kterou databázi použil, takže je
 hned vidět, kdyby mířil jinam, než chcete.
@@ -725,10 +873,17 @@ Základní URL: `http://localhost:8080/api/v1`
 | `POST` | `/auth/register` | Registrace nového uživatele | veřejné |
 | `POST` | `/auth/login` | Přihlášení `{login, password}` – `login` se porovná s loginem i e-mailem; vrátí JWT token | veřejné |
 | `GET` | `/auth/stream-token` | Krátkodobý token pro adresu audia (24 h) | přihlášený |
-| `POST` | `/auth/mobile-token` | Dlouhodobý token pro mobilní aplikaci | přihlášený |
+| `POST` | `/auth/mobile-token` | Dlouhodobý token pro mobilní aplikaci | webová relace |
 
-Při vypnuté registraci vrací `POST /auth/register` `403`; přepínač je
-v administraci (viz níže).
+Při vypnuté registraci (výchozí stav nové instance) vrací `POST /auth/register`
+`403`; přepínač je v administraci (viz níže). Přihlášení, registrace
+a párování televize mají limity na IP a přihlašovací jméno – překročení vrací
+`429` `auth.rate_limited` s `Retry-After` (viz
+[Bezpečnost](#bezpečnost)). Heslo delší než 72 bajtů server odmítne
+(`400` `auth.password_too_long`) – bcrypt by zbytek tiše zahodil.
+
+„Webová relace“ znamená přihlašovací token z `/auth/login`. Token mobilu nebo
+televize na takové cestě dostane `403` `auth.web_session_required`.
 
 Všechny ostatní endpointy vyžadují hlavičku:
 ```
@@ -750,16 +905,19 @@ proto si hned po přihlášení vymění `POST /auth/mobile-token` za token s de
 platností (`JWT_MOBILE_EXPIRY_DAYS`, výchozí 365 dní):
 
 ```jsonc
-// POST /auth/mobile-token   (tělo je nepovinné, device_name jde jen do logu)
-{ "device_name": "Pixel 8" }
+// POST /auth/mobile-token   (název zařízení v hlavičce X-Device-Name)
 → { "token": "<jwt>", "expires_at": "2027-09-17T18:22:03Z" }
 ```
 
-Mobilní token otevírá API stejně jako přihlašovací, ale **ne audio** – tam dál
-platí jen stream token v adrese. Další mobilní token jím vyrazit nejde (`403`),
-aby se uniklý token nemohl prodlužovat donekonečna; obnovuje se skutečným
-přihlášením. Smazání účtu ho zneplatní okamžitě, protože se uživatel při každém
-požadavku dohledává v databázi.
+Každý mobilní (a televizní) token je **relace zařízení**: uživatel ji vidí
+v profilu pod názvem z hlavičky `X-Device-Name` (televize pod názvem
+z párování) a může ji odvolat. Mobilní token otevírá API **jen s právy
+čtenáře** (i u účtu editora či admina) a **ne audio** – tam dál platí jen
+stream token v adrese. Další mobilní token jím vyrazit nejde (`403`), aby se
+uniklý token nemohl prodlužovat donekonečna; obnovuje se skutečným
+přihlášením. Smazání účtu, odvolání zařízení, „Odhlásit všude“ i změna hesla
+ho zneplatní okamžitě, protože server stav účtu a relace ověřuje při každém
+požadavku (s krátkou cache).
 
 ### Uživatelé
 
@@ -767,14 +925,23 @@ požadavku dohledává v databázi.
 |--------|----------|-------|---------|
 | `GET` | `/users` | Seznam uživatelů | admin |
 | `GET` | `/users/{id}` | Detail uživatele | admin / vlastní profil |
-| `PUT` | `/users/{id}` | Aktualizace jména, emailu a loginu (prázdný login ho odebere) | admin / vlastní profil |
-| `PUT` | `/users/{id}/password` | Změna hesla | admin / vlastní profil |
+| `PUT` | `/users/{id}` | Aktualizace jména, emailu a loginu (prázdný login ho odebere) | admin / vlastní profil, webová relace |
+| `PUT` | `/users/{id}/password` | Změna hesla | admin / vlastní profil, webová relace |
 | `PUT` | `/users/{id}/appearance` | Uložení vzhledu (`color_scheme`, `theme_mode`) | vlastní profil |
 | `PUT` | `/users/{id}/role` | Nastavení role | admin |
 | `DELETE` | `/users/{id}` | Smazání uživatele | admin |
+| `GET` | `/users/{id}/devices` | Přihlášené mobily a televize (název, kdy přihlášeno, naposledy viděno) | admin / vlastní profil, webová relace |
+| `DELETE` | `/users/{id}/devices/{sid}` | Odhlášení jednoho zařízení | admin / vlastní profil, webová relace |
+| `POST` | `/users/{id}/logout-all` | Odhlásit všude – zneplatní všechny tokeny účtu, volajícímu vrátí nový | admin / vlastní profil, webová relace |
 
 Vlastní účet vrátí na `DELETE` `400` a poslední administrátor `409` (platí
 i pro snížení jeho role).
+
+Kdo mění **vlastní** údaje nebo heslo (`PUT /users/{id}`,
+`PUT /users/{id}/password`), posílá i `current_password`; admin u cizího
+účtu ne. Změna hesla i reset adminem odhlásí všechny ostatní relace
+účtu (web, mobily, televize) a zapíše se do auditu. Při změně vlastního hesla
+vrátí odpověď nový token, se kterým web zůstane přihlášený.
 
 ### Administrace
 
@@ -813,8 +980,13 @@ pořadí pro knihy v daném jazyce (kód ISO 639-1 z číselníku jazyků):
   "languages": [ { "language": "en",
                    "providers": [ { "name": "audible_com", "enabled": true },
                                   { "name": "goodreads",   "enabled": true } ] } ],
-  "google_books_api_key": "" }
+  "google_books_api_key": null }
 ```
+
+Klíč Google Books server zpátky nevydává – `GET` vrací jen
+`google_books_api_key_set` (`true`/`false`). V `PUT` chybějící nebo `null`
+klíč znamená „beze změny“, prázdný řetězec klíč smaže a jiná hodnota ho
+nahradí.
 
 Průchod knihovnou i oprava kapitol běží na pozadí; druhý souběžný požadavek
 skončí `409`. Plán opravy si server vždy sestaví sám, klient mu seznam knih ke
@@ -1230,9 +1402,11 @@ Neznámé cesty pod `/api/v1/` vracejí JSON `{"error":"endpoint nenalezen"}`.
 | **admin** | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 Roli nově registrovaného uživatele i to, jestli je registrace vůbec otevřená,
-nastavuje admin (výchozí stav: registrace zapnutá, role **reader**). Role
+nastavuje admin (výchozí stav: registrace vypnutá, role **reader**). Role
 existujícího účtu mění pouze admin – v administraci nebo přes
 `PUT /users/{id}/role`.
 
 Role se při ověření každého požadavku čte z databáze, ne z tokenu (s desetivteřinovou
 cache), takže snížení role nebo smazání účtu platí hned i pro už vydané tokeny.
+Tokeny mobilní aplikace a televize mají roli shora omezenou na **reader** –
+editorské a administrátorské akce jdou jen z webu.
