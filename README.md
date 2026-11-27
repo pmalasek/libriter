@@ -259,10 +259,22 @@ relace; web, ze kterého se heslo měnilo, zůstane přihlášený.
 
 **Hlavičky.** Bezpečnostní hlavičky (`Content-Security-Policy`,
 `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`) posílá server
-sám. `Strict-Transport-Security` patří k TLS, a proto ji nastavuje nginx;
-server ji přidá jen tehdy, když požadavek přišel od důvěryhodné proxy
-s `X-Forwarded-Proto: https` (konfigurace v `deploy/nginx/` serverovou
-hlavičku skryje a posílá vlastní, aby nebyla dvakrát).
+sám. `Strict-Transport-Security` patří k TLS, a proto ji posílá jen nginx
+(konfigurace v `deploy/nginx/`); server ji nenastavuje.
+
+**Soubory knihovny.** Symbolické odkazy uvnitř `AUDIO_ROOT` / `VIDEO_ROOT`
+fungují dál, ale odkaz, který vede **mimo** kořen knihovny, server ignoruje
+(sken, přehrávání, obálky, titulky, import). Speciální soubory (pojmenované
+roury, zařízení) přeskakuje. Typ obrázku (obálky, fotky autorů, plakáty)
+se vždy určuje z obsahu souboru; co není JPEG, PNG, WebP, GIF ani BMP, se
+neuloží ani nevydá. ffmpeg/ffprobe čtou jen lokální soubory
+(`-protocol_whitelist file`).
+
+**Stahování ze zdrojů metadat.** Server stahuje obrázky a metadata jen
+z veřejných adres na portech 80/443 – spojení na loopback, privátní
+a link-local adresy odmítne i po přesměrování (ochrana proti SSRF)
+a proměnné `HTTP(S)_PROXY` ignoruje. Při chybě zdroje dostane klient obecnou
+hlášku, podrobnosti jsou v logu serveru.
 
 **Práva souborů.** Databázi (`libriter.db`, `-wal`, `-shm`) server vždy
 nastaví na `0600` a chybějící adresář pro ni založí jako `0700`. Nahrané
