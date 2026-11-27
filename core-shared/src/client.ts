@@ -80,6 +80,8 @@ interface RequestOptions {
    * ukládání pozice na odchodu – sendBeacon by neuměl poslat token v hlavičce.
    */
   keepalive?: boolean
+  /** Další hlavičky požadavku (např. X-Device-Name při vydání mobilního tokenu). */
+  headers?: Record<string, string>
 }
 
 /**
@@ -118,7 +120,7 @@ async function parseError(res: Response): Promise<ApiError> {
 export async function apiFetch<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { method = 'GET', json, anonymous = false, signal, keepalive } = options
 
-  const headers = new Headers({ Accept: 'application/json' })
+  const headers = new Headers({ ...options.headers, Accept: 'application/json' })
   const token = anonymous ? null : authToken
   if (token) headers.set('Authorization', `Bearer ${token}`)
   if (json !== undefined) headers.set('Content-Type', 'application/json')

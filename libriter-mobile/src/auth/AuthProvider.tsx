@@ -99,11 +99,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // zahodí – do úložiště se nikdy nedostane.
     setAuthToken(auth.token)
 
+    // Název zařízení uvidí uživatel v profilu na webu u přihlášených
+    // zařízení. Jde v hlavičce (URL-kódovaný – hlavička neunese diakritiku);
+    // v těle zůstává kvůli starším serverům, které ho jen logují.
+    const deviceName = Device.deviceName ?? Device.modelName ?? t('mobile.auth.defaultDeviceName')
     let mobile: MobileToken
     try {
       mobile = await apiFetch<MobileToken>('/auth/mobile-token', {
         method: 'POST',
-        json: { device_name: Device.deviceName ?? Device.modelName ?? t('mobile.auth.defaultDeviceName') },
+        headers: { 'X-Device-Name': encodeURIComponent(deviceName) },
+        json: { device_name: deviceName },
       })
     } catch (error: unknown) {
       // Přihlášení prošlo, ale server tenhle endpoint nezná: běží na starší
