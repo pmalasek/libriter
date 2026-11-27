@@ -31,6 +31,13 @@ func testRouter(t *testing.T) http.Handler {
 // testRouterDeps je testRouter, který vrátí i závislosti (zakládání účtů).
 func testRouterDeps(t *testing.T) (http.Handler, product.Deps) {
 	t.Helper()
+	return testRouterWith(t, nil)
+}
+
+// testRouterWith je testRouterDeps s možností upravit konfiguraci před
+// sestavením routeru (důvěryhodné proxy, vypnuté limity).
+func testRouterWith(t *testing.T, configure func(*config.Config)) (http.Handler, product.Deps) {
+	t.Helper()
 	dir := t.TempDir()
 	cfg := &config.Config{
 		Server:         config.ServerConfig{Env: "test"},
@@ -44,6 +51,9 @@ func testRouterDeps(t *testing.T) (http.Handler, product.Deps) {
 			ImportRoot:      filepath.Join(dir, "import"),
 			MaxUploadMB:     10,
 		},
+	}
+	if configure != nil {
+		configure(cfg)
 	}
 	if err := cfg.Storage.EnsureDirs(); err != nil {
 		t.Fatal(err)

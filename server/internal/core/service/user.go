@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
 
 	"mediater/internal/core/model"
 	"mediater/internal/core/storage"
@@ -109,15 +110,80 @@ func (u *UserService) UpdateLanguage(ctx context.Context, id uuid.UUID, uiLangua
 	return usr, err
 }
 
+// ChangePassword nastaví nové heslo. Zároveň zvýší verzi tokenů a odvolá
+// relace zařízení, takže se uživatel odhlásí všude – heslo se obvykle mění
+// právě proto, že ho mohl znát někdo další. Web si nový token vyžádá přes
+// IssueWebToken.
 func (u *UserService) ChangePassword(ctx context.Context, id uuid.UUID, newPassword string) error {
-	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcryptCost)
+	hash, err := hashPassword(newPassword)
 	if err != nil {
-		return fmt.Errorf("hash password: %w", err)
+		return err
 	}
-	if err = u.store.UpdateUserPassword(ctx, id, string(hash)); errors.Is(err, storage.ErrNotFound) {
+	if err = u.store.UpdateUserPassword(ctx, id, string(hash), time.Now()); errors.Is(err, storage.ErrNotFound) {
 		return ErrNotFound
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	u.invalidate(id)
+	return nil
+}
+
+// CheckPassword ověří současné heslo uživatele (před změnou hesla, e-mailu
+// nebo loginu). Špatné heslo vrátí ErrInvalidCredentials.
+func (u *UserService) CheckPassword(ctx context.Context, id uuid.UUID, password string) error {
+	usr, err := u.store.GetUserByID(ctx, id)
+	if errors.Is(err, storage.ErrNotFound) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if bcrypt.CompareHashAndPassword([]byte(usr.PasswordHash), []byte(password)) != nil {
+		return ErrInvalidCredentials
+	}
+	return nil
+}
+
+// LogoutAll zneplatní všechny tokeny uživatele (web, mobil, televize i
+// streamovací) zvýšením verze tokenů a odvolá jeho relace zařízení.
+func (u *UserService) LogoutAll(ctx context.Context, id uuid.UUID) error {
+	if _, err := u.store.LogoutAll(ctx, id, time.Now()); errors.Is(err, storage.ErrNotFound) {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	u.invalidate(id)
+	return nil
+}
+
+// ListDevices vrátí přihlášená zařízení uživatele (neodvolané relace).
+func (u *UserService) ListDevices(ctx context.Context, id uuid.UUID) ([]model.DeviceSession, error) {
+	return u.store.ListDeviceSessions(ctx, id)
+}
+
+// RevokeDevice odvolá jednu relaci zařízení; ostatní zařízení zůstanou
+// přihlášená. Vrátí odvolanou relaci (pro záznam v auditu).
+func (u *UserService) RevokeDevice(ctx context.Context, userID, sessionID uuid.UUID) (*model.DeviceSession, error) {
+	d, err := u.store.RevokeDeviceSession(ctx, userID, sessionID, time.Now())
+	if errors.Is(err, storage.ErrNotFound) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	u.invalidate(userID)
+	return d, nil
+}
+
+// IssueWebToken vydá uživateli nový přihlašovací token s aktuální verzí
+// tokenů (po změně hesla nebo „Odhlásit všude“). Bez zapojené AuthService
+// (CLI) token vydat nejde.
+func (u *UserService) IssueWebToken(ctx context.Context, id uuid.UUID) (string, error) {
+	if u.auth == nil {
+		return "", errors.New("vydání tokenu: chybí AuthService")
+	}
+	return u.auth.IssueWebToken(ctx, id)
 }
 
 func (u *UserService) Delete(ctx context.Context, id uuid.UUID) error {

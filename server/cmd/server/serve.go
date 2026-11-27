@@ -150,7 +150,9 @@ func runServe() error {
 func newRouter(cfg *config.Config, deps product.Deps, prods []product.Product) http.Handler {
 	r := chi.NewRouter()
 	r.Use(chimw.Recoverer)
-	r.Use(chimw.RealIP)
+	// Skutečná adresa klienta pro limity přihlášení; hlavičkám proxy se věří
+	// jen od adres z TRUSTED_PROXIES.
+	r.Use(middleware.ClientIP(cfg.Server.TrustedProxies))
 	r.Use(middleware.Logger)
 
 	r.Get("/health", corehandler.Health)
@@ -163,11 +165,19 @@ func newRouter(cfg *config.Config, deps product.Deps, prods []product.Product) h
 		// JSON, audio, video a obrázky jdou beze změny (a s Range).
 		r.Use(chimw.Compress(5, "application/json"))
 
+		// Limity se skládají tady, s novými počítadly pro každý router.
+		authH := corehandler.NewAuth(deps.Auth, deps.Registration)
+		limits := corehandler.DefaultRateLimits()
+		if cfg.Server.DisableRateLimits {
+			limits = corehandler.RateLimits{}
+			authH.SetLoginFailureLimit(0, 0)
+		}
 		corehandler.RegisterRoutes(r, deps.Auth, corehandler.Handlers{
-			Auth:    corehandler.NewAuth(deps.Auth, deps.Registration),
+			Auth:    authH,
 			Users:   corehandler.NewUser(deps.Users, deps.Audit),
 			Admin:   corehandler.NewAdmin(deps.Users, deps.Registration, deps.Audit),
 			Plugins: corehandler.NewPlugins(deps.Plugins, deps.PluginSettings, deps.Audit),
+			Limits:  limits,
 		})
 		for _, p := range prods {
 			p.RegisterRoutes(r)

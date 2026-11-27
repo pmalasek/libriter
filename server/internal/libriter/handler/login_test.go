@@ -77,7 +77,7 @@ func TestUpdateUserLogin(t *testing.T) {
 			email = "other@example.com"
 		}
 		rec := env.do(t, http.MethodPut, p, tok, map[string]string{
-			"display_name": "Čtenář", "email": email, "login": login,
+			"display_name": "Čtenář", "email": email, "login": login, "current_password": "tajneheslo",
 		})
 		return rec.Code
 	}

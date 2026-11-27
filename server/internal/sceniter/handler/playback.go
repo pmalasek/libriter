@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"mediater/internal/core/middleware"
 	"mediater/internal/sceniter/model"
 	"mediater/internal/sceniter/storage"
 	"mediater/internal/sceniter/stream"
@@ -67,7 +68,7 @@ func (h *Handler) Playback(w http.ResponseWriter, r *http.Request) {
 		d.Mode = stream.ModeDirect
 	}
 
-	token, expires, err := h.Auth.GenerateStreamToken(userID(r))
+	token, expires, err := h.Auth.GenerateStreamToken(middleware.ClaimsFromCtx(r.Context()))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "common.internal", "token pro přehrávání se nepodařilo vydat")
 		return
