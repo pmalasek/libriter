@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -50,6 +51,44 @@ func (c *Config) EnvPath(key, def string) string { return c.env.path(key, def) }
 type ServerConfig struct {
 	Port int
 	Env  string
+	// TrustedProxies jsou adresy reverzních proxy (TRUSTED_PROXIES), jejichž
+	// hlavičkám X-Real-IP a X-Forwarded-For server věří při zjišťování
+	// adresy klienta. Výchozí je jen localhost.
+	TrustedProxies []netip.Prefix
+	// DisableRateLimits vypne limity přihlášení. Jen pro testy – z prostředí
+	// se nenačítá.
+	DisableRateLimits bool
+}
+
+// DefaultTrustedProxies platí, když TRUSTED_PROXIES není nastavená.
+var DefaultTrustedProxies = []string{"127.0.0.0/8", "::1"}
+
+// ParseTrustedProxies převede seznam adres a rozsahů CIDR na prefixy.
+// Samotná adresa znamená právě ji (/32, /128). Neplatná položka je chyba –
+// překlep by jinak potichu vypnul limity přihlášení pro všechny klienty.
+func ParseTrustedProxies(items []string) ([]netip.Prefix, error) {
+	out := make([]netip.Prefix, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if strings.Contains(item, "/") {
+			p, err := netip.ParsePrefix(item)
+			if err != nil {
+				return nil, fmt.Errorf("TRUSTED_PROXIES: neplatný rozsah %q", item)
+			}
+			out = append(out, p.Masked())
+			continue
+		}
+		ip, err := netip.ParseAddr(item)
+		if err != nil {
+			return nil, fmt.Errorf("TRUSTED_PROXIES: neplatná adresa %q", item)
+		}
+		ip = ip.Unmap()
+		out = append(out, netip.PrefixFrom(ip, ip.BitLen()))
+	}
+	return out, nil
 }
 
 // DBConfig popisuje SQLite databázi – jediný soubor na disku.
@@ -148,6 +187,11 @@ func Load() (*Config, error) {
 	if err := checkJWTSecret(cfg); err != nil {
 		return nil, err
 	}
+	proxies, err := ParseTrustedProxies(envList("TRUSTED_PROXIES", DefaultTrustedProxies))
+	if err != nil {
+		return nil, err
+	}
+	cfg.Server.TrustedProxies = proxies
 	return cfg, nil
 }
 

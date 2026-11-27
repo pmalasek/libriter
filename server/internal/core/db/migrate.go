@@ -206,7 +206,7 @@ func applyWith(ctx context.Context, conn *sql.Conn, m migration, record string, 
 
 // MigrateModule aplikuje migrace jednoho modulu (produktu). Každý modul má
 // vlastní číselnou řadu od 001 a vlastní záznamy v tabulce module_migrations;
-// základní řada 001–017 v schema_migrations zůstává beze změny.
+// základní řada jádra (migrations/, záznamy v schema_migrations) je oddělená.
 //
 // fsys obsahuje soubory NNN_popis.sql přímo v kořeni. Nil nebo prázdný FS
 // znamená, že modul migrace nemá.

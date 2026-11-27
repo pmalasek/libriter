@@ -15,6 +15,9 @@ export default {
       role_change: 'Rôle modifié',
       delete: 'Compte supprimé',
       password_reset: 'Mot de passe réinitialisé',
+      password_change: 'Mot de passe modifié',
+      device_revoke: 'Appareil déconnecté',
+      logout_all: 'Déconnexion partout',
     },
     settings: {
       metadata_update: 'Sources de métadonnées modifiées',

@@ -22,9 +22,12 @@ import {
   type RegisterRequest,
   type RegistrationSettings,
   type Role,
+  type DeviceSession,
+  type SessionResetResponse,
   type UpdateUserRequest,
   type User,
 } from 'core-shared'
+import { useAuth } from '../auth/AuthContext'
 
 // Hooky účtu společné všem produktům: přihlášení, registrace a profil.
 
@@ -74,10 +77,20 @@ export function useUpdateProfile(userId: string) {
   })
 }
 
+/**
+ * Změna hesla. Server při ní odhlásí všechna přihlášení; u vlastního účtu
+ * vrátí nový token, který se hned uloží, aby web zůstal přihlášený.
+ */
 export function useChangePassword(userId: string) {
+  const queryClient = useQueryClient()
+  const { replaceToken } = useAuth()
   return useMutation({
     mutationFn: (body: ChangePasswordRequest) =>
-      apiFetch<{ status: string }>(`/users/${userId}/password`, { method: 'PUT', json: body }),
+      apiFetch<SessionResetResponse>(`/users/${userId}/password`, { method: 'PUT', json: body }),
+    onSuccess: (res) => {
+      if (res.token) replaceToken(res.token)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.userDevices(userId) })
+    },
   })
 }
 
@@ -239,4 +252,45 @@ export function useSaveRegistrationSettings() {
       apiFetch<RegistrationSettings>('/admin/settings/registration', { method: 'PUT', json: body }),
     [queryKeys.adminRegistration, queryKeys.authConfig],
   )
+}
+
+// ---- přihlášená zařízení a odhlášení všude (profil) ----
+
+/** Přihlášená zařízení uživatele (mobilní aplikace, televize). */
+export function useUserDevices(userId: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.userDevices(userId ?? ''),
+    queryFn: ({ signal }) => apiFetch<DeviceSession[]>(`/users/${userId}/devices`, { signal }),
+    enabled: Boolean(userId),
+  })
+}
+
+/** Odhlásí jedno zařízení; ostatní zůstanou přihlášená. */
+export function useRevokeDevice(userId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      apiFetch<void>(`/users/${userId}/devices/${sessionId}`, { method: 'DELETE' }),
+    onSuccess: (_, sessionId) => {
+      queryClient.setQueryData<DeviceSession[]>(queryKeys.userDevices(userId), (prev) =>
+        prev?.filter((d) => d.id !== sessionId),
+      )
+    },
+  })
+}
+
+/**
+ * Odhlásí účet všude. U vlastního účtu server vrátí nový token, který se
+ * hned uloží – tento prohlížeč zůstane přihlášený.
+ */
+export function useLogoutAll(userId: string) {
+  const queryClient = useQueryClient()
+  const { replaceToken } = useAuth()
+  return useMutation({
+    mutationFn: () => apiFetch<SessionResetResponse>(`/users/${userId}/logout-all`, { method: 'POST' }),
+    onSuccess: (res) => {
+      if (res.token) replaceToken(res.token)
+      queryClient.setQueryData<DeviceSession[]>(queryKeys.userDevices(userId), [])
+    },
+  })
 }

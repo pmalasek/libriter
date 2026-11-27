@@ -158,10 +158,10 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(authSvc))
 		r.Get("/auth/stream-token", authH.StreamToken)
-		r.Post("/auth/mobile-token", authH.MobileToken)
-		r.Put("/users/{id}/password", userH.ChangePassword)
+		r.With(middleware.RequireWebSessionCode("auth.mobile_token_refresh", "")).Post("/auth/mobile-token", authH.MobileToken)
+		r.With(middleware.RequireWebSession).Put("/users/{id}/password", userH.ChangePassword)
 		r.Get("/users/{id}", userH.Get)
-		r.Put("/users/{id}", userH.Update)
+		r.With(middleware.RequireWebSession).Put("/users/{id}", userH.Update)
 		r.Put("/users/{id}/appearance", userH.UpdateAppearance)
 		r.Put("/users/{id}/language", userH.UpdateLanguage)
 		r.Group(func(r chi.Router) {

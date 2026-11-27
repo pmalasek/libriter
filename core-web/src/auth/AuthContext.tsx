@@ -14,6 +14,11 @@ interface AuthContextValue {
   signOut: () => void
   /** Aktualizuje uložený profil po úpravě jména/emailu. */
   updateUser: (user: User) => void
+  /**
+   * Nahradí token po změně hesla nebo „Odhlásit všude“ – server dosavadní
+   * tokeny zneplatnil a vydal nový, aby tento prohlížeč zůstal přihlášený.
+   */
+  replaceToken: (token: string) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -60,6 +65,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })
   }, [])
 
+  const replaceToken = useCallback((token: string) => {
+    // Hned, ne až po renderu: požadavek odeslaný mezitím by se starým tokenem
+    // dostal 401 a odhlásil uživatele.
+    setAuthToken(token)
+    setSession((current) => {
+      if (!current) return current
+      const next: Session = { ...current, token }
+      saveSession(next)
+      return next
+    })
+  }, [])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       user: session?.user ?? null,
@@ -68,8 +85,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signOut,
       updateUser,
+      replaceToken,
     }),
-    [session, activeToken, signIn, signOut, updateUser],
+    [session, activeToken, signIn, signOut, updateUser, replaceToken],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

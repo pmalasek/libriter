@@ -15,6 +15,9 @@ export default {
       role_change: 'Rolle geändert',
       delete: 'Konto gelöscht',
       password_reset: 'Passwort zurückgesetzt',
+      password_change: 'Passwort geändert',
+      device_revoke: 'Gerät abgemeldet',
+      logout_all: 'Überall abgemeldet',
     },
     settings: {
       metadata_update: 'Metadatenquellen geändert',

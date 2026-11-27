@@ -14,4 +14,7 @@ export const coreQueryKeys = {
   adminUsers: ['admin', 'users'] as const,
   adminRegistration: ['admin', 'settings', 'registration'] as const,
   adminAudit: ['admin', 'audit'] as const,
+
+  // --- přihlášená zařízení (profil) ---
+  userDevices: (id: string) => ['users', id, 'devices'] as const,
 }

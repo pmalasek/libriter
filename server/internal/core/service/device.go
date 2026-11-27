@@ -14,7 +14,6 @@ import (
 	"mediater/internal/core/model"
 	"mediater/internal/core/storage"
 
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
 
@@ -114,10 +113,7 @@ func (a *AuthService) StartDeviceAuth(ctx context.Context, deviceName string) (*
 	}
 	deviceCode := base64.RawURLEncoding.EncodeToString(raw)
 
-	name := strings.TrimSpace(deviceName)
-	if len([]rune(name)) > 80 {
-		name = string([]rune(name)[:80])
-	}
+	name := CleanDeviceName(deviceName)
 
 	// Kolize user_code je při 25^8 kombinacích vzácná; pár pokusů stačí.
 	for range 5 {
@@ -212,33 +208,16 @@ func (a *AuthService) PollDeviceToken(ctx context.Context, deviceCode string) (*
 		return nil, "", time.Time{}, fmt.Errorf("get user: %w", err)
 	}
 
-	token, expiresAt, err := a.generateTVToken(u.ID, u.Role)
+	token, expiresAt, err := a.generateTVToken(ctx, u.ID, d.DeviceName)
 	if err != nil {
 		return nil, "", time.Time{}, err
 	}
 	return u, token, expiresAt, nil
 }
 
-// generateTVToken vydá dlouhodobý token televize; platí stejně dlouho jako
-// mobilní token.
-func (a *AuthService) generateTVToken(userID uuid.UUID, role string) (string, time.Time, error) {
-	ttl := a.cfg.MobileExpiry
-	if ttl <= 0 {
-		ttl = defaultMobileTokenTTL
-	}
-	now := time.Now()
-	expiresAt := now.Add(ttl)
-	token, err := a.signToken(Claims{
-		Role:  role,
-		Scope: ScopeTV,
-		RegisteredClaims: jwt.RegisteredClaims{
-			Subject:   userID.String(),
-			IssuedAt:  jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(expiresAt),
-		},
-	})
-	if err != nil {
-		return "", time.Time{}, err
-	}
-	return token, expiresAt, nil
+// generateTVToken vydá dlouhodobý token televize s vlastní relací zařízení;
+// platí stejně dlouho jako mobilní token. Název relace je název, který TV
+// poslala při zahájení párování.
+func (a *AuthService) generateTVToken(ctx context.Context, userID uuid.UUID, deviceName string) (string, time.Time, error) {
+	return a.generateDeviceToken(ctx, userID, ScopeTV, deviceName)
 }

@@ -107,6 +107,9 @@ func runUserAdd(args []string) error {
 	if len(pass) < minPasswordLen {
 		return fmt.Errorf("heslo musí mít alespoň %d znaků", minPasswordLen)
 	}
+	if len(pass) > service.MaxPasswordBytes {
+		return fmt.Errorf("heslo může mít nejvýš %d bajtů", service.MaxPasswordBytes)
+	}
 
 	u, err := userSvc.Create(ctx, *name, *email, *login, pass, *role)
 	if errors.Is(err, service.ErrEmailTaken) {

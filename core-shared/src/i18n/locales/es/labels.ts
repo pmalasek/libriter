@@ -15,6 +15,9 @@ export default {
       role_change: 'Rol cambiado',
       delete: 'Cuenta eliminada',
       password_reset: 'Contraseña restablecida',
+      password_change: 'Contraseña cambiada',
+      device_revoke: 'Sesión de dispositivo cerrada',
+      logout_all: 'Sesión cerrada en todas partes',
     },
     settings: {
       metadata_update: 'Fuentes de metadatos modificadas',

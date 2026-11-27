@@ -4,7 +4,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -21,10 +23,21 @@ type AuthHandler struct {
 	// settings rozhoduje, jestli je veřejná registrace zapnutá a jakou roli
 	// nový účet dostane. Nastavuje se v administraci.
 	settings service.RegistrationSource
+	// failures omezuje neúspěšná přihlášení k jednomu loginu (viz
+	// SetLoginFailureLimit). Nil = bez limitu.
+	failures *loginFailures
 }
 
 func NewAuth(svc *service.AuthService, settings service.RegistrationSource) *AuthHandler {
-	return &AuthHandler{svc: svc, settings: settings}
+	d := DefaultRateLimits()
+	return &AuthHandler{svc: svc, settings: settings,
+		failures: newLoginFailures(d.LoginFailures, d.LoginFailureWindow)}
+}
+
+// SetLoginFailureLimit nastaví nejvyšší počet neúspěšných přihlášení
+// k jednomu loginu za okno; limit 0 omezení vypne (testy).
+func (h *AuthHandler) SetLoginFailureLimit(limit int, window time.Duration) {
+	h.failures = newLoginFailures(limit, window)
 }
 
 // GET /api/v1/auth/config  (veřejné)
@@ -76,6 +89,11 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if len(req.Password) > service.MaxPasswordBytes {
+		writePasswordTooLong(w)
+		return
+	}
+
 	user, token, err := h.svc.Register(r.Context(), req.DisplayName, req.Email, req.Login, req.Password, settings.DefaultRole, req.UILanguage)
 	if errors.Is(err, service.ErrInvalidLanguage) {
 		writeError(w, http.StatusBadRequest, "user.invalid_language", "nepodporovaný jazyk rozhraní")
@@ -105,13 +123,13 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 // neumí poslat hlavičku Authorization, takže token putuje v adrese – a do
 // adresy přihlašovací token nepatří.
 func (h *AuthHandler) StreamToken(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromCtx(r.Context())
-	if !ok {
+	claims := middleware.ClaimsFromCtx(r.Context())
+	if claims == nil {
 		writeError(w, http.StatusUnauthorized, "auth.missing_token", "chybí autorizační token")
 		return
 	}
 
-	token, expiresAt, err := h.svc.GenerateStreamToken(userID)
+	token, expiresAt, err := h.svc.GenerateStreamToken(claims)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "auth.token_failed", "token pro přehrávání se nepodařilo vydat")
 		return
@@ -123,28 +141,28 @@ func (h *AuthHandler) StreamToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// POST /api/v1/auth/mobile-token  (přihlášený uživatel)
+// POST /api/v1/auth/mobile-token  (jen webové přihlášení)
 //
 // Vymění běžné přihlášení za dlouhodobý token mobilní aplikace. Ta se
 // přihlašuje jednou a pak jede i offline – s 72hodinovým přihlašovacím
 // tokenem by po víkendu bez signálu žádala heslo u stažené knihy.
 //
-// Mobilní (ani televizní) token další mobilní token nevyrazí: uniklý token by
-// se sám prodlužoval donekonečna a odhlášení by ho nikdy nedohnalo.
+// Mobilní (ani televizní) token další mobilní token nevyrazí – hlídá to
+// RequireWebSessionCode v routách: uniklý token by se sám prodlužoval
+// donekonečna a odhlášení by ho nikdy nedohnalo.
+//
+// Každý token dostane vlastní relaci zařízení (seznam v profilu, odvolání
+// jednotlivě). Název zařízení posílá mobil v hlavičce X-Device-Name
+// (URL-kódovaný, hlavička neunese diakritiku); starší verze aplikace ho
+// posílaly v těle jako device_name.
 func (h *AuthHandler) MobileToken(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromCtx(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "auth.missing_token", "chybí autorizační token")
 		return
 	}
-	if middleware.ScopeFromCtx(r.Context()) != "" {
-		writeError(w, http.StatusForbidden, "auth.mobile_token_refresh", "mobilní token nelze obnovit mobilním tokenem – přihlaste se znovu")
-		return
-	}
 
 	var req struct {
-		// DeviceName jde jen do logu, ať je v serverovém záznamu poznat,
-		// komu se token vydal. Nikde se neukládá.
 		DeviceName string `json:"device_name"`
 	}
 	// Prázdné tělo je v pořádku – jméno zařízení je nepovinné.
@@ -154,20 +172,34 @@ func (h *AuthHandler) MobileToken(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	deviceName := headerDeviceName(r)
+	if deviceName == "" {
+		deviceName = req.DeviceName
+	}
 
-	token, expiresAt, err := h.svc.GenerateMobileToken(userID, middleware.RoleFromCtx(r.Context()))
+	token, expiresAt, err := h.svc.GenerateMobileToken(r.Context(), userID, deviceName)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "auth.token_failed", "token pro mobilní aplikaci se nepodařilo vydat")
 		return
 	}
 
 	slog.Info("vydán mobilní token", "user_id", userID,
-		"device", strings.TrimSpace(req.DeviceName), "expires_at", expiresAt)
+		"device", service.CleanDeviceName(deviceName), "expires_at", expiresAt)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"token":      token,
 		"expires_at": expiresAt,
 	})
+}
+
+// headerDeviceName přečte název zařízení z hlavičky X-Device-Name. Mobil ho
+// posílá URL-kódovaný; nekódovaná hodnota se vezme, jak je.
+func headerDeviceName(r *http.Request) string {
+	raw := r.Header.Get("X-Device-Name")
+	if decoded, err := url.PathUnescape(raw); err == nil {
+		return decoded
+	}
+	return raw
 }
 
 // POST /api/v1/auth/login
@@ -183,8 +215,17 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, token, err := h.svc.Login(r.Context(), strings.TrimSpace(req.Login), req.Password)
+	login := strings.TrimSpace(req.Login)
+	// Příliš mnoho neúspěchů k tomuto loginu – heslo se už ani nezkouší,
+	// ať útok z mnoha adres nemá kam pokračovat.
+	if wait, blocked := h.failures.blocked(login); blocked {
+		writeRetryAfter(w, r, wait)
+		return
+	}
+
+	user, token, err := h.svc.Login(r.Context(), login, req.Password)
 	if errors.Is(err, service.ErrInvalidCredentials) {
+		h.failures.fail(login)
 		writeError(w, http.StatusUnauthorized, "auth.invalid_credentials", "neplatné přihlašovací údaje")
 		return
 	}
@@ -192,6 +233,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "auth.login_failed", "chyba při přihlášení")
 		return
 	}
+	h.failures.reset(login)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":  user,
@@ -272,7 +314,7 @@ func (h *AuthHandler) DeviceToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GET /api/v1/auth/device/{code}  (přihlášený uživatel)
+// GET /api/v1/auth/device/{code}  (jen webové přihlášení)
 //
 // Stránka schválení podle toho ukáže, které zařízení se přihlašuje.
 func (h *AuthHandler) DeviceInfo(w http.ResponseWriter, r *http.Request) {
@@ -288,7 +330,7 @@ func (h *AuthHandler) DeviceInfo(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, info)
 }
 
-// POST /api/v1/auth/device/approve  (přihlášený uživatel)
+// POST /api/v1/auth/device/approve  (jen webové přihlášení)
 //
 // Schválí párování: televize se přihlásí účtem toho, kdo kód potvrdil.
 func (h *AuthHandler) DeviceApprove(w http.ResponseWriter, r *http.Request) {

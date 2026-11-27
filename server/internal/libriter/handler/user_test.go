@@ -49,7 +49,7 @@ func TestUserAppearancePersistsAcrossLoginAndProfileEdits(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatal(rec.Body.String())
 	}
-	rec = env.do(t, http.MethodPut, path, token, map[string]string{"display_name": "Nové jméno", "email": "updated@example.com"})
+	rec = env.do(t, http.MethodPut, path, token, map[string]string{"display_name": "Nové jméno", "email": "updated@example.com", "current_password": "tajneheslo"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("profile: %d %s", rec.Code, rec.Body.String())
 	}
