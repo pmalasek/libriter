@@ -40,7 +40,8 @@ type ProgressInput struct {
 }
 
 // SaveProgress zapíše pozici, pokud je novější než uložená (recorded_at),
-// a připíše odkoukané sekundy k UTC dni recorded_at. Vrací ErrStale, když
+// a připíše odkoukané sekundy k UTC dni recorded_at – do denního součtu
+// (sc_watch_log) i do historie titulu (sc_watch_history). Vrací ErrStale, když
 // se pozice kvůli novějšímu záznamu nezapsala, a ErrDuplicateEvent u
 // opakované události.
 func (s *Store) SaveProgress(ctx context.Context, userID uuid.UUID, in ProgressInput) error {
@@ -95,6 +96,9 @@ func (s *Store) SaveProgress(ctx context.Context, userID uuid.UUID, in ProgressI
 			userID, in.RecordedAt.UTC().Format("2006-01-02"), secs)
 		if err != nil {
 			return fmt.Errorf("watch log: %w", err)
+		}
+		if err := addWatchHistory(ctx, tx, userID, in.MovieID, in.EpisodeID, secs, in.RecordedAt); err != nil {
+			return err
 		}
 	}
 	if err := tx.Commit(); err != nil {

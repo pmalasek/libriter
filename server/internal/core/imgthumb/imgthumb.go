@@ -13,12 +13,16 @@ import (
 	"image/draw"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"sync"
+
+	"mediater/internal/core/fsroot"
+	"mediater/internal/core/imagestore"
 
 	_ "image/gif" // registrace dekodérů pro image.Decode
 
@@ -132,7 +136,8 @@ func (c *Cache) generate(src, base string, width int) (string, error) {
 	c.sem <- struct{}{}
 	defer func() { <-c.sem }()
 
-	f, err := os.Open(src)
+	// FIFO by obyčejné os.Open zablokovalo; bere se jen běžný soubor.
+	f, _, err := fsroot.OpenFile(src)
 	if err != nil {
 		return "", err
 	}
@@ -199,7 +204,26 @@ func (c *Cache) generate(src, base string, width int) (string, error) {
 // ServeFile pošle obrázek abs: s ?w= jeho zmenšeninu, jinak originál. Když
 // zmenšenina nejde vytvořit (poškozený nebo neznámý formát), pošle originál –
 // prohlížeč si s ním možná poradí.
+//
+// Originál se vydá jen tehdy, když ho podle obsahu pozná imagestore.SniffExt,
+// a vždy s typem podle obsahu: soubor s příponou .jpg, který je ve
+// skutečnosti HTML, by jinak prohlížeč mohl vykreslit jako stránku.
 func (c *Cache) ServeFile(w http.ResponseWriter, r *http.Request, abs string) {
+	f, info, err := fsroot.OpenFile(abs)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	defer f.Close()
+
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(f, head)
+	head = head[:n]
+	if imagestore.SniffExt(head) == "" {
+		http.NotFound(w, r)
+		return
+	}
+
 	width, _ := strconv.Atoi(r.URL.Query().Get("w"))
 	if width = SnapWidth(width); width > 0 && c != nil {
 		if p, err := c.Thumb(abs, width); err == nil {
@@ -207,5 +231,11 @@ func (c *Cache) ServeFile(w http.ResponseWriter, r *http.Request, abs string) {
 			return
 		}
 	}
-	http.ServeFile(w, r, abs)
+
+	if _, err := f.Seek(0, io.SeekStart); err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	w.Header().Set("Content-Type", http.DetectContentType(head))
+	http.ServeContent(w, r, info.Name(), info.ModTime(), f)
 }

@@ -1,0 +1,81 @@
+# Libriter + Sceniter – PRODUKČNÍ instance
+#
+# Na serveru: /opt/libriter/compose.yaml (vedle .env a data/).
+#   cd /opt/libriter && docker compose up -d
+#
+# Weby: audiobooks/libriter.helpdesk24.works, libriter/audio.pem-tech.eu,
+#       sceniter.helpdesk24.works, sceniter/video.pem-tech.eu
+# (nginx proxuje na 172.24.0.46:8081 – port i hosty se nemění).
+#
+# Knihovny leží na NAS (172.24.0.6). NFS připojuje Docker sám jako volume,
+# ne bind-mountem z hostitele: když NAS není dostupný, kontejner nenastartuje
+# – místo toho, aby uviděl prázdný adresář a scanner bral knihovnu jako
+# prázdnou. Cesty uvnitř kontejneru jsou stejné jako na hostiteli
+# (/mnt/nfs_music, /mnt/nfs_video), takže .env zůstává beze změny.
+
+name: libriter
+
+services:
+  mediater:
+    image: mediater:${MEDIATER_TAG:-latest}
+    container_name: libriter
+    restart: unless-stopped
+    # Pozor: v .env nepsat komentář za hodnotu (KEY=hodnota # text). Docker ho
+    # odstraní jen po mezeře – po tabulátoru zůstane součástí hodnoty.
+    env_file: .env
+    environment:
+      # UMASK=0000 (dříve UMask=0000 v systemd unitu) ovlivňuje jen práva
+      # nově vytvořených souborů a složek; nic nemění na 777:
+      #  - složky, které aplikace založí (autor/kniha v knihovně, obálky),
+      #    vznikají 755,
+      #  - soubory 644 – nahrané a rozbalené importy i obálky; databáze
+      #    (libriter.db, -wal, -shm) je vždy 600, to nastavuje kód,
+      #  - jen segmenty, které zapisuje ffmpeg do volume transcode (mimo NAS),
+      #    mohou být 666.
+      # Ostatní klienti NAS tedy knihy čtou, ale zapisovat do nich nemohou.
+      UMASK: "0000"
+      # Adresy reverzních proxy, kterým server věří hlavičky X-Real-IP /
+      # X-Forwarded-For (podle nich počítá limity přihlášení na klienta).
+      # Hodnota patří do .env vedle tohoto souboru – musí to být adresa, ze
+      # které kontejner vidí spojení od nginxu: vnitřní IP nginx stroje
+      # (na něm ji ukáže `ip route get 172.24.0.46`, údaj src), např.:
+      #   TRUSTED_PROXIES=172.24.0.10
+      # Kdyby Docker spojení přeposílal přes userland-proxy, vidí kontejner
+      # místo ní bránu své sítě – pak přidat i tu. Bez správné hodnoty
+      # všichni klienti sdílejí jeden limit přihlášení.
+    # Jen na vnitřní adrese hostitele: nginx běží na jiném stroji a připojuje
+    # se na 172.24.0.46. 127.0.0.1 by ho odřízl, 0.0.0.0 by backend vystavil
+    # na všech rozhraních mimo nginx (bez HSTS, rate limitu a TLS).
+    ports:
+      - "172.24.0.46:8081:8081"
+    volumes:
+      - ./data:/app/data
+      - nfs_music:/mnt/nfs_music
+      - nfs_video:/mnt/nfs_video
+      - transcode:/var/cache/mediater/transcode
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "50m"
+        max-file: "5"
+
+volumes:
+  nfs_music:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=172.24.0.6,nfsvers=4.1,rw,hard,proto=tcp,timeo=600,retrans=2"
+      device: ":/volume1/music"
+  nfs_video:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: "addr=172.24.0.6,nfsvers=4.1,rw,hard,proto=tcp,timeo=600,retrans=2"
+      device: ":/volume1/video"
+  transcode:

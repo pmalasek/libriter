@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 
 	"mediater/internal/core/imagestore"
@@ -71,9 +72,25 @@ func CleanRelPath(p string) (string, error) {
 	return strings.Join(out, "/"), nil
 }
 
+// uploadFileMode jsou práva nahraných souborů. Po importu se přesunou do
+// AUDIO_ROOT, a kontejner běží s UMASK=0000 – os.Create by dal 0666 a soubor
+// by mohl přepsat kdokoli s přístupem ke sdílené knihovně.
+const uploadFileMode os.FileMode = 0o644
+
+// createUploadFile otevře cílový soubor pro zápis (existující zkrátí).
+func createUploadFile(dst string) (*os.File, error) {
+	return os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, uploadFileMode)
+}
+
 // AddFile uloží jeden nahraný soubor do relace. Systémové soubory tiše
 // zahodí (vrátí false), nepodporované typy odmítne.
-func (s *Service) AddFile(id uuid.UUID, relPath string, body io.Reader) (bool, error) {
+//
+// size je deklarovaná velikost těla (Content-Length), -1 když není známá.
+// Místo v limitu relace se rezervuje pod zámkem ještě před zápisem: známá
+// velikost se rezervuje přesně, neznámá zabere celý zbytek limitu. Souběžné
+// nahrávání tak limit relace nepřekročí – každý zápis smí jen to, co si
+// rezervoval.
+func (s *Service) AddFile(id uuid.UUID, relPath string, body io.Reader, size int64) (bool, error) {
 	rel, err := CleanRelPath(relPath)
 	if err != nil {
 		return false, err
@@ -85,63 +102,119 @@ func (s *Service) AddFile(id uuid.UUID, relPath string, body io.Reader) (bool, e
 		return false, fmt.Errorf("%w: %s", ErrFileType, path.Base(rel))
 	}
 
-	s.mu.Lock()
-	sess, ok := s.sessions[id]
-	if !ok {
-		s.mu.Unlock()
-		return false, ErrNotFound
-	}
-	if sess.State != StateUploading {
-		s.mu.Unlock()
-		return false, ErrWrongState
-	}
-	remaining := s.maxBytes - sess.UploadedBytes
-	s.mu.Unlock()
-
 	dst := filepath.Join(s.filesDir(id), filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return false, err
-	}
-
-	// Stejná cesta nahraná znovu (opakovaný pokus) soubor přepíše.
-	var previous int64
-	fi, statErr := os.Stat(dst)
-	replaced := statErr == nil
-	if replaced {
-		previous = fi.Size()
-	}
-
-	f, err := os.Create(dst)
+	res, err := s.reserveUpload(id, rel, dst, size)
 	if err != nil {
 		return false, err
 	}
-	// O bajt víc než zbývá, aby šlo poznat překročení limitu.
-	n, copyErr := io.Copy(f, io.LimitReader(body, remaining+previous+1))
-	closeErr := f.Close()
-	if copyErr == nil && n > remaining+previous {
-		copyErr = ErrTooLarge
-	}
-	if copyErr == nil {
-		copyErr = closeErr
-	}
-	if copyErr != nil {
+
+	n, err := writeUpload(dst, body, res.bytes)
+	if err != nil {
 		_ = os.Remove(dst)
-		if replaced {
-			s.update(id, func(sess *Session) {
-				sess.UploadedFiles--
-				sess.UploadedBytes -= previous
-			})
-		}
-		return false, copyErr
+	}
+	s.finishUpload(id, rel, res, n, err)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// uploadReservation je místo v limitu relace zabrané jedním zápisem.
+type uploadReservation struct {
+	bytes    int64 // kolik bajtů smí zápis nejvýš zapsat
+	previous int64 // velikost přepisovaného souboru (0 = nový soubor)
+	replaced bool
+}
+
+// reserveUpload pod zámkem ověří fázi relace, zamkne cestu proti souběžnému
+// zápisu a rezervuje místo v limitu. Přepisovaný soubor (opakovaný pokus)
+// se zápisem zkrátí, jeho bajty se proto hned uvolní.
+func (s *Service) reserveUpload(id uuid.UUID, rel, dst string, size int64) (uploadReservation, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	sess, ok := s.sessions[id]
+	if !ok {
+		return uploadReservation{}, ErrNotFound
+	}
+	if sess.State != StateUploading {
+		return uploadReservation{}, ErrWrongState
+	}
+	if _, busy := sess.writing[rel]; busy {
+		return uploadReservation{}, ErrUploadBusy
 	}
 
-	s.update(id, func(sess *Session) {
-		if !replaced {
-			sess.UploadedFiles++
-		}
-		sess.UploadedBytes += n - previous
-	})
-	return true, nil
+	var res uploadReservation
+	if fi, err := os.Stat(dst); err == nil {
+		res.previous = fi.Size()
+		res.replaced = true
+	}
+
+	available := s.maxBytes - sess.UploadedBytes - sess.reserved + res.previous
+	switch {
+	case size > available:
+		return uploadReservation{}, ErrTooLarge
+	case size >= 0:
+		res.bytes = size
+	default:
+		res.bytes = max(available, 0)
+	}
+
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return uploadReservation{}, err
+	}
+
+	if sess.writing == nil {
+		sess.writing = make(map[string]struct{})
+	}
+	sess.writing[rel] = struct{}{}
+	sess.reserved += res.bytes
+	if res.replaced {
+		sess.UploadedFiles--
+		sess.UploadedBytes -= res.previous
+	}
+	return res, nil
+}
+
+// writeUpload zapíše tělo do dst, nejvýš limit bajtů (víc = ErrTooLarge).
+func writeUpload(dst string, body io.Reader, limit int64) (int64, error) {
+	f, err := createUploadFile(dst)
+	if err != nil {
+		return 0, err
+	}
+	// O bajt víc než je rezervováno, aby šlo poznat překročení limitu.
+	n, err := io.Copy(f, io.LimitReader(body, limit+1))
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil && n > limit {
+		err = ErrTooLarge
+	}
+	return n, err
+}
+
+// finishUpload uvolní rezervaci a započítá zapsaný soubor. Při chybě je
+// soubor smazaný; přepisovaný soubor zmizel také (zápis ho zkrátil), takže
+// zůstává odečtený.
+func (s *Service) finishUpload(id uuid.UUID, rel string, res uploadReservation, n int64, writeErr error) {
+	s.mu.Lock()
+	sess, ok := s.sessions[id]
+	if !ok {
+		// Relaci mezitím někdo smazal; MkdirAll ji mohl na disku znovu
+		// založit, tak po sobě uklidit.
+		s.mu.Unlock()
+		_ = os.RemoveAll(s.sessionDir(id))
+		return
+	}
+	defer s.mu.Unlock()
+
+	delete(sess.writing, rel)
+	sess.reserved -= res.bytes
+	if writeErr == nil {
+		sess.UploadedFiles++
+		sess.UploadedBytes += n
+	}
+	sess.UpdatedAt = time.Now().UTC()
 }
 
 // UploadedFile je soubor, který už v relaci je.

@@ -25,6 +25,12 @@ export default {
     device_slow_down: 'Die Kopplung wird zu oft abgefragt',
     device_expired: 'Der Kopplungscode ist abgelaufen',
     device_code_invalid: 'Der Code existiert nicht oder ist abgelaufen',
+    web_session_required: 'Diese Aktion ist nur nach der Anmeldung im Web möglich',
+    session_revoked: 'Deine Sitzung wurde beendet, bitte melde dich erneut an',
+    rate_limited: 'Zu viele Versuche, bitte versuche es später erneut',
+    current_password_required: 'Gib dein aktuelles Passwort ein',
+    current_password_invalid: 'Das aktuelle Passwort ist falsch',
+    password_too_long: 'Das Passwort ist zu lang (höchstens 72 Byte)',
   },
   plugin: {
     not_found: 'Plugin ist nicht installiert',
@@ -40,6 +46,7 @@ export default {
     last_admin: 'Der letzte Administrator kann nicht entfernt werden',
     invalid_language: 'Nicht unterstützte Oberflächensprache',
     own_profile_only: 'Dies kann nur im eigenen Profil geändert werden',
+    device_not_found: 'Gerät nicht gefunden',
   },
   validation: {
     invalid: 'Ungültige Eingabe',
@@ -111,6 +118,8 @@ export default {
     invalid_book: 'Einem Buch fehlt der Titel oder es hat eine ungültige Reihennummer',
     failed: 'Der Import ist fehlgeschlagen',
     create_failed: 'Der Import konnte nicht gestartet werden',
+    upload_in_progress: 'Dateien werden noch hochgeladen – warte, bis der Upload abgeschlossen ist',
+    too_many_sessions: 'Zu viele offene Importe – schließe einen ab oder lösche ihn',
   },
   common: {
     load_failed: 'Daten konnten nicht geladen werden',

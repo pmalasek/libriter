@@ -7,12 +7,15 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"os/exec"
 	"runtime"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
+	"mediater/internal/core/fsroot"
+	"mediater/internal/core/middleware"
 	"mediater/internal/libriter/audiostore"
 	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/service"
@@ -96,22 +99,18 @@ var transcodeProfiles = map[string]transcodeProfile{
 // ale krátkodobý token jen na streamování (viz AuthService.GenerateStreamToken)
 // – adresa z historie prohlížeče tak neotevírá celé API.
 func (h *AudioHandler) Stream(w http.ResponseWriter, r *http.Request) {
-	userID, err := h.auth.ParseStreamToken(r.URL.Query().Get("t"))
+	claims, err := h.auth.ParseStreamToken(r.URL.Query().Get("t"))
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "auth.stream_token_invalid", "neplatný nebo vypršelý token pro přehrávání")
 		return
 	}
 
-	// Token přežije smazání účtu i odebrání práv, proto se uživatel ověřuje
-	// proti databázi stejně jako v běžném middleware.
-	role, err := h.auth.ResolveRole(r.Context(), userID)
-	if errors.Is(err, service.ErrNotFound) {
-		writeError(w, http.StatusUnauthorized, "auth.account_gone", "účet již neexistuje")
-		return
-	}
+	// Token přežije smazání účtu, odebrání práv, změnu hesla i odvolání
+	// zařízení, proto se ověřuje proti databázi stejně jako v běžném middleware.
+	role, err := h.auth.Authorize(r.Context(), claims)
 	if err != nil {
-		slog.Error("stream audia: ověření uživatele", "user_id", userID, "err", err)
-		writeError(w, http.StatusInternalServerError, "common.internal", "chyba při ověření uživatele")
+		userID, _ := uuid.Parse(claims.Subject)
+		middleware.WriteAuthorizeError(w, userID, err)
 		return
 	}
 	// Stejná hranice jako u čtení knihovny (viz middleware.RequireRole).
@@ -142,18 +141,14 @@ func (h *AudioHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, err := os.Open(abs)
+	// Odkaz ven z knihovny ani FIFO (to by obyčejné os.Open zablokovalo)
+	// se nevydá; typ souboru se ověřuje na otevřeném deskriptoru.
+	file, info, err := fsroot.Open(h.audioRoot, chapter.FilePath)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "audio.not_found", "audio soubor nenalezen")
 		return
 	}
 	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		writeError(w, http.StatusNotFound, "audio.not_found", "audio soubor nenalezen")
-		return
-	}
 
 	// Server má WriteTimeout 60 s kvůli běžnému API; hodinová kapitola
 	// přehrávaná v reálném čase by se do něj nevešla.
@@ -204,7 +199,7 @@ func (h *AudioHandler) streamTranscoded(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	args := []string{"-nostdin", "-v", "error", "-i", abs, "-vn", "-map_metadata", "-1"}
+	args := []string{"-nostdin", "-v", "error", "-protocol_whitelist", "file", "-i", abs, "-vn", "-map_metadata", "-1"}
 	args = append(args, profile.args...)
 	args = append(args, "pipe:1")
 	cmd := exec.CommandContext(r.Context(), h.ffmpeg, args...)

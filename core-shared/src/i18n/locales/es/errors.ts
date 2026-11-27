@@ -25,6 +25,12 @@ export default {
     device_slow_down: 'La vinculación se consulta con demasiada frecuencia',
     device_expired: 'El código de vinculación ha caducado',
     device_code_invalid: 'El código no existe o ha caducado',
+    web_session_required: 'Esta acción solo está disponible con la sesión iniciada en la web',
+    session_revoked: 'Se ha cerrado tu sesión, vuelve a iniciar sesión',
+    rate_limited: 'Demasiados intentos, inténtalo de nuevo más tarde',
+    current_password_required: 'Introduce tu contraseña actual',
+    current_password_invalid: 'La contraseña actual no es correcta',
+    password_too_long: 'La contraseña es demasiado larga (máximo 72 bytes)',
   },
   plugin: {
     not_found: 'El plugin no está instalado',
@@ -40,6 +46,7 @@ export default {
     last_admin: 'No se puede eliminar al último administrador',
     invalid_language: 'Idioma de la interfaz no compatible',
     own_profile_only: 'Esto solo se puede cambiar en tu propio perfil',
+    device_not_found: 'Dispositivo no encontrado',
   },
   validation: {
     invalid: 'Datos no válidos',
@@ -111,6 +118,8 @@ export default {
     invalid_book: 'A algún libro le falta el título o tiene un número de serie no válido',
     failed: 'La importación falló',
     create_failed: 'No se pudo iniciar la importación',
+    upload_in_progress: 'Los archivos aún se están subiendo; espera a que terminen',
+    too_many_sessions: 'Hay demasiadas importaciones en curso; termina o elimina alguna',
   },
   common: {
     load_failed: 'No se han podido cargar los datos',

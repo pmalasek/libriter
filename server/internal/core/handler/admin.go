@@ -65,6 +65,10 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "validation.register_fields", "display_name, email a heslo (min. 8 znaků) jsou povinné")
 		return
 	}
+	if len(req.Password) > service.MaxPasswordBytes {
+		writePasswordTooLong(w)
+		return
+	}
 	if _, ok := model.RoleLevel[req.Role]; !ok {
 		writeError(w, http.StatusBadRequest, "user.unknown_role", "neznámá role")
 		return

@@ -59,7 +59,35 @@ func (l *Library) Movie(ctx context.Context, userID, id uuid.UUID) (*MovieDetail
 			}
 		}
 	}
+	if err := l.ApplyUserAspect(ctx, userID, m, nil); err != nil {
+		return nil, err
+	}
 	return &MovieDetail{Movie: *m, Files: files, DetachableFiles: detachable, User: st}, nil
+}
+
+// ApplyUserAspect přepíše sdílený poměr stran filmu (m) nebo seriálu (sh)
+// volbou uživatele, pokud si nějakou uložil.
+func (l *Library) ApplyUserAspect(ctx context.Context, userID uuid.UUID, m *model.Movie, sh *model.Show) error {
+	var (
+		target          **string
+		movieID, showID *uuid.UUID
+	)
+	switch {
+	case m != nil:
+		target, movieID = &m.AspectRatio, &m.ID
+	case sh != nil:
+		target, showID = &sh.AspectRatio, &sh.ID
+	default:
+		return nil
+	}
+	ratio, err := l.store.UserAspectRatio(ctx, userID, movieID, showID)
+	if err != nil {
+		return err
+	}
+	if ratio != nil {
+		*target = ratio
+	}
+	return nil
 }
 
 // EpisodeWithProgress je díl s rozkoukaností uživatele.
@@ -99,6 +127,9 @@ type ShowDetail struct {
 func (l *Library) Show(ctx context.Context, userID, id uuid.UUID) (*ShowDetail, error) {
 	sh, err := l.store.GetShow(ctx, id)
 	if err != nil {
+		return nil, err
+	}
+	if err := l.ApplyUserAspect(ctx, userID, nil, sh); err != nil {
 		return nil, err
 	}
 	seasons, flat, latest, err := l.showEpisodes(ctx, userID, id)

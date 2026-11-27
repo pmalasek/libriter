@@ -77,10 +77,22 @@ i18n-check:
     npm run i18n:check -w libriter-shared
     npm run i18n:check -w sceniter-shared
 
+# Testy sdíleného TS kódu (node:test přes tsx)
+test-js:
+    npm test -w core-shared
+
 # go vet ./...
 [working-directory('server')]
 vet:
     go vet ./...
+
+# Hlásí jen zranitelnosti v kódu, který server opravdu volá. Nálezy ve
+# standardní knihovně opraví novější Go toolchain, ne go get.
+#
+# Známé zranitelnosti v Go závislostech (govulncheck)
+[working-directory('server')]
+vulncheck:
+    go run golang.org/x/vuln/cmd/govulncheck@latest ./...
 
 # tsc ve všech npm workspaces (sdílené balíčky, weby, mobil) a v TV aplikaci
 typecheck:
@@ -523,6 +535,97 @@ tv-brand-assets:
 # Nový release: zvýší verzi (patch/minor/major), sestaví .deb a vystaví ho na GitHubu
 deploy:
     bash _scripts/release.sh
+
+# ---- Docker ----
+# Server, na kterém běží kontejnery (compose v /opt/libriter a /opt/libriter-demo).
+docker_host := env("MEDIATER_DOCKER_HOST", "172.24.0.46")
+# Kolik starších verzí image nechat na serveru pro návrat zpět (kromě těch,
+# na kterých běží demo a produkce).
+docker_keep_images := env("MEDIATER_KEEP_IMAGES", "2")
+
+# Docker image mediater:<verze> + mediater:latest (verze: MEDIATER_VERSION, jinak `git describe`)
+docker-build:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version="${MEDIATER_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
+    # --provenance=false: bez atestace má opakovaný build z cache stejné ID image,
+    # takže docker-deploy pozná, že image na serveru už je, a kontejner nevyměňuje.
+    docker build --provenance=false --build-arg MEDIATER_VERSION="$version" \
+        -t "mediater:$version" -t mediater:latest .
+    echo "Image: mediater:$version"
+
+# Image se na server posílá přes `docker save | ssh docker load` (bez registry)
+# a jen když tam ještě není – `just docker-deploy prod` po `demo` tak už nic
+# nepřenáší. Kontejner se vymění přes `docker compose up -d` a čeká se, až
+# bude healthy. Nakonec se na serveru smažou staré image (viz docker_keep_images).
+#
+# Sestaví image, nahraje ho na server a restartuje instanci: just docker-deploy demo | prod
+docker-deploy target:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{target}}" in
+      demo) dir=/opt/libriter-demo; name=libriter-demo ;;
+      prod) dir=/opt/libriter;      name=libriter ;;
+      *) echo "Neznámý cíl '{{target}}' – použij: just docker-deploy demo | prod" >&2; exit 1 ;;
+    esac
+    host="{{docker_host}}"
+    version="${MEDIATER_VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo dev)}"
+
+    if [[ "{{target}}" == prod ]]; then
+      read -rp "Nasadit $version na PRODUKCI ($host:$dir)? [y/N] " confirm
+      [[ "$confirm" =~ ^[yYaA]$ ]] || { echo "Zrušeno."; exit 1; }
+    fi
+
+    MEDIATER_VERSION="$version" {{just_executable()}} docker-build
+
+    local_id="$(docker images -q --no-trunc "mediater:$version")"
+    remote_ids="$(ssh "$host" "sudo docker images -q --no-trunc mediater:$version; echo /; sudo docker images -q --no-trunc mediater:latest")"
+    if [[ "$remote_ids" == "$local_id"$'\n/\n'"$local_id" ]]; then
+      echo "Image mediater:$version už na $host je – přenos se přeskakuje."
+    else
+      echo "Přenáším mediater:$version na $host…"
+      docker save "mediater:$version" mediater:latest | gzip -1 | ssh "$host" 'sudo docker load'
+    fi
+
+    echo "Restartuji $name…"
+    ssh "$host" "sudo sh -s -- $dir $name {{docker_keep_images}}" <<'EOF'
+    set -eu
+    dir=$1 name=$2 keep=$3
+    cd "$dir"
+    docker compose up -d
+    i=0
+    while [ "$(docker inspect -f '{{{{.State.Health.Status}}' "$name")" != healthy ]; do
+      i=$((i + 1))
+      if [ $i -gt 45 ]; then
+        echo "Kontejner $name není ani po 90 s healthy:" >&2
+        docker logs --tail 40 "$name" >&2
+        exit 1
+      fi
+      sleep 2
+    done
+    docker logs "$name" 2>&1 | grep -m1 'verze=' || true
+    docker compose ps --format '{{{{.Name}}  {{{{.Image}}  {{{{.Status}}'
+
+    # Úklid starých image. Zůstává: co používá některý kontejner (demo i
+    # produkce), aktuální latest a $keep nejnovějších dalších verzí pro
+    # návrat zpět. `docker images` řadí od nejnovějšího.
+    used="$(docker ps -aq | xargs -r docker inspect -f '{{{{.Image}}' | sort -u)"
+    latest="$(docker images -q --no-trunc mediater:latest)"
+    n=0
+    docker images --no-trunc --format '{{{{.ID}} {{{{.Tag}}' mediater | while read -r id tag; do
+      [ "$tag" = latest ] && continue
+      [ "$id" = "$latest" ] && continue
+      printf '%s\n' "$used" | grep -qx "$id" && continue
+      n=$((n + 1))
+      [ $n -le "$keep" ] && continue
+      echo "Mažu starý image mediater:$tag"
+      docker rmi "mediater:$tag" >/dev/null
+    done
+    docker image prune -f >/dev/null
+    echo "Image na serveru:"
+    docker images --format '  {{{{.Repository}}:{{{{.Tag}}  {{{{.CreatedSince}}' mediater
+    EOF
+    echo "Hotovo: {{target}} běží na $version."
 
 # Nainstaluje vývojové nástroje: Go, Node, Android SDK; na macOS i iOS (Xcode CLT, CocoaPods)
 setup:

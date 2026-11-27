@@ -50,6 +50,12 @@ func (s *Service) Analyze(id uuid.UUID) (*Session, error) {
 		s.mu.Unlock()
 		return nil, ErrWrongState
 	}
+	// Rozbalování a rozpoznávání nesmí běžet nad rozepsanými soubory –
+	// klient nejdřív počká na dokončení všech nahrávání.
+	if len(sess.writing) > 0 {
+		s.mu.Unlock()
+		return nil, ErrUploadBusy
+	}
 	sess.State = StateAnalyzing
 	snap := snapshot(sess)
 	s.mu.Unlock()

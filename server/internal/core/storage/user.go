@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"mediater/internal/core/model"
 
@@ -193,17 +194,28 @@ func (s *Store) UpdateUserLanguage(ctx context.Context, id uuid.UUID, uiLanguage
 	return s.GetUserByID(ctx, id)
 }
 
-// UpdateUserPassword nastaví nový hash hesla.
-func (s *Store) UpdateUserPassword(ctx context.Context, id uuid.UUID, passwordHash string) error {
+// UpdateUserPassword nastaví nový hash hesla. Ve stejné transakci zvýší
+// verzi tokenů a odvolá relace zařízení – staré tokeny (i ty, které mohl
+// získat útočník se starým heslem) tím přestanou platit.
+func (s *Store) UpdateUserPassword(ctx context.Context, id uuid.UUID, passwordHash string, now time.Time) error {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("update password: begin: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
 	const q = `UPDATE users SET password_hash = ?2, updated_at = CURRENT_TIMESTAMP WHERE id = ?1`
-	res, err := s.db.ExecContext(ctx, q, id, passwordHash)
+	res, err := tx.ExecContext(ctx, q, id, passwordHash)
 	if err != nil {
 		return fmt.Errorf("update password: %w", err)
 	}
 	if RowsAffected(res) == 0 {
 		return ErrNotFound
 	}
-	return nil
+	if _, err := bumpTokenVersion(ctx, tx, id, now); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // DeleteUser smaže uživatele (kaskáda odstraní role, pozice atd.)

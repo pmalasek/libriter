@@ -25,6 +25,12 @@ export default {
     device_slow_down: 'Párování se zkouší příliš často',
     device_expired: 'Párovací kód vypršel',
     device_code_invalid: 'Kód neexistuje nebo už vypršel',
+    web_session_required: 'Tuto akci lze provést jen po přihlášení na webu',
+    session_revoked: 'Přihlášení bylo ukončeno, přihlaste se znovu',
+    rate_limited: 'Příliš mnoho pokusů, zkuste to za chvíli',
+    current_password_required: 'Zadejte současné heslo',
+    current_password_invalid: 'Současné heslo není správné',
+    password_too_long: 'Heslo je příliš dlouhé (nejvýš 72 bajtů)',
   },
   plugin: {
     not_found: 'Plugin není nainstalovaný',
@@ -40,6 +46,7 @@ export default {
     last_admin: 'Posledního administrátora nelze odebrat',
     invalid_language: 'Nepodporovaný jazyk rozhraní',
     own_profile_only: 'Toto lze měnit pouze ve vlastním profilu',
+    device_not_found: 'Zařízení nenalezeno',
   },
   validation: {
     invalid: 'Neplatný vstup',
@@ -111,6 +118,8 @@ export default {
     invalid_book: 'Některé knize chybí název nebo má neplatné pořadí v sérii',
     failed: 'Import se nezdařil',
     create_failed: 'Import se nepodařilo založit',
+    upload_in_progress: 'Soubory se ještě nahrávají – počkejte na dokončení',
+    too_many_sessions: 'Rozpracovaných importů je příliš mnoho – dokončete nebo smažte některý z nich',
   },
   common: {
     load_failed: 'Data se nepodařilo načíst',

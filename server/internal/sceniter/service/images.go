@@ -54,7 +54,7 @@ func (t *TitleImages) Upload(ctx context.Context, kind string, id uuid.UUID, ima
 		current = backdrop
 	}
 
-	fileName, err := imagestore.Write(t.root, manualName(image, kind, id), data, ext)
+	fileName, err := imagestore.Write(t.root, manualName(image, kind, id), data)
 	if err != nil {
 		return err
 	}

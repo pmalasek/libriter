@@ -54,6 +54,8 @@ var (
 	ErrNoBooks      = errors.New("nahrané soubory neobsahují žádnou knihu")
 	ErrNothingChose = errors.New("není vybrána žádná kniha")
 	ErrInvalidBook  = errors.New("neplatné údaje knihy")
+	ErrUploadBusy   = errors.New("soubory se ještě nahrávají")
+	ErrTooManyOpen  = errors.New("příliš mnoho rozpracovaných importů – dokončete nebo smažte některý z nich")
 )
 
 // Chapter je audio soubor knihy v náhledu.
@@ -120,6 +122,17 @@ type Session struct {
 	Skipped       []string  `json:"skipped"` // soubory, které se do žádné knihy nedostaly
 	Results       []Result  `json:"results"`
 	Error         string    `json:"error,omitempty"`
+
+	// Probíhající zápisy (AddFile): rezervované bajty v limitu a cesty,
+	// do kterých se právě zapisuje. Jen pod Service.mu.
+	reserved int64
+	writing  map[string]struct{}
+}
+
+// open vrátí true, dokud relace drží soubory ve stagingu nebo na ně čeká.
+// Dokončený i nepovedený import už soubory nemá.
+func (sess *Session) open() bool {
+	return sess.State != StateDone && sess.State != StateFailed
 }
 
 // libraryScanner je to, co importér potřebuje od scanneru.
@@ -130,14 +143,18 @@ type libraryScanner interface {
 	DefaultLanguage(ctx context.Context) string
 }
 
+// DefaultMaxSessions je výchozí strop rozpracovaných importů (IMPORT_MAX_SESSIONS).
+const DefaultMaxSessions = 5
+
 // Service spravuje relace importu.
 type Service struct {
-	root     string // IMPORT_ROOT
-	maxBytes int64
-	scanner  libraryScanner
-	store    *storage.Store
-	log      *slog.Logger
-	appCtx   context.Context
+	root        string // IMPORT_ROOT
+	maxBytes    int64
+	maxSessions int // strop současně otevřených relací
+	scanner     libraryScanner
+	store       *storage.Store
+	log         *slog.Logger
+	appCtx      context.Context
 
 	mu       sync.Mutex
 	sessions map[uuid.UUID]*Session
@@ -149,7 +166,12 @@ var ErrRootInsideLibrary = errors.New("IMPORT_ROOT nesmí ležet uvnitř AUDIO_R
 // New vytvoří službu. Relace z minulého běhu se smažou – v paměti restart
 // nepřežijí a jejich soubory by jen zabíraly místo. Maže se jen to, co
 // vypadá jako relace (adresář s UUID), nic jiného v IMPORT_ROOT.
-func New(appCtx context.Context, root string, maxBytes int64, scn libraryScanner, store *storage.Store) (*Service, error) {
+//
+// maxBytes je limit jedné relace, maxSessions strop současně otevřených
+// relací (nekladné číslo = DefaultMaxSessions). Každá relace smí nahrát až
+// maxBytes a rozbalit ze zipů dalších až maxBytes, takže staging potřebuje
+// nejvýš zhruba 2 × maxSessions × maxBytes místa.
+func New(appCtx context.Context, root string, maxBytes int64, maxSessions int, scn libraryScanner, store *storage.Store) (*Service, error) {
 	if inside, err := isWithin(scn.AudioRoot(), root); err != nil {
 		return nil, err
 	} else if inside {
@@ -165,20 +187,26 @@ func New(appCtx context.Context, root string, maxBytes int64, scn libraryScanner
 			}
 		}
 	}
+	if maxSessions <= 0 {
+		maxSessions = DefaultMaxSessions
+	}
 	s := &Service{
-		root:     root,
-		maxBytes: maxBytes,
-		scanner:  scn,
-		store:    store,
-		log:      slog.Default().With("component", "importer"),
-		appCtx:   appCtx,
-		sessions: make(map[uuid.UUID]*Session),
+		root:        root,
+		maxBytes:    maxBytes,
+		maxSessions: maxSessions,
+		scanner:     scn,
+		store:       store,
+		log:         slog.Default().With("component", "importer"),
+		appCtx:      appCtx,
+		sessions:    make(map[uuid.UUID]*Session),
 	}
 	go s.janitor()
 	return s, nil
 }
 
-// Create založí prázdnou relaci.
+// Create založí prázdnou relaci. Odmítne ji (ErrTooManyOpen), když je
+// otevřených relací už maxSessions – každá může zabrat až maxBytes místa
+// ve stagingu.
 func (s *Service) Create() (*Session, error) {
 	now := time.Now().UTC()
 	sess := &Session{
@@ -191,13 +219,24 @@ func (s *Service) Create() (*Session, error) {
 		Skipped:   []string{},
 		Results:   []Result{},
 	}
+
+	// Kontrola i zápis do mapy pod jedním zámkem, aby souběžné Create
+	// strop nepřekročily.
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	open := 0
+	for _, other := range s.sessions {
+		if other.open() {
+			open++
+		}
+	}
+	if open >= s.maxSessions {
+		return nil, ErrTooManyOpen
+	}
 	if err := os.MkdirAll(s.filesDir(sess.ID), 0o755); err != nil {
 		return nil, err
 	}
-
-	s.mu.Lock()
 	s.sessions[sess.ID] = sess
-	s.mu.Unlock()
 
 	snap := *sess
 	return &snap, nil
@@ -282,7 +321,7 @@ func (s *Service) janitor() {
 		var stale []uuid.UUID
 		s.mu.Lock()
 		for id, sess := range s.sessions {
-			busy := sess.State == StateAnalyzing || sess.State == StateImporting
+			busy := sess.State == StateAnalyzing || sess.State == StateImporting || len(sess.writing) > 0
 			if !busy && time.Since(sess.UpdatedAt) > sessionTTL {
 				stale = append(stale, id)
 				delete(s.sessions, id)
@@ -300,6 +339,7 @@ func (s *Service) janitor() {
 // snapshot vrátí hlubokou kopii relace pro čtení mimo zámek.
 func snapshot(sess *Session) *Session {
 	c := *sess
+	c.writing = nil
 	c.Books = make([]Book, len(sess.Books))
 	for i, b := range sess.Books {
 		b.Authors = append([]string{}, b.Authors...)

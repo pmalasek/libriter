@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -255,7 +256,9 @@ func (h *AuthorHandler) SetImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "author.not_found", "autor nenalezen")
 		return
 	case err != nil:
-		writeError(w, http.StatusBadGateway, "image.download_failed", "obrázek se nepodařilo stáhnout – "+err.Error())
+		// Detail (adresa, síťová chyba) jen do logu – klientovi obecná hláška.
+		slog.Warn("stažení fotky autora selhalo", "author", id, "err", err)
+		writeError(w, http.StatusBadGateway, "image.download_failed", "obrázek se nepodařilo stáhnout")
 		return
 	}
 
@@ -328,9 +331,12 @@ type authorRequest struct {
 	LastName   string  `json:"last_name"`
 	Name       string  `json:"name"`
 	Bio        *string `json:"bio"`
-	ImagePath  *string `json:"image_path"`
-	BirthYear  *int    `json:"birth_year"`
-	DeathYear  *int    `json:"death_year"`
+	// ImagePath se přijímá kvůli starším klientům (DisallowUnknownFields by
+	// vrátil 400), ale ignoruje se – fotku nastavuje jen služba obrázků
+	// a podle uložené cesty se soubor maže.
+	ImagePath *string `json:"image_path"`
+	BirthYear *int    `json:"birth_year"`
+	DeathYear *int    `json:"death_year"`
 }
 
 func (req *authorRequest) toInput() (storage.AuthorInput, error) {
@@ -353,7 +359,6 @@ func (req *authorRequest) toInput() (storage.AuthorInput, error) {
 	return storage.AuthorInput{
 		Name:      name,
 		Bio:       req.Bio,
-		ImagePath: req.ImagePath,
 		BirthYear: req.BirthYear,
 		DeathYear: req.DeathYear,
 	}, nil

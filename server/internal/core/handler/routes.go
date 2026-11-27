@@ -14,6 +14,9 @@ type Handlers struct {
 	Users   *UserHandler
 	Admin   *AdminHandler
 	Plugins *PluginsHandler
+	// Limits jsou limity veřejných přihlašovacích endpointů; nulová hodnota
+	// = bez limitů (viz DefaultRateLimits).
+	Limits RateLimits
 }
 
 // RegisterRoutes zaregistruje API jádra na router /api/v1: přihlášení,
@@ -24,29 +27,43 @@ type Handlers struct {
 func RegisterRoutes(r chi.Router, auth *service.AuthService, h Handlers) {
 	// --- bez přihlášení ---
 	r.Get("/auth/config", h.Auth.Config) // je registrace zapnutá?
-	r.Post("/auth/register", h.Auth.Register)
-	r.Post("/auth/login", h.Auth.Login)
+	r.Method("POST", "/auth/register", limited(h.Limits.Register, h.Auth.Register))
+	r.Method("POST", "/auth/login", limited(h.Limits.Login, h.Auth.Login))
 	// Párování televize (device flow): TV ukáže kód, uživatel ho schválí na webu
-	r.Post("/auth/device/start", h.Auth.DeviceStart)
-	r.Post("/auth/device/token", h.Auth.DeviceToken)
+	r.Method("POST", "/auth/device/start", limited(h.Limits.DeviceStart, h.Auth.DeviceStart))
+	r.Method("POST", "/auth/device/token", limited(h.Limits.DeviceToken, h.Auth.DeviceToken))
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Authenticate(auth))
 
 		// Token pro přehrávače (<audio>, <video> neumí poslat hlavičku)
 		r.Get("/auth/stream-token", h.Auth.StreamToken)
-		// Dlouhodobý token pro mobilní aplikaci (offline přehrávač)
-		r.Post("/auth/mobile-token", h.Auth.MobileToken)
-		// Schválení párování televize ze stránky /link
-		r.Get("/auth/device/{code}", h.Auth.DeviceInfo)
-		r.Post("/auth/device/approve", h.Auth.DeviceApprove)
 
-		// Uživatelé - vlastní profil
+		// Uživatelé - vlastní profil (volá i mobil)
 		r.Get("/users/{id}", h.Users.Get)
-		r.Put("/users/{id}", h.Users.Update)
-		r.Put("/users/{id}/password", h.Users.ChangePassword)
 		r.Put("/users/{id}/appearance", h.Users.UpdateAppearance)
 		r.Put("/users/{id}/language", h.Users.UpdateLanguage)
+
+		// Jen z webového přihlášení: token zařízení (mobil, televize) nesmí
+		// měnit přihlašovací údaje, vydávat další tokeny ani schvalovat
+		// párování – uniklý token by se jinak sám prodlužoval nebo převzal účet.
+		r.With(middleware.RequireWebSessionCode("auth.mobile_token_refresh",
+			"mobilní token nelze obnovit mobilním tokenem – přihlaste se znovu")).
+			Post("/auth/mobile-token", h.Auth.MobileToken)
+		r.Group(func(r chi.Router) {
+			r.Use(middleware.RequireWebSession)
+
+			// Schválení párování televize ze stránky /link
+			r.Get("/auth/device/{code}", h.Auth.DeviceInfo)
+			r.Post("/auth/device/approve", h.Auth.DeviceApprove)
+
+			r.Put("/users/{id}", h.Users.Update)
+			r.Put("/users/{id}/password", h.Users.ChangePassword)
+			// Přihlášená zařízení a odhlášení všude
+			r.Get("/users/{id}/devices", h.Users.ListDevices)
+			r.Delete("/users/{id}/devices/{sid}", h.Users.RevokeDevice)
+			r.Post("/users/{id}/logout-all", h.Users.LogoutAll)
+		})
 
 		// Uživatelé a společná administrace - pouze admin
 		r.Group(func(r chi.Router) {

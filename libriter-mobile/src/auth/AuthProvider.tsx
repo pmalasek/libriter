@@ -5,6 +5,7 @@ import {
   apiFetch,
   setAuthToken,
   setBaseUrl,
+  serverCandidates,
   setUnauthorizedHandler,
   t,
   type AuthResponse,
@@ -81,7 +82,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const signIn = useCallback<AuthValue['signIn']>(async (input) => {
-    const url = input.serverUrl.trim().replace(/\/+$/, '')
+    // Bez schématu se doplní https:// (http:// jen výslovně – k veřejné adrese
+    // ho přihlašovací obrazovka nechá potvrdit).
+    const url = serverCandidates(input.serverUrl)[0] ?? ''
     if (!url) throw new ApiError(0, t('mobile.auth.serverUrlRequired'))
 
     // Adresa musí platit dřív, než se pošle první požadavek.
@@ -99,11 +102,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // zahodí – do úložiště se nikdy nedostane.
     setAuthToken(auth.token)
 
+    // Název zařízení uvidí uživatel v profilu na webu u přihlášených
+    // zařízení. Jde v hlavičce (URL-kódovaný – hlavička neunese diakritiku);
+    // v těle zůstává kvůli starším serverům, které ho jen logují.
+    const deviceName = Device.deviceName ?? Device.modelName ?? t('mobile.auth.defaultDeviceName')
     let mobile: MobileToken
     try {
       mobile = await apiFetch<MobileToken>('/auth/mobile-token', {
         method: 'POST',
-        json: { device_name: Device.deviceName ?? Device.modelName ?? t('mobile.auth.defaultDeviceName') },
+        headers: { 'X-Device-Name': encodeURIComponent(deviceName) },
+        json: { device_name: deviceName },
       })
     } catch (error: unknown) {
       // Přihlášení prošlo, ale server tenhle endpoint nezná: běží na starší

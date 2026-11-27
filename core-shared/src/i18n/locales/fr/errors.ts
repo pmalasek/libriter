@@ -25,6 +25,12 @@ export default {
     device_slow_down: 'L’appairage est vérifié trop souvent',
     device_expired: 'Le code d’appairage a expiré',
     device_code_invalid: 'Le code n’existe pas ou a expiré',
+    web_session_required: 'Cette action n’est possible qu’en étant connecté sur le web',
+    session_revoked: 'Votre session a été fermée, veuillez vous reconnecter',
+    rate_limited: 'Trop de tentatives, veuillez réessayer plus tard',
+    current_password_required: 'Saisissez votre mot de passe actuel',
+    current_password_invalid: 'Le mot de passe actuel est incorrect',
+    password_too_long: 'Le mot de passe est trop long (72 octets maximum)',
   },
   plugin: {
     not_found: 'Le plugin n’est pas installé',
@@ -40,6 +46,7 @@ export default {
     last_admin: 'Le dernier administrateur ne peut pas être supprimé',
     invalid_language: 'Langue d’interface non prise en charge',
     own_profile_only: 'Cette modification n’est possible que dans votre propre profil',
+    device_not_found: 'Appareil introuvable',
   },
   validation: {
     invalid: 'Saisie invalide',
@@ -111,6 +118,8 @@ export default {
     invalid_book: 'Un livre n’a pas de titre ou a un numéro de série non valide',
     failed: 'L’import a échoué',
     create_failed: 'Impossible de démarrer l’import',
+    upload_in_progress: 'Des fichiers sont encore en cours d’envoi – attendez la fin',
+    too_many_sessions: 'Trop d’imports en cours – terminez-en ou supprimez-en un',
   },
   common: {
     load_failed: 'Impossible de charger les données',

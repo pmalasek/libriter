@@ -25,6 +25,12 @@ export default {
     device_slow_down: 'Pairing is being checked too often',
     device_expired: 'The pairing code has expired',
     device_code_invalid: 'The code does not exist or has expired',
+    web_session_required: 'This action is only available when signed in on the web',
+    session_revoked: 'Your session has been signed out, please sign in again',
+    rate_limited: 'Too many attempts, please try again later',
+    current_password_required: 'Enter your current password',
+    current_password_invalid: 'The current password is incorrect',
+    password_too_long: 'The password is too long (72 bytes max)',
   },
   plugin: {
     not_found: 'Plugin is not installed',
@@ -40,6 +46,7 @@ export default {
     last_admin: 'The last administrator cannot be removed',
     invalid_language: 'Unsupported interface language',
     own_profile_only: 'This can only be changed in your own profile',
+    device_not_found: 'Device not found',
   },
   validation: {
     invalid: 'Invalid input',
@@ -111,6 +118,8 @@ export default {
     invalid_book: 'Some book is missing a title or has an invalid series number',
     failed: 'The import failed',
     create_failed: 'Could not start the import',
+    upload_in_progress: 'Files are still uploading – wait until they finish',
+    too_many_sessions: 'Too many imports in progress – finish or delete one of them',
   },
   common: {
     load_failed: 'Could not load data',

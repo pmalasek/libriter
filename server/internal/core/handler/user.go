@@ -2,6 +2,8 @@ package handler
 
 import (
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -62,7 +64,11 @@ func (h *UserHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, u)
 }
 
-// PUT /api/v1/users/{id}  (admin nebo vlastní profil)
+// PUT /api/v1/users/{id}  (admin nebo vlastní profil, jen webové přihlášení)
+//
+// Kdo mění vlastní e-mail nebo login, musí zadat současné heslo
+// (current_password) – e-mail a login jsou přihlašovací údaje a ukradená
+// relace by si je jinak přepsala. Admin u cizího účtu heslo nezadává.
 func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUID(w, r, "id")
 	if !ok {
@@ -78,9 +84,10 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		DisplayName string `json:"display_name"`
-		Email       string `json:"email"`
-		Login       string `json:"login"`
+		DisplayName     string `json:"display_name"`
+		Email           string `json:"email"`
+		Login           string `json:"login"`
+		CurrentPassword string `json:"current_password"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
@@ -93,6 +100,26 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if req.DisplayName == "" || req.Email == "" {
 		writeError(w, http.StatusBadRequest, "validation.profile_fields", "display_name a email jsou povinné")
 		return
+	}
+
+	if callerID == id {
+		current, err := h.svc.GetByID(r.Context(), id)
+		if errors.Is(err, service.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
+			return
+		}
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "common.save_failed", "chyba při aktualizaci")
+			return
+		}
+		login, err := service.NormalizeLogin(req.Login)
+		if WriteUserInputError(w, err) {
+			return
+		}
+		if (req.Email != current.Email || login != current.Login) &&
+			!h.checkCurrentPassword(w, r, id, req.CurrentPassword) {
+			return
+		}
 	}
 
 	u, err := h.svc.Update(r.Context(), id, req.DisplayName, req.Email, req.Login)
@@ -108,6 +135,28 @@ func (h *UserHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, u)
+}
+
+// checkCurrentPassword ověří current_password volajícího. Při chybě rovnou
+// odpoví (400 chybí, 403 nesouhlasí) a vrátí false.
+func (h *UserHandler) checkCurrentPassword(w http.ResponseWriter, r *http.Request, id uuid.UUID, password string) bool {
+	if password == "" {
+		writeError(w, http.StatusBadRequest, "auth.current_password_required", "zadejte současné heslo")
+		return false
+	}
+	err := h.svc.CheckPassword(r.Context(), id, password)
+	switch {
+	case errors.Is(err, service.ErrInvalidCredentials):
+		writeError(w, http.StatusForbidden, "auth.current_password_invalid", "současné heslo nesouhlasí")
+		return false
+	case errors.Is(err, service.ErrNotFound):
+		writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
+		return false
+	case err != nil:
+		writeError(w, http.StatusInternalServerError, "common.internal", "heslo se nepodařilo ověřit")
+		return false
+	}
+	return true
 }
 
 // PUT /api/v1/users/{id}/appearance (pouze vlastní profil)
@@ -173,7 +222,12 @@ func (h *UserHandler) UpdateLanguage(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// PUT /api/v1/users/{id}/password  (admin nebo vlastní profil)
+// PUT /api/v1/users/{id}/password  (admin nebo vlastní profil, jen webové přihlášení)
+//
+// Vlastní změna vyžaduje current_password; admin resetuje cizí heslo bez
+// něj. Změna i reset odhlásí účet všude (zvýší verzi tokenů a odvolá
+// zařízení). Při vlastní změně dostane volající v odpovědi nový token, aby
+// web zůstal přihlášený.
 func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	id, ok := parseUUID(w, r, "id")
 	if !ok {
@@ -189,7 +243,8 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		Password string `json:"password"`
+		Password        string `json:"password"`
+		CurrentPassword string `json:"current_password"`
 	}
 	if err := readJSON(r, &req); err != nil {
 		writeError(w, http.StatusBadRequest, "request.invalid_body", "neplatný formát požadavku")
@@ -198,6 +253,15 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	if len(req.Password) < MinPasswordLength {
 		writeError(w, http.StatusBadRequest, "validation.password_too_short", "heslo musí mít alespoň 8 znaků")
+		return
+	}
+	if len(req.Password) > service.MaxPasswordBytes {
+		writePasswordTooLong(w)
+		return
+	}
+
+	self := callerID == id
+	if self && !h.checkCurrentPassword(w, r, id, req.CurrentPassword) {
 		return
 	}
 
@@ -209,17 +273,131 @@ func (h *UserHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Vlastní změna hesla je běžný úkon; do auditu patří jen reset cizího účtu.
-	if callerID != id {
-		h.audit.Record(r.Context(), callerID, service.AuditEvent{
-			Action:      service.AuditUserPasswordReset,
-			TargetType:  service.AuditTargetUser,
-			TargetID:    id.String(),
-			TargetLabel: UserLabel(r, h.svc, id),
-		})
+	action := service.AuditUserPasswordReset
+	if self {
+		action = service.AuditUserPasswordChange
+	}
+	h.audit.Record(r.Context(), callerID, service.AuditEvent{
+		Action:      action,
+		TargetType:  service.AuditTargetUser,
+		TargetID:    id.String(),
+		TargetLabel: UserLabel(r, h.svc, id),
+	})
+
+	resp := map[string]string{"status": "ok"}
+	if self {
+		token, err := h.svc.IssueWebToken(r.Context(), id)
+		if err != nil {
+			// Heslo je změněné; web se jen bude muset znovu přihlásit.
+			slog.Error("nový token po změně hesla", "user_id", id, "err", err)
+		} else {
+			resp["token"] = token
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// GET /api/v1/users/{id}/devices  (admin nebo vlastní profil, jen webové přihlášení)
+//
+// Přihlášená zařízení (mobilní aplikace, televize). Webová přihlášení se tu
+// neukazují – odhlásí je jen „Odhlásit všude“ nebo změna hesla.
+func (h *UserHandler) ListDevices(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.selfOrAdmin(w, r)
+	if !ok {
+		return
+	}
+	devices, err := h.svc.ListDevices(r.Context(), id)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.load_failed", "chyba při načítání zařízení")
+		return
+	}
+	writeJSON(w, http.StatusOK, devices)
+}
+
+// DELETE /api/v1/users/{id}/devices/{sid}  (admin nebo vlastní profil, jen webové přihlášení)
+//
+// Odvolá jedno zařízení: jeho token i streamovací tokeny, které si vydalo,
+// okamžitě přestanou platit. Ostatní zařízení zůstanou přihlášená.
+func (h *UserHandler) RevokeDevice(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.selfOrAdmin(w, r)
+	if !ok {
+		return
+	}
+	sid, ok := parseUUID(w, r, "sid")
+	if !ok {
+		return
+	}
+	d, err := h.svc.RevokeDevice(r.Context(), id, sid)
+	if errors.Is(err, service.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "user.device_not_found", "zařízení nenalezeno")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.delete_failed", "zařízení se nepodařilo odhlásit")
+		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+	callerID, _ := middleware.UserIDFromCtx(r.Context())
+	h.audit.Record(r.Context(), callerID, service.AuditEvent{
+		Action:      service.AuditUserDeviceRevoke,
+		TargetType:  service.AuditTargetUser,
+		TargetID:    id.String(),
+		TargetLabel: UserLabel(r, h.svc, id),
+		Details:     map[string]string{"session": d.ID.String(), "scope": d.Scope, "device": d.DeviceName},
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// POST /api/v1/users/{id}/logout-all  (admin nebo vlastní profil, jen webové přihlášení)
+//
+// Zneplatní všechny tokeny účtu – web, mobil, televize i streamovací adresy.
+// Kdo odhlašuje sám sebe, dostane v odpovědi nový token a zůstane přihlášený
+// v tomto prohlížeči.
+func (h *UserHandler) LogoutAll(w http.ResponseWriter, r *http.Request) {
+	id, ok := h.selfOrAdmin(w, r)
+	if !ok {
+		return
+	}
+	if err := h.svc.LogoutAll(r.Context(), id); errors.Is(err, service.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "user.not_found", "uživatel nenalezen")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "common.save_failed", "odhlášení se nepodařilo")
+		return
+	}
+
+	callerID, _ := middleware.UserIDFromCtx(r.Context())
+	h.audit.Record(r.Context(), callerID, service.AuditEvent{
+		Action:      service.AuditUserLogoutAll,
+		TargetType:  service.AuditTargetUser,
+		TargetID:    id.String(),
+		TargetLabel: UserLabel(r, h.svc, id),
+	})
+
+	resp := map[string]string{"status": "ok"}
+	if callerID == id {
+		token, err := h.svc.IssueWebToken(r.Context(), id)
+		if err != nil {
+			slog.Error("nový token po odhlášení všude", "user_id", id, "err", err)
+		} else {
+			resp["token"] = token
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// selfOrAdmin přečte {id} a pustí dál jen jeho vlastníka nebo admina.
+func (h *UserHandler) selfOrAdmin(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
+	id, ok := parseUUID(w, r, "id")
+	if !ok {
+		return uuid.Nil, false
+	}
+	callerID, _ := middleware.UserIDFromCtx(r.Context())
+	if middleware.RoleFromCtx(r.Context()) != model.RoleAdmin && callerID != id {
+		writeError(w, http.StatusForbidden, "auth.forbidden", "nedostatečná oprávnění")
+		return uuid.Nil, false
+	}
+	return id, true
 }
 
 // DELETE /api/v1/users/{id}  (admin)
@@ -319,6 +497,12 @@ func UserLabel(r *http.Request, svc *service.UserService, id uuid.UUID) string {
 
 // --- helper ---
 
+// writePasswordTooLong odpoví 400 na heslo delší, než bcrypt zpracuje.
+func writePasswordTooLong(w http.ResponseWriter) {
+	writeError(w, http.StatusBadRequest, "auth.password_too_long",
+		fmt.Sprintf("heslo může mít nejvýš %d bajtů", service.MaxPasswordBytes))
+}
+
 // WriteUserInputError odpoví na chyby údajů uživatele, které zavinil klient
 // (neplatný nebo obsazený login, obsazený e-mail). Vrací true, pokud odpověděl.
 func WriteUserInputError(w http.ResponseWriter, err error) bool {
@@ -329,6 +513,8 @@ func WriteUserInputError(w http.ResponseWriter, err error) bool {
 		writeError(w, http.StatusConflict, "user.login_taken", "login je již použit")
 	case errors.Is(err, service.ErrEmailTaken):
 		writeError(w, http.StatusConflict, "user.email_taken", "email je již použit")
+	case errors.Is(err, service.ErrPasswordTooLong):
+		writePasswordTooLong(w)
 	default:
 		return false
 	}

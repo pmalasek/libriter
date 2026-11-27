@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native'
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next'
 import { Eye, EyeOff, FingerprintPattern } from 'lucide-react-native'
+import { isInsecure, isLocalHost, serverCandidates, t as translate } from 'libriter-shared'
 
 import { useAuth } from '@/auth/AuthProvider'
 import { biometricsAvailable, clearCredentials, hasSavedCredentials, loadCredentials, saveCredentials } from '@/auth/credentials'
@@ -18,7 +19,8 @@ export default function LoginScreen() {
   const insets = useSafeAreaInsets()
 
   // Adresa serveru se předvyplní z minula: po odhlášení se mění heslo, ne server.
-  const [url, setUrl] = useState(serverUrl || 'https://')
+  // Bez schématu se při přihlášení doplní https://.
+  const [url, setUrl] = useState(serverUrl)
   const [login, setLogin] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -58,6 +60,9 @@ export default function LoginScreen() {
   }
 
   const submit = async () => {
+    // Heslo k veřejné adrese přes http:// jde nešifrovaně – jen po potvrzení.
+    const target = serverCandidates(url)[0] ?? ''
+    if (target && isInsecure(target) && !isLocalHost(target) && !(await confirmInsecure(target))) return
     setBusy(true)
     setError('')
     try {
@@ -99,6 +104,11 @@ export default function LoginScreen() {
               placeholder={t('mobile.login.serverUrlPlaceholder')}
               placeholderTextColor={colors.mutedForeground}
             />
+            {isInsecure(url) ? (
+              <Body size={13} style={{ color: colors.destructive }}>
+                {t('mobile.login.insecureHint')}
+              </Body>
+            ) : null}
           </Field>
           <Field label={t('mobile.login.login')}>
             <TextInput
@@ -177,6 +187,21 @@ export default function LoginScreen() {
       </ScrollView>
     </KeyboardAvoidingView>
   )
+}
+
+/** Zeptá se, jestli opravdu poslat heslo nešifrovaně (http:// k veřejné adrese). */
+function confirmInsecure(server: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    Alert.alert(
+      translate('mobile.login.insecureTitle'),
+      translate('mobile.login.insecureMessage', { server }),
+      [
+        { text: translate('common.cancel'), style: 'cancel', onPress: () => resolve(false) },
+        { text: translate('mobile.login.insecureContinue'), style: 'destructive', onPress: () => resolve(true) },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    )
+  })
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

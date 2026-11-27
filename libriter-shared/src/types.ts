@@ -304,15 +304,15 @@ export interface SessionItemsRequest {
 }
 
 /**
- * PUT /authors/{id} – úplná náhrada, takže se posílají i pole, která formulář
- * neukazuje (image_path), jinak by je server vymazal.
+ * POST /authors a PUT /authors/{id} – PUT nahrazuje všechna pole, která
+ * spravuje editor. Cestu k fotce (`image_path`) server z požadavku nebere;
+ * fotku mění jen nahrání nebo stažení obrázku.
  */
 export interface AuthorRequest {
   first_name: string
   middle_name: string
   last_name: string
   bio: string | null
-  image_path: string | null
   birth_year: number | null
   death_year: number | null
 }
@@ -483,14 +483,18 @@ export interface MetadataLanguageProfile {
 export interface MetadataSettings {
   providers: AdminProvider[]
   languages: MetadataLanguageProfile[]
-  google_books_api_key: string
+  /** Server klíč Google Books nevrací, jen jestli je nastavený. */
+  google_books_api_key_set: boolean
+  /** Platný klíč pochází z konfigurace serveru (GOOGLE_BOOKS_API_KEY). */
+  google_books_api_key_from_env: boolean
 }
 
 /** PUT /admin/settings/metadata – backend má DisallowUnknownFields. */
 export interface MetadataSettingsRequest {
   providers: { name: string; enabled: boolean }[]
   languages: { language: string; providers: { name: string; enabled: boolean }[] }[]
-  google_books_api_key: string
+  /** Chybí nebo null = klíč beze změny, '' = smazat, jinak nastavit. */
+  google_books_api_key?: string | null
 }
 
 /** GET a PUT /admin/settings/library */

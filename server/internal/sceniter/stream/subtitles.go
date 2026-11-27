@@ -15,20 +15,32 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/text/encoding/charmap"
+
+	"mediater/internal/core/fsroot"
 )
 
 // ErrUnsupportedSubtitle znamená titulky, které nejde převést do WebVTT.
 var ErrUnsupportedSubtitle = errors.New("titulky nejde převést do WebVTT")
 
+// maxSubtitleBytes je strop velikosti externích titulků; i dlouhý film má
+// titulky v řádu stovek kB.
+const maxSubtitleBytes = 16 << 20
+
 // Subtitles převádí titulky do WebVTT a výsledek si pamatuje na disku.
 type Subtitles struct {
 	ffmpeg string
 	cache  string // adresář mezipaměti (TRANSCODE_ROOT/subs)
+	// convert omezuje souběžné převody přes ffmpeg: vložené titulky
+	// znamenají přečíst celý soubor filmu a každý čtenář je může vyžádat.
+	convert chan struct{}
 }
+
+// maxSubtitleConversions je počet převodů titulků přes ffmpeg najednou.
+const maxSubtitleConversions = 2
 
 func NewSubtitles(cacheDir string) *Subtitles {
 	ffmpeg, _ := exec.LookPath("ffmpeg")
-	return &Subtitles{ffmpeg: ffmpeg, cache: cacheDir}
+	return &Subtitles{ffmpeg: ffmpeg, cache: cacheDir, convert: make(chan struct{}, maxSubtitleConversions)}
 }
 
 // Embedded vrátí vloženou titulkovou stopu idx souboru abs jako WebVTT.
@@ -46,7 +58,9 @@ func (s *Subtitles) Embedded(ctx context.Context, cacheKey, abs string, idx int)
 // přes ffmpeg, VTT se jen ověří.
 func (s *Subtitles) External(ctx context.Context, cacheKey, abs, format string) ([]byte, error) {
 	return s.cached(cacheKey, func() ([]byte, error) {
-		data, err := os.ReadFile(abs)
+		// Cesta prošla stream.Resolve (uvnitř VIDEO_ROOT); tady se navíc
+		// odmítne FIFO a zařízení a čte se jen do rozumné velikosti.
+		data, err := fsroot.ReadFile(abs, maxSubtitleBytes)
 		if err != nil {
 			return nil, err
 		}
@@ -81,10 +95,17 @@ func (s *Subtitles) External(ctx context.Context, cacheKey, abs, format string) 
 }
 
 func (s *Subtitles) ffmpegVTT(ctx context.Context, abs, mapSpec string) ([]byte, error) {
+	// Na volné místo se čeká; odpojený klient čekání ukončí.
+	select {
+	case s.convert <- struct{}{}:
+		defer func() { <-s.convert }()
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, s.ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error",
-		"-i", abs, "-map", mapSpec, "-f", "webvtt", "pipe:1")
+		"-protocol_whitelist", "file", "-i", abs, "-map", mapSpec, "-f", "webvtt", "pipe:1")
 	var out, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &stderr
 	if err := cmd.Run(); err != nil {

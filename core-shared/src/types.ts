@@ -34,6 +34,9 @@ export interface User extends UserAppearance {
  */
 export const LOGIN_PATTERN = '[A-Za-z0-9._\\-]{3,32}'
 
+/** Nejkratší heslo, které přijme registrace, změna i reset hesla. */
+export const MIN_PASSWORD = 8
+
 export function loginHint(): string {
   return t('labels.loginHint')
 }
@@ -110,10 +113,36 @@ export interface UpdateUserRequest {
   display_name: string
   email: string
   login: string
+  /** Povinné, když uživatel mění vlastní e-mail nebo login. */
+  current_password?: string
 }
 
 export interface ChangePasswordRequest {
   password: string
+  /** Povinné při změně vlastního hesla; admin u cizího účtu ho neposílá. */
+  current_password?: string
+}
+
+// --- přihlášená zařízení a odhlášení (GET /users/{id}/devices …) ---
+
+export type DeviceSessionScope = 'mobile' | 'tv'
+
+/** Přihlášené zařízení – mobilní aplikace nebo televize. */
+export interface DeviceSession {
+  id: string
+  scope: DeviceSessionScope
+  device_name: string
+  created_at: string
+  last_seen_at: string
+}
+
+/**
+ * Odpověď na změnu hesla a „Odhlásit všude“. Token přijde, jen když volající
+ * mění vlastní účet – dosavadní tokeny přestaly platit a web si uloží nový.
+ */
+export interface SessionResetResponse {
+  status: string
+  token?: string
 }
 
 export function roleLabel(role: Role): string {
@@ -171,6 +200,9 @@ const AUDIT_ACTIONS = [
   'user.role_change',
   'user.delete',
   'user.password_reset',
+  'user.password_change',
+  'user.device_revoke',
+  'user.logout_all',
   'settings.metadata_update',
   'settings.registration_update',
   'settings.library_update',
@@ -182,6 +214,21 @@ const AUDIT_ACTIONS = [
   'scanner.rescan',
   'library.repair_apply',
   'library.merge_books',
+  'library.import',
+  'sceniter.library_create',
+  'sceniter.library_update',
+  'sceniter.library_delete',
+  'sceniter.library_reorder',
+  'sceniter.scanner_rescan',
+  'sceniter.match',
+  'sceniter.unmatch',
+  'sceniter.edit',
+  'sceniter.detach_file',
+  'sceniter.renumber',
+  'sceniter.trash_file',
+  'sceniter.trash_restore',
+  'sceniter.trash_delete',
+  'sceniter.trash_empty',
 ] as const
 
 /** Čitelný název akce v auditu; neznámá akce se ukáže, jak přišla. */

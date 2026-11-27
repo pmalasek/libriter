@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"mediater/internal/core/safehttp"
 )
 
 // Prázdný český popis dílu se doplní z angličtiny, existující zůstane.
@@ -28,6 +30,7 @@ func TestSeasonFallsBackToEnglishOverview(t *testing.T) {
 
 	c := New("key", "cs-CZ")
 	c.baseURL = srv.URL
+	c.http = safehttp.NewClient(safehttp.AllowAddr(srv.Listener.Addr().String()))
 	s, err := c.Season(context.Background(), 42, 1)
 	if err != nil {
 		t.Fatal(err)
@@ -57,6 +60,7 @@ func TestSeasonNoFallbackWhenComplete(t *testing.T) {
 
 	c := New("key", "cs-CZ")
 	c.baseURL = srv.URL
+	c.http = safehttp.NewClient(safehttp.AllowAddr(srv.Listener.Addr().String()))
 	if _, err := c.Season(context.Background(), 42, 1); err != nil {
 		t.Fatal(err)
 	}

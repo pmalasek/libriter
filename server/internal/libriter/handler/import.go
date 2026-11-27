@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"mediater/internal/core/fsroot"
+	"mediater/internal/core/imagestore"
 	"mediater/internal/libriter/importer"
 	"mediater/internal/libriter/service"
 
@@ -38,6 +40,10 @@ func (h *ImportHandler) List(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/admin/import  (admin) – založí prázdný import
 func (h *ImportHandler) Create(w http.ResponseWriter, r *http.Request) {
 	sess, err := h.svc.Create()
+	if errors.Is(err, importer.ErrTooManyOpen) {
+		writeError(w, http.StatusTooManyRequests, "import.too_many_sessions", err.Error())
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "import.create_failed", "import se nepodařilo založit")
 		return
@@ -72,7 +78,9 @@ func (h *ImportHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	_ = rc.SetReadDeadline(time.Now().Add(uploadDeadline))
 	_ = rc.SetWriteDeadline(time.Now().Add(uploadDeadline))
 
-	stored, err := h.svc.AddFile(id, r.URL.Query().Get("path"), r.Body)
+	// ContentLength je -1, když klient velikost neposlal (chunked) – pak
+	// importér rezervuje celý zbytek limitu relace.
+	stored, err := h.svc.AddFile(id, r.URL.Query().Get("path"), r.Body, r.ContentLength)
 	if err != nil {
 		h.writeErr(w, err)
 		return
@@ -150,19 +158,28 @@ func (h *ImportHandler) Cover(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	filePath, data, mime, err := h.svc.CoverFile(id, r.URL.Query().Get("key"))
+	// MIME typ z tagu se nepoužije – rozhoduje jen obsah (viz níže).
+	filePath, data, _, err := h.svc.CoverFile(id, r.URL.Query().Get("key"))
 	if err != nil {
 		h.writeErr(w, err)
 		return
 	}
-	w.Header().Set("Cache-Control", "private, max-age=3600")
 	if filePath != "" {
-		http.ServeFile(w, r, filePath)
+		// Soubor nahrál uživatel: FIFO ani obří soubor se nečte.
+		data, err = fsroot.ReadFile(filePath, imagestore.MaxBytes)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "import.not_found", "obálka nenalezena")
+			return
+		}
+	}
+	// Prohlížeč by HTML s příponou .jpg vykreslil jako stránku na doméně
+	// aplikace – vydá se jen to, co je podle obsahu obrázek, a s tímto typem.
+	if imagestore.SniffExt(data) == "" {
+		writeError(w, http.StatusNotFound, "import.not_found", "obálka nenalezena")
 		return
 	}
-	if mime != "" {
-		w.Header().Set("Content-Type", mime)
-	}
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("Content-Type", http.DetectContentType(data))
 	_, _ = w.Write(data)
 }
 
@@ -195,6 +212,8 @@ func (h *ImportHandler) writeErr(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "import.not_found", err.Error())
 	case errors.Is(err, importer.ErrWrongState):
 		writeError(w, http.StatusConflict, "import.wrong_state", err.Error())
+	case errors.Is(err, importer.ErrUploadBusy):
+		writeError(w, http.StatusConflict, "import.upload_in_progress", err.Error())
 	case errors.Is(err, importer.ErrInvalidPath):
 		writeError(w, http.StatusBadRequest, "import.invalid_path", err.Error())
 	case errors.Is(err, importer.ErrFileType):

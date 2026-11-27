@@ -15,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"mediater/internal/core/middleware"
 	"mediater/internal/sceniter/model"
 	"mediater/internal/sceniter/storage"
 	"mediater/internal/sceniter/stream"
@@ -67,7 +68,7 @@ func (h *Handler) Playback(w http.ResponseWriter, r *http.Request) {
 		d.Mode = stream.ModeDirect
 	}
 
-	token, expires, err := h.Auth.GenerateStreamToken(userID(r))
+	token, expires, err := h.Auth.GenerateStreamToken(middleware.ClaimsFromCtx(r.Context()))
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "common.internal", "token pro přehrávání se nepodařilo vydat")
 		return
@@ -77,7 +78,7 @@ func (h *Handler) Playback(w http.ResponseWriter, r *http.Request) {
 	resp := PlaybackResponse{MediaID: mf.ID, DurationSec: mf.DurationSec, TokenExpiry: expires, Decision: d,
 		TranscodingAvailable: h.HLS.Available(), Subtitles: []subtitleTrack{}}
 	// Poměr stran je jen kosmetika – jeho chyba přehrávání neshodí.
-	if ratio, err := h.Store.MediaAspectRatio(r.Context(), mf.ID); err != nil {
+	if ratio, err := h.Store.MediaAspectRatio(r.Context(), userID(r), mf.ID); err != nil {
 		slog.Warn("poměr stran titulu", "media", mf.ID, "err", err)
 	} else {
 		resp.AspectRatio = ratio
@@ -140,11 +141,11 @@ func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.streamUser(w, r); !ok {
 		return
 	}
-	_, abs, ok := h.mediaFile(w, r)
+	mf, _, ok := h.mediaFile(w, r)
 	if !ok {
 		return
 	}
-	if !stream.ServeFile(w, r, abs) {
+	if !stream.ServeFile(w, r, h.VideoRoot, mf.FilePath) {
 		writeError(w, http.StatusNotFound, "media.not_found", "soubor videa nenalezen")
 	}
 }

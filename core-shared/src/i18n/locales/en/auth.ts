@@ -41,6 +41,8 @@ export default {
     code: 'Code from the TV',
     check: 'Continue',
     confirm: 'Sign in {{name}} to the account {{user}}?',
+    warningTitle: 'Only allow your own TV',
+    warning: 'Only allow this if you can see this exact code on your own TV right now. If someone else sent you the code or link, do not allow it – they would get access to your account.',
     unnamed: 'TV',
     approve: 'Allow',
     approving: 'Allowing…',

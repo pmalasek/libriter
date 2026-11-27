@@ -61,6 +61,9 @@ type Deps struct {
 	MaxHeight int
 	// Thumbs vytváří zmenšeniny plakátů a obrázků (?w=); nil = jen originály.
 	Thumbs *imgthumb.Cache
+
+	// Watching čte historii sledování pro administraci.
+	Watching *service.Watching
 }
 
 // Handler obsluhuje API Sceniteru.
@@ -181,6 +184,8 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Post("/admin/trash/delete", h.DeleteTrash)
 					r.Post("/admin/trash/empty", h.EmptyTrash)
 					r.Get("/admin/stats", h.Stats)
+					r.Get("/admin/watching", h.WatchingOverview)
+					r.Get("/admin/watching/{userId}", h.WatchingUser)
 					r.Get("/admin/transcode", h.TranscodeSessions)
 					r.Delete("/admin/transcode/{session}", h.StopTranscode)
 				})
@@ -206,21 +211,18 @@ func userID(r *http.Request) uuid.UUID {
 }
 
 // streamUser ověří token ?t= pro přehrávání stejně jako audio Libriteru:
-// token se scope stream, existující účet a role aspoň reader.
+// token se scope stream, existující účet, platná verze tokenů a relace
+// zařízení a role aspoň reader.
 func (h *Handler) streamUser(w http.ResponseWriter, r *http.Request) (uuid.UUID, bool) {
-	id, err := h.Auth.ParseStreamToken(r.URL.Query().Get("t"))
+	claims, err := h.Auth.ParseStreamToken(r.URL.Query().Get("t"))
 	if err != nil {
 		writeError(w, http.StatusUnauthorized, "auth.stream_token_invalid", "neplatný nebo vypršelý token pro přehrávání")
 		return uuid.Nil, false
 	}
-	role, err := h.Auth.ResolveRole(r.Context(), id)
-	if errors.Is(err, coreservice.ErrNotFound) {
-		writeError(w, http.StatusUnauthorized, "auth.account_gone", "účet již neexistuje")
-		return uuid.Nil, false
-	}
+	id, _ := uuid.Parse(claims.Subject) // ParseStreamToken subjekt ověřil
+	role, err := h.Auth.Authorize(r.Context(), claims)
 	if err != nil {
-		slog.Error("video: ověření uživatele", "user_id", id, "err", err)
-		writeError(w, http.StatusInternalServerError, "common.internal", "chyba při ověření uživatele")
+		middleware.WriteAuthorizeError(w, id, err)
 		return uuid.Nil, false
 	}
 	if lvl, ok := coremodel.RoleLevel[role]; !ok || lvl > coremodel.RoleLevel[coremodel.RoleReader] {

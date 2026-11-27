@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"mediater/internal/core/safehttp"
 )
 
 func TestClient(t *testing.T) {
@@ -34,6 +36,7 @@ func TestClient(t *testing.T) {
 	}))
 	defer srv.Close()
 	c := New().WithBaseURL(srv.URL)
+	c.http = safehttp.NewClient(safehttp.AllowAddr(srv.Listener.Addr().String()))
 	ctx := context.Background()
 
 	res, err := c.Search(ctx, "the office")

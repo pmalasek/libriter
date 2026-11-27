@@ -60,7 +60,7 @@ export default {
     deleted: 'Účet {{email}} byl smazán.',
     deleteTitle: 'Smazat účet?',
     deleteDescription:
-      'Účet <strong>{{email}}</strong> se smaže i s jeho pozicemi v přehrávání a záložkami. Knihy v knihovně to nijak nezmění.',
+      'Účet <strong>{{email}}</strong> se smaže i s jeho pozicemi v přehrávání, historií a záložkami. Obsah knihovny to nijak nezmění.',
     deleting: 'Mažu…',
     passwordTooShort: 'Heslo musí mít alespoň {{min}} znaků.',
     fields: {
@@ -160,7 +160,7 @@ export default {
       'Při vypnuté registraci zakládá účty výhradně administrátor (záložka Uživatelé nebo příkaz <code>libriter user add</code>).',
     enable: 'Povolit veřejnou registraci',
     defaultRole: 'Role nového účtu',
-    roleHint: 'Čtenář si knihovnu jen prohlíží, editor smí upravovat knihy a autory.',
+    roleHint: 'Čtenář si knihovnu jen prohlíží, editor smí upravovat její obsah a metadata.',
   },
   unsavedChanges: 'Máte neuložené změny.',
   metadata: {
@@ -179,6 +179,11 @@ export default {
       'Bez klíče platí anonymní denní kvóta sdílená pro celou IP adresu, která se snadno vyčerpá. Klíč se získá v Google Cloud konzoli po zapnutí Books API.',
     apiKey: 'Klíč API',
     optional: 'nepovinné',
+    apiKeySet: 'Klíč je uložený – pro změnu zadejte nový',
+    apiKeyFromEnv: 'Klíč je nastavený v konfiguraci serveru (GOOGLE_BOOKS_API_KEY). Klíč uložený zde má přednost.',
+    apiKeyClear: 'Smazat klíč',
+    apiKeyWillClear: 'Klíč se po uložení smaže.',
+    apiKeyKeep: 'Ponechat klíč',
     languagesTitle: 'Zdroje podle jazyka knihy',
     languagesDescription: 'Pro knihy v těchto jazycích se místo výchozího pořadí použije vlastní. Jazyk hledání se předvyplní z knihy a v dialogu jde přepnout.',
     addLanguage: 'Přidat jazyk',

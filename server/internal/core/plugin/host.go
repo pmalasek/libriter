@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -19,6 +18,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"mediater/internal/core/safehttp"
 )
 
 const (
@@ -169,8 +170,10 @@ type Host struct {
 // voláním Discover.
 func NewHost(dir string) *Host {
 	h := &Host{
-		dir:        dir,
-		http:       &http.Client{Timeout: 30 * time.Second},
+		dir: dir,
+		// Adresy obrázků určuje zdroj metadat (tedy cizí web): spojení jen
+		// na veřejné adresy a porty 80/443, i po přesměrování.
+		http:       safehttp.NewClient(safehttp.WithTimeout(30 * time.Second)),
 		log:        slog.Default().With("component", "plugins"),
 		timeout:    callTimeout,
 		backoffMin: backoffMin,
@@ -406,12 +409,12 @@ func (h *Host) DownloadImage(ctx context.Context, name, rawURL string) ([]byte, 
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("obrázek %s: HTTP %d", rawURL, resp.StatusCode)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxImage+1))
+	data, err := safehttp.ReadAll(resp.Body, maxImage)
+	if errors.Is(err, safehttp.ErrTooLarge) {
+		return nil, "", fmt.Errorf("obrázek %s je větší než %d MB", rawURL, maxImage>>20)
+	}
 	if err != nil {
 		return nil, "", err
-	}
-	if len(data) > maxImage {
-		return nil, "", fmt.Errorf("obrázek %s je větší než %d MB", rawURL, maxImage>>20)
 	}
 	return data, resp.Header.Get("Content-Type"), nil
 }

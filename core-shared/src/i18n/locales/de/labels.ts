@@ -15,6 +15,9 @@ export default {
       role_change: 'Rolle geändert',
       delete: 'Konto gelöscht',
       password_reset: 'Passwort zurückgesetzt',
+      password_change: 'Passwort geändert',
+      device_revoke: 'Gerät abgemeldet',
+      logout_all: 'Überall abgemeldet',
     },
     settings: {
       metadata_update: 'Metadatenquellen geändert',
@@ -42,6 +45,22 @@ export default {
       merge_books: 'Aufgeteilte Bücher zusammengeführt',
       import: 'Bücher importiert',
     },
+    sceniter: {
+      library_create: 'Videobibliothek erstellt',
+      library_update: 'Videobibliothek geändert',
+      library_delete: 'Videobibliothek gelöscht',
+      library_reorder: 'Reihenfolge der Videobibliotheken geändert',
+      scanner_rescan: 'Prüfung der Videobibliothek gestartet',
+      match: 'Titel mit Metadaten verknüpft',
+      unmatch: 'Metadaten-Verknüpfung des Titels aufgehoben',
+      edit: 'Titel bearbeitet',
+      detach_file: 'Datei vom Titel getrennt',
+      renumber: 'Episoden neu nummeriert',
+      trash_file: 'Datei in den Papierkorb verschoben',
+      trash_restore: 'Datei aus dem Papierkorb wiederhergestellt',
+      trash_delete: 'Datei endgültig aus dem Papierkorb gelöscht',
+      trash_empty: 'Papierkorb geleert',
+    },
   },
   listControls: {
     view: 'Ansicht',
@@ -53,6 +72,10 @@ export default {
     tiles: 'Kacheln',
     small: 'Kleine Kacheln',
     list: 'Liste',
+  },
+  shelf: {
+    previous: 'Nach links scrollen',
+    next: 'Nach rechts scrollen',
   },
   authorSort: {
     last_name: 'Nachname',

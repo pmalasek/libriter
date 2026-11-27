@@ -933,7 +933,7 @@ func (m *Matcher) download(ctx context.Context, provider, url, name string) stri
 	if url == "" || m.imageRoot == "" {
 		return ""
 	}
-	data, contentType, err := m.plugins.DownloadImage(ctx, provider, url)
+	data, _, err := m.plugins.DownloadImage(ctx, provider, url)
 	if err != nil {
 		// Pauzu zdroje zalogoval hostitel; titul se pak celý zahodí.
 		if !plugin.IsRateLimited(err) {
@@ -941,11 +941,9 @@ func (m *Matcher) download(ctx context.Context, provider, url, name string) stri
 		}
 		return ""
 	}
-	ext := imagestore.ExtForContentType(contentType)
-	if ext == "" {
-		ext = imagestore.SniffExt(data)
-	}
-	file, err := imagestore.Write(m.imageRoot, name, data, ext)
+	// Typ (a příponu) určí imagestore.Write podle obsahu; Content-Type zdroje
+	// nerozhoduje a data, která obrázek nejsou, se neuloží.
+	file, err := imagestore.Write(m.imageRoot, name, data)
 	if err != nil {
 		m.log.Warn("uložení obrázku", "name", name, "err", err)
 		return ""

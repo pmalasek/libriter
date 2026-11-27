@@ -49,7 +49,7 @@ func TestUserAppearancePersistsAcrossLoginAndProfileEdits(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatal(rec.Body.String())
 	}
-	rec = env.do(t, http.MethodPut, path, token, map[string]string{"display_name": "Nové jméno", "email": "updated@example.com"})
+	rec = env.do(t, http.MethodPut, path, token, map[string]string{"display_name": "Nové jméno", "email": "updated@example.com", "current_password": "tajneheslo"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("profile: %d %s", rec.Code, rec.Body.String())
 	}
@@ -184,6 +184,7 @@ func TestUserLanguageRejectsUnauthorizedAndInvalidChanges(t *testing.T) {
 
 func TestRegisterStoresUILanguage(t *testing.T) {
 	env := newAdminTestEnv(t)
+	env.enableRegistration(t)
 	register := func(email, lang string) (int, model.User) {
 		t.Helper()
 		body := map[string]string{"display_name": "Nový", "email": email, "password": "tajneheslo"}

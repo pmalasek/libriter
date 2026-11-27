@@ -228,8 +228,19 @@ func TestRegistrationSettings(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Registration: %v", err)
 	}
-	if !settings.Enabled || settings.DefaultRole != model.RoleReader {
-		t.Errorf("výchozí nastavení = %+v, chtěno zapnutá registrace s rolí reader", settings)
+	if settings.Enabled || settings.DefaultRole != model.RoleReader {
+		t.Errorf("výchozí nastavení = %+v, chtěno vypnutá registrace s rolí reader", settings)
+	}
+
+	if _, err := svc.SetRegistration(ctx, RegistrationSettings{Enabled: true, DefaultRole: model.RoleReader}); err != nil {
+		t.Fatalf("SetRegistration: %v", err)
+	}
+	settings, err = svc.Registration(ctx)
+	if err != nil {
+		t.Fatalf("Registration po zapnutí: %v", err)
+	}
+	if !settings.Enabled {
+		t.Errorf("nastavení = %+v, chtěno zapnutá registrace", settings)
 	}
 
 	if _, err := svc.SetRegistration(ctx, RegistrationSettings{Enabled: false, DefaultRole: model.RoleEditor}); err != nil {

@@ -45,13 +45,15 @@ func scanDeviceCode(row interface{ Scan(...any) error }) (*DeviceCode, error) {
 	return &d, nil
 }
 
-// PurgeDeviceCodes smaže prošlá párování a vrátí počet zbylých.
+// PurgeDeviceCodes smaže prošlá párování a vrátí počet zbylých neschválených.
+// Schválená (čekající jen na vyzvednutí tokenu) se do limitu nepočítají – patří
+// přihlášenému uživateli, ne anonymnímu zájemci o kód.
 func (s *Store) PurgeDeviceCodes(ctx context.Context, now time.Time) (int, error) {
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM device_codes WHERE expires_at <= ?1`, now.Unix()); err != nil {
 		return 0, fmt.Errorf("purge device codes: %w", err)
 	}
 	var n int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM device_codes`).Scan(&n); err != nil {
+	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM device_codes WHERE user_id IS NULL`).Scan(&n); err != nil {
 		return 0, fmt.Errorf("count device codes: %w", err)
 	}
 	return n, nil

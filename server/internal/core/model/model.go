@@ -57,6 +57,19 @@ type User struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+// DeviceSession je přihlášené zařízení uživatele: mobilní aplikace nebo
+// televize. Jednotlivou relaci jde odvolat, aniž by se odhlásila ostatní.
+type DeviceSession struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"-"`
+	// Scope je „mobile“ nebo „tv“.
+	Scope      string     `json:"scope"`
+	DeviceName string     `json:"device_name"`
+	CreatedAt  time.Time  `json:"created_at"`
+	LastSeenAt time.Time  `json:"last_seen_at"`
+	RevokedAt  *time.Time `json:"-"`
+}
+
 // AuditEntry je záznam administrativní akce. ActorEmail je snímek z doby
 // zápisu – účet mohl mezitím zmizet a ActorID je pak NULL.
 type AuditEntry struct {

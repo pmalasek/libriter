@@ -1,0 +1,47 @@
+# Libriter + Sceniter – DEMO instance
+#
+# Na serveru: /opt/libriter-demo/compose.yaml (vedle .env a data/).
+#   cd /opt/libriter-demo && docker compose up -d
+#
+# Weby: libriter.demo.helpdesk24.works, sceniter.demo.helpdesk24.works
+# (nginx proxuje na 172.24.0.46:8082 – port i hosty se nemění).
+
+name: libriter-demo
+
+services:
+  mediater:
+    image: mediater:${MEDIATER_TAG:-latest}
+    container_name: libriter-demo
+    restart: unless-stopped
+    # Relativní cesty z .env (./data/...) míří do /app/data.
+    # Pozor: v .env nepsat komentář za hodnotu (KEY=hodnota # text). Docker ho
+    # odstraní jen po mezeře – po tabulátoru zůstane součástí hodnoty.
+    # TRUSTED_PROXIES v .env: adresa, ze které kontejner vidí spojení od
+    # nginxu – vnitřní IP nginx stroje (na něm `ip route get 172.24.0.46`,
+    # údaj src), např. TRUSTED_PROXIES=172.24.0.10. Bez ní všichni klienti
+    # sdílejí jeden limit přihlášení. Podrobnosti v compose.prod.yaml.
+    env_file: .env
+    # Jen na vnitřní adrese hostitele: nginx běží na jiném stroji a připojuje
+    # se na 172.24.0.46. 127.0.0.1 by ho odřízl, 0.0.0.0 by backend vystavil
+    # na všech rozhraních mimo nginx.
+    ports:
+      - "172.24.0.46:8082:8082"
+    volumes:
+      - ./data:/app/data
+      - transcode:/var/cache/mediater/transcode
+    # Zabezpečení odpovídá dřívějšímu systemd unitu (ProtectSystem=strict,
+    # NoNewPrivileges, zápis jen do dat).
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+
+volumes:
+  transcode:

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -50,6 +51,44 @@ func (c *Config) EnvPath(key, def string) string { return c.env.path(key, def) }
 type ServerConfig struct {
 	Port int
 	Env  string
+	// TrustedProxies jsou adresy reverzních proxy (TRUSTED_PROXIES), jejichž
+	// hlavičkám X-Real-IP a X-Forwarded-For server věří při zjišťování
+	// adresy klienta. Výchozí je jen localhost.
+	TrustedProxies []netip.Prefix
+	// DisableRateLimits vypne limity přihlášení. Jen pro testy – z prostředí
+	// se nenačítá.
+	DisableRateLimits bool
+}
+
+// DefaultTrustedProxies platí, když TRUSTED_PROXIES není nastavená.
+var DefaultTrustedProxies = []string{"127.0.0.0/8", "::1"}
+
+// ParseTrustedProxies převede seznam adres a rozsahů CIDR na prefixy.
+// Samotná adresa znamená právě ji (/32, /128). Neplatná položka je chyba –
+// překlep by jinak potichu vypnul limity přihlášení pro všechny klienty.
+func ParseTrustedProxies(items []string) ([]netip.Prefix, error) {
+	out := make([]netip.Prefix, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if strings.Contains(item, "/") {
+			p, err := netip.ParsePrefix(item)
+			if err != nil {
+				return nil, fmt.Errorf("TRUSTED_PROXIES: neplatný rozsah %q", item)
+			}
+			out = append(out, p.Masked())
+			continue
+		}
+		ip, err := netip.ParseAddr(item)
+		if err != nil {
+			return nil, fmt.Errorf("TRUSTED_PROXIES: neplatná adresa %q", item)
+		}
+		ip = ip.Unmap()
+		out = append(out, netip.PrefixFrom(ip, ip.BitLen()))
+	}
+	return out, nil
 }
 
 // DBConfig popisuje SQLite databázi – jediný soubor na disku.
@@ -145,10 +184,45 @@ var DefaultLanguageProviders = map[string][]string{
 // podepisuje a ověřuje tokeny.
 func Load() (*Config, error) {
 	cfg := load()
-	if cfg.JWT.Secret == "" {
-		return nil, fmt.Errorf("JWT_SECRET není nastaven (hledal jsem .env: %s)", envFileOrNone(cfg.EnvFile))
+	if err := checkJWTSecret(cfg); err != nil {
+		return nil, err
 	}
+	proxies, err := ParseTrustedProxies(envList("TRUSTED_PROXIES", DefaultTrustedProxies))
+	if err != nil {
+		return nil, err
+	}
+	cfg.Server.TrustedProxies = proxies
 	return cfg, nil
+}
+
+// PlaceholderJWTSecret je vzorová hodnota z dřívější dokumentace. Je veřejně
+// známá, takže by s ní kdokoli mohl podepsat vlastní token.
+const PlaceholderJWTSecret = "change-me-before-production"
+
+// MinJWTSecretLen je nejmenší délka JWT_SECRET v bajtech (256 bitů pro HS256).
+const MinJWTSecretLen = 32
+
+// jwtSecretHint radí, jak bezpečný klíč vyrobit.
+const jwtSecretHint = "vygenerujte ho příkazem `openssl rand -hex 32`"
+
+// checkJWTSecret odmítne chybějící nebo zjevně slabý JWT_SECRET. Vzorovou
+// hodnotu odmítá vždy, krátký klíč jen v produkci – při vývoji stačí varování.
+func checkJWTSecret(cfg *Config) error {
+	secret := cfg.JWT.Secret
+	switch {
+	case secret == "":
+		return fmt.Errorf("JWT_SECRET není nastaven (hledal jsem .env: %s); %s", envFileOrNone(cfg.EnvFile), jwtSecretHint)
+	case secret == PlaceholderJWTSecret:
+		return fmt.Errorf("JWT_SECRET obsahuje vzorovou hodnotu %q, kterou zná každý; %s", PlaceholderJWTSecret, jwtSecretHint)
+	case len(secret) < MinJWTSecretLen:
+		if cfg.Server.Env == "production" {
+			return fmt.Errorf("JWT_SECRET je příliš krátký (%d bajtů, v produkci je potřeba aspoň %d); %s",
+				len(secret), MinJWTSecretLen, jwtSecretHint)
+		}
+		slog.Warn("JWT_SECRET je příliš krátký, v produkci server nenastartuje; vygenerujte ho příkazem `openssl rand -hex 32`",
+			"délka", len(secret), "minimum", MinJWTSecretLen)
+	}
+	return nil
 }
 
 // LoadCLI načte konfiguraci pro příkazy, které nepracují s tokeny

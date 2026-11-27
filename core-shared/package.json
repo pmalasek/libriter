@@ -10,7 +10,8 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "i18n:check": "tsx scripts/i18n-check.ts"
+    "i18n:check": "tsx scripts/i18n-check.ts",
+    "test": "tsx --test test/*.test.ts"
   },
   "devDependencies": {
     "tsx": "^4.23.15",

@@ -41,6 +41,8 @@ import {
   type RenumberPlan,
   type ShowFolder,
   type TrashLibrary,
+  type WatchingDetail,
+  type WatchingSummary,
 } from 'sceniter-shared'
 
 const BASE = '/sceniter'
@@ -368,6 +370,26 @@ export function useAdminStats() {
     queryFn: () => apiFetch<SceniterStats>(`${BASE}/admin/stats`),
     // Během kontroly knihovny se stav obnovuje průběžně.
     refetchInterval: (query) => (query.state.data?.scanner.running ? 2000 : false),
+  })
+}
+
+/** Přehled sledování všech účtů (jen čtení). */
+export function useAdminWatching() {
+  return useQuery({
+    queryKey: queryKeys.adminWatching,
+    queryFn: async () => list(await apiFetch<WatchingSummary[] | null>(`${BASE}/admin/watching`)),
+  })
+}
+
+/** Historie sledování jednoho účtu za posledních `days` dní, po titulech a dnech. */
+export function useAdminWatchingUser(userId: string, days: number) {
+  return useQuery({
+    queryKey: queryKeys.adminWatchingUser(userId, days),
+    queryFn: async () => {
+      const detail = await apiFetch<WatchingDetail>(`${BASE}/admin/watching/${userId}?days=${days}`)
+      return { ...detail, entries: list(detail.entries) }
+    },
+    enabled: Boolean(userId),
   })
 }
 

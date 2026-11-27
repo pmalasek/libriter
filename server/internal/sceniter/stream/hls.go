@@ -110,6 +110,9 @@ type Manager struct {
 	mu       sync.Mutex
 	sessions map[string]*Session
 	byKey    map[string]*Session
+	// pending jsou místa v limitu rezervovaná převody, které ještě
+	// zjišťují začátek (seekLanding) – i to spouští ffprobe a ffmpeg.
+	pending int
 }
 
 // NewManager vytvoří správce převodů. root je pracovní adresář (obsah se při
@@ -179,16 +182,24 @@ func (m *Manager) Open(o Options) (*Session, error) {
 	}
 	key := sessionKey(o)
 
+	// Přehrávač master playlist načítá víc než jednou, proto se nejdřív
+	// zkusí běžící převod. Jinak se pod zámkem rezervuje místo v limitu –
+	// ještě před seekLanding, který sám spouští ffprobe a ffmpeg; bez
+	// rezervace by souběžné požadavky limit obešly.
 	m.mu.Lock()
 	if s, ok := m.byKey[key]; ok {
 		s.touch()
 		m.mu.Unlock()
 		return s, nil
 	}
+	if m.usedLocked(o)+m.pending >= m.max {
+		m.mu.Unlock()
+		return nil, ErrBusy
+	}
+	m.pending++
 	m.mu.Unlock()
 
-	// Místo začátku se zjišťuje mimo zámek (ffmpeg čte soubor). Přehrávač
-	// master playlist načítá víc než jednou, proto se nejdřív zkusí běžící.
+	// Místo začátku se zjišťuje mimo zámek (ffmpeg čte soubor).
 	start := 0.0
 	if o.Start > 0 && m.ffprobe != "" {
 		k, err := seekLanding(m.appCtx, m.ffmpeg, m.ffprobe, o.Path, o.Start)
@@ -200,6 +211,9 @@ func (m *Manager) Open(o Options) (*Session, error) {
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	// Rezervace končí tady v každém případě: buď z ní vznikne session,
+	// nebo se vrací chyba.
+	m.pending--
 	if s, ok := m.byKey[key]; ok {
 		s.touch()
 		return s, nil
@@ -211,7 +225,7 @@ func (m *Manager) Open(o Options) (*Session, error) {
 			m.removeLocked(s)
 		}
 	}
-	if len(m.sessions) >= m.max {
+	if len(m.sessions)+m.pending >= m.max {
 		return nil, ErrBusy
 	}
 
@@ -229,6 +243,18 @@ func (m *Manager) Open(o Options) (*Session, error) {
 	m.byKey[key] = s
 	m.log.Info("převod spuštěn", "session", id, "mode", o.Mode, "media", o.MediaID, "start", start)
 	return s, nil
+}
+
+// usedLocked spočítá místa obsazená převody, které Open pro o nenahradí
+// (převody téhož souboru stejného uživatele se při spuštění ukončí).
+func (m *Manager) usedLocked(o Options) int {
+	n := 0
+	for _, s := range m.sessions {
+		if s.UserID != o.UserID || s.MediaID != o.MediaID {
+			n++
+		}
+	}
+	return n
 }
 
 // Lookup vrátí session uživatele podle ID.
@@ -366,7 +392,9 @@ func ffmpegArgs(o Options, dir string, start int, from float64) []string {
 		// stopami by šel do fMP4 jen přes edit list, který ExoPlayer ignoruje.
 		args = append(args, "-ss", strconv.FormatFloat(from, 'f', 3, 64), "-noaccurate_seek")
 	}
-	args = append(args, "-i", o.Path, "-map", "0:v:0")
+	// Vstupem je vždy místní soubor; playlist nebo .concat v knihovně nesmí
+	// ffmpeg poslat na síť ani k souborům mimo ni.
+	args = append(args, "-protocol_whitelist", "file", "-i", o.Path, "-map", "0:v:0")
 	if o.Audio != nil {
 		args = append(args, "-map", "0:"+strconv.Itoa(*o.Audio))
 	} else {

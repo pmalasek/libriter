@@ -41,6 +41,8 @@ export default {
     code: 'Code de la TV',
     check: 'Continuer',
     confirm: 'Connecter {{name}} au compte {{user}} ?',
+    warningTitle: 'N’autorisez que votre propre TV',
+    warning: 'N’autorisez cet appareil que si vous voyez exactement ce code sur votre propre TV en ce moment. Si quelqu’un d’autre vous a envoyé le code ou le lien, refusez : cette personne aurait accès à votre compte.',
     unnamed: 'TV',
     approve: 'Autoriser',
     approving: 'Autorisation…',

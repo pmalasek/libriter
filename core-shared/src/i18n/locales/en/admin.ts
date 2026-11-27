@@ -58,7 +58,7 @@ export default {
     deleted: 'Account {{email}} has been deleted.',
     deleteTitle: 'Delete account?',
     deleteDescription:
-      'Account <strong>{{email}}</strong> will be deleted along with its playback positions and bookmarks. Books in the library are not affected.',
+      'Account <strong>{{email}}</strong> will be deleted along with its playback positions, history and bookmarks. The library content is not affected.',
     deleting: 'Deleting…',
     passwordTooShort: 'Password must be at least {{min}} characters long.',
     fields: {
@@ -157,7 +157,7 @@ export default {
       'With registration disabled, accounts are created only by an administrator (Users tab or the <code>libriter user add</code> command).',
     enable: 'Allow public registration',
     defaultRole: 'Role of new accounts',
-    roleHint: 'A reader can only browse the library, an editor can edit books and authors.',
+    roleHint: 'A reader can only browse the library, an editor can edit its content and metadata.',
   },
   unsavedChanges: 'You have unsaved changes.',
   metadata: {
@@ -176,6 +176,11 @@ export default {
       'Without a key, an anonymous daily quota shared by the whole IP address applies, and it runs out easily. You can get a key in the Google Cloud console after enabling the Books API.',
     apiKey: 'API key',
     optional: 'optional',
+    apiKeySet: 'A key is saved – type a new one to replace it',
+    apiKeyFromEnv: 'The key is set in the server configuration (GOOGLE_BOOKS_API_KEY). A key saved here takes precedence.',
+    apiKeyClear: 'Remove key',
+    apiKeyWillClear: 'The key will be removed when you save.',
+    apiKeyKeep: 'Keep key',
     languagesTitle: 'Sources by book language',
     languagesDescription: 'Books in these languages use their own order instead of the default one. The search language is prefilled from the book and can be switched in the dialog.',
     addLanguage: 'Add language',
