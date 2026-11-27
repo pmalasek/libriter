@@ -32,6 +32,7 @@ import (
 
 	"mediater/internal/core/htmlutil"
 	"mediater/internal/core/plugin"
+	"mediater/internal/core/safehttp"
 )
 
 const (
@@ -79,7 +80,8 @@ type Client struct {
 }
 
 func New() *Client {
-	return &Client{baseURL: defaultBaseURL, http: &http.Client{Timeout: 20 * time.Second}}
+	// Jen veřejné adresy a porty 80/443 i po přesměrování (SSRF).
+	return &Client{baseURL: defaultBaseURL, http: safehttp.NewClient(safehttp.WithTimeout(20 * time.Second))}
 }
 
 // WithBaseURL přesměruje klienta (testy).

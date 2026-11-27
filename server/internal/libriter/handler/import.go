@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"time"
 
+	"mediater/internal/core/fsroot"
+	"mediater/internal/core/imagestore"
 	"mediater/internal/libriter/importer"
 	"mediater/internal/libriter/service"
 
@@ -156,19 +158,28 @@ func (h *ImportHandler) Cover(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	filePath, data, mime, err := h.svc.CoverFile(id, r.URL.Query().Get("key"))
+	// MIME typ z tagu se nepoužije – rozhoduje jen obsah (viz níže).
+	filePath, data, _, err := h.svc.CoverFile(id, r.URL.Query().Get("key"))
 	if err != nil {
 		h.writeErr(w, err)
 		return
 	}
-	w.Header().Set("Cache-Control", "private, max-age=3600")
 	if filePath != "" {
-		http.ServeFile(w, r, filePath)
+		// Soubor nahrál uživatel: FIFO ani obří soubor se nečte.
+		data, err = fsroot.ReadFile(filePath, imagestore.MaxBytes)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "import.not_found", "obálka nenalezena")
+			return
+		}
+	}
+	// Prohlížeč by HTML s příponou .jpg vykreslil jako stránku na doméně
+	// aplikace – vydá se jen to, co je podle obsahu obrázek, a s tímto typem.
+	if imagestore.SniffExt(data) == "" {
+		writeError(w, http.StatusNotFound, "import.not_found", "obálka nenalezena")
 		return
 	}
-	if mime != "" {
-		w.Header().Set("Content-Type", mime)
-	}
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("Content-Type", http.DetectContentType(data))
 	_, _ = w.Write(data)
 }
 

@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"mediater/internal/core/fsroot"
 	"mediater/internal/libriter/storage"
 
 	"github.com/fsnotify/fsnotify"
@@ -212,6 +213,13 @@ func (s *Scanner) isAudio(path string) bool {
 	return audioExts[strings.ToLower(filepath.Ext(path))]
 }
 
+// inLibrary řekne, jestli absPath je běžný soubor uvnitř knihovny – po
+// překladu symbolických odkazů. Odkaz mezi složkami knihovny projde.
+func (s *Scanner) inLibrary(absPath string) bool {
+	_, err := fsroot.Stat(s.audioRoot, absPath)
+	return err == nil
+}
+
 // relPath vrátí cestu relativní k audioRoot pro ukládání do DB.
 func (s *Scanner) relPath(absPath string) string {
 	rel, err := filepath.Rel(s.audioRoot, absPath)
@@ -252,6 +260,11 @@ func (s *Scanner) runScan(ctx context.Context) {
 
 	err := filepath.WalkDir(s.audioRoot, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !s.isAudio(path) {
+			return nil
+		}
+		// Jen běžný soubor nebo odkaz na něj uvnitř knihovny (FIFO by
+		// zablokovalo čtení tagů, odkaz ven by vynesl cizí soubor).
+		if !d.Type().IsRegular() && !s.inLibrary(path) {
 			return nil
 		}
 		select {
@@ -318,6 +331,10 @@ func (s *Scanner) handleFSEvent(ctx context.Context, watcher *fsnotify.Watcher, 
 	// Nový adresář → přidat do watcheru, aby byly sledovány i soubory v něm
 	if event.Has(fsnotify.Create) {
 		if fi, err := os.Stat(event.Name); err == nil && fi.IsDir() {
+			// Odkaz na složku mimo knihovnu se nesleduje.
+			if !fsroot.Contains(s.audioRoot, event.Name) {
+				return
+			}
 			_ = watcher.Add(event.Name)
 			s.log.Debug("přidán do watcheru", "dir", event.Name)
 			return
@@ -392,6 +409,13 @@ func (s *Scanner) waitAndProcess(ctx context.Context, absPath string) {
 // Vrací, jestli kapitola vznikla, a chybu pro statistiku průchodu.
 func (s *Scanner) processFile(ctx context.Context, absPath string) (bool, error) {
 	rel := s.relPath(absPath)
+
+	// Ze watcheru i z importu sem může přijít cokoli – stejná kontrola jako
+	// při průchodu. Přeskočení není chyba průchodu.
+	if !s.inLibrary(absPath) {
+		s.log.Warn("přeskakuji soubor: chybí, není běžný nebo vede mimo knihovnu", "path", rel)
+		return false, nil
+	}
 
 	// Rychlá kontrola mimo zámek – kapitola identifikována cestou k souboru
 	exists, err := s.store.ChapterExistsByFilePath(ctx, rel)

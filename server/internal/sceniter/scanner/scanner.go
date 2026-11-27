@@ -31,6 +31,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 	"github.com/google/uuid"
 
+	"mediater/internal/core/fsroot"
 	"mediater/internal/sceniter/model"
 	"mediater/internal/sceniter/storage"
 )
@@ -251,6 +252,13 @@ func (s *Scanner) run(ctx context.Context) {
 			if d.IsDir() || !IsVideo(path) {
 				return nil
 			}
+			// Odkaz ven z knihovny nebo FIFO se bere jako neexistující –
+			// dřívější záznam pro ně se pak uklidí jako zmizelý soubor.
+			if !d.Type().IsRegular() {
+				if _, err := fsroot.Stat(s.root, path); err != nil {
+					return nil
+				}
+			}
 			seen[s.rel(path)] = true
 			added, perr := s.processIn(ctx, lib, path)
 			s.count(added, perr)
@@ -356,8 +364,10 @@ func (s *Scanner) process(ctx context.Context, abs string) (bool, error) {
 // processIn založí nebo aktualizuje jeden soubor knihovny. Vrací true
 // u nového souboru.
 func (s *Scanner) processIn(ctx context.Context, lib *model.Library, abs string) (bool, error) {
-	info, err := os.Stat(abs)
-	if err != nil || !info.Mode().IsRegular() {
+	// Jen běžný soubor nebo odkaz na něj uvnitř VIDEO_ROOT – odkaz ven by
+	// zpřístupnil cizí soubor, FIFO by zablokovalo ffprobe.
+	info, err := fsroot.Stat(s.root, abs)
+	if err != nil {
 		return false, nil
 	}
 	rel := s.rel(abs)
@@ -794,6 +804,11 @@ func (s *Scanner) subtitlesFor(abs string) []storage.SubtitleFile {
 		if !ok {
 			continue
 		}
+		// Titulky čte přehrávač každého čtenáře: odkaz mimo knihovnu ani
+		// jiný než běžný soubor se nezapíše.
+		if _, err := fsroot.Stat(s.root, filepath.Join(dir, e.Name())); err != nil {
+			continue
+		}
 		out = append(out, storage.SubtitleFile{
 			FilePath: s.rel(filepath.Join(dir, e.Name())),
 			Language: lang,
@@ -857,7 +872,10 @@ func (s *Scanner) handle(ctx context.Context, w *fsnotify.Watcher, ev fsnotify.E
 	}
 	if ev.Has(fsnotify.Create) {
 		if fi, err := os.Stat(ev.Name); err == nil && fi.IsDir() {
-			_ = w.Add(ev.Name)
+			// Odkaz na složku mimo VIDEO_ROOT se nesleduje.
+			if fsroot.Contains(s.root, ev.Name) {
+				_ = w.Add(ev.Name)
+			}
 			return
 		}
 	}

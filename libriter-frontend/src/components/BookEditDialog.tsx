@@ -294,7 +294,6 @@ function BookEditForm({
             middle_name: author.middle_name,
             last_name: author.last_name,
             bio: null,
-            image_path: null,
             birth_year: null,
             death_year: null,
           })

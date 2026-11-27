@@ -141,11 +141,11 @@ func (h *Handler) Stream(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.streamUser(w, r); !ok {
 		return
 	}
-	_, abs, ok := h.mediaFile(w, r)
+	mf, _, ok := h.mediaFile(w, r)
 	if !ok {
 		return
 	}
-	if !stream.ServeFile(w, r, abs) {
+	if !stream.ServeFile(w, r, h.VideoRoot, mf.FilePath) {
 		writeError(w, http.StatusNotFound, "media.not_found", "soubor videa nenalezen")
 	}
 }

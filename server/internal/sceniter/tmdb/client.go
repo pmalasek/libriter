@@ -15,6 +15,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"mediater/internal/core/safehttp"
 )
 
 const (
@@ -54,7 +56,8 @@ func New(key, language string) *Client {
 		language: language,
 		baseURL:  defaultBaseURL,
 		imageURL: defaultImageURL,
-		http:     &http.Client{Timeout: 20 * time.Second},
+		// Jen veřejné adresy a porty 80/443 i po přesměrování (SSRF).
+		http: safehttp.NewClient(safehttp.WithTimeout(20 * time.Second)),
 	}
 }
 

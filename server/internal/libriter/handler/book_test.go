@@ -1,8 +1,11 @@
 package handler
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"image"
+	"image/jpeg"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -121,8 +124,13 @@ func TestBookHandlerCoverServesFile(t *testing.T) {
 	store, router, coverRoot := newCoverTestEnv(t)
 	book := createTestBook(t, store)
 
-	// Minimální JPEG - stačí magické číslo, http.ServeFile určuje typ dle přípony.
-	data := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 'J', 'F', 'I', 'F'}
+	// Skutečný JPEG – obálka se vydá jen tehdy, když ji obsah prozradí
+	// jako obrázek.
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 2, 2)), nil); err != nil {
+		t.Fatal(err)
+	}
+	data := buf.Bytes()
 	name := book.ID.String() + ".jpg"
 	if err := os.WriteFile(filepath.Join(coverRoot, name), data, 0o644); err != nil {
 		t.Fatalf("zápis obálky: %v", err)
@@ -165,6 +173,31 @@ func TestBookHandlerCoverServesFile(t *testing.T) {
 			t.Errorf("Content-Type = %q, chtěno %q", ct, "image/jpeg")
 		}
 	})
+}
+
+// Soubor s příponou .jpg, který je ve skutečnosti HTML, se nevydá – ani
+// jako originál, ani když zmenšenina selže. Endpoint obálky je bez
+// přihlášení a prohlížeč by HTML mohl vykreslit.
+func TestBookHandlerCoverRejectsNonImage(t *testing.T) {
+	ctx := context.Background()
+	store, router, coverRoot := newCoverTestEnv(t)
+	book := createTestBook(t, store)
+
+	name := book.ID.String() + ".jpg"
+	html := []byte("<!doctype html><html><script>alert(document.cookie)</script></html>")
+	if err := os.WriteFile(filepath.Join(coverRoot, name), html, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.UpdateBookCoverPath(ctx, book.ID, name); err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range []string{"", "?w=320"} {
+		rec := httptest.NewRecorder()
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/books/"+book.ID.String()+"/cover"+q, nil))
+		if rec.Code != http.StatusNotFound || bytes.Contains(rec.Body.Bytes(), []byte("<script>")) {
+			t.Errorf("GET cover%s: status %d, tělo %q", q, rec.Code, rec.Body.String())
+		}
+	}
 }
 
 func TestBookPatchRequestValidation(t *testing.T) {

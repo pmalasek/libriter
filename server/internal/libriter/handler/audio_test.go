@@ -6,7 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
+	"time"
 
 	"mediater/internal/libriter/model"
 	"mediater/internal/libriter/storage"
@@ -170,6 +172,69 @@ func TestAudioStreamRejectsPathsOutsideLibrary(t *testing.T) {
 	rec := env.do(t, http.MethodGet, "/chapters/"+uuid.New().String()+"/audio?t="+streamToken, "", nil)
 	if rec.Code != http.StatusNotFound {
 		t.Errorf("neznámá kapitola: %d", rec.Code)
+	}
+}
+
+// Odkaz ven z knihovny se nevydá, FIFO požadavek nezablokuje a odkaz mezi
+// složkami knihovny dál funguje.
+func TestAudioStreamSymlinksAndFIFO(t *testing.T) {
+	env := newAdminTestEnv(t)
+	token, _ := env.login(t, "odkazy@example.com", model.RoleReader)
+	streamToken := env.streamToken(t, token)
+
+	secret := filepath.Join(filepath.Dir(env.audioRoot), "tajne.mp3")
+	if err := os.WriteFile(secret, []byte("tajemstvi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeChapterFile(t, env, "knihovna/Sdilene/01.mp3", "uvnitr")
+	dir := filepath.Join(env.audioRoot, "knihovna", "Odkazy")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(dir, "ven.mp3")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(env.audioRoot, "knihovna", "Sdilene", "01.mp3"), filepath.Join(dir, "uvnitr.mp3")); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Mkfifo(filepath.Join(dir, "roura.mp3"), 0o644); err != nil {
+		t.Skipf("mkfifo: %v", err)
+	}
+
+	book, err := env.store.CreateBook(context.Background(), storage.BookInput{
+		Title: "Odkazy", DurationSeconds: 60, FilePath: "knihovna/Odkazy", Language: "cs",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, tc := range []struct {
+		file string
+		code int
+		body string
+	}{
+		{"knihovna/Odkazy/ven.mp3", http.StatusNotFound, ""},
+		{"knihovna/Odkazy/roura.mp3", http.StatusNotFound, ""},
+		{"knihovna/Odkazy/uvnitr.mp3", http.StatusOK, "uvnitr"},
+	} {
+		chapter, err := env.store.CreateChapter(context.Background(), storage.ChapterInput{
+			BookID: book.ID, Position: i + 1, Title: "Kapitola", FilePath: tc.file, DurationSeconds: 60,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			rec := env.do(t, http.MethodGet, "/chapters/"+chapter.ID.String()+"/audio?t="+streamToken, "", nil)
+			if rec.Code != tc.code || (tc.body != "" && rec.Body.String() != tc.body) {
+				t.Errorf("%s: %d %q, chtěno %d", tc.file, rec.Code, rec.Body.String(), tc.code)
+			}
+		}()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+			t.Fatalf("%s: požadavek se zablokoval", tc.file)
+		}
 	}
 }
 

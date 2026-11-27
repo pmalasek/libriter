@@ -27,14 +27,15 @@ func seekLanding(ctx context.Context, ffmpeg, ffprobe, path string, at float64) 
 	// -ss se počítá od začátku souboru, -copyts ale vypíše absolutní čas –
 	// začátek souboru (u nahrávek z vysílání i několik sekund) se odečte.
 	out, err := exec.CommandContext(ctx, ffprobe, "-v", "error", "-show_entries", "format=start_time",
-		"-of", "csv=p=0", path).Output()
+		"-of", "csv=p=0", "-protocol_whitelist", "file", path).Output()
 	if err != nil {
 		return 0, fmt.Errorf("ffprobe: %w", err)
 	}
 	fileStart, _ := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 
 	out, err = exec.CommandContext(ctx, ffmpeg, "-nostdin", "-v", "error",
-		"-ss", strconv.FormatFloat(at, 'f', 3, 64), "-noaccurate_seek", "-i", path,
+		"-ss", strconv.FormatFloat(at, 'f', 3, 64), "-noaccurate_seek",
+		"-protocol_whitelist", "file", "-i", path,
 		"-map", "0:v:0", "-c", "copy", "-copyts", "-frames:v", "1", "-f", "framecrc", "-").Output()
 	if err != nil {
 		return 0, fmt.Errorf("ffmpeg: %w", err)

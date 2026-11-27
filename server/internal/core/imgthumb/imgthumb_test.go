@@ -7,7 +7,9 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -103,15 +105,62 @@ func TestThumb(t *testing.T) {
 	}
 }
 
+// Obrázek, který podle obsahu obrázkem je, ale nejde dekódovat (poškozený
+// nebo neznámá varianta), se pošle jako originál – prohlížeč si s ním možná
+// poradí.
 func TestServeFileFallsBackToOriginal(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "broken.jpg")
-	os.WriteFile(src, []byte("not an image"), 0o644)
+	broken := []byte("\xff\xd8\xff\xe0\x00\x10JFIF poškozený zbytek")
+	os.WriteFile(src, broken, 0o644)
 	c := New(filepath.Join(dir, "thumbs"))
 
 	rec := httptest.NewRecorder()
 	c.ServeFile(rec, httptest.NewRequest("GET", "/x?w=160", nil), src)
-	if rec.Code != 200 || rec.Body.String() != "not an image" {
+	if rec.Code != 200 || rec.Body.String() != string(broken) {
 		t.Errorf("fallback: %d %q", rec.Code, rec.Body.String())
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "image/jpeg" {
+		t.Errorf("Content-Type %q", ct)
+	}
+}
+
+// Co obrázkem není (HTML s příponou .jpg), se nevydá – ani se zmenšeninou,
+// ani bez ní. Obálky a fotky jdou ven bez přihlášení.
+func TestServeFileRejectsNonImage(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "cover.jpg")
+	os.WriteFile(src, []byte("<!doctype html><script>alert(1)</script>"), 0o644)
+	c := New(filepath.Join(dir, "thumbs"))
+	for _, target := range []string{"/x", "/x?w=160"} {
+		rec := httptest.NewRecorder()
+		c.ServeFile(rec, httptest.NewRequest("GET", target, nil), src)
+		if rec.Code != 404 || strings.Contains(rec.Body.String(), "<script>") {
+			t.Errorf("%s: %d %q", target, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+// FIFO s názvem obrázku požadavek nezablokuje.
+func TestServeFileRejectsFIFO(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "cover.jpg")
+	if err := syscall.Mkfifo(src, 0o644); err != nil {
+		t.Skipf("mkfifo: %v", err)
+	}
+	c := New(filepath.Join(dir, "thumbs"))
+	done := make(chan int, 1)
+	go func() {
+		rec := httptest.NewRecorder()
+		c.ServeFile(rec, httptest.NewRequest("GET", "/x?w=160", nil), src)
+		done <- rec.Code
+	}()
+	select {
+	case code := <-done:
+		if code != 404 {
+			t.Errorf("FIFO: %d", code)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("vydání FIFO se zablokovalo")
 	}
 }

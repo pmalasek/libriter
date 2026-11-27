@@ -11,9 +11,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"strings"
 
+	"mediater/internal/core/safehttp"
 	"mediater/internal/libriter/model"
 )
 
@@ -440,16 +440,10 @@ func (c *Chain) SupportsImageURL(rawURL string) bool {
 	return false
 }
 
-// HostMatches ověří, že URL má http(s) schéma a hostitele host (volitelně
-// s předponou "www."). Poskytovatelé jím implementují Supports.
+// HostMatches ověří, že URL má http(s) schéma, standardní port a hostitele
+// host (volitelně s předponou "www."). Poskytovatelé jím implementují
+// Supports. Jediná implementace je safehttp.HostMatches – sdílí ji i hostitel
+// pluginů.
 func HostMatches(rawURL, host string) bool {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return false
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return false
-	}
-	return strings.EqualFold(u.Hostname(), host) ||
-		strings.EqualFold(u.Hostname(), "www."+host)
+	return safehttp.HostMatches(rawURL, host)
 }

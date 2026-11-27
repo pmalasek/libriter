@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"mediater/internal/core/safehttp"
 	"mediater/internal/libriter/metadata"
 )
 
@@ -43,6 +44,8 @@ func newTestClient(t *testing.T, market Marketplace, handler http.HandlerFunc) *
 
 	c := NewClient(market)
 	c.apiBase = srv.URL
+	// safehttp jinak spojení na 127.0.0.1 nepovolí.
+	c.fetcher.WithHTTPOptions(safehttp.AllowAddr(srv.Listener.Addr().String()))
 	return c
 }
 

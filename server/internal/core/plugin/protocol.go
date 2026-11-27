@@ -15,9 +15,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
 	"regexp"
-	"strings"
+
+	"mediater/internal/core/safehttp"
 )
 
 // ProtocolVersion je verze protokolu, kterou server umí.
@@ -216,16 +216,8 @@ func codeOf(err error) string {
 	return ""
 }
 
-// HostMatches ověří, že URL má http(s) schéma a hostitele host (volitelně
-// s předponou "www.").
+// HostMatches ověří, že URL má http(s) schéma, standardní port a hostitele
+// host (volitelně s předponou "www."). Viz safehttp.HostMatches.
 func HostMatches(rawURL, host string) bool {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return false
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return false
-	}
-	return strings.EqualFold(u.Hostname(), host) ||
-		strings.EqualFold(u.Hostname(), "www."+host)
+	return safehttp.HostMatches(rawURL, host)
 }

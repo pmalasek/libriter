@@ -1,22 +1,15 @@
 package imagestore
 
 import (
+	"bytes"
+	"errors"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 )
-
-func TestNormalizeExt(t *testing.T) {
-	cases := map[string]string{
-		".JPEG": ".jpeg", "png": ".png", ".xyz": ".jpg", "": ".jpg", ".webp": ".webp",
-	}
-	for in, want := range cases {
-		if got := NormalizeExt(in); got != want {
-			t.Errorf("NormalizeExt(%q) = %q, chtěno %q", in, got, want)
-		}
-	}
-}
 
 func TestExtForContentType(t *testing.T) {
 	cases := map[string]string{
@@ -46,33 +39,58 @@ func TestExtForContentType(t *testing.T) {
 	}
 }
 
-func TestWriteAndCopyFile(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "obrazky") // ještě neexistuje – musí se vytvořit
-
-	src := filepath.Join(t.TempDir(), "folder.JPG")
-	if err := os.WriteFile(src, []byte("obrazek"), 0o644); err != nil {
+// tinyPNG vrátí skutečný obrázek 1×1 – SniffExt ho musí poznat.
+func tinyPNG(t *testing.T) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, image.NewRGBA(image.Rect(0, 0, 1, 1))); err != nil {
 		t.Fatal(err)
 	}
+	return buf.Bytes()
+}
 
-	name, err := CopyFile(root, "kniha", src)
+func TestWrite(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "obrazky") // ještě neexistuje – musí se vytvořit
+	img := tinyPNG(t)
+
+	name, err := Write(root, "kniha", img)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if name != "kniha.jpg" {
+	// Přípona podle obsahu, ne podle toho, co tvrdí zdroj.
+	if name != "kniha.png" {
 		t.Fatalf("název = %q", name)
 	}
 
 	data, err := os.ReadFile(filepath.Join(root, name))
-	if err != nil || string(data) != "obrazek" {
-		t.Fatalf("obsah %q err %v", data, err)
+	if err != nil || !bytes.Equal(data, img) {
+		t.Fatalf("obsah se liší, err %v", err)
 	}
 	// Zápis jde přes .tmp + rename, po sobě nesmí nic zůstat.
 	if entries, _ := os.ReadDir(root); len(entries) != 1 {
 		t.Fatalf("zůstal .tmp soubor: %v", entries)
 	}
 
-	if _, err := Write("", "x", []byte("a"), ".jpg"); err == nil {
+	if _, err := Write("", "x", img); err == nil {
 		t.Error("zápis bez nastaveného adresáře má selhat")
+	}
+}
+
+// HTML vydávající se za obrázek se nesmí uložit – soubory obálek vydává
+// endpoint bez přihlášení.
+func TestWriteRejectsNonImage(t *testing.T) {
+	root := t.TempDir()
+	for _, data := range [][]byte{
+		[]byte("<!doctype html><script>alert(1)</script>"),
+		[]byte("obrazek"),
+		nil,
+	} {
+		if _, err := Write(root, "x", data); !errors.Is(err, ErrNotImage) {
+			t.Errorf("Write(%q) = %v, chtěno ErrNotImage", data, err)
+		}
+	}
+	if entries, _ := os.ReadDir(root); len(entries) != 0 {
+		t.Errorf("na disku něco zůstalo: %v", entries)
 	}
 }
 

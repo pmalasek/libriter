@@ -45,7 +45,10 @@ func Probe(ctx context.Context, ffprobe, path string) *storage.Probe {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, ffprobe, "-v", "error", "-print_format", "json",
-		"-show_format", "-show_streams", path)
+		"-show_format", "-show_streams",
+		// Jen místní soubor: playlist nebo .concat v knihovně by jinak
+		// ffprobe poslal na síť nebo k jiným souborům.
+		"-protocol_whitelist", "file", path)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
@@ -118,7 +121,7 @@ func ProbeTitle(ctx context.Context, ffprobe, path string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 	out, err := exec.CommandContext(ctx, ffprobe, "-v", "error", "-print_format", "json",
-		"-show_entries", "format_tags", path).Output()
+		"-show_entries", "format_tags", "-protocol_whitelist", "file", path).Output()
 	if err != nil {
 		return "", err
 	}

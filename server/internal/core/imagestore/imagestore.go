@@ -6,6 +6,7 @@
 package imagestore
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -25,18 +26,6 @@ var imageExts = map[string]bool{
 // IsImageExt řekne, jestli přípona patří podporovanému obrázku.
 func IsImageExt(ext string) bool {
 	return imageExts[strings.ToLower(ext)]
-}
-
-// NormalizeExt vrátí známou příponu obrázku, jinak ".jpg".
-func NormalizeExt(ext string) string {
-	ext = strings.ToLower(ext)
-	if !strings.HasPrefix(ext, ".") {
-		ext = "." + ext
-	}
-	if imageExts[ext] {
-		return ext
-	}
-	return ".jpg"
 }
 
 // ExtForContentType převede MIME typ na příponu souboru.
@@ -72,15 +61,29 @@ func SniffExt(data []byte) string {
 	return ExtForContentType(http.DetectContentType(data))
 }
 
+// ErrNotImage znamená, že data nejsou podporovaný obrázek.
+var ErrNotImage = errors.New("data nejsou podporovaný obrázek")
+
 // Write uloží data pod názvem <name><ext> do root a vrátí název souboru.
+// Příponu určí obsah (SniffExt) – hlavičce Content-Type, příponě v adrese
+// ani tagu se nevěří; co obrázek není, se neuloží (ErrNotImage). Soubory se
+// vydávají i bez přihlášení, takže sem nesmí projít HTML ani nic jiného.
+//
 // Zapisuje přes dočasný soubor a přejmenování, aby na disku nikdy neležel
 // obrázek stažený jen zpola.
-func Write(root, name string, data []byte, ext string) (string, error) {
+func Write(root, name string, data []byte) (string, error) {
 	if root == "" {
 		return "", fmt.Errorf("adresář pro obrázky není nastaven")
 	}
+	if len(data) > MaxBytes {
+		return "", fmt.Errorf("obrázek je větší než %d MB", MaxBytes>>20)
+	}
+	ext := SniffExt(data)
+	if ext == "" {
+		return "", ErrNotImage
+	}
 
-	fileName := name + NormalizeExt(ext)
+	fileName := name + ext
 
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		return "", fmt.Errorf("vytvoření %s: %w", root, err)
@@ -98,15 +101,6 @@ func Write(root, name string, data []byte, ext string) (string, error) {
 	}
 
 	return fileName, nil
-}
-
-// CopyFile zkopíruje obrázek ze srcPath do root pod názvem name.
-func CopyFile(root, name, srcPath string) (string, error) {
-	data, err := os.ReadFile(srcPath)
-	if err != nil {
-		return "", fmt.Errorf("čtení obrázku %s: %w", srcPath, err)
-	}
-	return Write(root, name, data, filepath.Ext(srcPath))
 }
 
 // ReadLimited načte nejvýš MaxBytes dat; větší vstup skončí chybou, aby

@@ -88,9 +88,6 @@ function AuthorEditForm({ author, onDone }: { author: Author; onDone: () => void
         middle_name: middleName.trim(),
         last_name: lastName.trim(),
         bio: bio.trim() || null,
-        // Formulář obrázek needituje přímo, ale PUT je úplná náhrada – bez
-        // vrácení původní hodnoty by se cesta k fotce vymazala.
-        image_path: author.image_path ?? null,
         birth_year: toYear(birthYear),
         death_year: toYear(deathYear),
       },

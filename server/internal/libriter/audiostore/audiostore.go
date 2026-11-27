@@ -9,34 +9,26 @@ import (
 	"mime"
 	"path/filepath"
 	"strings"
+
+	"mediater/internal/core/fsroot"
 )
 
-// Resolve ověří, že relPath ukazuje na soubor uvnitř root, a vrátí jeho
-// absolutní cestu. Hodnota z databáze může pocházet ze scanu i z ruční
-// editace, proto se kontroluje pokaždé.
+// Resolve ověří, že relPath ukazuje dovnitř root, a vrátí jeho absolutní
+// cestu. Hodnota z databáze může pocházet ze scanu i z ruční editace, proto
+// se kontroluje pokaždé.
+//
+// Kontroluje se i cíl symbolických odkazů: odkaz uvnitř knihovny projde,
+// odkaz ven ne. Neexistující soubor (smazaný, teprve vznikající) projde –
+// volající to pozná sám; obsah se čte přes fsroot.Open, který ověří i typ
+// souboru.
 func Resolve(root, relPath string) (string, bool) {
-	if root == "" || relPath == "" {
-		return "", false
-	}
 	// Windows oddělovač by na Linuxu prošel jako součást názvu a schoval by
 	// tak `..\` v cestě; v knihovně nemá co dělat.
-	if strings.ContainsRune(relPath, '\\') || filepath.IsAbs(relPath) {
+	if strings.ContainsRune(relPath, '\\') {
 		return "", false
 	}
-	for _, part := range strings.Split(relPath, "/") {
-		if part == ".." {
-			return "", false
-		}
-	}
-
-	// root může být relativní cesta (viz config.env.path).
-	absRoot, err := filepath.Abs(root)
-	if err != nil {
-		return "", false
-	}
-
-	abs := filepath.Join(absRoot, relPath)
-	if !strings.HasPrefix(abs, absRoot+string(filepath.Separator)) {
+	abs, err := fsroot.Join(root, relPath)
+	if err != nil || !fsroot.Contains(root, abs) {
 		return "", false
 	}
 	return abs, true

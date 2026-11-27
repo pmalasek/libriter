@@ -7,7 +7,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"mediater/internal/core/fsroot"
 	"mediater/internal/core/middleware"
 	"mediater/internal/libriter/audiostore"
 	"mediater/internal/libriter/model"
@@ -141,18 +141,14 @@ func (h *AudioHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, err := os.Open(abs)
+	// Odkaz ven z knihovny ani FIFO (to by obyčejné os.Open zablokovalo)
+	// se nevydá; typ souboru se ověřuje na otevřeném deskriptoru.
+	file, info, err := fsroot.Open(h.audioRoot, chapter.FilePath)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "audio.not_found", "audio soubor nenalezen")
 		return
 	}
 	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() {
-		writeError(w, http.StatusNotFound, "audio.not_found", "audio soubor nenalezen")
-		return
-	}
 
 	// Server má WriteTimeout 60 s kvůli běžnému API; hodinová kapitola
 	// přehrávaná v reálném čase by se do něj nevešla.
@@ -203,7 +199,7 @@ func (h *AudioHandler) streamTranscoded(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	args := []string{"-nostdin", "-v", "error", "-i", abs, "-vn", "-map_metadata", "-1"}
+	args := []string{"-nostdin", "-v", "error", "-protocol_whitelist", "file", "-i", abs, "-vn", "-map_metadata", "-1"}
 	args = append(args, profile.args...)
 	args = append(args, "pipe:1")
 	cmd := exec.CommandContext(r.Context(), h.ffmpeg, args...)

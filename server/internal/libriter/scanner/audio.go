@@ -16,14 +16,16 @@
 package scanner
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
+	"mediater/internal/core/fsroot"
 	"mediater/internal/libriter/model"
 
 	"github.com/dhowden/tag"
@@ -76,7 +78,8 @@ func extractMeta(absPath, dirName string) (*AudioMeta, error) {
 // readTagMeta přečte jen to, co je v tagech souboru – bez náhradních hodnot
 // a bez délky. Chybějící nebo nečitelné tagy nejsou chyba.
 func readTagMeta(absPath string) (*AudioMeta, error) {
-	f, err := os.Open(absPath)
+	// O_NONBLOCK a kontrola typu: FIFO by obyčejné os.Open zablokovalo.
+	f, _, err := fsroot.OpenFile(absPath)
 	if err != nil {
 		return nil, fmt.Errorf("open: %w", err)
 	}
@@ -174,12 +177,21 @@ func cleanAlbumTitle(s string) string {
 	return s
 }
 
+// probeTimeout je strop pro jedno volání ffprobe. Poškozený soubor ani
+// pomalý disk nesmí zastavit scan, který drží ingestMu.
+const probeTimeout = 2 * time.Minute
+
 // ffprobeDuration zavolá ffprobe a vrátí délku v sekundách. Při chybě vrátí 0.
 func ffprobeDuration(absPath string) int {
-	cmd := exec.Command("ffprobe",
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ffprobe",
 		"-v", "quiet",
 		"-print_format", "json",
 		"-show_entries", "format=duration",
+		// Jen místní soubor: playlist nebo .concat v knihovně by jinak
+		// ffprobe poslal na síť nebo k jiným souborům.
+		"-protocol_whitelist", "file",
 		absPath,
 	)
 	out, err := cmd.Output()

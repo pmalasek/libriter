@@ -304,15 +304,15 @@ export interface SessionItemsRequest {
 }
 
 /**
- * PUT /authors/{id} – úplná náhrada, takže se posílají i pole, která formulář
- * neukazuje (image_path), jinak by je server vymazal.
+ * POST /authors a PUT /authors/{id} – PUT nahrazuje všechna pole, která
+ * spravuje editor. Cestu k fotce (`image_path`) server z požadavku nebere;
+ * fotku mění jen nahrání nebo stažení obrázku.
  */
 export interface AuthorRequest {
   first_name: string
   middle_name: string
   last_name: string
   bio: string | null
-  image_path: string | null
   birth_year: number | null
   death_year: number | null
 }
