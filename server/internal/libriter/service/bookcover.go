@@ -41,6 +41,12 @@ func NewBookCover(store *storage.Store, chain ChainSource, root string) *BookCov
 	}
 }
 
+// WithFetcher vymění klienta pro stahování (testy proti httptest).
+func (s *BookCoverService) WithFetcher(f *metadata.Fetcher) *BookCoverService {
+	s.fetcher = f
+	return s
+}
+
 // SetFromURL stáhne obrázek a uloží ho jako obálku knihy. Dosavadní obálku
 // nahradí – o tom, jestli se má měnit, rozhoduje klient.
 func (s *BookCoverService) SetFromURL(ctx context.Context, bookID uuid.UUID, coverURL string) (*model.Book, error) {

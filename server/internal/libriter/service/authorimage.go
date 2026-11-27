@@ -49,6 +49,12 @@ func NewAuthorImage(store *storage.Store, chain ChainSource, root string) *Autho
 	}
 }
 
+// WithFetcher vymění klienta pro stahování (testy proti httptest).
+func (s *AuthorImageService) WithFetcher(f *metadata.Fetcher) *AuthorImageService {
+	s.fetcher = f
+	return s
+}
+
 // SetFromURL stáhne obrázek a uloží ho jako fotku autora.
 func (s *AuthorImageService) SetFromURL(ctx context.Context, authorID uuid.UUID, imageURL string) (*model.Author, error) {
 	if !s.chain.Chain().SupportsImageURL(imageURL) {

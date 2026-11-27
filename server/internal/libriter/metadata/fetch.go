@@ -10,6 +10,8 @@ import (
 	"net/http/cookiejar"
 	"sync"
 	"time"
+
+	"mediater/internal/core/safehttp"
 )
 
 // UserAgent identifikuje aplikaci cizím webům. OpenLibrary o slušný
@@ -30,12 +32,32 @@ type Fetcher struct {
 // DefaultAcceptLanguage upřednostňuje češtinu – většina zdrojů jsou české weby.
 const DefaultAcceptLanguage = "cs,en;q=0.9"
 
+// fetchTimeout je strop jednoho požadavku na zdroj metadat.
+const fetchTimeout = 15 * time.Second
+
+// maxResponse je strop velikosti odpovědi zdroje; stránka katalogu ani
+// obrázek tolik nemají.
+const maxResponse = 32 << 20
+
+// NewFetcher vrátí klienta pro zdroje metadat. Adresy často pocházejí
+// z odpovědi cizího webu nebo od uživatele, proto jde přes safehttp: jen
+// veřejné adresy, porty 80/443 a nejvýš 5 přesměrování.
 func NewFetcher(minDelay time.Duration) *Fetcher {
 	return &Fetcher{
-		client:         &http.Client{Timeout: 15 * time.Second},
+		client:         safehttp.NewClient(safehttp.WithTimeout(fetchTimeout)),
 		minDelay:       minDelay,
 		acceptLanguage: DefaultAcceptLanguage,
 	}
+}
+
+// WithHTTPOptions sestaví HTTP klienta znovu s dalšími volbami safehttp.
+// Slouží testům, které běží proti httptest.Server na 127.0.0.1
+// (safehttp.AllowAddr). Cookies zůstávají.
+func (f *Fetcher) WithHTTPOptions(opts ...safehttp.Option) *Fetcher {
+	jar := f.client.Jar
+	f.client = safehttp.NewClient(append([]safehttp.Option{safehttp.WithTimeout(fetchTimeout)}, opts...)...)
+	f.client.Jar = jar
+	return f
 }
 
 // WithCookies zapne úložiště cookies. Některé weby (Goodreads) nejdřív
@@ -76,7 +98,7 @@ func (f *Fetcher) Get(ctx context.Context, targetURL string, accept string) (io.
 		resp.Body.Close()
 		return nil, &StatusError{Status: resp.StatusCode, URL: targetURL}
 	}
-	return resp.Body, nil
+	return safehttp.LimitBody(resp.Body, maxResponse), nil
 }
 
 // StatusError je odpověď s jiným stavem než 200. Poskytovatelé podle něj
@@ -121,7 +143,7 @@ func (f *Fetcher) GetWithType(ctx context.Context, targetURL, accept string) (io
 		resp.Body.Close()
 		return nil, "", &StatusError{Status: resp.StatusCode, URL: targetURL}
 	}
-	return resp.Body, resp.Header.Get("Content-Type"), nil
+	return safehttp.LimitBody(resp.Body, maxResponse), resp.Header.Get("Content-Type"), nil
 }
 
 // GetJSON stáhne URL a rozparsuje ji do v.

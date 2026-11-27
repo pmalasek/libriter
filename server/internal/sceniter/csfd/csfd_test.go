@@ -15,6 +15,7 @@ import (
 	"golang.org/x/net/html"
 
 	"mediater/internal/core/plugin"
+	"mediater/internal/core/safehttp"
 )
 
 // Testovací stránky jsou skutečné stránky ČSFD (říjen 2026) bez skriptů a stylů.
@@ -137,6 +138,7 @@ func TestSeason(t *testing.T) {
 	defer srv.Close()
 
 	c := New().WithBaseURL(srv.URL)
+	c.http = safehttp.NewClient(safehttp.AllowAddr(srv.Listener.Addr().String()))
 	s, err := c.Season(context.Background(), "1024280", 1, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -189,6 +191,7 @@ func TestSeasonOnlyAndRateLimit(t *testing.T) {
 	defer srv.Close()
 
 	c := New().WithBaseURL(srv.URL)
+	c.http = safehttp.NewClient(safehttp.AllowAddr(srv.Listener.Addr().String()))
 	s, err := c.Season(context.Background(), "1024280", 1, []int{2})
 	if err != nil {
 		t.Fatal(err)
