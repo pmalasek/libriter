@@ -2,7 +2,6 @@
 // běžná práce s knihovnou zůstala přehledná.
 
 import {
-  useInfiniteQuery,
   useMutation,
   useQuery,
   useQueryClient,
@@ -11,8 +10,6 @@ import {
 import { apiFetch, asList } from './client'
 import { queryKeys } from './hooks'
 import type {
-  AuditPage,
-  CreateUserRequest,
   DuplicateGroup,
   DuplicateReport,
   ImportBookEdit,
@@ -26,26 +23,37 @@ import type {
   MergeResult,
   MetadataSettings,
   MetadataSettingsRequest,
-  RegistrationSettings,
   RepairPlan,
   RepairResult,
-  Role,
   ScannerStatus,
   SystemInfo,
-  UpdateUserRequest,
-  User,
 } from './types'
 
+// Správa uživatelů, registrace a audit jsou sdílené s ostatními produkty.
+export {
+  useAdminUsers,
+  useAuditLog,
+  useCreateUser,
+  useDeleteUser,
+  useRegistrationSettings,
+  useResetUserPassword,
+  useSaveRegistrationSettings,
+  useSetUserRole,
+  useUpdateUser,
+} from 'core-web/src/api/hooks'
+
+// Klíče účtů, registrace a auditu patří jádru (coreQueryKeys) – hooky správy
+// uživatelů jsou v core-web a Libriter přes tyhle aliasy dál obnovuje audit.
 export const adminKeys = {
-  users: ['admin', 'users'] as const,
+  users: queryKeys.adminUsers,
   metadata: ['admin', 'settings', 'metadata'] as const,
-  registration: ['admin', 'settings', 'registration'] as const,
+  registration: queryKeys.adminRegistration,
   library: ['admin', 'settings', 'library'] as const,
   scanner: ['admin', 'scanner'] as const,
   duplicates: ['admin', 'library', 'duplicates'] as const,
   stats: ['admin', 'stats'] as const,
   system: ['admin', 'system'] as const,
-  audit: ['admin', 'audit'] as const,
+  audit: queryKeys.adminAudit,
   listening: ['admin', 'listening'] as const,
   listeningUser: (userId: string) => ['admin', 'listening', userId] as const,
   imports: ['admin', 'import'] as const,
@@ -54,24 +62,10 @@ export const adminKeys = {
 
 // --- čtení ---
 
-export function useAdminUsers(): UseQueryResult<User[], Error> {
-  return useQuery({
-    queryKey: adminKeys.users,
-    queryFn: async () => asList(await apiFetch<User[] | null>('/users')),
-  })
-}
-
 export function useMetadataSettings() {
   return useQuery({
     queryKey: adminKeys.metadata,
     queryFn: () => apiFetch<MetadataSettings>('/admin/settings/metadata'),
-  })
-}
-
-export function useRegistrationSettings() {
-  return useQuery({
-    queryKey: adminKeys.registration,
-    queryFn: () => apiFetch<RegistrationSettings>('/admin/settings/registration'),
   })
 }
 
@@ -122,24 +116,9 @@ export function useListeningUser(userId: string) {
   })
 }
 
-const AUDIT_PAGE_SIZE = 50
-
-/** Audit log se stránkuje kurzorem (id posledního záznamu), ne offsetem. */
-export function useAuditLog() {
-  return useInfiniteQuery({
-    queryKey: adminKeys.audit,
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) =>
-      apiFetch<AuditPage>(
-        `/admin/audit?limit=${AUDIT_PAGE_SIZE}${pageParam ? `&before=${pageParam}` : ''}`,
-      ),
-    getNextPageParam: (last) => last.next_before ?? undefined,
-  })
-}
-
 // --- mutace ---
 
-/** Po zásahu admina zestará seznam uživatelů i audit log. */
+/** Po zásahu admina zestará audit log a zadané klíče. */
 function useAdminMutation<TVars, TData>(
   mutationFn: (vars: TVars) => Promise<TData>,
   extraKeys: readonly (readonly string[])[] = [],
@@ -156,52 +135,6 @@ function useAdminMutation<TVars, TData>(
   })
 }
 
-export function useCreateUser() {
-  return useAdminMutation(
-    (body: CreateUserRequest) => apiFetch<User>('/admin/users', { method: 'POST', json: body }),
-    [adminKeys.users, adminKeys.stats],
-  )
-}
-
-/** Úprava údajů libovolného účtu adminem – stejný endpoint jako vlastní profil. */
-export function useUpdateUser() {
-  return useAdminMutation(
-    ({ userId, ...body }: UpdateUserRequest & { userId: string }) =>
-      apiFetch<User>(`/users/${userId}`, { method: 'PUT', json: body }),
-    [adminKeys.users],
-  )
-}
-
-export function useSetUserRole() {
-  return useAdminMutation(
-    ({ userId, role }: { userId: string; role: Role }) =>
-      apiFetch<{ status: string; role: Role }>(`/users/${userId}/role`, {
-        method: 'PUT',
-        json: { role },
-      }),
-    [adminKeys.users],
-  )
-}
-
-export function useDeleteUser() {
-  return useAdminMutation(
-    (userId: string) => apiFetch<void>(`/users/${userId}`, { method: 'DELETE' }),
-    // Smazaný účet musí zmizet i z přehledu poslechů; klíč se shoduje
-    // prefixem, takže padne i jeho detail.
-    [adminKeys.users, adminKeys.stats, adminKeys.listening],
-  )
-}
-
-/** Reset hesla adminem jde přes stejný endpoint jako změna vlastního hesla. */
-export function useResetUserPassword() {
-  return useAdminMutation(({ userId, password }: { userId: string; password: string }) =>
-    apiFetch<{ status: string }>(`/users/${userId}/password`, {
-      method: 'PUT',
-      json: { password },
-    }),
-  )
-}
-
 export function useSaveMetadataSettings() {
   return useAdminMutation(
     (body: MetadataSettingsRequest) =>
@@ -215,14 +148,6 @@ export function useSaveLibrarySettings() {
     (body: LibrarySettings) =>
       apiFetch<LibrarySettings>('/admin/settings/library', { method: 'PUT', json: body }),
     [adminKeys.library],
-  )
-}
-
-export function useSaveRegistrationSettings() {
-  return useAdminMutation(
-    (body: RegistrationSettings) =>
-      apiFetch<RegistrationSettings>('/admin/settings/registration', { method: 'PUT', json: body }),
-    [adminKeys.registration, queryKeys.authConfig],
   )
 }
 

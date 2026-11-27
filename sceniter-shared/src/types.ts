@@ -1,6 +1,8 @@
 // Typy API Sceniteru. Zrcadlí JSON modely server/internal/sceniter/model
 // a odpovědi handlerů v server/internal/sceniter/handler.
 
+import type { Role } from 'core-shared'
+
 export type MatchState = 'unmatched' | 'auto' | 'manual' | 'ignored'
 export type TitleKind = 'movie' | 'show'
 export type ImageSource = '' | 'manual'
@@ -571,6 +573,52 @@ export interface SceniterStats {
   transcodes: number
   /** Je nainstalovaný aspoň jeden zdroj video metadat. */
   metadata: boolean
+}
+
+// ---- statistika sledování (GET /sceniter/admin/watching) ----
+
+/**
+ * Řádek přehledu sledování – jeden účet a součty jeho historie. Titulem se
+ * rozumí film nebo seriál; účet bez historie má nuly a last_watched_at chybí.
+ */
+export interface WatchingSummary {
+  user_id: string
+  display_name: string
+  email: string
+  role: Role
+  seconds_watched: number
+  movies: number
+  shows: number
+  episodes: number
+  last_watched_at?: string
+}
+
+/**
+ * Řádek historie: titul a den (UTC). U filmu jsou vyplněná pole movie_*,
+ * u dílu show_*, season, episode*.
+ */
+export interface WatchHistoryEntry {
+  day: string
+  kind: 'movie' | 'episode'
+  movie_id?: string
+  movie_title?: string
+  movie_year?: number
+  show_id?: string
+  show_title?: string
+  season?: number
+  episode_id?: string
+  episode?: number
+  episode_title?: string
+  seconds: number
+  first_at: string
+  last_at: string
+}
+
+/** GET /sceniter/admin/watching/{userId}?days= */
+export interface WatchingDetail {
+  user: { id: string; display_name: string; email: string; role: Role }
+  days: number
+  entries: WatchHistoryEntry[]
 }
 
 /** Výsledek hledání u zdroje metadat (pro ruční párování). */

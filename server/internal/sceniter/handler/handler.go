@@ -61,6 +61,9 @@ type Deps struct {
 	MaxHeight int
 	// Thumbs vytváří zmenšeniny plakátů a obrázků (?w=); nil = jen originály.
 	Thumbs *imgthumb.Cache
+
+	// Watching čte historii sledování pro administraci.
+	Watching *service.Watching
 }
 
 // Handler obsluhuje API Sceniteru.
@@ -181,6 +184,8 @@ func (h *Handler) Routes(r chi.Router) {
 					r.Post("/admin/trash/delete", h.DeleteTrash)
 					r.Post("/admin/trash/empty", h.EmptyTrash)
 					r.Get("/admin/stats", h.Stats)
+					r.Get("/admin/watching", h.WatchingOverview)
+					r.Get("/admin/watching/{userId}", h.WatchingUser)
 					r.Get("/admin/transcode", h.TranscodeSessions)
 					r.Delete("/admin/transcode/{session}", h.StopTranscode)
 				})

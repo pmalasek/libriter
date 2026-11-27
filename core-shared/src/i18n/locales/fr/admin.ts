@@ -58,7 +58,7 @@ export default {
     empty: 'Aucun utilisateur',
     deleted: 'Le compte {{email}} a été supprimé.',
     deleteTitle: 'Supprimer le compte ?',
-    deleteDescription: 'Le compte <strong>{{email}}</strong> sera supprimé avec ses positions de lecture et ses signets. Les livres de la bibliothèque ne seront pas affectés.',
+    deleteDescription: 'Le compte <strong>{{email}}</strong> sera supprimé avec ses positions de lecture, son historique et ses signets. Le contenu de la bibliothèque ne sera pas affecté.',
     deleting: 'Suppression…',
     passwordTooShort: 'Le mot de passe doit contenir au moins {{min}} caractères.',
     fields: {
@@ -156,7 +156,7 @@ export default {
     description: 'Lorsque l’inscription est désactivée, seul un administrateur peut créer des comptes (onglet Utilisateurs ou commande <code>libriter user add</code>).',
     enable: 'Autoriser l’inscription publique',
     defaultRole: 'Rôle des nouveaux comptes',
-    roleHint: 'Un lecteur peut uniquement parcourir la bibliothèque ; un éditeur peut modifier les livres et les auteurs.',
+    roleHint: 'Un lecteur peut uniquement parcourir la bibliothèque ; un éditeur peut modifier son contenu et les métadonnées.',
   },
   unsavedChanges: 'Vous avez des modifications non enregistrées.',
   metadata: {

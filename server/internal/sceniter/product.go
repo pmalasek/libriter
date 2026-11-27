@@ -68,6 +68,8 @@ func (p *Product) Init(d product.Deps) error {
 		VideoRoot: cfg.VideoRoot, ImageRoot: cfg.ImageRoot, MaxHeight: cfg.TranscodeMaxHeight,
 		Thumbs: d.Thumbs,
 	}
+	// Jména a e-maily uživatelů dodá jádro – úložiště Sceniteru tabulku users nečte.
+	deps.Watching = service.NewWatching(store, d.Users)
 
 	if cfg.Enabled() {
 		if err := os.MkdirAll(cfg.ImageRoot, 0o755); err != nil {

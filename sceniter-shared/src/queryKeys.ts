@@ -31,6 +31,8 @@ export const queryKeys = {
   adminTranscode: ['sceniter', 'admin', 'transcode'] as const,
   adminRefresh: ['sceniter', 'admin', 'refresh'] as const,
   adminMatch: ['sceniter', 'admin', 'match'] as const,
+  adminWatching: ['sceniter', 'admin', 'watching'] as const,
+  adminWatchingUser: (userId: string, days: number) => ['sceniter', 'admin', 'watching', userId, days] as const,
   libraries: ['sceniter', 'libraries'] as const,
   adminLibraries: ['sceniter', 'admin', 'libraries'] as const,
   libraryCandidates: ['sceniter', 'admin', 'libraries', 'candidates'] as const,

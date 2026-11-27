@@ -2,15 +2,13 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation } from 'react-router'
 import { useAuthConfig, useRegister } from '../api/hooks'
-import { currentLanguage, loginHint, LOGIN_PATTERN, roleLabel } from 'core-shared'
+import { currentLanguage, loginHint, LOGIN_PATTERN, MIN_PASSWORD, roleLabel } from 'core-shared'
 import { useAuth } from '../auth/AuthContext'
 import { AuthShell } from '../components/layout/AuthShell'
 import { Button } from '../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input'
 import { Label } from '../components/ui/label'
-
-const MIN_PASSWORD = 8
 
 export function RegisterPage() {
   const { t } = useTranslation()

@@ -34,6 +34,9 @@ export interface User extends UserAppearance {
  */
 export const LOGIN_PATTERN = '[A-Za-z0-9._\\-]{3,32}'
 
+/** Nejkratší heslo, které přijme registrace, změna i reset hesla. */
+export const MIN_PASSWORD = 8
+
 export function loginHint(): string {
   return t('labels.loginHint')
 }
@@ -182,6 +185,21 @@ const AUDIT_ACTIONS = [
   'scanner.rescan',
   'library.repair_apply',
   'library.merge_books',
+  'library.import',
+  'sceniter.library_create',
+  'sceniter.library_update',
+  'sceniter.library_delete',
+  'sceniter.library_reorder',
+  'sceniter.scanner_rescan',
+  'sceniter.match',
+  'sceniter.unmatch',
+  'sceniter.edit',
+  'sceniter.detach_file',
+  'sceniter.renumber',
+  'sceniter.trash_file',
+  'sceniter.trash_restore',
+  'sceniter.trash_delete',
+  'sceniter.trash_empty',
 ] as const
 
 /** Čitelný název akce v auditu; neznámá akce se ukáže, jak přišla. */
