@@ -336,10 +336,11 @@ neumí), takže vypadají na obou platformách stejně.
 ## Nasazení na helpdesk24.works
 
 Libriter i Sceniter běží v jednom Docker kontejneru na serveru 172.24.0.46,
-produkce i demo každé zvlášť. Nginx s TLS je na jiném stroji
-(78.156.131.251) a proxuje na vnitřní adresu serveru:
+produkce i demo každé zvlášť. Nginx s TLS běží na tomtéž serveru a proxuje
+na backend přes `127.0.0.1` (weby Libriteru) i `172.24.0.46` (weby Sceniteru
+přes upstream); compose proto publikuje port na obou adresách:
 
-| Instance | Adresář na serveru | Port (jen na 172.24.0.46) | Domény |
+| Instance | Adresář na serveru | Port (127.0.0.1 a 172.24.0.46) | Domény |
 |---|---|---|---|
 | produkce | `/opt/libriter` | `8081` | Libriter a Sceniter na helpdesk24.works a pem-tech.eu (seznam v hlavičce compose) |
 | demo | `/opt/libriter-demo` | `8082` | libriter.demo.helpdesk24.works, sceniter.demo.helpdesk24.works |
@@ -419,7 +420,7 @@ ještě v jiném souboru.
 
 ```bash
 curl -sI https://video.helpdesk24.works/ | grep -iE 'strict-transport|content-security|x-frame'
-ssh 172.24.0.46 'ss -ltnp | grep -E ":808[12]"'      # jen 172.24.0.46:8081 / :8082
+ssh 172.24.0.46 'ss -ltnp | grep -E ":808[12]"'      # jen 127.0.0.1 a 172.24.0.46 na :8081 / :8082
 ssh 172.24.0.46 'ls -l /opt/libriter/data/libriter.db*'  # -rw------- (0600)
 sudo grep -c '?t=' /var/log/nginx/video.access.log /var/log/nginx/audiobooks.access.log  # na nginx stroji – po nasazení nepřibývá
 ```

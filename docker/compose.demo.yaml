@@ -4,7 +4,7 @@
 #   cd /opt/libriter-demo && docker compose up -d
 #
 # Weby: libriter.demo.helpdesk24.works, sceniter.demo.helpdesk24.works
-# (nginx proxuje na 172.24.0.46:8082 – port i hosty se nemění).
+# (nginx proxuje na 127.0.0.1:8082 a 172.24.0.46:8082 – viz ports níž).
 
 name: libriter-demo
 
@@ -21,10 +21,13 @@ services:
     # údaj src), např. TRUSTED_PROXIES=172.24.0.10. Bez ní všichni klienti
     # sdílejí jeden limit přihlášení. Podrobnosti v compose.prod.yaml.
     env_file: .env
-    # Jen na vnitřní adrese hostitele: nginx běží na jiném stroji a připojuje
-    # se na 172.24.0.46. 127.0.0.1 by ho odřízl, 0.0.0.0 by backend vystavil
-    # na všech rozhraních mimo nginx.
+    # Jen na loopbacku a vnitřní adrese hostitele, ne na všech rozhraních.
+    # Nginx na tomto serveru používá obě cesty: weby Libriteru proxují na
+    # 127.0.0.1:8082, weby Sceniteru přes upstream na 172.24.0.46:8082
+    # (a tam se připojuje i případný nginx na jiném stroji). Bez kterékoli
+    # z vazeb přestane část webů fungovat (502).
     ports:
+      - "127.0.0.1:8082:8082"
       - "172.24.0.46:8082:8082"
     volumes:
       - ./data:/app/data

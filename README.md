@@ -35,7 +35,7 @@ mediater/               # monorepo (pracovní zastřešující název)
 ├── Dockerfile          # image mediater (oba weby, backend, pluginy, ffmpeg)
 ├── docker/             # compose pro demo a produkci, entrypoint kontejneru
 ├── packaging/deb/      # balíček .deb (jméno zůstává `libriter`)
-├── deploy/nginx/       # reverse proxy pro obě domény (běží na jiném stroji)
+├── deploy/nginx/       # reverse proxy pro obě domény
 ├── _scripts/           # pomocné skripty
 ├── bin/                # sestavená binárka bin/mediater (just build)
 └── server/data/        # vývojová data (DB_PATH, AUDIO_ROOT, …)
@@ -404,8 +404,9 @@ sudo -u libriter LIBRITER_ENV_FILE=/etc/libriter/libriter.env libriter user list
 
 ### 5. Nasazení v Dockeru
 
-Produkce i demo na helpdesk24.works běží v Dockeru na serveru 172.24.0.46;
-nginx s TLS je na jiném stroji (78.156.131.251) a proxuje na tento server
+Produkce i demo na helpdesk24.works běží v Dockeru na serveru 172.24.0.46.
+Nginx s TLS běží na tomtéž serveru (weby Libriteru proxují na `127.0.0.1`,
+weby Sceniteru přes upstream na `172.24.0.46`)
 (konfigurace v [deploy/nginx/](deploy/nginx/), postup v
 [docs/sceniter.md](docs/sceniter.md#nasazení-na-helpdesk24works)).
 
@@ -434,9 +435,9 @@ just docker-deploy prod     # totéž pro produkci (zeptá se na potvrzení)
   v repozitáři je potřeba soubor na serveru upravit ručně (stejně tak
   nginx). V `.env` nepište komentář za hodnotu (`KEY=hodnota # text`).
 - **Porty**: produkce poslouchá na `8081`, demo na `8082` (`SERVER_PORT`
-  v `.env` instance) a compose je publikuje **jen na vnitřní adrese**
-  `172.24.0.46:8081` / `172.24.0.46:8082`, kam se připojuje nginx. Na
-  `127.0.0.1` by se nginx z jiného stroje nedostal, bez adresy by backend
+  v `.env` instance) a compose je publikuje **jen na loopbacku a vnitřní
+  adrese** (`127.0.0.1` a `172.24.0.46`). Nginx na serveru používá obě
+  cesty – bez kterékoli z nich vrátí část webů `502`; bez adresy by backend
   visel na všech rozhraních mimo nginx. Ověření: `ss -ltnp | grep 808`.
 - **`TRUSTED_PROXIES`** v `.env` instance nastavte na adresu, ze které
   kontejner vidí nginx (vnitřní IP nginx stroje – na něm ji ukáže

@@ -5,7 +5,7 @@
 #
 # Weby: audiobooks/libriter.helpdesk24.works, libriter/audio.pem-tech.eu,
 #       sceniter.helpdesk24.works, sceniter/video.pem-tech.eu
-# (nginx proxuje na 172.24.0.46:8081 – port i hosty se nemění).
+# (nginx proxuje na 127.0.0.1:8081 a 172.24.0.46:8081 – viz ports níž).
 #
 # Knihovny leží na NAS (172.24.0.6). NFS připojuje Docker sám jako volume,
 # ne bind-mountem z hostitele: když NAS není dostupný, kontejner nenastartuje
@@ -43,10 +43,13 @@ services:
       # Kdyby Docker spojení přeposílal přes userland-proxy, vidí kontejner
       # místo ní bránu své sítě – pak přidat i tu. Bez správné hodnoty
       # všichni klienti sdílejí jeden limit přihlášení.
-    # Jen na vnitřní adrese hostitele: nginx běží na jiném stroji a připojuje
-    # se na 172.24.0.46. 127.0.0.1 by ho odřízl, 0.0.0.0 by backend vystavil
-    # na všech rozhraních mimo nginx (bez HSTS, rate limitu a TLS).
+    # Jen na loopbacku a vnitřní adrese hostitele, ne na všech rozhraních.
+    # Nginx na tomto serveru používá obě cesty: weby Libriteru proxují na
+    # 127.0.0.1:8081, weby Sceniteru přes upstream na 172.24.0.46:8081
+    # (a tam se připojuje i případný nginx na jiném stroji). Bez kterékoli
+    # z vazeb přestane část webů fungovat (502).
     ports:
+      - "127.0.0.1:8081:8081"
       - "172.24.0.46:8081:8081"
     volumes:
       - ./data:/app/data
