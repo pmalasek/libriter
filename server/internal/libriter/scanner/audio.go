@@ -16,12 +16,14 @@
 package scanner
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"mediater/internal/core/fsroot"
 	"mediater/internal/libriter/model"
@@ -175,12 +177,21 @@ func cleanAlbumTitle(s string) string {
 	return s
 }
 
+// probeTimeout je strop pro jedno volání ffprobe. Poškozený soubor ani
+// pomalý disk nesmí zastavit scan, který drží ingestMu.
+const probeTimeout = 2 * time.Minute
+
 // ffprobeDuration zavolá ffprobe a vrátí délku v sekundách. Při chybě vrátí 0.
 func ffprobeDuration(absPath string) int {
-	cmd := exec.Command("ffprobe",
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ffprobe",
 		"-v", "quiet",
 		"-print_format", "json",
 		"-show_entries", "format=duration",
+		// Jen místní soubor: playlist nebo .concat v knihovně by jinak
+		// ffprobe poslal na síť nebo k jiným souborům.
+		"-protocol_whitelist", "file",
 		absPath,
 	)
 	out, err := cmd.Output()

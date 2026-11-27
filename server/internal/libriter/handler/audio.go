@@ -200,7 +200,7 @@ func (h *AudioHandler) streamTranscoded(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	args := []string{"-nostdin", "-v", "error", "-i", abs, "-vn", "-map_metadata", "-1"}
+	args := []string{"-nostdin", "-v", "error", "-protocol_whitelist", "file", "-i", abs, "-vn", "-map_metadata", "-1"}
 	args = append(args, profile.args...)
 	args = append(args, "pipe:1")
 	cmd := exec.CommandContext(r.Context(), h.ffmpeg, args...)
