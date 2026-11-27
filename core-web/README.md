@@ -1,8 +1,9 @@
 # core-web
 
 React komponenty společné webovým rozhraním všech produktů: shadcn/ui
-(`components/ui/*`), vzhled (téma, barevná schémata, paleta OKLCH
-v `styles/base.css`), přihlášení a session (`auth/*`), jazyk rozhraní
+(`components/ui/*`), vzhled (režim, barevná témata, paleta OKLCH
+v `styles/base.css`), navigace aplikace (`components/layout/SideNav.tsx`,
+`TabBar.tsx` – produkty dodají položky a logo), přihlášení a session (`auth/*`), jazyk rozhraní
 (`i18n/*`), přihlašovací, registrační a profilová stránka a hooky účtu.
 
 Jako `core-shared` se publikuje jako TypeScript zdroj bez build kroku.

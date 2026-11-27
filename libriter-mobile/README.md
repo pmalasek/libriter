@@ -82,10 +82,15 @@ text zesvětlal, proto se přes ně klade ještě závoj z palety (`colors.glass
 stejně jako to dělá `--glass` v CSS. Společná komponenta je
 `src/components/ui/Blur.tsx`.
 
-Barvy se počítají ze **stejných OKLCH hodnot, jaké má web v `index.css`**
-(`src/theme/palette.ts` + převod v `src/theme/oklch.ts`): tyrkysová má čísla
-zapsaná napevno, ostatní schémata se odvozují z odstínu přes `schemeHues` ze
-shared. Změna palety webu se tedy promítá sem, nikde jinde barvy nejsou.
+Barvy se počítají ze **stejných OKLCH hodnot jako web** – témat
+v `core-shared/src/themes.ts` (`src/theme/palette.ts` z nich skládá i sklo,
+hrany a záře stejnými vzorci jako `core-web/src/styles/base.css`; převod
+OKLCH → sRGB je v `core-shared/src/color.ts`). Jinde barvy zapsané nejsou.
+
+Témata Midnight, Emerald a Burgundy nahradila dřívější schémata (teal, blue,
+violet, green). Server od migrace 021 přijímá i stará jména a převádí je, takže
+starší nainstalovaná aplikace dál funguje; **nová aplikace potřebuje
+aktualizovaný server** – starší server by nová jména témat odmítl.
 
 Schéma a světlý/tmavý režim se berou z profilu uživatele jako na webu; změna
 ve „Více → Vzhled“ se uloží přes `PUT /users/{id}/appearance`, takže platí
