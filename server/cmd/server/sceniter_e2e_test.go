@@ -14,6 +14,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"mediater/internal/core/model"
+	"mediater/internal/core/service"
 )
 
 // sceniterEnv je router se Sceniterem nad dočasnou videoknihovnou.
@@ -115,6 +118,11 @@ func TestSceniterEndToEnd(t *testing.T) {
 	e.token = ""
 
 	// Účet je společný: uživatel z jádra se přihlásí stejně jako do Libriteru.
+	// Registrace je ve výchozím stavu vypnutá, test ji zapne.
+	if _, err := deps.Registration.SetRegistration(context.Background(),
+		service.RegistrationSettings{Enabled: true, DefaultRole: model.RoleReader}); err != nil {
+		t.Fatal(err)
+	}
 	if rec := e.do("POST", "/api/v1/auth/register", "", map[string]string{
 		"display_name": "Divák", "email": "divak@example.com", "password": "tajneheslo",
 	}); rec.Code != http.StatusCreated {

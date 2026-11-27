@@ -184,6 +184,7 @@ func TestUserLanguageRejectsUnauthorizedAndInvalidChanges(t *testing.T) {
 
 func TestRegisterStoresUILanguage(t *testing.T) {
 	env := newAdminTestEnv(t)
+	env.enableRegistration(t)
 	register := func(email, lang string) (int, model.User) {
 		t.Helper()
 		body := map[string]string{"display_name": "Nový", "email": email, "password": "tajneheslo"}
