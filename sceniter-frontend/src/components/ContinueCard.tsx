@@ -39,7 +39,7 @@ export function ContinueCard({ item }: { item: ContinueItem }) {
   return (
     <Link to={to} className="group block outline-none" aria-label={`${title}, ${sub}`}>
       <div className="relative overflow-hidden rounded-2xl ring-1 ring-glass-edge transition-[transform,box-shadow] duration-200 group-hover:-translate-y-0.5 group-hover:ring-2 group-hover:ring-primary group-focus-visible:ring-2 group-focus-visible:ring-primary">
-        <Poster src={still} title={title} aspect="still" className="rounded-none shadow-none ring-0" />
+        <Poster src={still} title={title} aspect="still" className="rounded-none shadow-none ring-0" bare />
         <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/35 to-transparent" />
 
         {item.next ? (

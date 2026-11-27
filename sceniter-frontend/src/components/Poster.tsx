@@ -15,6 +15,7 @@ export function Poster({
   className,
   aspect = 'poster',
   compact = false,
+  bare = false,
 }: {
   src?: string
   title: string
@@ -25,10 +26,12 @@ export function Poster({
   aspect?: 'poster' | 'still'
   /** Miniatura (řádek seznamu) – bez obrázku jen písmeno, název se nevejde. */
   compact?: boolean
+  /** Název a rok píše karta přes obrázek sama – náhradní plakát jen plochu s písmenem. */
+  bare?: boolean
 }) {
   const ratio = aspect === 'poster' ? 'aspect-[2/3]' : 'aspect-video'
   const [failed, setFailed] = useState(false)
-  if (!src || failed) return <Placeholder title={title} kind={kind} year={year} className={cn(ratio, className)} compact={compact} still={aspect === 'still'} />
+  if (!src || failed) return <Placeholder title={title} kind={kind} year={year} className={cn(ratio, className)} compact={compact} still={aspect === 'still'} bare={bare} />
   return (
     <img
       src={src}
@@ -47,6 +50,7 @@ function Placeholder({
   className,
   compact,
   still,
+  bare,
 }: {
   title: string
   kind?: TitleKind
@@ -54,6 +58,7 @@ function Placeholder({
   className?: string
   compact: boolean
   still: boolean
+  bare: boolean
 }) {
   const { t } = useTranslation()
   const [top, mid, bottom] = placeholderGradient(title)
@@ -86,7 +91,7 @@ function Placeholder({
           {initial}
         </span>
       ) : null}
-      {compact ? null : still ? (
+      {compact || bare ? null : still ? (
         <div className="absolute inset-x-[5cqw] bottom-[6cqh]">
           <p className="font-heading line-clamp-2 text-[6cqw] leading-tight font-semibold text-balance">{title}</p>
         </div>
