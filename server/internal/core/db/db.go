@@ -5,7 +5,10 @@ import (
 	"context"
 	"database/sql"
 	"database/sql/driver"
+	"errors"
 	"fmt"
+	"io/fs"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -63,8 +66,8 @@ func Open(ctx context.Context, cfg config.DBConfig) (*sql.DB, error) {
 		return nil, fmt.Errorf("db: DB_PATH není nastaven")
 	}
 
-	if err := os.MkdirAll(filepath.Dir(cfg.Path), 0o755); err != nil {
-		return nil, fmt.Errorf("db: vytvoření adresáře: %w", err)
+	if err := prepareFiles(cfg.Path); err != nil {
+		return nil, err
 	}
 
 	registerCollations()
@@ -99,5 +102,62 @@ func Open(ctx context.Context, cfg config.DBConfig) (*sql.DB, error) {
 		return nil, err
 	}
 
+	// -wal a -shm vytváří SQLite až s prvním spojením a zápisem, s právy
+	// hlavního souboru. Kontrola po otevření pokryje i soubory, které zůstaly
+	// po starší verzi s volnějšími právy a SQLite je jen znovu použil.
+	if err := restrictFiles(cfg.Path); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	return db, nil
+}
+
+// dbFileMode jsou práva databáze a jejích souborů -wal/-shm. Obsahuje hashe
+// hesel a nastavení (třeba API klíče), číst ji smí jen vlastník – nezávisle
+// na umasku procesu (kontejner běží s UMASK=0000 kvůli NAS).
+const dbFileMode os.FileMode = 0o600
+
+// prepareFiles připraví adresář a soubor databáze před otevřením:
+//   - chybějící adresář vytvoří s 0700 (existujícímu práva nemění – může být
+//     sdílený, třeba ./data s obálkami),
+//   - chybějící soubor založí s 0600, aby ho SQLite nevytvořil podle umasku,
+//   - existujícímu souboru i -wal/-shm práva zúží na 0600.
+func prepareFiles(path string) error {
+	dir := filepath.Dir(path)
+	if _, err := os.Stat(dir); errors.Is(err, fs.ErrNotExist) {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return fmt.Errorf("db: vytvoření adresáře: %w", err)
+		}
+	} else if err != nil {
+		return fmt.Errorf("db: adresář: %w", err)
+	}
+
+	f, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE, dbFileMode)
+	if err != nil {
+		return fmt.Errorf("db: vytvoření souboru: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("db: vytvoření souboru: %w", err)
+	}
+	return restrictFiles(path)
+}
+
+// restrictFiles nastaví 0600 souboru databáze a existujícím -wal/-shm.
+// OpenFile s 0600 platí jen pro nově založený soubor; databáze z dřívějších
+// verzí (typicky 0644) se musí opravit dodatečně.
+func restrictFiles(path string) error {
+	for _, p := range []string{path, path + "-wal", path + "-shm"} {
+		err := os.Chmod(p, dbFileMode)
+		switch {
+		case err == nil, errors.Is(err, fs.ErrNotExist):
+		case errors.Is(err, fs.ErrPermission):
+			// Cizí soubor (třeba CLI spuštěné jiným uživatelem) – práva opraví
+			// server běžící pod vlastníkem; kvůli tomu neodmítat start.
+			slog.Warn("db: práva souboru nelze zúžit na 0600", "file", p, "err", err)
+		default:
+			return fmt.Errorf("db: nastavení práv %s: %w", filepath.Base(p), err)
+		}
+	}
+	return nil
 }

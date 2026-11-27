@@ -111,6 +111,8 @@ export default {
     invalid_book: 'Some book is missing a title or has an invalid series number',
     failed: 'The import failed',
     create_failed: 'Could not start the import',
+    upload_in_progress: 'Files are still uploading – wait until they finish',
+    too_many_sessions: 'Too many imports in progress – finish or delete one of them',
   },
   common: {
     load_failed: 'Could not load data',

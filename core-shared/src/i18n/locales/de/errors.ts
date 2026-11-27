@@ -111,6 +111,8 @@ export default {
     invalid_book: 'Einem Buch fehlt der Titel oder es hat eine ungültige Reihennummer',
     failed: 'Der Import ist fehlgeschlagen',
     create_failed: 'Der Import konnte nicht gestartet werden',
+    upload_in_progress: 'Dateien werden noch hochgeladen – warte, bis der Upload abgeschlossen ist',
+    too_many_sessions: 'Zu viele offene Importe – schließe einen ab oder lösche ihn',
   },
   common: {
     load_failed: 'Daten konnten nicht geladen werden',

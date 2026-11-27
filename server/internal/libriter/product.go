@@ -121,7 +121,8 @@ func (p *Product) Init(d product.Deps) error {
 	p.audioH = handler.NewAudio(bookSvc, d.Auth, cfg.Storage.AudioRoot)
 
 	importSvc, err := importer.New(ctx, cfg.Storage.ImportRoot,
-		cfg.Storage.MaxUploadMB<<20, scn, store)
+		cfg.Storage.MaxUploadMB<<20,
+		cfg.EnvInt("IMPORT_MAX_SESSIONS", importer.DefaultMaxSessions), scn, store)
 	if err != nil {
 		return fmt.Errorf("import knih (IMPORT_ROOT=%s): %w", cfg.Storage.ImportRoot, err)
 	}

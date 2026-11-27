@@ -316,11 +316,11 @@ func TestImportEndToEnd(t *testing.T) {
 	scn := scanner.New(audioRoot, "", store)
 	scn.SetDefaultLanguage(func(context.Context) string { return "de" })
 
-	if _, err := New(ctx, filepath.Join(audioRoot, "import"), 1<<20, scn, store); err == nil {
+	if _, err := New(ctx, filepath.Join(audioRoot, "import"), 1<<20, 0, scn, store); err == nil {
 		t.Fatal("staging uvnitř AUDIO_ROOT měl být odmítnut")
 	}
 
-	svc, err := New(ctx, filepath.Join(base, "import"), 1<<20, scn, store)
+	svc, err := New(ctx, filepath.Join(base, "import"), 1<<20, 0, scn, store)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,7 +331,7 @@ func TestImportEndToEnd(t *testing.T) {
 	}
 	upload := func(rel, body string) {
 		t.Helper()
-		if _, err := svc.AddFile(sess.ID, rel, strings.NewReader(body)); err != nil {
+		if _, err := svc.AddFile(sess.ID, rel, strings.NewReader(body), -1); err != nil {
 			t.Fatalf("AddFile %s: %v", rel, err)
 		}
 	}
@@ -344,7 +344,7 @@ func TestImportEndToEnd(t *testing.T) {
 	zipBody, _ := os.ReadFile(zipPath)
 	upload("mars.zip", string(zipBody))
 
-	if _, err := svc.AddFile(sess.ID, "virus.exe", strings.NewReader("x")); err == nil {
+	if _, err := svc.AddFile(sess.ID, "virus.exe", strings.NewReader("x"), 1); err == nil {
 		t.Error("nepodporovaný typ měl být odmítnut")
 	}
 
@@ -464,12 +464,12 @@ func TestFilesListsUploaded(t *testing.T) {
 	defer cancel()
 	base := t.TempDir()
 	scn := scanner.New(filepath.Join(base, "books"), "", nil)
-	svc, err := New(ctx, filepath.Join(base, "import"), 1<<20, scn, nil)
+	svc, err := New(ctx, filepath.Join(base, "import"), 1<<20, 0, scn, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	sess, _ := svc.Create()
-	if _, err := svc.AddFile(sess.ID, "Kniha/01.mp3", strings.NewReader("abc")); err != nil {
+	if _, err := svc.AddFile(sess.ID, "Kniha/01.mp3", strings.NewReader("abc"), 3); err != nil {
 		t.Fatal(err)
 	}
 

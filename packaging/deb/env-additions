@@ -24,3 +24,17 @@ TRANSCODE_MAX_HEIGHT=1080
 # Adresář se zdroji metadat (mediater-meta-*). Soubory musí patřit rootovi
 # a nesmí být zapisovatelné pro skupinu ani ostatní.
 PLUGIN_DIR=/usr/lib/mediater/plugins
+
+# ---- Zabezpečení (doplněno s limity přihlášení) ----
+# Reverzní proxy, kterým server věří X-Real-IP / X-Forwarded-For (IP nebo
+# CIDR, čárkou oddělené). Podle IP klienta se počítají limity přihlášení,
+# registrace a párování TV. Výchozí hodnota stačí pro nginx na tomtéž stroji;
+# běží-li jinde, doplňte jeho adresu, jinak všichni klienti sdílejí jeden limit.
+# Dále platí: JWT_SECRET musí mít v produkci aspoň 32 bajtů (instalace ho
+# generuje sama) a veřejná registrace je na nové instanci vypnutá – zapíná se
+# v administraci (Registrace).
+TRUSTED_PROXIES=127.0.0.0/8,::1
+
+# ---- Import knih (doplněno s limitem importů) ----
+# Kolik importů smí být rozpracovaných najednou; každý zabere až MAX_UPLOAD_MB.
+IMPORT_MAX_SESSIONS=5
