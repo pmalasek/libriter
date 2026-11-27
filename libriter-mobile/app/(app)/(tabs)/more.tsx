@@ -1,4 +1,5 @@
-import { Alert, Pressable, StyleSheet, View } from 'react-native'
+import { Alert, Platform, Pressable, StyleSheet, View } from 'react-native'
+import Constants from 'expo-constants'
 import { useTranslation } from 'react-i18next'
 import { useRouter } from 'expo-router'
 import { Download, Headphones, LogOut, Settings, type LucideProps } from 'lucide-react-native'
@@ -64,8 +65,19 @@ export default function MoreScreen() {
         </Muted>
         <LanguagePicker />
       </View>
+
+      <Muted size={12} style={{ marginTop: spacing.lg, textAlign: 'center' }}>
+        Libriter · {t('layout.version', { version: appVersion() })}
+      </Muted>
     </Screen>
   )
+}
+
+/** Verze aplikace a číslo buildu z app.json („1.4.0 (37)“). */
+function appVersion(): string {
+  const config = Constants.expoConfig
+  const build = Platform.OS === 'ios' ? config?.ios?.buildNumber : config?.android?.versionCode
+  return build ? `${config?.version ?? '?'} (${build})` : (config?.version ?? '?')
 }
 
 function Row({
