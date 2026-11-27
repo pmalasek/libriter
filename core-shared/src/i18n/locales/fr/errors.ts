@@ -111,6 +111,8 @@ export default {
     invalid_book: 'Un livre n’a pas de titre ou a un numéro de série non valide',
     failed: 'L’import a échoué',
     create_failed: 'Impossible de démarrer l’import',
+    upload_in_progress: 'Des fichiers sont encore en cours d’envoi – attendez la fin',
+    too_many_sessions: 'Trop d’imports en cours – terminez-en ou supprimez-en un',
   },
   common: {
     load_failed: 'Impossible de charger les données',

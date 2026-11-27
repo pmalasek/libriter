@@ -111,7 +111,7 @@ func writeEntry(f *zip.File, dst string, limit int64) (int64, error) {
 	}
 	defer rc.Close()
 
-	out, err := os.Create(dst)
+	out, err := createUploadFile(dst)
 	if err != nil {
 		return 0, err
 	}

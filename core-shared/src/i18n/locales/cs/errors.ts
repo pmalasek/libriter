@@ -111,6 +111,8 @@ export default {
     invalid_book: 'Některé knize chybí název nebo má neplatné pořadí v sérii',
     failed: 'Import se nezdařil',
     create_failed: 'Import se nepodařilo založit',
+    upload_in_progress: 'Soubory se ještě nahrávají – počkejte na dokončení',
+    too_many_sessions: 'Rozpracovaných importů je příliš mnoho – dokončete nebo smažte některý z nich',
   },
   common: {
     load_failed: 'Data se nepodařilo načíst',

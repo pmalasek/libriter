@@ -38,6 +38,10 @@ func (h *ImportHandler) List(w http.ResponseWriter, r *http.Request) {
 // POST /api/v1/admin/import  (admin) – založí prázdný import
 func (h *ImportHandler) Create(w http.ResponseWriter, r *http.Request) {
 	sess, err := h.svc.Create()
+	if errors.Is(err, importer.ErrTooManyOpen) {
+		writeError(w, http.StatusTooManyRequests, "import.too_many_sessions", err.Error())
+		return
+	}
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "import.create_failed", "import se nepodařilo založit")
 		return
@@ -72,7 +76,9 @@ func (h *ImportHandler) Upload(w http.ResponseWriter, r *http.Request) {
 	_ = rc.SetReadDeadline(time.Now().Add(uploadDeadline))
 	_ = rc.SetWriteDeadline(time.Now().Add(uploadDeadline))
 
-	stored, err := h.svc.AddFile(id, r.URL.Query().Get("path"), r.Body)
+	// ContentLength je -1, když klient velikost neposlal (chunked) – pak
+	// importér rezervuje celý zbytek limitu relace.
+	stored, err := h.svc.AddFile(id, r.URL.Query().Get("path"), r.Body, r.ContentLength)
 	if err != nil {
 		h.writeErr(w, err)
 		return
@@ -195,6 +201,8 @@ func (h *ImportHandler) writeErr(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "import.not_found", err.Error())
 	case errors.Is(err, importer.ErrWrongState):
 		writeError(w, http.StatusConflict, "import.wrong_state", err.Error())
+	case errors.Is(err, importer.ErrUploadBusy):
+		writeError(w, http.StatusConflict, "import.upload_in_progress", err.Error())
 	case errors.Is(err, importer.ErrInvalidPath):
 		writeError(w, http.StatusBadRequest, "import.invalid_path", err.Error())
 	case errors.Is(err, importer.ErrFileType):
