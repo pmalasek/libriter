@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -90,9 +91,10 @@ func (h *MetadataHandler) Search(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusGatewayTimeout, "request.timeout", "vypršel čas požadavku")
 			return
 		}
-		// Důvod se propouští k editorovi schválně: typicky jde o vyčerpanou
-		// kvótu nebo rozbitý scraper a z obecné hlášky by nešlo poznat, co dělat.
-		writeError(w, http.StatusBadGateway, "metadata.fetch_failed", "zdroje metadat selhaly – "+err.Error())
+		// Důvod (vyčerpaná kvóta, rozbitý scraper, adresa) jde do logu, kde
+		// ho najde správce; klient dostane obecnou hlášku.
+		slog.Warn("hledání metadat selhalo", "err", err)
+		writeError(w, http.StatusBadGateway, "metadata.fetch_failed", "zdroje metadat selhaly")
 		return
 	}
 
@@ -131,7 +133,8 @@ func (h *MetadataHandler) SearchAuthors(w http.ResponseWriter, r *http.Request) 
 			writeError(w, http.StatusGatewayTimeout, "request.timeout", "vypršel čas požadavku")
 			return
 		}
-		writeError(w, http.StatusBadGateway, "metadata.fetch_failed", "zdroje metadat selhaly – "+err.Error())
+		slog.Warn("hledání autora ve zdrojích metadat selhalo", "err", err)
+		writeError(w, http.StatusBadGateway, "metadata.fetch_failed", "zdroje metadat selhaly")
 		return
 	}
 

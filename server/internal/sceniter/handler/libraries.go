@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/google/uuid"
@@ -41,7 +42,9 @@ func (h *Handler) AdminLibraries(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) LibraryCandidates(w http.ResponseWriter, r *http.Request) {
 	dirs, err := h.Libs.Candidates(r.Context())
 	if err != nil {
-		writeError(w, http.StatusServiceUnavailable, "library.root_unavailable", err.Error())
+		// Chyba nese cestu VIDEO_ROOT – jen do logu.
+		slog.Warn("složky VIDEO_ROOT nejde vypsat", "err", err)
+		writeError(w, http.StatusServiceUnavailable, "library.root_unavailable", "složka videoknihovny není dostupná")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"dirs": dirs})

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -255,7 +256,9 @@ func (h *AuthorHandler) SetImage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "author.not_found", "autor nenalezen")
 		return
 	case err != nil:
-		writeError(w, http.StatusBadGateway, "image.download_failed", "obrázek se nepodařilo stáhnout – "+err.Error())
+		// Detail (adresa, síťová chyba) jen do logu – klientovi obecná hláška.
+		slog.Warn("stažení fotky autora selhalo", "author", id, "err", err)
+		writeError(w, http.StatusBadGateway, "image.download_failed", "obrázek se nepodařilo stáhnout")
 		return
 	}
 

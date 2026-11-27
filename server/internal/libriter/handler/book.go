@@ -3,6 +3,7 @@ package handler
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -127,7 +128,9 @@ func (h *BookHandler) SetCover(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 		return
 	case err != nil:
-		writeError(w, http.StatusBadGateway, "image.download_failed", "obálku se nepodařilo stáhnout – "+err.Error())
+		// Detail (adresa, síťová chyba) jen do logu – klientovi obecná hláška.
+		slog.Warn("stažení obálky selhalo", "book", id, "err", err)
+		writeError(w, http.StatusBadGateway, "image.download_failed", "obálku se nepodařilo stáhnout")
 		return
 	}
 
@@ -342,7 +345,9 @@ func (h *BookHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "book.not_found", "kniha nenalezena")
 		return
 	} else if err != nil {
-		writeError(w, http.StatusInternalServerError, "common.delete_failed", "chyba při mazání knihy – "+err.Error())
+		// Chyba nese cesty na disku – jen do logu.
+		slog.Error("mazání knihy selhalo", "book", id, "delete_files", deleteFiles, "err", err)
+		writeError(w, http.StatusInternalServerError, "common.delete_failed", "chyba při mazání knihy")
 		return
 	}
 

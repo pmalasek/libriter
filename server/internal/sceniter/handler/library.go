@@ -586,11 +586,14 @@ func (h *Handler) writeMetadataError(w http.ResponseWriter, err error) bool {
 	case plugin.IsNotFound(err):
 		writeError(w, http.StatusNotFound, "sceniter.metadata_not_found", "titul u zdroje nenalezen")
 	case plugin.IsRateLimited(err):
-		writeError(w, http.StatusTooManyRequests, "sceniter.metadata_rate_limited", "zdroj metadat dočasně odmítá požadavky: "+err.Error())
+		slog.Warn("zdroj metadat odmítá požadavky", "err", err)
+		writeError(w, http.StatusTooManyRequests, "sceniter.metadata_rate_limited", "zdroj metadat dočasně odmítá požadavky")
 	case errors.Is(err, storage.ErrConflict):
 		writeError(w, http.StatusConflict, "sceniter.metadata_conflict", err.Error())
 	default:
-		writeError(w, http.StatusBadGateway, "sceniter.metadata_failed", "zdroj metadat neodpovídá: "+err.Error())
+		// Detail (adresa, výstup pluginu) jen do logu – klientovi obecná hláška.
+		slog.Warn("zdroj metadat selhal", "err", err)
+		writeError(w, http.StatusBadGateway, "sceniter.metadata_failed", "zdroj metadat neodpovídá")
 	}
 	return true
 }
