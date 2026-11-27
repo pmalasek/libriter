@@ -54,6 +54,10 @@ export default {
     small: 'Kleine Kacheln',
     list: 'Liste',
   },
+  shelf: {
+    previous: 'Nach links scrollen',
+    next: 'Nach rechts scrollen',
+  },
   authorSort: {
     last_name: 'Nachname',
     first_name: 'Vorname',

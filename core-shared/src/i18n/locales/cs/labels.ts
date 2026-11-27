@@ -54,6 +54,10 @@ export default {
     small: 'Malé dlaždice',
     list: 'Seznam',
   },
+  shelf: {
+    previous: 'Posunout doleva',
+    next: 'Posunout doprava',
+  },
   authorSort: {
     last_name: 'Příjmení',
     first_name: 'Křestní jméno',

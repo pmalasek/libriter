@@ -54,6 +54,10 @@ export default {
     small: 'Small tiles',
     list: 'List',
   },
+  shelf: {
+    previous: 'Scroll left',
+    next: 'Scroll right',
+  },
   authorSort: {
     last_name: 'Last name',
     first_name: 'First name',
