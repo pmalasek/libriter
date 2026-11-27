@@ -1,7 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
-  <rect x="1" y="1" width="30" height="30" rx="9" fill="#1B3A8F"/>
-  <rect x="6" y="11" width="20" height="14" rx="3" fill="#D9A384"/>
-  <path d="M6.6 10.4 24.8 6.2l.9 3.6L7.5 14Z" fill="#D9A384"/>
-  <path d="M10.2 9.6l2.4 3.2M15.4 8.4l2.4 3.2M20.6 7.2l2.4 3.2" stroke="#112561" stroke-width="1.4" stroke-linecap="round"/>
-  <path d="M14 15.2 19.6 18 14 20.8Z" fill="#1B3A8F"/>
+  <defs>
+    <linearGradient id="m" x1="0.1" y1="0" x2="0.9" y2="1">
+      <stop offset="0" stop-color="#F2C9A6"/>
+      <stop offset="0.5" stop-color="#D9A384"/>
+      <stop offset="1" stop-color="#9A5B36"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="30" height="30" rx="9" fill="#0B1020"/>
+  <g transform="translate(2.4 2.4) scale(0.85)">
+    <path d="M8.5 6.2c0-1.5 1.6-2.4 2.9-1.7l15.1 9.8c1.2.8 1.2 2.6 0 3.4L11.4 27.5c-1.3.8-2.9-.2-2.9-1.7Z" fill="none" stroke="url(#m)" stroke-width="3.6" stroke-linejoin="round"/>
+    <path d="M13.2 12.4v7.2c0 .5.5.8.9.5l5.6-3.6c.4-.3.4-.8 0-1.1l-5.6-3.6c-.4-.3-.9 0-.9.6Z" fill="url(#m)"/>
+  </g>
 </svg>

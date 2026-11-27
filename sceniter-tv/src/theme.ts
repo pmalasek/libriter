@@ -41,6 +41,8 @@ export const colors = {
   textFaint: `rgba(${fgR},${fgG},${fgB},0.44)`,
   accent: lchHex(t.metal),
   accentDeep: oklch(ml - 0.2, mc, mh),
+  /** Světlý odlesk kovu (přechod ve značce). */
+  accentLight: oklch(Math.min(ml + 0.1, 0.95), mc * 0.7, mh),
   /** Halo kolem zaměřené karty, vybrané pozadí. */
   accentSoft: lchRgba(t.metal, 0.2),
   focus: '#FFFFFF',

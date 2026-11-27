@@ -25,7 +25,7 @@ export function AppLayout() {
     <div className="min-h-svh text-foreground">
       <AuroraBackdrop className="fixed -z-10" />
 
-      <SideNav items={items} wide={wide} logo={<Logo size="sm" />} mark={<LogoMark />} brand="Sceniter" />
+      <SideNav items={items} wide={wide} logo={<Logo size="md" />} mark={<LogoMark />} brand="Sceniter" />
       <TabBar items={items} />
 
       <header className="glass inset-shadow-glass sticky top-0 z-30 flex h-14 items-center justify-between gap-2 px-4 md:hidden">
