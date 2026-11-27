@@ -1,11 +1,13 @@
 import { ChevronRightIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
+import { ShelfScroller } from 'core-web/src/components/ShelfScroller'
 import { cn } from '@/lib/utils'
 
 /**
  * Vodorovná police na domovské stránce. Položky se posouvají do strany
- * a zaskakují na začátek, aby police nikdy nekončila rozpůlenou obálkou.
+ * a zaskakují na začátek, aby police nikdy nekončila rozpůlenou obálkou;
+ * myší se posouvá šipkami (viz ShelfScroller).
  */
 export function Shelf({
   title,
@@ -35,11 +37,7 @@ export function Shelf({
         ) : null}
       </div>
 
-      {/* Záporný okraj nechá police začínat i končit u hrany obsahu, ale
-          posunuté položky se nelepí na kraj obrazovky. */}
-      <div className="-mx-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-        <div className="flex snap-x snap-mandatory gap-4">{children}</div>
-      </div>
+      <ShelfScroller>{children}</ShelfScroller>
     </section>
   )
 }

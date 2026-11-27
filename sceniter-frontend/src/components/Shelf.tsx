@@ -1,6 +1,7 @@
 import { ChevronRightIcon, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
+import { ShelfScroller } from 'core-web/src/components/ShelfScroller'
 import { cn } from 'core-web/src/lib/utils'
 
 /**
@@ -62,9 +63,7 @@ export function Shelf({
           </Link>
         ) : null}
       </div>
-      <div className="-mx-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none] sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
-        <div className="flex snap-x snap-mandatory gap-4">{children}</div>
-      </div>
+      <ShelfScroller>{children}</ShelfScroller>
     </section>
   )
 }

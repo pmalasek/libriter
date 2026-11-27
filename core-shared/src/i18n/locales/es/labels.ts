@@ -54,6 +54,10 @@ export default {
     small: 'Mosaico pequeño',
     list: 'Lista',
   },
+  shelf: {
+    previous: 'Desplazar a la izquierda',
+    next: 'Desplazar a la derecha',
+  },
   authorSort: {
     last_name: 'Apellidos',
     first_name: 'Nombre',

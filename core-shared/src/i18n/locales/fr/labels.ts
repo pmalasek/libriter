@@ -54,6 +54,10 @@ export default {
     small: 'Petites vignettes',
     list: 'Liste',
   },
+  shelf: {
+    previous: 'Défiler vers la gauche',
+    next: 'Défiler vers la droite',
+  },
   authorSort: {
     last_name: 'Nom de famille',
     first_name: 'Prénom',
