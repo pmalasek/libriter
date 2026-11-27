@@ -32,6 +32,11 @@ const AdminMatchPage = lazyPage(() => import('@/pages/admin/AdminMatchPage'), 'A
 const AdminIssuesPage = lazyPage(() => import('@/pages/admin/AdminIssuesPage'), 'AdminIssuesPage')
 const AdminTranscodePage = lazyPage(() => import('@/pages/admin/AdminTranscodePage'), 'AdminTranscodePage')
 const AdminTrashPage = lazyPage(() => import('@/pages/admin/AdminTrashPage'), 'AdminTrashPage')
+const AdminWatchingPage = lazyPage(() => import('@/pages/admin/AdminWatchingPage'), 'AdminWatchingPage')
+const AdminWatchingUserPage = lazyPage(() => import('@/pages/admin/AdminWatchingUserPage'), 'AdminWatchingUserPage')
+const AdminUsersPage = lazyPage(() => import('@/pages/admin/AdminUsersPage'), 'AdminUsersPage')
+const AdminSettingsPage = lazyPage(() => import('core-web/src/pages/admin/AdminSettingsPage'), 'AdminSettingsPage')
+const AdminAuditPage = lazyPage(() => import('core-web/src/pages/admin/AdminAuditPage'), 'AdminAuditPage')
 
 export function App() {
   return (
@@ -51,6 +56,27 @@ export function App() {
 
         <Route element={<AppLayout />}>
           <Route path="profile" element={<ProfilePage />} />
+
+          <Route element={<RequireRole role="admin" />}>
+            <Route path="admin" element={<AdminLayout />}>
+              {/* Účty, registrace a audit patří jádru – fungují i bez VIDEO_ROOT. */}
+              <Route path="users" element={<AdminUsersPage />} />
+              <Route path="settings" element={<AdminSettingsPage />} />
+              <Route path="audit" element={<AdminAuditPage />} />
+              <Route element={<DisabledGate />}>
+                <Route index element={<AdminOverviewPage />} />
+                <Route path="libraries" element={<AdminLibrariesPage />} />
+                <Route path="sources" element={<AdminSourcesPage />} />
+                <Route path="match" element={<AdminMatchPage />} />
+                <Route path="issues" element={<AdminIssuesPage />} />
+                <Route path="trash" element={<AdminTrashPage />} />
+                <Route path="transcode" element={<AdminTranscodePage />} />
+                <Route path="watching" element={<AdminWatchingPage />} />
+                <Route path="watching/:userId" element={<AdminWatchingUserPage />} />
+              </Route>
+            </Route>
+          </Route>
+
           <Route element={<DisabledGate />}>
             <Route index element={<HomePage />} />
             <Route path="movies" element={<MoviesPage />} />
@@ -64,18 +90,6 @@ export function App() {
             <Route path="people/:id" element={<PersonPage />} />
             <Route path="watchlist" element={<WatchlistPage />} />
             <Route path="search" element={<SearchPage />} />
-
-            <Route element={<RequireRole role="admin" />}>
-              <Route path="admin" element={<AdminLayout />}>
-                <Route index element={<AdminOverviewPage />} />
-                <Route path="libraries" element={<AdminLibrariesPage />} />
-                <Route path="sources" element={<AdminSourcesPage />} />
-                <Route path="match" element={<AdminMatchPage />} />
-                <Route path="issues" element={<AdminIssuesPage />} />
-                <Route path="trash" element={<AdminTrashPage />} />
-                <Route path="transcode" element={<AdminTranscodePage />} />
-              </Route>
-            </Route>
           </Route>
           <Route path="*" element={<NotFoundPage />} />
         </Route>

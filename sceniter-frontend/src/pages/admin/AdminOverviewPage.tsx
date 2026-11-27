@@ -1,4 +1,4 @@
-import { DatabaseZapIcon, RefreshCwIcon, SparklesIcon } from 'lucide-react'
+import { DatabaseZapIcon, HistoryIcon, RefreshCwIcon, SparklesIcon, UsersIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
@@ -160,6 +160,20 @@ export function AdminOverviewPage() {
             <CardTitle>{t('video.admin.users.title')}</CardTitle>
             <CardDescription>{t('video.admin.users.description')}</CardDescription>
           </CardHeader>
+          <CardContent className="flex flex-wrap gap-2">
+            <Button asChild variant="outline">
+              <Link to="/admin/users">
+                <UsersIcon />
+                {t('video.admin.users.manage')}
+              </Link>
+            </Button>
+            <Button asChild variant="outline">
+              <Link to="/admin/watching">
+                <HistoryIcon />
+                {t('video.admin.nav.watching')}
+              </Link>
+            </Button>
+          </CardContent>
         </Card>
       </div>
     </div>
