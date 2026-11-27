@@ -318,13 +318,13 @@ func TestSceniterEndToEnd(t *testing.T) {
 			} `json:"movie"`
 		} `json:"continue"`
 		Libraries []struct {
-			Movies   []any `json:"movies"`
-			Episodes []any `json:"episodes"`
+			Movies []any `json:"movies"`
+			Shows  []any `json:"shows"`
 		} `json:"libraries"`
 	}
 	e.json("GET", "/api/v1/sceniter/home", nil, &home)
 	if len(home.Continue) != 1 || home.Continue[0].Movie.ID != movieID || len(home.Libraries) != 2 ||
-		len(home.Libraries[0].Movies) != 2 || len(home.Libraries[1].Episodes) != 1 {
+		len(home.Libraries[0].Movies) != 2 || len(home.Libraries[1].Shows) != 1 {
 		t.Fatalf("home: %+v", home)
 	}
 	if code := e.json("PUT", "/api/v1/sceniter/watchlist/movie/"+byTitle["Pelíšky"], nil, nil); code != http.StatusNoContent {
