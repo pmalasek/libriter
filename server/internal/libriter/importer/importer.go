@@ -168,8 +168,9 @@ var ErrRootInsideLibrary = errors.New("IMPORT_ROOT nesmí ležet uvnitř AUDIO_R
 // vypadá jako relace (adresář s UUID), nic jiného v IMPORT_ROOT.
 //
 // maxBytes je limit jedné relace, maxSessions strop současně otevřených
-// relací (nekladné číslo = DefaultMaxSessions). Každá relace smí zabrat až
-// maxBytes, takže staging potřebuje nejvýš maxSessions × maxBytes místa.
+// relací (nekladné číslo = DefaultMaxSessions). Každá relace smí nahrát až
+// maxBytes a rozbalit ze zipů dalších až maxBytes, takže staging potřebuje
+// nejvýš zhruba 2 × maxSessions × maxBytes místa.
 func New(appCtx context.Context, root string, maxBytes int64, maxSessions int, scn libraryScanner, store *storage.Store) (*Service, error) {
 	if inside, err := isWithin(scn.AudioRoot(), root); err != nil {
 		return nil, err
