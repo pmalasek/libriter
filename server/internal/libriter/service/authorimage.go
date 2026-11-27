@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"mediater/internal/core/imagestore"
@@ -98,7 +97,7 @@ func (s *AuthorImageService) save(ctx context.Context, authorID uuid.UUID, data 
 	// Frontend obchází cache prohlížeče přes ?v=<image_path>, takže každá
 	// nová fotka musí mít nové jméno – jinak by se ukazovala ta stará.
 	name := fmt.Sprintf("%s-%d", authorID, time.Now().UnixNano())
-	fileName, err := imagestore.Write(s.root, name, data, ext)
+	fileName, err := imagestore.Write(s.root, name, data)
 	if err != nil {
 		return nil, err
 	}
@@ -145,21 +144,15 @@ func (s *AuthorImageService) download(ctx context.Context, imageURL string) ([]b
 
 // downloadImage stáhne obrázek a ověří, že obrázek skutečně je. Vrací data
 // a příponu souboru (".jpg"). Sdílí ho fotky autorů i obálky knih.
+//
+// Typ se určuje jen podle obsahu: Content-Type ani přípona v adrese
+// nerozhodují, cizí server by jimi jinak protlačil HTML na disk.
 func downloadImage(ctx context.Context, fetcher *metadata.Fetcher, imageURL string) ([]byte, string, error) {
-	body, contentType, err := fetcher.GetWithType(ctx, imageURL, "image/*")
+	body, _, err := fetcher.GetWithType(ctx, imageURL, "image/*")
 	if err != nil {
 		return nil, "", fmt.Errorf("stažení obrázku: %w", err)
 	}
 	defer body.Close()
-
-	ext := imagestore.ExtForContentType(contentType)
-	if ext == "" {
-		// Některé servery typ neposílají správně – zkusíme příponu z adresy.
-		ext = filepath.Ext(imageURL)
-		if !imagestore.IsImageExt(ext) {
-			return nil, "", fmt.Errorf("adresa nevrátila obrázek (Content-Type %q)", contentType)
-		}
-	}
 
 	data, err := imagestore.ReadLimited(body)
 	if err != nil {
@@ -167,6 +160,10 @@ func downloadImage(ctx context.Context, fetcher *metadata.Fetcher, imageURL stri
 	}
 	if len(data) == 0 {
 		return nil, "", errors.New("stažený obrázek je prázdný")
+	}
+	ext := imagestore.SniffExt(data)
+	if ext == "" {
+		return nil, "", errors.New("adresa nevrátila podporovaný obrázek")
 	}
 	return data, ext, nil
 }

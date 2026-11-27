@@ -3,20 +3,23 @@
 // Hledání a ukládání obálek knih do COVER_ROOT.
 //
 // Pořadí hledání (při vytvoření nebo prvním ingestu knihy):
-//  1. obrázek v adresáři s audio soubory → vybere se největší (podle velikosti)
+//  1. obrázek v adresáři s audio soubory → vybere se největší (podle velikosti);
+//     odkaz ven z knihovny se přeskočí
 //  2. obrázek vložený v tagu audio souboru (APIC / covr)
 //
-// Nalezený obrázek se zkopíruje do COVER_ROOT jako <book_id>.<ext>
+// Nalezený obrázek se zkopíruje do COVER_ROOT jako <book_id>.<ext>; příponu
+// určuje obsah souboru, ne jeho název ani tag
 // a relativní cesta se uloží do books.cover_path.
 
 package scanner
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
+	"mediater/internal/core/fsroot"
 	"mediater/internal/core/imagestore"
 	"mediater/internal/libriter/model"
 
@@ -62,14 +65,20 @@ func (s *Scanner) hasCover(book *model.Book) bool {
 // Vrací relativní cestu od COVER_ROOT a popis zdroje ("" = nic nenalezeno).
 func (s *Scanner) resolveCover(bookID uuid.UUID, absDir, absFile string) (string, string, error) {
 	// 1. Obrázek v adresáři – největší
-	if src := largestImageInDir(absDir); src != "" {
-		rel, err := imagestore.CopyFile(s.coverRoot, bookID.String(), src)
+	if src := largestImageInDir(s.audioRoot, absDir); src != "" {
+		// Obálku vydává endpoint bez přihlášení: kopíruje se jen soubor
+		// uvnitř knihovny a jen skutečný obrázek (typ podle obsahu).
+		data, err := fsroot.ReadFileIn(s.audioRoot, src, imagestore.MaxBytes)
+		if err != nil {
+			return "", "", fmt.Errorf("čtení obrázku %s: %w", filepath.Base(src), err)
+		}
+		rel, err := imagestore.Write(s.coverRoot, bookID.String(), data)
 		return rel, "adresář: " + filepath.Base(src), err
 	}
 
 	// 2. Obrázek vložený v audio souboru
 	if pic := embeddedCover(absFile); pic != nil {
-		rel, err := imagestore.Write(s.coverRoot, bookID.String(), pic.Data, "."+strings.ToLower(pic.Ext))
+		rel, err := imagestore.Write(s.coverRoot, bookID.String(), pic.Data)
 		return rel, "tag: " + filepath.Base(absFile), err
 	}
 
@@ -77,8 +86,9 @@ func (s *Scanner) resolveCover(bookID uuid.UUID, absDir, absFile string) (string
 }
 
 // largestImageInDir vrátí cestu k největšímu obrázku v adresáři (nerekurzivně).
-// Prázdný řetězec = žádný obrázek.
-func largestImageInDir(dir string) string {
+// Bere jen běžné soubory a odkazy, které vedou na běžný soubor uvnitř
+// knihovny root. Prázdný řetězec = žádný obrázek.
+func largestImageInDir(root, dir string) string {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return ""
@@ -91,12 +101,15 @@ func largestImageInDir(dir string) string {
 		if e.IsDir() || !imagestore.IsImageExt(filepath.Ext(e.Name())) {
 			continue
 		}
-		info, err := e.Info()
+		path := filepath.Join(dir, e.Name())
+		// Velikost cíle odkazu, ne odkazu samotného; zároveň odmítne odkaz
+		// ven z knihovny, FIFO i zařízení.
+		info, err := fsroot.Stat(root, path)
 		if err != nil || info.Size() == 0 || info.Size() > imagestore.MaxBytes {
 			continue
 		}
 		if info.Size() > bestSize {
-			best, bestSize = filepath.Join(dir, e.Name()), info.Size()
+			best, bestSize = path, info.Size()
 		}
 	}
 	return best
@@ -104,7 +117,7 @@ func largestImageInDir(dir string) string {
 
 // embeddedCover přečte obálku z tagů audio souboru. nil = žádná není.
 func embeddedCover(absPath string) *tag.Picture {
-	f, err := os.Open(absPath)
+	f, _, err := fsroot.OpenFile(absPath)
 	if err != nil {
 		return nil
 	}

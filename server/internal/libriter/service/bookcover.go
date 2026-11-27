@@ -90,7 +90,7 @@ func (s *BookCoverService) save(ctx context.Context, bookID uuid.UUID, data []by
 	// Jméno souboru je stejné jako u obálek, které ukládá scanner
 	// (<book_id>.<ext>), takže se obálka z adresáře a ze zdroje nemíchají.
 	// Cache prohlížeče obchází ?v=<updated_at>, které se zápisem změní.
-	fileName, err := imagestore.Write(s.root, bookID.String(), data, ext)
+	fileName, err := imagestore.Write(s.root, bookID.String(), data)
 	if err != nil {
 		return nil, err
 	}
