@@ -11,6 +11,7 @@ const lazyPage = <K extends string>(load: () => Promise<Record<K, React.Componen
   lazy(() => load().then((m) => ({ default: m[name] })))
 
 const HomePage = lazyPage(() => import('@/pages/HomePage'), 'HomePage')
+const BrowsePage = lazyPage(() => import('@/pages/BrowsePage'), 'BrowsePage')
 const MoviesPage = lazyPage(() => import('@/pages/ListPage'), 'MoviesPage')
 const ShowsPage = lazyPage(() => import('@/pages/ListPage'), 'ShowsPage')
 const LibraryPage = lazyPage(() => import('@/pages/ListPage'), 'LibraryPage')
@@ -79,6 +80,7 @@ export function App() {
 
           <Route element={<DisabledGate />}>
             <Route index element={<HomePage />} />
+            <Route path="browse" element={<BrowsePage />} />
             <Route path="movies" element={<MoviesPage />} />
             <Route path="movies/:id" element={<MovieDetailPage />} />
             <Route path="shows" element={<ShowsPage />} />

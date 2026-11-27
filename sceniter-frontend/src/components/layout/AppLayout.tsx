@@ -1,3 +1,4 @@
+import { SearchIcon } from 'lucide-react'
 import { Suspense } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Outlet } from 'react-router'
@@ -7,6 +8,7 @@ import { useWideNav } from 'core-web/src/components/layout/navTypes'
 import { SideNav } from 'core-web/src/components/layout/SideNav'
 import { TabBar } from 'core-web/src/components/layout/TabBar'
 import { UserMenu } from 'core-web/src/components/layout/UserMenu'
+import { Button } from 'core-web/src/components/ui/button'
 import { cn } from 'core-web/src/lib/utils'
 import { Logo, LogoMark } from './Logo'
 import { useNavItems } from './navItems'
@@ -30,7 +32,14 @@ export function AppLayout() {
         <Link to="/" className="flex items-center" aria-label={t('layout.homeLink')}>
           <Logo size="sm" />
         </Link>
-        <UserMenu />
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" asChild>
+            <Link to="/search" aria-label={t('video.nav.search')}>
+              <SearchIcon className="size-5" />
+            </Link>
+          </Button>
+          <UserMenu />
+        </div>
       </header>
 
       {/* Panel vlevo ukrajuje šířku; obsah se vystředí ve zbylém místě. */}

@@ -19,7 +19,7 @@ type Featured = { kind: 'movie'; title: Movie } | { kind: 'show'; title: Show }
  * Doporučené tituly pro banner: nejnovější s obrázkem pozadí, střídavě
  * z jednotlivých knihoven, ať banner neukazuje jen jednu z nich.
  */
-export function pickFeatured(rows: HomeLibrary[]): Featured[] {
+function pickFeatured(rows: HomeLibrary[]): Featured[] {
   const queues: Featured[][] = rows.map((row) => [
     ...row.movies.filter((m) => m.backdrop_path).map((title) => ({ kind: 'movie' as const, title })),
     ...row.shows.filter((s) => s.backdrop_path).map((title) => ({ kind: 'show' as const, title })),
@@ -72,7 +72,7 @@ export function HomeHero({ rows }: { rows: HomeLibrary[] }) {
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
-      className="relative -mx-4 -mt-4 mb-2 overflow-hidden sm:-mx-6 lg:-mx-8"
+      className="group/hero relative -mx-4 -mt-4 mb-2 overflow-hidden sm:-mx-6 lg:-mx-8"
     >
       {/* Všechna pozadí jsou v DOM a prolínají se průhledností. */}
       <div aria-hidden className="absolute inset-0">
@@ -114,7 +114,7 @@ export function HomeHero({ rows }: { rows: HomeLibrary[] }) {
             type="button"
             onClick={() => go(-1)}
             aria-label={t('video.home.heroPrev')}
-            className="absolute top-1/2 left-1 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full text-foreground/70 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 lg:flex"
+            className="absolute top-1/2 left-2 z-10 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full bg-background/25 text-foreground/80 outline-none backdrop-blur-sm hover:bg-background/45 opacity-0 transition-opacity group-hover/hero:opacity-100 hover:text-primary focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:hover)_and_(pointer:fine)]:flex"
           >
             <ChevronLeftIcon className="size-7" />
           </button>
@@ -122,7 +122,7 @@ export function HomeHero({ rows }: { rows: HomeLibrary[] }) {
             type="button"
             onClick={() => go(1)}
             aria-label={t('video.home.heroNext')}
-            className="absolute top-1/2 right-1 hidden size-10 -translate-y-1/2 items-center justify-center rounded-full text-foreground/70 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 lg:flex"
+            className="absolute top-1/2 right-2 z-10 hidden size-11 -translate-y-1/2 items-center justify-center rounded-full bg-background/25 text-foreground/80 outline-none backdrop-blur-sm hover:bg-background/45 opacity-0 transition-opacity group-hover/hero:opacity-100 hover:text-primary focus-visible:opacity-100 focus-visible:ring-3 focus-visible:ring-ring/50 [@media(hover:hover)_and_(pointer:fine)]:flex"
           >
             <ChevronRightIcon className="size-7" />
           </button>
@@ -169,17 +169,17 @@ function HeroSlide({ featured }: { featured: Featured }) {
         {meta.length > 0 ? <p className="mt-3 text-sm text-foreground/85 sm:text-base">{meta.join('  ·  ')}</p> : null}
         {title.overview ? <p className="mt-2 line-clamp-2 max-w-xl text-sm text-foreground/80 sm:text-base">{title.overview}</p> : null}
 
-        <div className="mt-6 flex flex-wrap items-center gap-3">
+        <div className="mt-6 flex flex-wrap items-center gap-2 sm:gap-3">
           {playTo ? (
             <Button size="lg" className="h-12 rounded-full px-7 text-base" onClick={() => navigate(playTo)}>
               <PlayIcon className="fill-current" />
               {t('video.detail.play')}
             </Button>
           ) : null}
-          <Button size="lg" variant="outline" className="h-12 rounded-full bg-background/30 px-6 text-base" asChild>
-            <Link to={to}>
+          <Button size="lg" variant="outline" className="h-12 rounded-full bg-background/30 px-4 text-base sm:px-6" asChild>
+            <Link to={to} aria-label={t('video.home.moreInfo')}>
               <InfoIcon />
-              {t('video.home.moreInfo')}
+              <span className="max-sm:hidden">{t('video.home.moreInfo')}</span>
             </Link>
           </Button>
           {detail ? (
