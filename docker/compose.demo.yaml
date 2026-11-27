@@ -16,9 +16,15 @@ services:
     # Relativní cesty z .env (./data/...) míří do /app/data.
     # Pozor: v .env nepsat komentář za hodnotu (KEY=hodnota # text). Docker ho
     # odstraní jen po mezeře – po tabulátoru zůstane součástí hodnoty.
+    # TRUSTED_PROXIES v .env: adresa, ze které kontejner vidí spojení od
+    # nginxu (IP nginx stroje), např. TRUSTED_PROXIES=78.156.131.251. Bez ní
+    # všichni klienti sdílejí jeden limit přihlášení.
     env_file: .env
+    # Jen na vnitřní adrese hostitele: nginx běží na jiném stroji a připojuje
+    # se na 172.24.0.46. 127.0.0.1 by ho odřízl, 0.0.0.0 by backend vystavil
+    # na všech rozhraních mimo nginx.
     ports:
-      - "8082:8082"
+      - "172.24.0.46:8082:8082"
     volumes:
       - ./data:/app/data
       - transcode:/var/cache/mediater/transcode
