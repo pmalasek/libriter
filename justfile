@@ -82,6 +82,14 @@ i18n-check:
 vet:
     go vet ./...
 
+# Hlásí jen zranitelnosti v kódu, který server opravdu volá. Nálezy ve
+# standardní knihovně opraví novější Go toolchain, ne go get.
+#
+# Známé zranitelnosti v Go závislostech (govulncheck)
+[working-directory('server')]
+vulncheck:
+    go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
 # tsc ve všech npm workspaces (sdílené balíčky, weby, mobil) a v TV aplikaci
 typecheck:
     npm run typecheck
