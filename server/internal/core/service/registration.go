@@ -36,9 +36,11 @@ func NewRegistration(store *storage.Store) *RegistrationService {
 	return &RegistrationService{store: store}
 }
 
-// Registration vrátí nastavení registrace (výchozí: zapnutá, role reader).
+// Registration vrátí nastavení registrace (výchozí: vypnutá, role reader).
+// Nový server tak nepustí dovnitř nikoho cizího, dokud admin registraci
+// v administraci výslovně nezapne.
 func (s *RegistrationService) Registration(ctx context.Context) (RegistrationSettings, error) {
-	out := RegistrationSettings{Enabled: true, DefaultRole: model.RoleReader}
+	out := RegistrationSettings{Enabled: false, DefaultRole: model.RoleReader}
 
 	raw, err := s.store.GetSetting(ctx, SettingRegistration)
 	if errors.Is(err, storage.ErrNotFound) {

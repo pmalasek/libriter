@@ -15,6 +15,7 @@ import (
 
 	"mediater/internal/core/config"
 	"mediater/internal/core/db"
+	"mediater/internal/core/middleware"
 	"mediater/internal/core/plugin"
 	"mediater/internal/core/product"
 	"mediater/internal/core/service"
@@ -129,5 +130,50 @@ func TestUnknownAPIPathIsJSON(t *testing.T) {
 	testRouter(t).ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/nonsense", nil))
 	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Header().Get("Content-Type"), "application/json") {
 		t.Fatalf("stav %d, typ %q", rec.Code, rec.Header().Get("Content-Type"))
+	}
+}
+
+// Bezpečnostní hlavičky dostane API, SPA i /health. API má přísnější CSP,
+// protože se nikdy nezobrazuje jako stránka.
+func TestSecurityHeaders(t *testing.T) {
+	r := testRouter(t)
+
+	tests := []struct {
+		name, method, path string
+		wantStatus         int
+		wantCSP            string
+	}{
+		{"veřejné API", http.MethodGet, "/api/v1/auth/config", http.StatusOK, middleware.APIContentSecurityPolicy},
+		{"API bez přihlášení", http.MethodGet, "/api/v1/users/me", http.StatusUnauthorized, middleware.APIContentSecurityPolicy},
+		{"neznámé API", http.MethodGet, "/api/v1/nonsense", http.StatusNotFound, middleware.APIContentSecurityPolicy},
+		{"chybná metoda API", http.MethodDelete, "/api/v1/auth/config", http.StatusMethodNotAllowed, middleware.APIContentSecurityPolicy},
+		// Frontend v testech sestavený není, SPA vrací stránku s návodem (503).
+		{"SPA kořen", http.MethodGet, "/", http.StatusServiceUnavailable, middleware.WebContentSecurityPolicy},
+		{"SPA podstránka", http.MethodGet, "/books/123", http.StatusServiceUnavailable, middleware.WebContentSecurityPolicy},
+		{"health", http.MethodGet, "/health", http.StatusOK, middleware.WebContentSecurityPolicy},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := httptest.NewRecorder()
+			r.ServeHTTP(rec, httptest.NewRequest(tc.method, tc.path, nil))
+			if rec.Code != tc.wantStatus {
+				t.Errorf("stav %d, chci %d", rec.Code, tc.wantStatus)
+			}
+			h := rec.Header()
+			for key, want := range map[string]string{
+				"X-Content-Type-Options":  "nosniff",
+				"X-Frame-Options":         "DENY",
+				"Referrer-Policy":         "strict-origin-when-cross-origin",
+				"Content-Security-Policy": tc.wantCSP,
+			} {
+				if got := h.Get(key); got != want {
+					t.Errorf("%s = %q, chci %q", key, got, want)
+				}
+			}
+			// HSTS přidává nginx, server sám HTTPS neobsluhuje.
+			if got := h.Get("Strict-Transport-Security"); got != "" {
+				t.Errorf("Strict-Transport-Security = %q, server ji nastavovat nemá", got)
+			}
+		})
 	}
 }

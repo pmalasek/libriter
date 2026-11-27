@@ -95,12 +95,14 @@ func (f *fakeScanner) Merge(_ context.Context, targets []uuid.UUID) (scanner.Mer
 }
 
 type adminTestEnv struct {
-	router  http.Handler
-	store   *storage.Store
-	users   *service.UserService
-	auth    *service.AuthService
-	audit   *service.AuditService
-	scanner *fakeScanner
+	router http.Handler
+	store  *storage.Store
+	users  *service.UserService
+	auth   *service.AuthService
+	audit  *service.AuditService
+	// settings drží mimo jiné nastavení registrace (výchozí: vypnutá).
+	settings *service.SettingsService
+	scanner  *fakeScanner
 	// audioRoot je kořen, pod který testy zapisují audio soubory kapitol.
 	audioRoot string
 }
@@ -207,7 +209,16 @@ func newAdminTestEnv(t *testing.T) *adminTestEnv {
 
 	return &adminTestEnv{
 		router: r, store: store, users: userSvc, auth: authSvc,
-		audit: auditSvc, scanner: scn, audioRoot: audioRoot,
+		audit: auditSvc, settings: settingsSvc, scanner: scn, audioRoot: audioRoot,
+	}
+}
+
+// enableRegistration zapne veřejnou registraci (výchozí je vypnutá).
+func (e *adminTestEnv) enableRegistration(t *testing.T) {
+	t.Helper()
+	if _, err := e.settings.SetRegistration(context.Background(),
+		service.RegistrationSettings{Enabled: true, DefaultRole: model.RoleReader}); err != nil {
+		t.Fatalf("zapnutí registrace: %v", err)
 	}
 }
 
@@ -331,22 +342,45 @@ func TestRegistrationCanBeDisabled(t *testing.T) {
 	env := newAdminTestEnv(t)
 	adminToken, _ := env.login(t, "admin@example.com", model.RoleAdmin)
 
-	// Výchozí stav: registrace zapnutá.
+	// Výchozí stav: registrace vypnutá. Pole registration_enabled ale v
+	// odpovědi být musí – TV podle něj pozná, že mluví se skutečným serverem.
 	rec := env.do(t, http.MethodGet, "/auth/config", "", nil)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("auth/config: status = %d", rec.Code)
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+		t.Fatalf("odpověď: %v", err)
+	}
+	if enabled, ok := raw["registration_enabled"]; !ok || enabled != false {
+		t.Errorf("výchozí konfigurace = %v, chtěno registration_enabled: false", raw)
+	}
+	rec = env.do(t, http.MethodPost, "/auth/register", "", map[string]string{
+		"display_name": "Zvědavec", "email": "prvni@example.com", "password": "tajneheslo",
+	})
+	if rec.Code != http.StatusForbidden {
+		t.Errorf("registrace ve výchozím stavu: status = %d, chtěno 403", rec.Code)
+	}
+
+	// Admin registraci zapne…
+	rec = env.do(t, http.MethodPut, "/admin/settings/registration", adminToken,
+		map[string]any{"enabled": true, "default_role": model.RoleReader})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("zapnutí registrace: status = %d (%s)", rec.Code, rec.Body.String())
 	}
 	var cfg struct {
 		RegistrationEnabled bool   `json:"registration_enabled"`
 		DefaultRole         string `json:"default_role"`
 	}
+	rec = env.do(t, http.MethodGet, "/auth/config", "", nil)
 	if err := json.Unmarshal(rec.Body.Bytes(), &cfg); err != nil {
 		t.Fatalf("odpověď: %v", err)
 	}
 	if !cfg.RegistrationEnabled || cfg.DefaultRole != model.RoleReader {
-		t.Errorf("výchozí konfigurace = %+v, chtěna zapnutá registrace s rolí reader", cfg)
+		t.Errorf("konfigurace po zapnutí = %+v, chtěna zapnutá registrace s rolí reader", cfg)
 	}
 
+	// …a zase vypne.
 	rec = env.do(t, http.MethodPut, "/admin/settings/registration", adminToken,
 		map[string]any{"enabled": false, "default_role": model.RoleEditor})
 	if rec.Code != http.StatusOK {
