@@ -207,10 +207,10 @@ func TestMigrateExistingUserAppearance(t *testing.T) {
 	if err := conn.QueryRow(`SELECT display_name, email, color_scheme, theme_mode FROM users WHERE id = ?1`, id).Scan(&name, &email, &scheme, &mode); err != nil {
 		t.Fatal(err)
 	}
-	if name != "Původní účet" || email != "legacy@example.com" || scheme != "teal" || mode != "system" {
+	if name != "Původní účet" || email != "legacy@example.com" || scheme != "midnight" || mode != "system" {
 		t.Fatalf("migrated user: %q %q %q %q", name, email, scheme, mode)
 	}
-	if _, err := conn.Exec(`UPDATE users SET color_scheme = 'violet', theme_mode = 'dark' WHERE id = ?1`, id); err != nil {
+	if _, err := conn.Exec(`UPDATE users SET color_scheme = 'burgundy', theme_mode = 'dark' WHERE id = ?1`, id); err != nil {
 		t.Fatal(err)
 	}
 	if err := Migrate(context.Background(), conn); err != nil {
@@ -219,8 +219,86 @@ func TestMigrateExistingUserAppearance(t *testing.T) {
 	if err := conn.QueryRow(`SELECT color_scheme, theme_mode FROM users WHERE id = ?1`, id).Scan(&scheme, &mode); err != nil {
 		t.Fatal(err)
 	}
-	if scheme != "violet" || mode != "dark" {
+	if scheme != "burgundy" || mode != "dark" {
 		t.Fatal("repeated migration reset appearance")
+	}
+}
+
+// Migrace 021 převede stará schémata na nová témata, nový CHECK odmítne
+// staré hodnoty a cizí klíče ani indexy na users neutrpí.
+func TestMigrateColorSchemes(t *testing.T) {
+	ctx := context.Background()
+	db := openLegacy(t)
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	// openLegacy už aplikovala 001; doženeme vše před 021.
+	migrations, err := loadMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range migrations {
+		if m.version == 1 {
+			continue
+		}
+		if m.version >= 21 {
+			break
+		}
+		if err := apply(ctx, conn, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	legacy := map[string]string{"teal": "midnight", "blue": "midnight", "green": "emerald", "violet": "burgundy"}
+	ids := map[string]string{}
+	for old := range legacy {
+		id := uuid.New().String()
+		ids[old] = id
+		if _, err := conn.ExecContext(ctx, `INSERT INTO users (id, display_name, email, password_hash, color_scheme) VALUES (?1, ?2, ?3, 'hash', ?4)`,
+			id, old, old+"@example.com", old); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := conn.ExecContext(ctx, `INSERT INTO device_sessions (id, user_id, scope, created_at, last_seen_at) VALUES ('d1', ?1, 'tv', 0, 0)`, ids["violet"]); err != nil {
+		t.Fatal(err)
+	}
+	conn.Close()
+
+	if err := Migrate(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	for old, want := range legacy {
+		var got string
+		if err := db.QueryRow(`SELECT color_scheme FROM users WHERE id = ?1`, ids[old]).Scan(&got); err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("%s → %q, chci %q", old, got, want)
+		}
+	}
+	if _, err := db.Exec(`UPDATE users SET color_scheme = 'teal' WHERE id = ?1`, ids["teal"]); err == nil {
+		t.Error("CHECK přijal staré schéma")
+	}
+	var children int
+	if err := db.QueryRow(`SELECT count(*) FROM device_sessions WHERE user_id = ?1`, ids["violet"]).Scan(&children); err != nil || children != 1 {
+		t.Errorf("podřízený řádek po migraci: %d %v", children, err)
+	}
+	var dup int
+	if err := db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name IN ('users_email_unique', 'users_login_unique')`).Scan(&dup); err != nil {
+		t.Fatal(err)
+	}
+	if dup != 2 {
+		t.Errorf("indexy users: %d", dup)
+	}
+	rows, err := db.Query(`PRAGMA foreign_key_check`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	if rows.Next() {
+		t.Error("porušené cizí klíče po migraci")
 	}
 }
 

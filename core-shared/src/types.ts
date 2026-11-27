@@ -6,7 +6,7 @@ import { t, type UILanguage } from './i18n'
 
 export type Role = 'admin' | 'editor' | 'reader'
 
-export type ColorScheme = 'teal' | 'blue' | 'violet' | 'green'
+export type ColorScheme = 'midnight' | 'emerald' | 'burgundy'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 

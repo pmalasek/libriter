@@ -1,13 +1,13 @@
 import { cn } from 'core-web/src/lib/utils'
 
-/** Značka Sceniteru: klapka v barvě schématu. */
+/** Značka Sceniteru: kovová klapka na ploše v barvě tématu. */
 export function LogoMark({ className }: { className?: string }) {
   return (
     <span
       role="img"
       aria-label="Sceniter"
       className={cn(
-        'bg-brand-gradient inset-shadow-glass flex size-12 shrink-0 items-center justify-center rounded-2xl text-primary-foreground shadow-glass ring-1 ring-white/20',
+        'bg-brand-surface inset-shadow-glass flex size-12 shrink-0 items-center justify-center rounded-2xl text-metal shadow-glass ring-1 ring-metal/35',
         className,
       )}
     >
@@ -16,11 +16,11 @@ export function LogoMark({ className }: { className?: string }) {
         <path d="M5.6 10.4 25.4 5.8l.9 3.7L6.5 14.1Z" fill="currentColor" />
         <path
           d="M9.6 9.5l2.6 3.4M15.2 8.2l2.6 3.4M20.8 6.9l2.6 3.4"
-          stroke="var(--primary)"
+          stroke="var(--brand-deep)"
           strokeWidth="1.5"
           strokeLinecap="round"
         />
-        <path d="M14 15.4 20 18.5 14 21.6Z" fill="var(--primary)" />
+        <path d="M14 15.4 20 18.5 14 21.6Z" fill="var(--brand-deep)" />
       </svg>
     </span>
   )

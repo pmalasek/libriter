@@ -89,10 +89,9 @@ export default {
     added: 'Fecha de incorporación',
   },
   colorScheme: {
-    teal: 'Verde azulado',
-    blue: 'Azul',
-    violet: 'Violeta',
-    green: 'Verde',
+    midnight: 'Azul medianoche y cobre',
+    emerald: 'Esmeralda y oro',
+    burgundy: 'Burdeos y oro',
   },
   themeMode: {
     light: 'Claro',

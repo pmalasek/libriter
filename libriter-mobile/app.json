@@ -7,7 +7,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
-    "primaryColor": "#007A7B",
+    "primaryColor": "#1B3A8F",
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "cz.libriter.app",
@@ -52,10 +52,10 @@
           "image": "./assets/splash-icon.png",
           "imageWidth": 160,
           "resizeMode": "contain",
-          "backgroundColor": "#F6FBFD",
+          "backgroundColor": "#F4F7FC",
           "dark": {
             "image": "./assets/splash-icon.png",
-            "backgroundColor": "#050F15"
+            "backgroundColor": "#0B1020"
           }
         }
       ],

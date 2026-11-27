@@ -16,6 +16,11 @@
     --color-highlight: var(--highlight);
     --color-highlight-foreground: var(--highlight-foreground);
     --color-highlight-deep: var(--highlight-deep);
+    --color-brand: var(--brand);
+    --color-brand-deep: var(--brand-deep);
+    --color-brand-foreground: var(--brand-foreground);
+    --color-metal: var(--metal);
+    --color-metal-foreground: var(--metal-foreground);
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -70,227 +75,294 @@
 }
 
 /*
- * Paleta: sytý teal z loga jako hlavní barva, oranžová jako doplněk (--highlight).
+ * Barevná témata: Midnight Blue & Copper (výchozí), Emerald & Gold,
+ * Burgundy & Gold – každé ve světlém i tmavém režimu. Primitiva --t-* jsou
+ * trojice OKLCH (L C H) a MUSÍ se shodovat s core-shared/src/themes.ts, ze
+ * kterého barvy počítá mobil a televize (hlídá test core-shared/test/themes.test.ts).
+ *
+ * Každý blok je úplný: :root.dark a :root[data-color-scheme] mají stejnou
+ * specificitu, takže o výsledku rozhoduje pořadí bloků.
+ */
+/* Midnight Blue & Copper – světlý */
+:root,
+:root[data-color-scheme="midnight"] {
+    --t-background: 0.975 0.008 265;
+    --t-foreground: 0.22 0.05 268;
+    --t-card: 1 0 0;
+    --t-sidebar: 0.955 0.014 265;
+    --t-secondary: 0.945 0.014 265;
+    --t-secondary-foreground: 0.38 0.06 265;
+    --t-muted-foreground: 0.48 0.045 265;
+    --t-accent: 0.935 0.02 265;
+    --t-accent-foreground: 0.3 0.06 266;
+    --t-border: 0.9 0.015 265;
+    --t-primary: 0.52 0.1 48;
+    --t-primary-foreground: 0.99 0.005 60;
+    --t-brand-gradient-end: 0.45 0.09 46;
+    --t-brand: 0.382 0.146 265;
+    --t-brand-deep: 0.29 0.11 266;
+    --t-brand-foreground: 0.97 0.012 265;
+    --t-metal: 0.759 0.077 51;
+    --t-metal-foreground: 0.19 0.03 51;
+    --t-highlight: 0.62 0.06 264;
+    --t-highlight-foreground: 0.99 0 0;
+    --t-highlight-deep: 0.42 0.07 264;
+    --t-destructive: 0.577 0.245 27.325;
+}
+
+/* Midnight Blue & Copper – tmavý */
+:root.dark,
+:root.dark[data-color-scheme="midnight"] {
+    --t-background: 0.177 0.034 270;
+    --t-foreground: 0.95 0.012 265;
+    --t-card: 0.235 0.055 268;
+    --t-sidebar: 0.205 0.045 269;
+    --t-secondary: 0.29 0.06 267;
+    --t-secondary-foreground: 0.9 0.04 265;
+    --t-muted-foreground: 0.74 0.046 264;
+    --t-accent: 0.31 0.07 266;
+    --t-accent-foreground: 0.93 0.03 265;
+    --t-border: 0.85 0.04 265;
+    --t-primary: 0.759 0.077 51;
+    --t-primary-foreground: 0.19 0.03 51;
+    --t-brand-gradient-end: 0.84 0.065 58;
+    --t-brand: 0.382 0.146 265;
+    --t-brand-deep: 0.29 0.11 266;
+    --t-brand-foreground: 0.96 0.015 265;
+    --t-metal: 0.759 0.077 51;
+    --t-metal-foreground: 0.19 0.03 51;
+    --t-highlight: 0.781 0.046 264;
+    --t-highlight-foreground: 0.2 0.03 265;
+    --t-highlight-deep: 0.86 0.035 264;
+    --t-destructive: 0.704 0.191 22.216;
+}
+
+/* Emerald & Gold – světlý */
+:root[data-color-scheme="emerald"] {
+    --t-background: 0.975 0.012 85;
+    --t-foreground: 0.22 0.03 180;
+    --t-card: 0.995 0.004 85;
+    --t-sidebar: 0.955 0.018 85;
+    --t-secondary: 0.945 0.018 85;
+    --t-secondary-foreground: 0.38 0.05 175;
+    --t-muted-foreground: 0.47 0.035 175;
+    --t-accent: 0.935 0.025 170;
+    --t-accent-foreground: 0.3 0.05 175;
+    --t-border: 0.9 0.02 85;
+    --t-primary: 0.52 0.1 68;
+    --t-primary-foreground: 0.99 0.005 85;
+    --t-brand-gradient-end: 0.45 0.09 64;
+    --t-brand: 0.42 0.075 171;
+    --t-brand-deep: 0.33 0.06 173;
+    --t-brand-foreground: 0.97 0.015 85;
+    --t-metal: 0.773 0.106 85;
+    --t-metal-foreground: 0.2 0.03 85;
+    --t-highlight: 0.62 0.06 82;
+    --t-highlight-foreground: 0.99 0 0;
+    --t-highlight-deep: 0.42 0.06 75;
+    --t-destructive: 0.577 0.245 27.325;
+}
+
+/* Emerald & Gold – tmavý */
+:root.dark[data-color-scheme="emerald"] {
+    --t-background: 0.2 0.026 182;
+    --t-foreground: 0.95 0.015 85;
+    --t-card: 0.255 0.038 178;
+    --t-sidebar: 0.225 0.032 180;
+    --t-secondary: 0.3 0.042 177;
+    --t-secondary-foreground: 0.9 0.04 85;
+    --t-muted-foreground: 0.76 0.04 82;
+    --t-accent: 0.32 0.05 176;
+    --t-accent-foreground: 0.93 0.03 85;
+    --t-border: 0.85 0.03 170;
+    --t-primary: 0.773 0.106 85;
+    --t-primary-foreground: 0.2 0.03 85;
+    --t-brand-gradient-end: 0.85 0.09 90;
+    --t-brand: 0.471 0.089 171;
+    --t-brand-deep: 0.36 0.07 173;
+    --t-brand-foreground: 0.97 0.015 85;
+    --t-metal: 0.773 0.106 85;
+    --t-metal-foreground: 0.2 0.03 85;
+    --t-highlight: 0.843 0.049 82;
+    --t-highlight-foreground: 0.2 0.03 82;
+    --t-highlight-deep: 0.9 0.04 82;
+    --t-destructive: 0.704 0.191 22.216;
+}
+
+/* Burgundy & Gold – světlý */
+:root[data-color-scheme="burgundy"] {
+    --t-background: 0.975 0.01 50;
+    --t-foreground: 0.22 0.03 25;
+    --t-card: 0.99 0.004 50;
+    --t-sidebar: 0.955 0.016 45;
+    --t-secondary: 0.945 0.016 45;
+    --t-secondary-foreground: 0.38 0.06 20;
+    --t-muted-foreground: 0.48 0.035 30;
+    --t-accent: 0.935 0.022 30;
+    --t-accent-foreground: 0.3 0.06 20;
+    --t-border: 0.9 0.018 45;
+    --t-primary: 0.52 0.1 68;
+    --t-primary-foreground: 0.99 0.005 85;
+    --t-brand-gradient-end: 0.45 0.09 64;
+    --t-brand: 0.436 0.162 17;
+    --t-brand-deep: 0.33 0.12 18;
+    --t-brand-foreground: 0.97 0.012 50;
+    --t-metal: 0.785 0.11 82;
+    --t-metal-foreground: 0.2 0.03 60;
+    --t-highlight: 0.62 0.04 40;
+    --t-highlight-foreground: 0.99 0 0;
+    --t-highlight-deep: 0.42 0.05 35;
+    --t-destructive: 0.577 0.245 27.325;
+}
+
+/* Burgundy & Gold – tmavý */
+:root.dark[data-color-scheme="burgundy"] {
+    --t-background: 0.192 0.014 34;
+    --t-foreground: 0.95 0.012 50;
+    --t-card: 0.245 0.035 22;
+    --t-sidebar: 0.215 0.022 28;
+    --t-secondary: 0.29 0.045 19;
+    --t-secondary-foreground: 0.9 0.03 50;
+    --t-muted-foreground: 0.76 0.03 51;
+    --t-accent: 0.31 0.05 19;
+    --t-accent-foreground: 0.93 0.02 50;
+    --t-border: 0.85 0.03 30;
+    --t-primary: 0.785 0.11 82;
+    --t-primary-foreground: 0.2 0.03 60;
+    --t-brand-gradient-end: 0.86 0.095 88;
+    --t-brand: 0.436 0.162 17;
+    --t-brand-deep: 0.33 0.12 18;
+    --t-brand-foreground: 0.97 0.012 50;
+    --t-metal: 0.785 0.11 82;
+    --t-metal-foreground: 0.2 0.03 60;
+    --t-highlight: 0.868 0.027 51;
+    --t-highlight-foreground: 0.2 0.03 40;
+    --t-highlight-deep: 0.92 0.02 51;
+    --t-destructive: 0.704 0.191 22.216;
+}
+
+/*
+ * Sémantické tokeny – jak se barvy tématu používají. Platí pro všechna témata
+ * a oba režimy; .dark níže přepisuje jen to, co se v tmavém režimu skládá
+ * jinak (průsvitné hrany, sklo, stíny).
+ *
+ * --primary je kov (měď, zlato): tlačítka, průběh, odkazy, aktivní stav.
+ * --brand je sytá barva tématu: výplň aktivní položky menu, avatar, záře.
  * Pozor na --accent: používají ho hover stavy položek v dropdownech a selectech,
- * proto zůstává jemný teal tint, ne sytá barva.
+ * proto zůstává jemný tint, ne sytá barva.
  */
 :root {
-    --background: oklch(0.985 0.006 220);
-    --foreground: oklch(0.22 0.03 235);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.22 0.03 235);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.22 0.03 235);
-    --primary: oklch(0.52 0.1 195);
-    --primary-foreground: oklch(0.99 0 0);
-    --brand-gradient-end: oklch(0.62 0.12 185);
-    --secondary: oklch(0.95 0.03 195);
-    --secondary-foreground: oklch(0.38 0.08 200);
-    --muted: oklch(0.955 0.01 225);
-    --muted-foreground: oklch(0.5 0.03 235);
-    --accent: oklch(0.94 0.03 195);
-    --accent-foreground: oklch(0.3 0.06 200);
-    --highlight: oklch(0.7 0.18 50);
-    --highlight-foreground: oklch(0.99 0 0);
-    --highlight-deep: oklch(0.5 0.16 45);
+    --background: oklch(var(--t-background));
+    --foreground: oklch(var(--t-foreground));
+    --card: oklch(var(--t-card));
+    --card-foreground: var(--foreground);
+    --popover: var(--card);
+    --popover-foreground: var(--foreground);
+    --primary: oklch(var(--t-primary));
+    --primary-foreground: oklch(var(--t-primary-foreground));
+    --brand-gradient-end: oklch(var(--t-brand-gradient-end));
+    --brand: oklch(var(--t-brand));
+    --brand-deep: oklch(var(--t-brand-deep));
+    --brand-foreground: oklch(var(--t-brand-foreground));
+    --metal: oklch(var(--t-metal));
+    --metal-foreground: oklch(var(--t-metal-foreground));
+    --secondary: oklch(var(--t-secondary));
+    --secondary-foreground: oklch(var(--t-secondary-foreground));
+    --muted: var(--secondary);
+    --muted-foreground: oklch(var(--t-muted-foreground));
+    --accent: oklch(var(--t-accent));
+    --accent-foreground: oklch(var(--t-accent-foreground));
+    --highlight: oklch(var(--t-highlight));
+    --highlight-foreground: oklch(var(--t-highlight-foreground));
+    --highlight-deep: oklch(var(--t-highlight-deep));
+    --destructive: oklch(var(--t-destructive));
+    --border: oklch(var(--t-border));
+    --input: var(--border);
+    --ring: var(--primary);
     /* Barvy záře pod hlavičkami detailů – s alfou přímo v tokenu, ať je
        minifikátor nezjednoduší na plnou barvu (color-mix s var() nesnáší). */
-    --glow-1: oklch(0.52 0.1 195 / 0.14);
-    --glow-2: oklch(0.7 0.18 50 / 0.1);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.9 0.015 225);
-    --input: oklch(0.9 0.015 225);
-    --ring: oklch(0.52 0.1 195);
-    --chart-1: oklch(0.52 0.1 195);
-    --chart-2: oklch(0.7 0.18 50);
+    --glow-1: oklch(var(--t-brand) / 0.16);
+    --glow-2: oklch(var(--t-metal) / 0.12);
+    --chart-1: var(--primary);
+    --chart-2: var(--brand);
     --chart-3: oklch(0.6 0.18 300);
     --chart-4: oklch(0.65 0.17 150);
     --chart-5: oklch(0.65 0.2 350);
     --radius: 0.875rem;
-    --sidebar: oklch(1 0 0);
-    --sidebar-foreground: oklch(0.22 0.03 235);
-    --sidebar-primary: oklch(0.52 0.1 195);
-    --sidebar-primary-foreground: oklch(0.99 0 0);
-    --sidebar-accent: oklch(0.94 0.035 195);
-    --sidebar-accent-foreground: oklch(0.38 0.09 200);
-    --sidebar-border: oklch(0.9 0.015 225);
-    --sidebar-ring: oklch(0.52 0.1 195);
+    --sidebar: oklch(var(--t-sidebar));
+    --sidebar-foreground: var(--foreground);
+    --sidebar-primary: var(--brand);
+    --sidebar-primary-foreground: var(--brand-foreground);
+    --sidebar-accent: var(--accent);
+    --sidebar-accent-foreground: var(--accent-foreground);
+    --sidebar-border: var(--border);
+    --sidebar-ring: var(--ring);
 
-    /* Sklo. Alfa je přímo v tokenu (stejný důvod jako u --glow-*).
-       --scheme-hue je nastavené jen u ostatních schémat, tyrkysové má
-       odstín natvrdo – proto všude záložní hodnota. */
-    --glass: oklch(1 0 0 / 0.55);
-    --glass-strong: oklch(1 0 0 / 0.74);
-    --glass-popover: oklch(1 0 0 / 0.86);
-    --glass-edge: oklch(0.22 0.03 var(--scheme-hue, 235) / 0.08);
+    /* Sklo. Alfa je přímo v tokenu (stejný důvod jako u --glow-*). */
+    --glass: oklch(var(--t-card) / 0.55);
+    --glass-strong: oklch(var(--t-card) / 0.74);
+    --glass-popover: oklch(var(--t-card) / 0.86);
+    --glass-edge: oklch(var(--t-foreground) / 0.08);
     --glass-highlight: oklch(1 0 0 / 0.85);
     --glass-blur: 16px;
     --glass-blur-strong: 24px;
     --glass-saturate: 1.35;
     --shadow-glass:
-        0 1px 2px oklch(0.22 0.03 var(--scheme-hue, 235) / 0.04),
-        0 8px 24px -8px oklch(0.22 0.03 var(--scheme-hue, 235) / 0.12);
+        0 1px 2px oklch(var(--t-foreground) / 0.04),
+        0 8px 24px -8px oklch(var(--t-foreground) / 0.12);
     --shadow-glass-lg:
-        0 2px 4px oklch(0.22 0.03 var(--scheme-hue, 235) / 0.05),
-        0 24px 48px -16px oklch(0.22 0.03 var(--scheme-hue, 235) / 0.22);
+        0 2px 4px oklch(var(--t-foreground) / 0.05),
+        0 24px 48px -16px oklch(var(--t-foreground) / 0.22);
     --shadow-glow:
-        0 0 0 1px oklch(0.52 0.1 195 / 0.25),
-        0 8px 24px -6px oklch(0.52 0.1 195 / 0.45);
+        0 0 0 1px oklch(var(--t-primary) / 0.25),
+        0 8px 24px -6px oklch(var(--t-primary) / 0.45);
     /* Závoj nad okolním pozadím (obálka, aurora) – drží podlahu světlosti,
        aby text na skle zůstal čitelný nad libovolnou obálkou. */
-    --ambient-veil: oklch(0.985 0.006 var(--scheme-hue, 220) / 0.68);
-    --aurora-1: oklch(0.52 0.1 195 / 0.16);
-    --aurora-2: oklch(0.7 0.18 50 / 0.1);
-    --aurora-3: oklch(0.62 0.12 185 / 0.12);
+    --ambient-veil: oklch(var(--t-background) / 0.68);
+    --aurora-1: oklch(var(--t-brand) / 0.14);
+    --aurora-2: oklch(var(--t-metal) / 0.12);
+    --aurora-3: oklch(var(--t-brand) / 0.08);
 }
 
 .dark {
-    --background: oklch(0.16 0.02 235);
-    --foreground: oklch(0.96 0.005 220);
-    --card: oklch(0.21 0.02 235);
-    --card-foreground: oklch(0.96 0.005 220);
-    --popover: oklch(0.21 0.02 235);
-    --popover-foreground: oklch(0.96 0.005 220);
-    --primary: oklch(0.78 0.12 190);
-    --primary-foreground: oklch(0.18 0.03 220);
-    --secondary: oklch(0.27 0.02 235);
-    --secondary-foreground: oklch(0.9 0.05 190);
-    --muted: oklch(0.27 0.02 235);
-    --muted-foreground: oklch(0.72 0.02 225);
-    --accent: oklch(0.29 0.03 220);
-    --accent-foreground: oklch(0.92 0.04 190);
-    --highlight: oklch(0.78 0.16 60);
-    --highlight-foreground: oklch(0.2 0.04 50);
-    --highlight-deep: oklch(0.85 0.13 70);
-    --glow-1: oklch(0.78 0.12 190 / 0.12);
-    --glow-2: oklch(0.78 0.16 60 / 0.08);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.78 0.12 190);
-    --chart-1: oklch(0.78 0.12 190);
-    --chart-2: oklch(0.78 0.16 60);
+    --border: oklch(var(--t-border) / 0.12);
+    --input: oklch(var(--t-border) / 0.18);
     --chart-3: oklch(0.7 0.16 300);
     --chart-4: oklch(0.75 0.15 150);
     --chart-5: oklch(0.72 0.18 350);
-    --sidebar: oklch(0.19 0.02 235);
-    --sidebar-foreground: oklch(0.96 0.005 220);
-    --sidebar-primary: oklch(0.78 0.12 190);
-    --sidebar-primary-foreground: oklch(0.18 0.03 220);
-    --sidebar-accent: oklch(0.78 0.12 190 / 15%);
-    --sidebar-accent-foreground: oklch(0.88 0.08 190);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.78 0.12 190);
 
-    /* Sklo v tmavém režimu: kouřové plochy, hrana ze světla, hlubší stín. */
-    --glass: oklch(0.21 0.02 var(--scheme-hue, 235) / 0.45);
-    --glass-strong: oklch(0.19 0.02 var(--scheme-hue, 235) / 0.62);
-    --glass-popover: oklch(0.21 0.02 var(--scheme-hue, 235) / 0.82);
-    --glass-edge: oklch(1 0 0 / 0.12);
-    --glass-highlight: oklch(1 0 0 / 0.14);
+    /* Sklo v tmavém režimu: kouřové plochy v barvě tématu, hrana ze světla,
+       hlubší stín. */
+    --glass: oklch(var(--t-card) / 0.5);
+    --glass-strong: oklch(var(--t-sidebar) / 0.72);
+    --glass-popover: oklch(var(--t-card) / 0.88);
+    --glass-edge: oklch(var(--t-border) / 0.14);
+    --glass-highlight: oklch(1 0 0 / 0.1);
     --shadow-glass: 0 1px 2px oklch(0 0 0 / 0.2), 0 8px 24px -8px oklch(0 0 0 / 0.45);
     --shadow-glass-lg: 0 2px 4px oklch(0 0 0 / 0.25), 0 24px 48px -16px oklch(0 0 0 / 0.6);
     --shadow-glow:
-        0 0 0 1px oklch(0.78 0.12 190 / 0.3),
-        0 8px 24px -6px oklch(0.78 0.12 190 / 0.4);
-    --ambient-veil: oklch(0.16 0.02 var(--scheme-hue, 235) / 0.66);
-    --aurora-1: oklch(0.78 0.12 190 / 0.14);
-    --aurora-2: oklch(0.78 0.16 60 / 0.08);
-    --aurora-3: oklch(0.68 0.12 185 / 0.1);
+        0 0 0 1px oklch(var(--t-primary) / 0.3),
+        0 8px 24px -6px oklch(var(--t-primary) / 0.35);
+    --glow-1: oklch(var(--t-brand) / 0.35);
+    --glow-2: oklch(var(--t-metal) / 0.1);
+    --ambient-veil: oklch(var(--t-background) / 0.66);
+    /* Brand je v tmavém režimu sám tmavý – aurora ho potřebuje víc. */
+    --aurora-1: oklch(var(--t-brand) / 0.42);
+    --aurora-2: oklch(var(--t-metal) / 0.08);
+    --aurora-3: oklch(var(--t-brand) / 0.28);
 }
 
-/* Barevné schéma je nezávislé na světlém/tmavém režimu. */
-:root[data-color-scheme="blue"] {
-    --scheme-hue: 255;
-    --scheme-highlight-hue: 65;
-}
-
-:root[data-color-scheme="violet"] {
-    --scheme-hue: 300;
-    --scheme-highlight-hue: 25;
-}
-
-:root[data-color-scheme="green"] {
-    --scheme-hue: 150;
-    --scheme-highlight-hue: 80;
-}
-
-:root:is([data-color-scheme="blue"], [data-color-scheme="violet"], [data-color-scheme="green"]) {
-    --background: oklch(0.985 0.006 var(--scheme-hue));
-    --foreground: oklch(0.22 0.03 var(--scheme-hue));
-    --card-foreground: var(--foreground);
-    --popover-foreground: var(--foreground);
-    --primary: oklch(0.52 0.14 var(--scheme-hue));
-    --primary-foreground: oklch(0.99 0 0);
-    --secondary: oklch(0.95 0.025 var(--scheme-hue));
-    --secondary-foreground: oklch(0.38 0.08 var(--scheme-hue));
-    --muted: oklch(0.955 0.01 var(--scheme-hue));
-    --muted-foreground: oklch(0.5 0.03 var(--scheme-hue));
-    --accent: oklch(0.94 0.03 var(--scheme-hue));
-    --accent-foreground: oklch(0.3 0.06 var(--scheme-hue));
-    --highlight: oklch(0.7 0.15 var(--scheme-highlight-hue));
-    --highlight-foreground: oklch(0.2 0.03 var(--scheme-highlight-hue));
-    --highlight-deep: oklch(0.48 0.12 var(--scheme-highlight-hue));
-    --glow-1: oklch(0.52 0.14 var(--scheme-hue) / 0.14);
-    --glow-2: oklch(0.7 0.15 var(--scheme-highlight-hue) / 0.1);
-    --border: oklch(0.9 0.015 var(--scheme-hue));
-    --input: var(--border);
-    --ring: var(--primary);
-    --chart-1: var(--primary);
-    --chart-2: var(--highlight);
-    --sidebar-foreground: var(--foreground);
-    --sidebar-primary: var(--primary);
-    --sidebar-primary-foreground: var(--primary-foreground);
-    --sidebar-accent: var(--accent);
-    --sidebar-accent-foreground: var(--accent-foreground);
-    --sidebar-border: var(--border);
-    --sidebar-ring: var(--ring);
-    --brand-gradient-end: oklch(0.56 0.12 var(--scheme-hue));
-    /* Neutrální tokeny skla si odstín doplní přes var(--scheme-hue); barevné
-       je potřeba přepsat, protože jejich odstín je odstín hlavní barvy. */
-    --shadow-glow:
-        0 0 0 1px oklch(0.52 0.14 var(--scheme-hue) / 0.25),
-        0 8px 24px -6px oklch(0.52 0.14 var(--scheme-hue) / 0.45);
-    --aurora-1: oklch(0.52 0.14 var(--scheme-hue) / 0.16);
-    --aurora-2: oklch(0.7 0.15 var(--scheme-highlight-hue) / 0.1);
-    --aurora-3: oklch(0.56 0.12 var(--scheme-hue) / 0.12);
-}
-
-:root.dark:is([data-color-scheme="blue"], [data-color-scheme="violet"], [data-color-scheme="green"]) {
-    --background: oklch(0.16 0.02 var(--scheme-hue));
-    --foreground: oklch(0.96 0.005 var(--scheme-hue));
-    --card: oklch(0.21 0.02 var(--scheme-hue));
-    --popover: var(--card);
-    --primary: oklch(0.78 0.12 var(--scheme-hue));
-    --primary-foreground: oklch(0.18 0.03 var(--scheme-hue));
-    --secondary: oklch(0.27 0.02 var(--scheme-hue));
-    --secondary-foreground: oklch(0.9 0.05 var(--scheme-hue));
-    --muted: var(--secondary);
-    --muted-foreground: oklch(0.72 0.02 var(--scheme-hue));
-    --accent: oklch(0.29 0.03 var(--scheme-hue));
-    --accent-foreground: oklch(0.92 0.04 var(--scheme-hue));
-    --highlight: oklch(0.78 0.13 var(--scheme-highlight-hue));
-    --highlight-deep: oklch(0.85 0.1 var(--scheme-highlight-hue));
-    --glow-1: oklch(0.78 0.12 var(--scheme-hue) / 0.12);
-    --glow-2: oklch(0.78 0.13 var(--scheme-highlight-hue) / 0.08);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --sidebar: oklch(0.19 0.02 var(--scheme-hue));
-    --brand-gradient-end: oklch(0.68 0.12 var(--scheme-hue));
-    --shadow-glow:
-        0 0 0 1px oklch(0.78 0.12 var(--scheme-hue) / 0.3),
-        0 8px 24px -6px oklch(0.78 0.12 var(--scheme-hue) / 0.4);
-    --aurora-1: oklch(0.78 0.12 var(--scheme-hue) / 0.14);
-    --aurora-2: oklch(0.78 0.13 var(--scheme-highlight-hue) / 0.08);
-    --aurora-3: oklch(0.68 0.12 var(--scheme-hue) / 0.1);
-}
-
-/* Firemní gradient – tlačítka, přihlašovací panel, velké nadpisy přes bg-clip-text. */
+/* Kovový gradient – tlačítka, průběh, velké nadpisy přes bg-clip-text. */
 @utility bg-brand-gradient {
     background-image: linear-gradient(135deg, var(--primary), var(--brand-gradient-end));
 }
 
-/* Jemná záře pod hlavičkami detailů; oranžová jen naznačená, ať nepřebíjí obsah. */
+/* Plocha v brand barvě – přihlašovací panel, značka v logu, zástupné obrázky. */
+@utility bg-brand-surface {
+    background-image: linear-gradient(135deg, var(--brand), var(--brand-deep));
+}
+
+/* Jemná záře pod hlavičkami detailů: brand vlevo, kov jen naznačený vpravo. */
 @utility bg-brand-glow {
     background-image:
         radial-gradient(60% 80% at 15% 0%, var(--glow-1), transparent 70%),

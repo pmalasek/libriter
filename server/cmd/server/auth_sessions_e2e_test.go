@@ -191,7 +191,7 @@ func TestDeviceTokensAreReaderOnly(t *testing.T) {
 		e.expect(e.req("PUT", "/api/v1/users/"+adminID+"/language", tok, map[string]string{"ui_language": "cs"}),
 			http.StatusOK, "", name+": jazyk")
 		e.expect(e.req("PUT", "/api/v1/users/"+adminID+"/appearance", tok,
-			map[string]string{"color_scheme": "teal", "theme_mode": "dark"}), http.StatusOK, "", name+": vzhled")
+			map[string]string{"color_scheme": "emerald", "theme_mode": "dark"}), http.StatusOK, "", name+": vzhled")
 		e.streamToken(tok)
 	}
 }

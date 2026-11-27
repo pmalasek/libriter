@@ -54,8 +54,8 @@ export function ThemeToggle() {
         <View style={styles.schemes}>
           {COLOR_SCHEMES.map((option) => {
             const active = option.value === scheme
-            // Ukázková barva je „primary“ daného schématu ve světlém režimu.
-            const swatch = palette(option.value as ColorScheme, 'light').primary
+            // Ukázka: brand a kov tématu (zlato mají dvě témata skoro stejné).
+            const swatch = palette(option.value as ColorScheme, 'dark')
             return (
               <Pressable
                 key={option.value}
@@ -64,7 +64,9 @@ export function ThemeToggle() {
                 accessibilityRole="radio"
                 accessibilityState={{ checked: active }}
               >
-                <View style={[styles.dot, { backgroundColor: swatch, borderColor: colors.glassEdge }]} />
+                <View style={[styles.dot, { backgroundColor: swatch.brand, borderColor: colors.glassEdge }]}>
+                  <View style={[styles.dotHalf, { backgroundColor: swatch.metal }]} />
+                </View>
                 <Body size={13} medium style={active ? { color: colors.primary } : undefined}>
                   {colorSchemeLabel(option.value)}
                 </Body>
@@ -98,5 +100,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md - 4,
     height: 38,
   },
-  dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 1 },
+  dot: { width: 16, height: 16, borderRadius: 8, borderWidth: 1, overflow: 'hidden', flexDirection: 'row', justifyContent: 'flex-end' },
+  dotHalf: { width: '50%', height: '100%' },
 })

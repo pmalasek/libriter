@@ -81,9 +81,8 @@ func (u *UserService) Update(ctx context.Context, id uuid.UUID, displayName, ema
 }
 
 func (u *UserService) UpdateAppearance(ctx context.Context, id uuid.UUID, colorScheme, themeMode string) (*model.User, error) {
-	switch colorScheme {
-	case "teal", "blue", "violet", "green":
-	default:
+	colorScheme, ok := model.NormalizeColorScheme(colorScheme)
+	if !ok {
 		return nil, fmt.Errorf("%w: neznámé barevné schéma", ErrInvalidSetting)
 	}
 	switch themeMode {

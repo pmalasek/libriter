@@ -4,13 +4,13 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { apiFetch } from 'core-shared'
 import { coreQueryKeys as queryKeys } from 'core-shared'
-import { t, type User, type UserAppearance } from 'core-shared'
+import { lchHex, t, THEMES, type User, type UserAppearance } from 'core-shared'
 import { useAuth } from '../auth/AuthContext'
 import { ColorSchemeContext, parseScheme, readScheme, STORAGE_KEY } from './colorScheme'
 
 export function ColorSchemeProvider({ children }: { children: React.ReactNode }) {
   const { user, updateUser } = useAuth()
-  const { theme, setTheme } = useTheme()
+  const { theme, resolvedTheme, setTheme } = useTheme()
   const queryClient = useQueryClient()
   const [localScheme, setScheme] = useState(readScheme)
   const colorScheme = user ? parseScheme(user.color_scheme) : localScheme
@@ -30,6 +30,15 @@ export function ColorSchemeProvider({ children }: { children: React.ReactNode })
       // Místní cache není podmínkou pro použití vzhledu z profilu.
     }
   }, [colorScheme])
+
+  // Barva lišty prohlížeče na telefonu (a okna nainstalované aplikace) ladí
+  // s pozadím tématu.
+  useEffect(() => {
+    const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+    if (!meta) return
+    const mode = resolvedTheme === 'light' ? 'light' : 'dark'
+    meta.content = lchHex(THEMES[colorScheme][mode].background)
+  }, [colorScheme, resolvedTheme])
 
   useEffect(() => {
     if (user) return

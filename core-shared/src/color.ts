@@ -1,9 +1,12 @@
 /**
- * Převod OKLCH → sRGB. Web má paletu zapsanou v `oklch()` přímo v CSS
- * (libriter-frontend/src/index.css); React Native tenhle zápis nezná, takže
- * se stejná čísla přepočítají tady. Postup je standardní: OKLCH → Oklab →
- * lineární sRGB → gamma; hodnoty mimo gamut se oříznou.
+ * Převod OKLCH → sRGB. Web má paletu v `oklch()` přímo v CSS; React Native
+ * (mobil, televize) tenhle zápis nezná, takže se stejná čísla přepočítají
+ * tady. Postup je standardní: OKLCH → Oklab → lineární sRGB → gamma; hodnoty
+ * mimo gamut se oříznou.
  */
+
+/** Barva jako trojice OKLCH: světlost 0–1, sytost, odstín ve stupních. */
+export type Lch = readonly [l: number, c: number, h: number]
 
 function gamma(value: number): number {
   const clamped = Math.min(1, Math.max(0, value))
@@ -45,4 +48,19 @@ export function oklch(l: number, c: number, h: number): string {
 export function oklcha(l: number, c: number, h: number, alpha: number): string {
   const [r, g, b] = oklchToRgb(l, c, h)
   return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
+/** Trojice → `#rrggbb`. */
+export function lchHex([l, c, h]: Lch): string {
+  return oklch(l, c, h)
+}
+
+/** Trojice s průhledností → `rgba(...)`. */
+export function lchRgba([l, c, h]: Lch, alpha: number): string {
+  return oklcha(l, c, h, alpha)
+}
+
+/** Trojice → CSS `oklch(l c h)` (ukázky barev v přepínači). */
+export function lchCss([l, c, h]: Lch): string {
+  return `oklch(${l} ${c} ${h})`
 }

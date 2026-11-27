@@ -89,10 +89,9 @@ export default {
     added: 'Hinzugefügt am',
   },
   colorScheme: {
-    teal: 'Türkis',
-    blue: 'Blau',
-    violet: 'Violett',
-    green: 'Grün',
+    midnight: 'Mitternachtsblau & Kupfer',
+    emerald: 'Smaragd & Gold',
+    burgundy: 'Burgund & Gold',
   },
   themeMode: {
     light: 'Hell',
